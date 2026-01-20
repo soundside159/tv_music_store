@@ -8,6 +8,7 @@ import LoadingScreen from "@/components/LoadingScreen";
 const Index = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [showContent, setShowContent] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string>("modern-score");
 
   useEffect(() => {
     // Preload the cinema hero image
@@ -35,8 +36,11 @@ const Index = () => {
         <>
           <Navigation />
           <main>
-            <CinemaHero />
-            <Categories />
+            <CinemaHero selectedCategory={selectedCategory} />
+            <Categories 
+              selectedCategory={selectedCategory} 
+              onCategoryChange={setSelectedCategory} 
+            />
           </main>
           <Footer />
         </>
