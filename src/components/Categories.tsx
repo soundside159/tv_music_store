@@ -14,25 +14,25 @@ const Categories = () => {
   const categories: Category[] = [
     {
       id: "modern-score",
-      title: "Modern Score",
+      title: "Modern Score Music",
       description: "Contemporary orchestral compositions with cinematic depth. Perfect for drama, documentary, and emotional storytelling.",
       icon: Music,
     },
     {
       id: "thriller",
-      title: "Thriller",
+      title: "Thriller Music",
       description: "Tension-building soundscapes and dark atmospheres. Designed for suspense, horror, and psychological narratives.",
       icon: Skull,
     },
     {
       id: "game-ost",
-      title: "Game OST",
+      title: "Game OST Music",
       description: "Dynamic and adaptive music for interactive media. From epic adventures to ambient exploration themes.",
       icon: Gamepad2,
     },
     {
       id: "production",
-      title: "Production",
+      title: "Production Music",
       description: "Broadcast-ready tracks for commercials, trailers, and corporate media. High-impact, versatile compositions.",
       icon: Clapperboard,
     },
