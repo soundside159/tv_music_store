@@ -17,7 +17,7 @@ const Navigation = () => {
         <div className="flex items-center justify-between h-16 md:h-20">
           {/* Logo */}
           <a href="/" className="font-display text-xl md:text-2xl text-gradient-gold tracking-wider">
-            SCORE VAULT
+            TVMUSICSTORE
           </a>
 
           {/* Desktop Navigation */}
