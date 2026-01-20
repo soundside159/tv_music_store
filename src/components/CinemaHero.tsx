@@ -8,7 +8,7 @@ const CinemaHero = () => {
         <img
           src={cinemaHero}
           alt="Premium cinema screening room"
-          className="w-full h-full object-cover object-[center_12%]"
+          className="w-full h-full object-cover object-[center_2%]"
         />
 
         {/* Screen overlay container - for future video integration */}
