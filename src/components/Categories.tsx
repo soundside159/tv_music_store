@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Music, Skull, Gamepad2, Clapperboard, LucideIcon } from "lucide-react";
+import { motion } from "framer-motion";
+import { Clapperboard, Skull, Gamepad2, Youtube, LucideIcon } from "lucide-react";
 
 interface Category {
   id: string;
@@ -16,7 +17,7 @@ const Categories = () => {
       id: "modern-score",
       title: "Modern Score Music",
       description: "Contemporary orchestral compositions with cinematic depth. Perfect for drama, documentary, and emotional storytelling.",
-      icon: Music,
+      icon: Clapperboard,
     },
     {
       id: "thriller",
@@ -34,7 +35,7 @@ const Categories = () => {
       id: "production",
       title: "Production Music",
       description: "Broadcast-ready tracks for commercials, trailers, and corporate media. High-impact, versatile compositions.",
-      icon: Clapperboard,
+      icon: Youtube,
     },
   ];
 
@@ -42,34 +43,83 @@ const Categories = () => {
     setSelectedCategory(selectedCategory === id ? null : id);
   };
 
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.15,
+        delayChildren: 0.3,
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 30 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.6,
+        ease: [0.25, 0.46, 0.45, 0.94] as const,
+      },
+    },
+  };
+
+  const headerVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.6,
+      },
+    },
+  };
+
   return (
     <section id="catalog" className="relative -mt-32 md:-mt-40 pb-16 bg-transparent z-10">
-      <div className="w-full px-8 md:px-12 lg:px-16">
-        <div className="text-center mb-8">
+      <div className="w-full px-4 sm:px-6 md:px-8 lg:px-12">
+        <motion.div 
+          className="text-center mb-8"
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-100px" }}
+          variants={headerVariants}
+        >
           <h2 className="font-display text-2xl md:text-3xl text-gradient-gold mb-2 tracking-wide">
             CATALOG
           </h2>
           <p className="font-body text-sm text-muted-foreground max-w-xl mx-auto">
             Explore our curated collection of premium music, crafted for the most demanding productions.
           </p>
-        </div>
+        </motion.div>
 
-        <div className="flex justify-between gap-4">
+        <motion.div 
+          className="flex justify-center gap-4 sm:gap-6 md:gap-8 lg:gap-10"
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-50px" }}
+          variants={containerVariants}
+        >
           {categories.map((category) => {
             const Icon = category.icon;
             const isSelected = selectedCategory === category.id;
             
             return (
-              <button
+              <motion.button
                 key={category.id}
+                variants={itemVariants}
                 onClick={() => handleCategoryClick(category.id)}
-                className={`group relative p-5 md:p-6 bg-card/90 backdrop-blur-sm border 
+                className={`group relative p-6 md:p-8 bg-card/90 backdrop-blur-sm border 
                            transition-all duration-300 cursor-pointer overflow-hidden text-left
-                           flex-1 max-w-[280px]
+                           flex-1 min-w-0
                            ${isSelected 
                              ? 'border-primary bg-primary/10 ring-2 ring-primary/50 scale-[1.02]' 
                              : 'border-border/50 hover:border-primary/50'
                            }`}
+                whileHover={{ scale: isSelected ? 1.02 : 1.03 }}
+                whileTap={{ scale: 0.98 }}
               >
                 {/* Hover glow effect */}
                 <div className={`absolute inset-0 transition-opacity duration-500 pointer-events-none
@@ -78,30 +128,35 @@ const Categories = () => {
                 
                 <div className="relative z-10">
                   <Icon 
-                    className={`w-8 h-8 md:w-10 md:h-10 mb-3 md:mb-4 transition-all duration-300
+                    className={`w-10 h-10 md:w-12 md:h-12 mb-4 md:mb-5 transition-all duration-300
                                ${isSelected ? 'text-primary scale-110' : 'text-primary group-hover:scale-110'}`}
                     strokeWidth={1.5}
                   />
                   
-                  <h3 className="font-display text-base md:text-lg text-foreground mb-2 tracking-wide">
+                  <h3 className="font-display text-base md:text-lg lg:text-xl text-foreground mb-3 tracking-wide">
                     {category.title}
                   </h3>
                   
-                  <p className="font-body text-xs md:text-sm text-muted-foreground leading-relaxed line-clamp-3">
+                  <p className="font-body text-xs md:text-sm text-muted-foreground leading-relaxed">
                     {category.description}
                   </p>
                   
                   {isSelected && (
-                    <div className="mt-3 flex items-center gap-2 text-primary text-xs font-body animate-fade-in">
+                    <motion.div 
+                      className="mt-4 flex items-center gap-2 text-primary text-xs font-body"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3 }}
+                    >
                       <span>Selected</span>
                       <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                    </div>
+                    </motion.div>
                   )}
                 </div>
-              </button>
+              </motion.button>
             );
           })}
-        </div>
+        </motion.div>
       </div>
     </section>
   );

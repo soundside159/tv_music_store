@@ -1,7 +1,6 @@
 import Navigation from "@/components/Navigation";
 import CinemaHero from "@/components/CinemaHero";
 import Categories from "@/components/Categories";
-import CustomWork from "@/components/CustomWork";
 import Footer from "@/components/Footer";
 
 const Index = () => {
@@ -11,7 +10,6 @@ const Index = () => {
       <main>
         <CinemaHero />
         <Categories />
-        <CustomWork />
       </main>
       <Footer />
     </div>
