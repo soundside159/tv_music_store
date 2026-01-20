@@ -2,9 +2,9 @@ import cinemaHero from "@/assets/cinema-hero.png";
 
 const CinemaHero = () => {
   return (
-    <section className="relative w-full">
+    <section className="relative w-full pt-4 md:pt-8">
       {/* Cinema Image Container - Screen area preserved for future video */}
-      <div className="relative w-full aspect-[16/9] max-h-[70vh] overflow-hidden">
+      <div className="relative w-full aspect-[16/9] max-h-[75vh] overflow-hidden">
         <img
           src={cinemaHero}
           alt="Premium cinema screening room"
