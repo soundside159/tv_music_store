@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { motion } from "framer-motion";
 import { Clapperboard, Skull, Gamepad2, Youtube, LucideIcon } from "lucide-react";
 
@@ -9,9 +8,12 @@ interface Category {
   icon: LucideIcon;
 }
 
-const Categories = () => {
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+interface CategoriesProps {
+  selectedCategory: string;
+  onCategoryChange: (id: string) => void;
+}
 
+const Categories = ({ selectedCategory, onCategoryChange }: CategoriesProps) => {
   const categories: Category[] = [
     {
       id: "modern-score",
@@ -40,7 +42,7 @@ const Categories = () => {
   ];
 
   const handleCategoryClick = (id: string) => {
-    setSelectedCategory(selectedCategory === id ? null : id);
+    onCategoryChange(id);
   };
 
   const containerVariants = {
