@@ -1,17 +1,46 @@
+import { useState, useEffect } from "react";
 import Navigation from "@/components/Navigation";
 import CinemaHero from "@/components/CinemaHero";
 import Categories from "@/components/Categories";
 import Footer from "@/components/Footer";
+import LoadingScreen from "@/components/LoadingScreen";
 
 const Index = () => {
+  const [isLoading, setIsLoading] = useState(true);
+  const [showContent, setShowContent] = useState(false);
+
+  useEffect(() => {
+    // Preload the cinema hero image
+    const img = new Image();
+    img.src = "/src/assets/cinema-hero.png";
+    img.onload = () => {
+      // Image loaded, we can start showing content
+      setShowContent(true);
+    };
+    img.onerror = () => {
+      // Even on error, show content after a short delay
+      setShowContent(true);
+    };
+  }, []);
+
+  const handleLoadingComplete = () => {
+    setIsLoading(false);
+  };
+
   return (
     <div className="min-h-screen bg-background">
-      <Navigation />
-      <main>
-        <CinemaHero />
-        <Categories />
-      </main>
-      <Footer />
+      {isLoading && <LoadingScreen onComplete={handleLoadingComplete} />}
+      
+      {showContent && (
+        <>
+          <Navigation />
+          <main>
+            <CinemaHero />
+            <Categories />
+          </main>
+          <Footer />
+        </>
+      )}
     </div>
   );
 };
