@@ -4,10 +4,14 @@ import { Menu, X } from "lucide-react";
 const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false);
 
+  const scrollToTop = (e: React.MouseEvent) => {
+    e.preventDefault();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const navItems = [
-    { label: "Catalog", href: "#catalog" },
+    { label: "Music Catalog", href: "#", onClick: scrollToTop },
     { label: "Licensing", href: "#licensing" },
-    { label: "Custom Work", href: "#custom" },
     { label: "Contact", href: "#contact" },
   ];
 
@@ -26,6 +30,7 @@ const Navigation = () => {
               <a
                 key={item.label}
                 href={item.href}
+                onClick={item.onClick}
                 className="font-body text-sm tracking-wide text-muted-foreground 
                          hover:text-primary transition-colors duration-300"
               >
@@ -61,7 +66,10 @@ const Navigation = () => {
                 <a
                   key={item.label}
                   href={item.href}
-                  onClick={() => setIsOpen(false)}
+                  onClick={(e) => {
+                    if (item.onClick) item.onClick(e);
+                    setIsOpen(false);
+                  }}
                   className="font-body text-base tracking-wide text-muted-foreground 
                            hover:text-primary transition-colors duration-300 py-2"
                 >

@@ -1,59 +1,160 @@
+import { useState } from "react";
+import { motion } from "framer-motion";
+import { Send } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+
 const Footer = () => {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toast } = useToast();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
+    // Simulate form submission
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    toast({
+      title: "Message sent!",
+      description: "We'll get back to you soon.",
+    });
+    
+    setName("");
+    setEmail("");
+    setMessage("");
+    setIsSubmitting(false);
+  };
+
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+        delayChildren: 0.2,
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.5,
+      },
+    },
+  };
+
   return (
-    <footer id="contact" className="py-16 bg-card border-t border-border/50">
+    <footer id="contact" className="py-20 bg-card border-t border-border/50">
       <div className="container mx-auto px-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
-          {/* Brand */}
-          <div>
-            <h3 className="font-display text-2xl text-gradient-gold mb-4 tracking-wider">
-              SCORE VAULT
-            </h3>
-            <p className="font-body text-sm text-muted-foreground leading-relaxed">
-              Premium music licensing for film, television, and media productions worldwide.
+        <motion.div 
+          className="max-w-2xl mx-auto"
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-100px" }}
+          variants={containerVariants}
+        >
+          {/* Header */}
+          <motion.div className="text-center mb-10" variants={itemVariants}>
+            <h2 className="font-display text-3xl md:text-4xl text-gradient-gold mb-4 tracking-wide">
+              Let's Create Together
+            </h2>
+            <p className="font-body text-base md:text-lg text-muted-foreground">
+              Need a custom composition or track adaptation for your project?
             </p>
-          </div>
+          </motion.div>
 
-          {/* Quick Links */}
-          <div>
-            <h4 className="font-display text-sm text-foreground mb-4 tracking-wider uppercase">
-              Quick Links
-            </h4>
-            <div className="flex flex-col gap-3">
-              {["Catalog", "Licensing", "Custom Work", "About"].map((link) => (
-                <a
-                  key={link}
-                  href={`#${link.toLowerCase().replace(" ", "-")}`}
-                  className="font-body text-sm text-muted-foreground hover:text-primary 
-                           transition-colors duration-300"
-                >
-                  {link}
-                </a>
-              ))}
+          {/* Contact Form */}
+          <motion.form 
+            onSubmit={handleSubmit} 
+            className="space-y-6"
+            variants={itemVariants}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label htmlFor="name" className="block font-body text-sm text-foreground mb-2">
+                  Name
+                </label>
+                <Input
+                  id="name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Your name"
+                  required
+                  className="bg-background/50 border-border/50 focus:border-primary"
+                />
+              </div>
+              <div>
+                <label htmlFor="email" className="block font-body text-sm text-foreground mb-2">
+                  Email
+                </label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  required
+                  className="bg-background/50 border-border/50 focus:border-primary"
+                />
+              </div>
             </div>
-          </div>
-
-          {/* Contact */}
-          <div>
-            <h4 className="font-display text-sm text-foreground mb-4 tracking-wider uppercase">
-              Contact
-            </h4>
-            <div className="flex flex-col gap-3 font-body text-sm text-muted-foreground">
-              <a 
-                href="mailto:licensing@scorevault.com"
-                className="hover:text-primary transition-colors duration-300"
-              >
-                licensing@scorevault.com
-              </a>
-              <p>Los Angeles, CA</p>
+            
+            <div>
+              <label htmlFor="message" className="block font-body text-sm text-foreground mb-2">
+                Message
+              </label>
+              <Textarea
+                id="message"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Tell us about your project..."
+                required
+                rows={5}
+                className="bg-background/50 border-border/50 focus:border-primary resize-none"
+              />
             </div>
-          </div>
-        </div>
 
-        <div className="border-t border-border/50 pt-8">
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full md:w-auto px-8 py-3 bg-primary text-primary-foreground 
+                       hover:bg-primary/90 transition-all duration-300 font-body"
+            >
+              {isSubmitting ? (
+                "Sending..."
+              ) : (
+                <>
+                  Send Message
+                  <Send className="ml-2 w-4 h-4" />
+                </>
+              )}
+            </Button>
+          </motion.form>
+        </motion.div>
+
+        {/* Copyright */}
+        <motion.div 
+          className="border-t border-border/50 mt-16 pt-8"
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.5 }}
+        >
           <p className="font-body text-xs text-muted-foreground text-center">
-            © 2026 Score Vault. All rights reserved.
+            © 2026 TVMUSICSTORE. All rights reserved.
           </p>
-        </div>
+        </motion.div>
       </div>
     </footer>
   );
