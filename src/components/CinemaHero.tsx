@@ -10,9 +10,9 @@ const CinemaHero = () => {
           alt="Premium cinema screening room"
           className="w-full h-full object-cover object-[center_12%]"
         />
-        
+
         {/* Screen overlay container - for future video integration */}
-        <div 
+        <div
           className="absolute top-[8%] left-[20%] right-[20%] bottom-[40%] 
                      flex items-center justify-center"
           id="cinema-screen"
