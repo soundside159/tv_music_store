@@ -20,10 +20,10 @@ const CinemaHero = () => {
           {/* Future video or content will go here */}
           <div className="w-full h-full flex items-center justify-center">
             <div className="text-center animate-fade-in">
-              <h1 className="font-display text-4xl md:text-6xl lg:text-7xl text-gradient-gold tracking-wider mb-4">
+              <h1 className="font-display text-4xl md:text-6xl lg:text-7xl text-black tracking-wider mb-4">
                 TVMUSICSTORE
               </h1>
-              <p className="font-body text-sm md:text-base text-foreground/80 tracking-[0.3em] uppercase">
+              <p className="font-body text-sm md:text-base text-black/80 tracking-[0.3em] uppercase">
                 Premium Music for Film & Television
               </p>
             </div>
