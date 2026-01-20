@@ -1,20 +1,44 @@
 import { motion, AnimatePresence } from "framer-motion";
 import cinemaHero from "@/assets/cinema-hero.png";
 import cinemaThriller from "@/assets/cinema-thriller.png";
+import cinemaGame from "@/assets/cinema-game.png";
+import cinemaProduction from "@/assets/cinema-production.png";
 
 interface CinemaHeroProps {
   selectedCategory: string;
 }
 
+interface CategoryContent {
+  image: string;
+  title: string;
+  subtitle: string;
+}
+
 const CinemaHero = ({ selectedCategory }: CinemaHeroProps) => {
-  const heroImages: Record<string, string> = {
-    "modern-score": cinemaHero,
-    "thriller": cinemaThriller,
-    "game-ost": cinemaHero, // Placeholder - will use default for now
-    "production": cinemaHero, // Placeholder - will use default for now
+  const categoryContent: Record<string, CategoryContent> = {
+    "modern-score": {
+      image: cinemaHero,
+      title: "Modern Score Music",
+      subtitle: "Contemporary drama, documentary, and emotional storytelling.",
+    },
+    "thriller": {
+      image: cinemaThriller,
+      title: "Thriller Music",
+      subtitle: "Tension and suspense for crime dramas and thrillers.",
+    },
+    "game-ost": {
+      image: cinemaGame,
+      title: "Game OST Music",
+      subtitle: "Epic soundtracks for missions, exploration, and boss battles.",
+    },
+    "production": {
+      image: cinemaProduction,
+      title: "Production Music",
+      subtitle: "Versatile tracks for TV, corporate videos, and commercials.",
+    },
   };
 
-  const currentImage = heroImages[selectedCategory] || cinemaHero;
+  const currentContent = categoryContent[selectedCategory] || categoryContent["modern-score"];
 
   return (
     <section className="relative w-full">
@@ -23,7 +47,7 @@ const CinemaHero = ({ selectedCategory }: CinemaHeroProps) => {
         <AnimatePresence mode="wait">
           <motion.img
             key={selectedCategory}
-            src={currentImage}
+            src={currentContent.image}
             alt="Premium cinema screening room"
             className="w-full h-full object-cover object-[center_28%]"
             initial={{ opacity: 0 }}
@@ -41,14 +65,23 @@ const CinemaHero = ({ selectedCategory }: CinemaHeroProps) => {
         >
           {/* Future video or content will go here */}
           <div className="w-full h-full flex items-center justify-center">
-            <div className="text-center animate-fade-in">
-              <h1 className="font-display text-4xl md:text-6xl lg:text-7xl text-black tracking-wider mb-4">
-                TVMUSICSTORE
-              </h1>
-              <p className="font-body text-sm md:text-base text-black/80 tracking-[0.3em] uppercase">
-                Premium Music for Film & Television
-              </p>
-            </div>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={selectedCategory}
+                className="text-center"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.4 }}
+              >
+                <h1 className="font-display text-4xl md:text-6xl lg:text-7xl text-black tracking-wider mb-4">
+                  {currentContent.title}
+                </h1>
+                <p className="font-body text-sm md:text-base text-black/80 tracking-[0.3em] uppercase max-w-xl mx-auto">
+                  {currentContent.subtitle}
+                </p>
+              </motion.div>
+            </AnimatePresence>
           </div>
         </div>
 
