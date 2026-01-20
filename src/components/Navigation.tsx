@@ -9,10 +9,15 @@ const Navigation = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const scrollToContact = (e: React.MouseEvent) => {
+    e.preventDefault();
+    document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   const navItems = [
     { label: "Music Catalog", href: "#", onClick: scrollToTop },
     { label: "Licensing", href: "#licensing" },
-    { label: "Contact", href: "#contact" },
+    { label: "Contact", href: "#contact", onClick: scrollToContact },
   ];
 
   return (

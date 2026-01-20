@@ -91,7 +91,7 @@ const Footer = () => {
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Your name"
                   required
-                  className="bg-background/50 border-border/50 focus:border-primary"
+                  className="bg-background/50 border border-border/50 focus:border-primary focus:ring-0 focus:outline-none transition-colors duration-300"
                 />
               </div>
               <div>
@@ -105,7 +105,7 @@ const Footer = () => {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="your@email.com"
                   required
-                  className="bg-background/50 border-border/50 focus:border-primary"
+                  className="bg-background/50 border border-border/50 focus:border-primary focus:ring-0 focus:outline-none transition-colors duration-300"
                 />
               </div>
             </div>
@@ -121,7 +121,7 @@ const Footer = () => {
                 placeholder="Tell us about your project..."
                 required
                 rows={5}
-                className="bg-background/50 border-border/50 focus:border-primary resize-none"
+                className="bg-background/50 border border-border/50 focus:border-primary focus:ring-0 focus:outline-none transition-colors duration-300 resize-none"
               />
             </div>
 
