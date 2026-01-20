@@ -54,7 +54,7 @@ const Categories = () => {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-8">
+        <div className="flex flex-wrap justify-between gap-y-4">
           {categories.map((category) => {
             const Icon = category.icon;
             const isSelected = selectedCategory === category.id;
@@ -65,6 +65,7 @@ const Categories = () => {
                 onClick={() => handleCategoryClick(category.id)}
                 className={`group relative p-4 md:p-6 bg-card/90 backdrop-blur-sm border 
                            transition-all duration-300 cursor-pointer overflow-hidden text-left
+                           w-[48%] lg:w-[23%]
                            ${isSelected 
                              ? 'border-primary bg-primary/10 ring-2 ring-primary/50 scale-[1.02]' 
                              : 'border-border/50 hover:border-primary/50'
