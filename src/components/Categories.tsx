@@ -44,7 +44,7 @@ const Categories = () => {
 
   return (
     <section id="catalog" className="relative -mt-32 md:-mt-40 pb-16 bg-transparent z-10">
-      <div className="container mx-auto px-6">
+      <div className="w-full px-8 md:px-12 lg:px-16">
         <div className="text-center mb-8">
           <h2 className="font-display text-2xl md:text-3xl text-gradient-gold mb-2 tracking-wide">
             CATALOG
@@ -54,7 +54,7 @@ const Categories = () => {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-10">
+        <div className="flex justify-between gap-4">
           {categories.map((category) => {
             const Icon = category.icon;
             const isSelected = selectedCategory === category.id;
@@ -65,7 +65,7 @@ const Categories = () => {
                 onClick={() => handleCategoryClick(category.id)}
                 className={`group relative p-5 md:p-6 bg-card/90 backdrop-blur-sm border 
                            transition-all duration-300 cursor-pointer overflow-hidden text-left
-                           min-w-[160px]
+                           flex-1 max-w-[280px]
                            ${isSelected 
                              ? 'border-primary bg-primary/10 ring-2 ring-primary/50 scale-[1.02]' 
                              : 'border-border/50 hover:border-primary/50'
