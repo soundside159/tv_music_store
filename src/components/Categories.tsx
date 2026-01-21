@@ -113,47 +113,44 @@ const Categories = ({ selectedCategory, onCategoryChange }: CategoriesProps) => 
                 key={category.id}
                 variants={itemVariants}
                 onClick={() => handleCategoryClick(category.id)}
-                className={`group relative p-6 md:p-8 bg-card/90 backdrop-blur-sm border 
-                           transition-all duration-300 cursor-pointer overflow-hidden text-left
+                className={`group relative p-4 md:p-5 bg-card/90 backdrop-blur-sm border 
+                           transition-all duration-300 cursor-pointer overflow-hidden text-center
                            flex-1 min-w-0
                            ${isSelected 
-                             ? 'border-primary bg-primary/10 ring-2 ring-primary/50 scale-[1.02]' 
+                             ? 'border-primary bg-primary/10 ring-2 ring-primary/50' 
                              : 'border-border/50 hover:border-primary/50'
                            }`}
-                whileHover={{ scale: isSelected ? 1.02 : 1.03 }}
+                whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
+                {/* Selected indicator - top right */}
+                {isSelected && (
+                  <motion.div 
+                    className="absolute top-2 right-2 flex items-center gap-1.5 text-primary text-xs font-body"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                    <span>Selected</span>
+                  </motion.div>
+                )}
+                
                 {/* Hover glow effect */}
                 <div className={`absolute inset-0 transition-opacity duration-500 pointer-events-none
                                 bg-gradient-to-br from-primary/10 to-transparent
                                 ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
                 
-                <div className="relative z-10">
+                <div className="relative z-10 flex flex-col items-center">
                   <Icon 
-                    className={`w-10 h-10 md:w-12 md:h-12 mb-4 md:mb-5 transition-all duration-300
+                    className={`w-8 h-8 md:w-10 md:h-10 mb-3 transition-all duration-300
                                ${isSelected ? 'text-primary scale-110' : 'text-primary group-hover:scale-110'}`}
                     strokeWidth={1.5}
                   />
                   
-                  <h3 className="font-display text-base md:text-lg lg:text-xl text-foreground mb-3 tracking-wide">
+                  <h3 className="font-display text-sm md:text-base lg:text-lg text-foreground tracking-wide">
                     {category.title}
                   </h3>
-                  
-                  <p className="font-body text-xs md:text-sm text-muted-foreground leading-relaxed">
-                    {category.description}
-                  </p>
-                  
-                  {isSelected && (
-                    <motion.div 
-                      className="mt-4 flex items-center gap-2 text-primary text-xs font-body"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3 }}
-                    >
-                      <span>Selected</span>
-                      <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                    </motion.div>
-                  )}
                 </div>
               </motion.button>
             );
