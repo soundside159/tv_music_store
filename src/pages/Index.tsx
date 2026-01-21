@@ -4,6 +4,7 @@ import CinemaHero from "@/components/CinemaHero";
 import Categories from "@/components/Categories";
 import Footer from "@/components/Footer";
 import LoadingScreen from "@/components/LoadingScreen";
+import TrackList from "@/components/TrackList";
 
 const Index = () => {
   const [isLoading, setIsLoading] = useState(true);
@@ -42,6 +43,7 @@ const Index = () => {
               onCategoryChange={setSelectedCategory} 
             />
           </main>
+          <TrackList />
           <Footer />
         </>
       )}
