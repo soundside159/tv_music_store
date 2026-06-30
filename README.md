@@ -1,8 +1,14 @@
-# Welcome to your Lovable project
+# TVMUSICSTORE
+
+Premium cinematic music catalog for film, television, games, trailers, and production use.
+
+## Project overview
+
+TVMUSICSTORE is a modern React/Vite website with a dark cinema-inspired interface. The site presents an elite music catalog with dynamic theater backgrounds, animated category selection, a track preview panel, and a bottom audio waveform player.
 
 ## Project info
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+**Published URL**: https://cinema-soundtrack-studio.lovable.app
 
 ## How can I edit this code?
 
@@ -54,11 +60,21 @@ npm run dev
 
 This project is built with:
 
-- Vite
+- React 18
 - TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+- Vite 5
+- Tailwind CSS v3
+- shadcn/ui
+- Framer Motion
+- Lucide React
+
+## Main sections
+
+- Cinematic hero with dynamic category backgrounds
+- Music categories: Modern Score Music, Thriller Music, Game OST Music, Production Music
+- Right-side track preview/listening panel
+- Bottom audio waveform player
+- Contact form
 
 ## How can I deploy this project?
 
