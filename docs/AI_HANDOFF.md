@@ -14,14 +14,14 @@ This file is the short operational handoff for another AI assistant. It must sta
 - GitHub repo: `https://github.com/soundside159/tv_music_store`
 - Hosting: Cloudflare Pages, auto-deploying from `main`
 - Current app: React 18 + TypeScript + Vite + Tailwind + shadcn/ui
-- Backend is not built yet. Current catalog is mock data in `src/data/catalogTracks.ts`.
+- Backend is not built yet. Current catalog is temporary data in `src/data/catalogTracks.ts` with two real public MP3 preview tracks.
 - Architecture decision: keep Vite + Cloudflare. Do not migrate to Next.js, WordPress, or Supabase unless the owner explicitly changes the plan.
 
 ## Current Routes
 
 - `/`: branded landing page
-- `/catalog`: MVP catalog shell with filters, mock tracks, version switching, and sticky player UI
-- `/track/:slug`: MVP track detail shell backed by mock catalog data
+- `/catalog`: MVP catalog shell with filters, real MP3 previews, version switching, and sticky player UI
+- `/track/:slug`: MVP track detail shell backed by temporary catalog data and real MP3 previews
 - `*`: NotFound fallback
 
 ## Deployment Settings
@@ -54,11 +54,12 @@ npm run lint
 ## Current Implementation Notes
 
 - `src/data/catalogTracks.ts` is the temporary source for catalog records.
+- `public/audio/previews/` contains public MP3 previews generated from owner-provided WAVs. Do not commit private master WAV/ZIP files.
 - `src/pages/Catalog.tsx` links each track to `/track/:slug`.
 - `src/pages/TrackDetail.tsx` shows a minimal main player, preview versions, compact license rows, delivery notes, and similar tracks.
-- Catalog and track detail design should stay minimal: no separate Details button in rows, no Stems badge for now, and waveform rows should be a primary horizontal element.
+- Catalog and track detail design should stay minimal: dark graphite/white palette, no gold/mustard theme, no separate Details button in rows, no Stems badge for now, and compact waveform rows should be the main music-library element.
 - Stripe buttons are UI placeholders only. No payment should be considered real until webhook-confirmed backend logic exists.
-- Preview waveform UI is visual only. Real audio playback and R2 assets come later.
+- Waveform UI is still visual/synthetic, but real MP3 preview playback is connected through `<audio>`. R2/private masters come later.
 
 ## Next Recommended Step
 

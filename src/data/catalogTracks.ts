@@ -1,11 +1,19 @@
 export type TrackCategory = "modern-score" | "thriller" | "game-ost" | "production";
 
-export type TrackVersion = "full" | "60s" | "30s" | "15s" | "loop" | "stems";
+export type TrackVersion = "full" | "no-drums" | "no-drums-no-synths" | "drums-bass" | "drums-perc";
+
+export interface TrackAudioVersion {
+  id: TrackVersion;
+  label: string;
+  src: string;
+  duration: string;
+}
 
 export interface CatalogTrack {
   id: string;
   slug: string;
   title: string;
+  artist: string;
   category: TrackCategory;
   genre: string;
   mood: string;
@@ -14,10 +22,9 @@ export interface CatalogTrack {
   bpm: number;
   duration: string;
   priceFrom: number;
-  hasStems: boolean;
-  isFree: boolean;
   description: string;
-  versions: TrackVersion[];
+  tags: string[];
+  audioVersions: TrackAudioVersion[];
 }
 
 export const categoryLabels: Record<TrackCategory, string> = {
@@ -30,104 +37,76 @@ export const categoryLabels: Record<TrackCategory, string> = {
 export const catalogTracks: CatalogTrack[] = [
   {
     id: "trk_001",
-    slug: "epic-horizons",
-    title: "Epic Horizons",
-    category: "modern-score",
-    genre: "Cinematic Orchestral",
-    mood: "Hopeful",
-    useCase: "Documentary / Brand Film",
-    styleOf: "Adventure score",
-    bpm: 92,
-    duration: "3:24",
+    slug: "a-few-clicks-to-destruction",
+    title: "A Few Clicks To Destruction",
+    artist: "TVMUSICSTORE",
+    category: "thriller",
+    genre: "Hybrid Thriller",
+    mood: "Dark",
+    useCase: "Trailer / Horror / Tension",
+    styleOf: "Slow-burn destruction cue",
+    bpm: 70,
+    duration: "0:51",
     priceFrom: 39,
-    hasStems: true,
-    isFree: false,
-    description: "A broad orchestral cue for emotional reveals, brand stories, and premium documentaries.",
-    versions: ["full", "60s", "30s", "15s", "stems"],
+    description:
+      "A dark hybrid cue with pressure, low movement, and stripped alternate mixes for tension edits and destructive reveals.",
+    tags: ["Trailer", "Horror", "Tension", "Dark"],
+    audioVersions: [
+      {
+        id: "full",
+        label: "Full Mix",
+        duration: "0:51",
+        src: "/audio/previews/a-few-clicks-to-destruction/full-mix.mp3",
+      },
+      {
+        id: "no-drums-no-synths",
+        label: "No Drums / No Synths",
+        duration: "0:51",
+        src: "/audio/previews/a-few-clicks-to-destruction/no-drums-no-synths.mp3",
+      },
+      {
+        id: "drums-bass",
+        label: "Drums / Bass",
+        duration: "0:51",
+        src: "/audio/previews/a-few-clicks-to-destruction/drums-bass.mp3",
+      },
+    ],
   },
   {
     id: "trk_002",
-    slug: "dark-suspense",
-    title: "Dark Suspense",
-    category: "thriller",
-    genre: "Hybrid Tension",
-    mood: "Dark",
-    useCase: "Crime Trailer",
-    styleOf: "Modern thriller score",
-    bpm: 78,
-    duration: "2:48",
-    priceFrom: 39,
-    hasStems: true,
-    isFree: false,
-    description: "Low pulses, sharp rises, and controlled pressure for trailers, cold opens, and investigations.",
-    versions: ["full", "60s", "30s", "loop", "stems"],
-  },
-  {
-    id: "trk_003",
-    slug: "victory-march",
-    title: "Victory March",
+    slug: "a-journey-in-other-worlds",
+    title: "A Journey in Other Worlds",
+    artist: "TVMUSICSTORE",
     category: "game-ost",
-    genre: "Epic Fantasy",
-    mood: "Heroic",
-    useCase: "Game Boss Fight",
-    styleOf: "Fantasy adventure",
-    bpm: 126,
-    duration: "4:12",
+    genre: "Fantasy Adventure",
+    mood: "Epic",
+    useCase: "Game / Fantasy / Adventure",
+    styleOf: "Otherworldly adventure score",
+    bpm: 160,
+    duration: "1:09",
     priceFrom: 39,
-    hasStems: false,
-    isFree: false,
-    description: "A mission-ready orchestral theme with heroic brass, driving percussion, and loopable energy.",
-    versions: ["full", "60s", "30s", "loop"],
-  },
-  {
-    id: "trk_004",
-    slug: "midnight-chase",
-    title: "Midnight Chase",
-    category: "thriller",
-    genre: "Action Tension",
-    mood: "Urgent",
-    useCase: "Trailer / Chase Scene",
-    styleOf: "Pulse-driven cinema",
-    bpm: 138,
-    duration: "3:05",
-    priceFrom: 39,
-    hasStems: true,
-    isFree: false,
-    description: "Fast pulses and cinematic impacts for pursuit scenes, urgent promos, and high-stakes edits.",
-    versions: ["full", "60s", "30s", "15s", "stems"],
-  },
-  {
-    id: "trk_005",
-    slug: "corporate-cinematic-rise",
-    title: "Corporate Cinematic Rise",
-    category: "production",
-    genre: "Corporate Cinematic",
-    mood: "Confident",
-    useCase: "Commercial / Corporate Video",
-    styleOf: "Premium brand film",
-    bpm: 104,
-    duration: "2:36",
-    priceFrom: 39,
-    hasStems: false,
-    isFree: true,
-    description: "Clean piano, warm strings, and a confident build for launches, reels, and business stories.",
-    versions: ["full", "60s", "30s", "15s"],
-  },
-  {
-    id: "trk_006",
-    slug: "documentary-tension-bed",
-    title: "Documentary Tension Bed",
-    category: "modern-score",
-    genre: "Documentary",
-    mood: "Investigative",
-    useCase: "Documentary Underscore",
-    styleOf: "Minimal dramatic score",
-    bpm: 86,
-    duration: "3:18",
-    priceFrom: 39,
-    hasStems: false,
-    isFree: true,
-    description: "A restrained bed for interviews, investigative pacing, and story sections that need quiet gravity.",
-    versions: ["full", "60s", "30s", "loop"],
+    description:
+      "A fast orchestral fantasy cue for game worlds, adventure trailers, fantasy sequences, and high-energy story beats.",
+    tags: ["Game", "Fantasy", "Adventure", "Epic"],
+    audioVersions: [
+      {
+        id: "full",
+        label: "Full Mix",
+        duration: "1:09",
+        src: "/audio/previews/a-journey-in-other-worlds/full-mix.mp3",
+      },
+      {
+        id: "no-drums",
+        label: "No Drums",
+        duration: "1:09",
+        src: "/audio/previews/a-journey-in-other-worlds/no-drums.mp3",
+      },
+      {
+        id: "drums-perc",
+        label: "Drums / Perc",
+        duration: "1:09",
+        src: "/audio/previews/a-journey-in-other-worlds/drums-perc.mp3",
+      },
+    ],
   },
 ];

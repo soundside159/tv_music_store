@@ -28,12 +28,12 @@ const Navigation = () => {
   ];
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border/50">
+    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/85 backdrop-blur-xl">
       <div className="container mx-auto px-6">
         <div className="flex items-center justify-between h-16 md:h-20">
           {/* Logo */}
-          <Link to="/" className="font-display text-xl md:text-2xl text-gradient-gold tracking-wider">
-            TVMUSICSTORE
+          <Link to="/" className="font-body text-sm font-semibold uppercase tracking-[0.22em] text-foreground md:text-base">
+            TV Music Store
           </Link>
 
           {/* Desktop Navigation */}
@@ -43,18 +43,14 @@ const Navigation = () => {
                 key={item.label}
                 href={item.href}
                 onClick={item.onClick}
-                className="font-body text-sm tracking-wide text-muted-foreground 
-                         hover:text-primary transition-colors duration-300"
+                className="font-body text-sm text-muted-foreground transition-colors duration-300 hover:text-foreground"
               >
                 {item.label}
               </a>
             ))}
             <a
               href="#contact"
-              className="font-body text-sm tracking-wide px-5 py-2.5 
-                       border border-primary/50 text-primary
-                       hover:bg-primary hover:text-primary-foreground
-                       transition-all duration-300"
+              className="rounded-full bg-foreground px-5 py-2.5 font-body text-sm text-background transition-colors duration-300 hover:bg-primary"
             >
               Get Started
             </a>
@@ -82,8 +78,7 @@ const Navigation = () => {
                     if (item.onClick) item.onClick(e);
                     setIsOpen(false);
                   }}
-                  className="font-body text-base tracking-wide text-muted-foreground 
-                           hover:text-primary transition-colors duration-300 py-2"
+                  className="py-2 font-body text-base text-muted-foreground transition-colors duration-300 hover:text-foreground"
                 >
                   {item.label}
                 </a>
@@ -91,10 +86,7 @@ const Navigation = () => {
               <a
                 href="#contact"
                 onClick={() => setIsOpen(false)}
-                className="font-body text-sm tracking-wide px-5 py-3 mt-2
-                         border border-primary/50 text-primary text-center
-                         hover:bg-primary hover:text-primary-foreground
-                         transition-all duration-300"
+                className="mt-2 rounded-full bg-foreground px-5 py-3 text-center font-body text-sm text-background transition-colors duration-300 hover:bg-primary"
               >
                 Get Started
               </a>

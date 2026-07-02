@@ -19,7 +19,7 @@ Core positioning: boutique cinematic music licensing from one composer, with dir
 - React Router DOM
 - TanStack Query
 - Lucide React icons
-- Google Fonts: Cinzel for display text, Inter for body text
+- Google Fonts: Inter for the modern UI; Cinzel remains loaded only for legacy/homepage compatibility
 
 ## Planned Services
 
@@ -37,22 +37,23 @@ Architecture is fixed in the master plan: do not migrate to Next.js, Supabase, o
 ## Repository Structure
 
 - `src/pages/Index.tsx`: main homepage composition
-- `src/pages/Catalog.tsx`: MVP catalog page with mock filters, track rows, version switching, and sticky player shell
-- `src/pages/TrackDetail.tsx`: MVP track detail page backed by mock catalog data
+- `src/pages/Catalog.tsx`: MVP catalog page with real preview MP3 playback, compact track rows, version switching, and sticky player shell
+- `src/pages/TrackDetail.tsx`: MVP track detail page backed by real preview MP3s from the temporary catalog data
 - `src/pages/NotFound.tsx`: fallback route page
 - `src/components/Navigation.tsx`: fixed header and menu
 - `src/components/CinemaHero.tsx`: hero image and category-specific headline
 - `src/components/Categories.tsx`: category selector buttons
 - `src/components/TrackList.tsx`: temporary fixed track preview panel and player bar
-- `src/components/WaveformPreview.tsx`: shared visual waveform component for catalog and track detail mock players
+- `src/components/WaveformPreview.tsx`: shared visual waveform component for catalog and track detail preview players
 - `src/components/Footer.tsx`: contact form UI
 - `src/components/LoadingScreen.tsx`: initial loading screen
 - `src/components/ui/`: shadcn/ui primitives
 - `src/hooks/`: custom hooks
 - `src/lib/`: shared utilities
-- `src/data/catalogTracks.ts`: temporary mock catalog data and catalog-related TypeScript types; replace with D1-backed API later
+- `src/data/catalogTracks.ts`: temporary catalog data for the two real uploaded tracks and catalog-related TypeScript types; replace with D1-backed API later
 - `src/assets/`: bundled image assets used by Vite
 - `public/`: static public files copied to build output
+- `public/audio/previews/`: public MP3 preview files generated from owner-provided WAVs; do not put private master WAV/ZIP files here
 - `public/_redirects`: Cloudflare Pages SPA fallback
 - `docs/TVMUSICSTORE_MASTER_PLAN.md`: full business, UX, technical, database, admin, email, marketing, and roadmap plan
 - `docs/AI_HANDOFF.md`: short operational handoff for another AI assistant; never include secrets there
@@ -100,7 +101,7 @@ If Cloudflare auto-detects Bun, add `SKIP_DEPENDENCY_INSTALL=1` and keep the bui
 Planned app areas:
 
 - `/`: public catalog and homepage
-- `/catalog`: MVP filterable music catalog, currently backed by `src/data/catalogTracks.ts`; keep the UI minimal and track-row focused
+- `/catalog`: MVP filterable music catalog, currently backed by `src/data/catalogTracks.ts`; keep the UI minimal, dark/neutral, and track-row focused
 - `/track/:slug`: MVP track detail page, currently backed by `src/data/catalogTracks.ts`; keep the main player and licensing info visually quiet
 - `/playlists` and `/playlist/:slug`: curated playlists
 - `/free`: free tier tracks in exchange for email
@@ -142,8 +143,8 @@ Payments must be confirmed by Stripe webhooks before creating orders, licenses, 
 MVP priority:
 
 1. Keep current branded landing page.
-2. Build `/catalog` on mock data first. Current status: initial route and UI shell exist.
-3. Build `/track/:slug` on mock data first. Current status: initial route and UI shell exist.
+2. Build `/catalog` on temporary data first. Current status: two real tracks and six public MP3 preview versions are connected.
+3. Build `/track/:slug` on temporary data first. Current status: real preview playback and version switching exist.
 4. Add D1 schema and seed flow.
 5. Add R2 storage strategy for previews and private masters.
 6. Add Resend domain and transactional email scaffolding.
