@@ -5,6 +5,7 @@ import Categories from "@/components/Categories";
 import Footer from "@/components/Footer";
 import LoadingScreen from "@/components/LoadingScreen";
 import TrackList from "@/components/TrackList";
+import cinemaHero from "@/assets/cinema-hero.png";
 
 const Index = () => {
   const [isLoading, setIsLoading] = useState(true);
@@ -14,7 +15,7 @@ const Index = () => {
   useEffect(() => {
     // Preload the cinema hero image
     const img = new Image();
-    img.src = "/src/assets/cinema-hero.png";
+    img.src = cinemaHero;
     img.onload = () => {
       // Image loaded, we can start showing content
       setShowContent(true);
