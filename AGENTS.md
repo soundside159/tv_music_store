@@ -38,6 +38,7 @@ Architecture is fixed in the master plan: do not migrate to Next.js, Supabase, o
 
 - `src/pages/Index.tsx`: main homepage composition
 - `src/pages/Catalog.tsx`: MVP catalog page with mock filters, track rows, version switching, and sticky player shell
+- `src/pages/TrackDetail.tsx`: MVP track detail page backed by mock catalog data
 - `src/pages/NotFound.tsx`: fallback route page
 - `src/components/Navigation.tsx`: fixed header and menu
 - `src/components/CinemaHero.tsx`: hero image and category-specific headline
@@ -53,6 +54,7 @@ Architecture is fixed in the master plan: do not migrate to Next.js, Supabase, o
 - `public/`: static public files copied to build output
 - `public/_redirects`: Cloudflare Pages SPA fallback
 - `docs/TVMUSICSTORE_MASTER_PLAN.md`: full business, UX, technical, database, admin, email, marketing, and roadmap plan
+- `docs/AI_HANDOFF.md`: short operational handoff for another AI assistant; never include secrets there
 
 ## Local Commands
 
@@ -98,7 +100,7 @@ Planned app areas:
 
 - `/`: public catalog and homepage
 - `/catalog`: MVP filterable music catalog, currently backed by `src/data/catalogTracks.ts`
-- `/track/:slug`: future track detail page
+- `/track/:slug`: MVP track detail page, currently backed by `src/data/catalogTracks.ts`
 - `/playlists` and `/playlist/:slug`: curated playlists
 - `/free`: free tier tracks in exchange for email
 - `/licensing`: license information and FAQ
@@ -140,11 +142,12 @@ MVP priority:
 
 1. Keep current branded landing page.
 2. Build `/catalog` on mock data first. Current status: initial route and UI shell exist.
-3. Add D1 schema and seed flow.
-4. Add R2 storage strategy for previews and private masters.
-5. Add Resend domain and transactional email scaffolding.
-6. Add Stripe Checkout and webhooks.
-7. Add basic `/admin` for tracks, tags, prices, orders, and customers.
+3. Build `/track/:slug` on mock data first. Current status: initial route and UI shell exist.
+4. Add D1 schema and seed flow.
+5. Add R2 storage strategy for previews and private masters.
+6. Add Resend domain and transactional email scaffolding.
+7. Add Stripe Checkout and webhooks.
+8. Add basic `/admin` for tracks, tags, prices, orders, and customers.
 
 ## Documentation Rule
 

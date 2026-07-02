@@ -4,6 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
+  ArrowRight,
   Filter,
   Pause,
   Play,
@@ -255,7 +256,12 @@ const Catalog = () => {
 
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="font-display text-lg tracking-wide text-foreground">{track.title}</h3>
+                            <Link
+                              to={`/track/${track.slug}`}
+                              className="font-display text-lg tracking-wide text-foreground transition-colors hover:text-primary"
+                            >
+                              {track.title}
+                            </Link>
                             {track.isFree && <Tag>Free tier</Tag>}
                             {track.hasStems && <Tag>Stems</Tag>}
                           </div>
@@ -307,10 +313,19 @@ const Catalog = () => {
                           <span className="font-body text-sm text-muted-foreground">
                             from <span className="text-foreground">${track.priceFrom}</span>
                           </span>
-                          <Button size="sm" className="h-9 rounded-none gap-2">
-                            <Plus className="h-4 w-4" />
-                            Add
-                          </Button>
+                          <div className="flex items-center gap-2">
+                            <Link
+                              to={`/track/${track.slug}`}
+                              className="inline-flex h-9 items-center gap-1.5 border border-primary/50 px-3 font-body text-xs text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+                            >
+                              Details
+                              <ArrowRight className="h-3.5 w-3.5" />
+                            </Link>
+                            <Button size="sm" className="h-9 rounded-none gap-2">
+                              <Plus className="h-4 w-4" />
+                              Add
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     </div>
