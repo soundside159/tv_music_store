@@ -44,6 +44,7 @@ Architecture is fixed in the master plan: do not migrate to Next.js, Supabase, o
 - `src/components/CinemaHero.tsx`: hero image and category-specific headline
 - `src/components/Categories.tsx`: category selector buttons
 - `src/components/TrackList.tsx`: temporary fixed track preview panel and player bar
+- `src/components/WaveformPreview.tsx`: shared visual waveform component for catalog and track detail mock players
 - `src/components/Footer.tsx`: contact form UI
 - `src/components/LoadingScreen.tsx`: initial loading screen
 - `src/components/ui/`: shadcn/ui primitives
@@ -99,8 +100,8 @@ If Cloudflare auto-detects Bun, add `SKIP_DEPENDENCY_INSTALL=1` and keep the bui
 Planned app areas:
 
 - `/`: public catalog and homepage
-- `/catalog`: MVP filterable music catalog, currently backed by `src/data/catalogTracks.ts`
-- `/track/:slug`: MVP track detail page, currently backed by `src/data/catalogTracks.ts`
+- `/catalog`: MVP filterable music catalog, currently backed by `src/data/catalogTracks.ts`; keep the UI minimal and track-row focused
+- `/track/:slug`: MVP track detail page, currently backed by `src/data/catalogTracks.ts`; keep the main player and licensing info visually quiet
 - `/playlists` and `/playlist/:slug`: curated playlists
 - `/free`: free tier tracks in exchange for email
 - `/licensing`: license information and FAQ

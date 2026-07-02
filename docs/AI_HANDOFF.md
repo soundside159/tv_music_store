@@ -55,7 +55,8 @@ npm run lint
 
 - `src/data/catalogTracks.ts` is the temporary source for catalog records.
 - `src/pages/Catalog.tsx` links each track to `/track/:slug`.
-- `src/pages/TrackDetail.tsx` shows preview versions, license cards, trust flow, and similar tracks.
+- `src/pages/TrackDetail.tsx` shows a minimal main player, preview versions, compact license rows, delivery notes, and similar tracks.
+- Catalog and track detail design should stay minimal: no separate Details button in rows, no Stems badge for now, and waveform rows should be a primary horizontal element.
 - Stripe buttons are UI placeholders only. No payment should be considered real until webhook-confirmed backend logic exists.
 - Preview waveform UI is visual only. Real audio playback and R2 assets come later.
 
