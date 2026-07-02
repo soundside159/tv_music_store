@@ -1,23 +1,30 @@
 import { useState } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 
 const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const location = useLocation();
+  const isHome = location.pathname === "/";
 
   const scrollToTop = (e: React.MouseEvent) => {
-    e.preventDefault();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (isHome) {
+      e.preventDefault();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   };
 
   const scrollToContact = (e: React.MouseEvent) => {
-    e.preventDefault();
-    document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
+    if (isHome) {
+      e.preventDefault();
+      document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
+    }
   };
 
   const navItems = [
-    { label: "Music Catalog", href: "#", onClick: scrollToTop },
-    { label: "Licensing", href: "#licensing" },
-    { label: "Contact", href: "#contact", onClick: scrollToContact },
+    { label: "Music Catalog", href: "/catalog" },
+    { label: "Licensing", href: "/#licensing", onClick: scrollToTop },
+    { label: "Contact", href: "/#contact", onClick: scrollToContact },
   ];
 
   return (
@@ -25,9 +32,9 @@ const Navigation = () => {
       <div className="container mx-auto px-6">
         <div className="flex items-center justify-between h-16 md:h-20">
           {/* Logo */}
-          <a href="/" className="font-display text-xl md:text-2xl text-gradient-gold tracking-wider">
+          <Link to="/" className="font-display text-xl md:text-2xl text-gradient-gold tracking-wider">
             TVMUSICSTORE
-          </a>
+          </Link>
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-8">

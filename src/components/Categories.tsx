@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
 import { Clapperboard, Skull, Gamepad2, Youtube, LucideIcon } from "lucide-react";
 
 interface Category {
@@ -155,6 +156,21 @@ const Categories = ({ selectedCategory, onCategoryChange }: CategoriesProps) => 
               </motion.button>
             );
           })}
+        </motion.div>
+
+        <motion.div
+          className="mt-8 flex justify-center"
+          initial={{ opacity: 0, y: 12 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.45, delay: 0.2 }}
+        >
+          <Link
+            to={`/catalog?category=${selectedCategory}`}
+            className="border border-primary/60 px-7 py-3 font-body text-sm tracking-wide text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+          >
+            Explore Catalog
+          </Link>
         </motion.div>
       </div>
     </section>
