@@ -2,10 +2,19 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ListMusic, Pause, Play, Plus, Search } from "lucide-react";
+import {
+  Download,
+  Filter,
+  Heart,
+  Home,
+  ListMusic,
+  Pause,
+  Play,
+  Search,
+  ShoppingBag,
+} from "lucide-react";
 import Navigation from "@/components/Navigation";
 import WaveformPreview from "@/components/WaveformPreview";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { catalogTracks, categoryLabels } from "@/data/catalogTracks";
 import type { CatalogTrack, TrackAudioVersion, TrackCategory, TrackVersion } from "@/data/catalogTracks";
@@ -15,26 +24,34 @@ type ActivePlayer = {
   versionId: TrackVersion;
 };
 
-const platformTags = ["Sora", "Veo", "Nano Banana", "Kling", "Trailers", "Games"];
+type FilterValue = {
+  genre: string;
+  mood: string;
+  useCase: string;
+};
 
-const categoryOptions: Array<{ value: "all" | TrackCategory; label: string }> = [
-  { value: "all", label: "All" },
-  ...Array.from(new Set(catalogTracks.map((track) => track.category))).map((category) => ({
-    value: category,
-    label: categoryLabels[category],
-  })),
-];
+const splitFilterValues = (value: string) => value.split("/").map((item) => item.trim()).filter(Boolean);
 
-const moodOptions = ["All", ...Array.from(new Set(catalogTracks.map((track) => track.mood)))];
+const uniqueValues = (values: string[]) => Array.from(new Set(values)).sort((a, b) => a.localeCompare(b));
+
+const useCaseOptions = uniqueValues(catalogTracks.flatMap((track) => splitFilterValues(track.useCase)));
+const genreOptions = uniqueValues(catalogTracks.map((track) => track.genre));
+const moodOptions = uniqueValues(catalogTracks.map((track) => track.mood));
 
 const Catalog = () => {
   const [searchParams] = useSearchParams();
   const initialCategory = searchParams.get("category") as TrackCategory | null;
+  const initialGenre =
+    initialCategory && categoryLabels[initialCategory]
+      ? catalogTracks.find((track) => track.category === initialCategory)?.genre ?? "All"
+      : "All";
+
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState<"all" | TrackCategory>(
-    initialCategory && categoryLabels[initialCategory] ? initialCategory : "all",
-  );
-  const [mood, setMood] = useState("All");
+  const [filters, setFilters] = useState<FilterValue>({
+    genre: initialGenre,
+    mood: "All",
+    useCase: "All",
+  });
   const [activePlayer, setActivePlayer] = useState<ActivePlayer | null>(null);
   const [expandedTrackId, setExpandedTrackId] = useState<string | null>(catalogTracks[0]?.id ?? null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -42,13 +59,15 @@ const Catalog = () => {
   const [selectedVersions, setSelectedVersions] = useState<Record<string, TrackVersion>>({});
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const pendingPlayRef = useRef(false);
+  const pendingSeekRef = useRef<number | null>(null);
 
   const filteredTracks = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
     return catalogTracks.filter((track) => {
-      const matchesCategory = category === "all" || track.category === category;
-      const matchesMood = mood === "All" || track.mood === mood;
+      const matchesUseCase = filters.useCase === "All" || splitFilterValues(track.useCase).includes(filters.useCase);
+      const matchesGenre = filters.genre === "All" || track.genre === filters.genre;
+      const matchesMood = filters.mood === "All" || track.mood === filters.mood;
       const matchesQuery =
         !normalizedQuery ||
         [track.title, track.artist, track.genre, track.mood, track.useCase, track.description, ...track.tags]
@@ -56,9 +75,9 @@ const Catalog = () => {
           .toLowerCase()
           .includes(normalizedQuery);
 
-      return matchesCategory && matchesMood && matchesQuery;
+      return matchesUseCase && matchesGenre && matchesMood && matchesQuery;
     });
-  }, [category, mood, query]);
+  }, [filters, query]);
 
   const currentTrack = catalogTracks.find((track) => track.id === activePlayer?.trackId) ?? filteredTracks[0];
   const currentVersion = currentTrack?.audioVersions.find((version) => version.id === activePlayer?.versionId);
@@ -69,6 +88,13 @@ const Catalog = () => {
     if (!audio || !currentSrc) return;
 
     audio.load();
+  }, [currentSrc]);
+
+  const applyPendingStart = (audio: HTMLAudioElement) => {
+    if (pendingSeekRef.current !== null && Number.isFinite(audio.duration) && audio.duration > 0) {
+      audio.currentTime = audio.duration * pendingSeekRef.current;
+      pendingSeekRef.current = null;
+    }
 
     if (!pendingPlayRef.current) return;
     pendingPlayRef.current = false;
@@ -77,12 +103,12 @@ const Catalog = () => {
       .play()
       .then(() => setIsPlaying(true))
       .catch(() => setIsPlaying(false));
-  }, [currentSrc]);
+  };
 
   const getSelectedVersion = (track: CatalogTrack) =>
     track.audioVersions.find((version) => version.id === selectedVersions[track.id]) ?? track.audioVersions[0];
 
-  const playVersion = (track: CatalogTrack, version: TrackAudioVersion) => {
+  const playVersion = (track: CatalogTrack, version: TrackAudioVersion, seekTo: number | null = null) => {
     const audio = audioRef.current;
     const sameVersion = activePlayer?.trackId === track.id && activePlayer.versionId === version.id;
 
@@ -90,6 +116,18 @@ const Catalog = () => {
     setExpandedTrackId(track.id);
 
     if (sameVersion && audio) {
+      if (seekTo !== null) {
+        if (Number.isFinite(audio.duration) && audio.duration > 0) {
+          audio.currentTime = audio.duration * seekTo;
+          setProgress(seekTo);
+        }
+        audio
+          .play()
+          .then(() => setIsPlaying(true))
+          .catch(() => setIsPlaying(false));
+        return;
+      }
+
       if (isPlaying) {
         audio.pause();
         setIsPlaying(false);
@@ -103,15 +141,13 @@ const Catalog = () => {
       return;
     }
 
-    setProgress(0);
+    pendingSeekRef.current = seekTo;
+    pendingPlayRef.current = true;
+    setProgress(seekTo ?? 0);
     setActivePlayer({ trackId: track.id, versionId: version.id });
 
-    if (!audio) {
-      pendingPlayRef.current = true;
-      return;
-    }
+    if (!audio) return;
 
-    pendingPlayRef.current = false;
     audio.src = version.src;
     audio.load();
     audio
@@ -123,6 +159,13 @@ const Catalog = () => {
   const activeProgressFor = (track: CatalogTrack, version: TrackAudioVersion) =>
     activePlayer?.trackId === track.id && activePlayer.versionId === version.id ? progress : 0;
 
+  const setFilter = (key: keyof FilterValue, value: string) => {
+    setFilters((current) => ({
+      ...current,
+      [key]: current[key] === value ? "All" : value,
+    }));
+  };
+
   return (
     <div className="min-h-screen bg-background pb-24">
       <Navigation />
@@ -130,6 +173,7 @@ const Catalog = () => {
         ref={audioRef}
         src={currentSrc}
         preload="metadata"
+        onLoadedMetadata={(event) => applyPendingStart(event.currentTarget)}
         onTimeUpdate={(event) => {
           const audio = event.currentTarget;
           setProgress(audio.duration ? audio.currentTime / audio.duration : 0);
@@ -140,112 +184,98 @@ const Catalog = () => {
         }}
       />
 
-      <main className="pt-20 md:pt-24">
-        <section className="border-b border-border/40">
-          <div className="mx-auto w-full max-w-7xl px-4 py-7 sm:px-6 lg:px-8">
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-              <div className="max-w-3xl">
-                <p className="mb-3 font-body text-xs uppercase tracking-[0.24em] text-muted-foreground">
-                  Music library
-                </p>
-                <h1 className="font-body text-4xl font-semibold tracking-normal text-foreground md:text-6xl">
-                  Cinematic tracks for modern video
-                </h1>
-                <p className="mt-4 max-w-2xl font-body text-sm leading-6 text-muted-foreground">
-                  Minimal catalog view for testing real previews, alternate mixes, licensing, and future checkout.
-                </p>
-              </div>
+      <main className="px-4 pt-24 sm:px-6 lg:px-8">
+        <CatalogBreadcrumb />
 
-              <div className="flex flex-wrap gap-2 rounded-full border border-border/60 bg-card/50 p-2">
-                {platformTags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded-full px-3 py-1.5 font-body text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
-          <div className="grid gap-3 border-b border-border/40 pb-5 lg:grid-cols-[minmax(16rem,1fr)_12rem]">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search tracks, moods, use cases"
-                className="h-11 rounded-none border-border/70 bg-transparent pl-9"
-              />
+        <section className="mt-8 grid gap-8 lg:grid-cols-[18rem_minmax(0,1fr)]">
+          <aside className="h-fit rounded-xl border border-border/70 bg-card/30 p-5">
+            <div className="mb-6 flex items-center gap-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/70">
+                <Filter className="h-4 w-4" />
+              </span>
+              <h1 className="font-body text-lg font-semibold tracking-wide text-foreground">Filters</h1>
             </div>
 
-            <SelectField value={mood} onChange={setMood}>
-              {moodOptions.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </SelectField>
+            <FilterGroup
+              label="Use Case"
+              options={useCaseOptions}
+              value={filters.useCase}
+              onChange={(value) => setFilter("useCase", value)}
+            />
+            <FilterGroup
+              label="Genre"
+              options={genreOptions}
+              value={filters.genre}
+              onChange={(value) => setFilter("genre", value)}
+            />
+            <FilterGroup
+              label="Mood"
+              options={moodOptions}
+              value={filters.mood}
+              onChange={(value) => setFilter("mood", value)}
+            />
+          </aside>
 
-            <div className="flex flex-wrap gap-2 lg:col-span-2">
-              {categoryOptions.map((item) => (
-                <FilterPill
-                  key={item.value}
-                  active={category === item.value}
-                  onClick={() => setCategory(item.value)}
-                >
-                  {item.label}
-                </FilterPill>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-5 flex items-center justify-between gap-4 font-body text-xs uppercase tracking-[0.18em] text-muted-foreground">
-            <span className="inline-flex items-center gap-2">
-              <ListMusic className="h-4 w-4" />
-              {filteredTracks.length} tracks /{" "}
-              {filteredTracks.reduce((total, track) => total + track.audioVersions.length, 0)} versions
-            </span>
-            <span>Sort by Featured</span>
-          </div>
-
-          <div className="mt-3 border-y border-border/40">
-            {filteredTracks.map((track, index) => {
-              const selectedVersion = getSelectedVersion(track);
-              const expanded = expandedTrackId === track.id;
-              const rowIsPlaying = activePlayer?.trackId === track.id && isPlaying;
-
-              return (
-                <TrackRow
-                  key={track.id}
-                  activePlayer={activePlayer}
-                  expanded={expanded}
-                  index={index}
-                  isPlaying={rowIsPlaying}
-                  onPlayVersion={playVersion}
-                  onToggleExpanded={() => setExpandedTrackId(expanded ? null : track.id)}
-                  progress={activeProgressFor(track, selectedVersion)}
-                  selectedVersion={selectedVersion}
-                  track={track}
+          <section className="min-w-0">
+            <div className="grid gap-3 md:grid-cols-[minmax(16rem,40rem)_1fr_auto] md:items-center">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search tracks, genres, moods"
+                  className="h-12 rounded-lg border-border/70 bg-card/30 pl-11"
                 />
-              );
-            })}
-          </div>
-
-          {filteredTracks.length === 0 && (
-            <div className="py-12 text-center font-body text-sm text-muted-foreground">
-              No tracks found. Try another mood or search phrase.
+              </div>
+              <div />
+              <div className="font-body text-sm text-muted-foreground">
+                Sort by <span className="font-semibold text-foreground">Featured</span>
+              </div>
             </div>
-          )}
+
+            <div className="mt-8 flex items-center justify-between gap-4 border-b border-border/40 pb-3 font-body text-xs uppercase tracking-[0.18em] text-muted-foreground">
+              <span className="inline-flex items-center gap-2">
+                <ListMusic className="h-4 w-4" />
+                {filteredTracks.length} tracks /{" "}
+                {filteredTracks.reduce((total, track) => total + track.audioVersions.length, 0)} versions
+              </span>
+            </div>
+
+            <div className="border-b border-border/40">
+              {filteredTracks.map((track, index) => {
+                const selectedVersion = getSelectedVersion(track);
+                const expanded = expandedTrackId === track.id;
+                const rowIsPlaying = activePlayer?.trackId === track.id && isPlaying;
+
+                return (
+                  <TrackRow
+                    key={track.id}
+                    activePlayer={activePlayer}
+                    expanded={expanded}
+                    index={index}
+                    isPlaying={rowIsPlaying}
+                    onPlayVersion={playVersion}
+                    onToggleExpanded={() => setExpandedTrackId(expanded ? null : track.id)}
+                    progress={activeProgressFor(track, selectedVersion)}
+                    selectedVersion={selectedVersion}
+                    track={track}
+                  />
+                );
+              })}
+            </div>
+
+            {filteredTracks.length === 0 && (
+              <div className="py-12 text-center font-body text-sm text-muted-foreground">
+                No tracks found. Try another filter or search phrase.
+              </div>
+            )}
+          </section>
         </section>
       </main>
 
       {currentTrack && currentVersion && (
         <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-background/95 backdrop-blur-xl">
-          <div className="mx-auto grid min-h-16 w-full max-w-7xl gap-3 px-4 py-3 sm:px-6 md:grid-cols-[minmax(12rem,20rem)_minmax(0,1fr)_auto] md:items-center lg:px-8">
+          <div className="grid min-h-16 w-full gap-3 px-4 py-3 sm:px-6 md:grid-cols-[minmax(12rem,20rem)_minmax(0,1fr)_auto] md:items-center lg:px-8">
             <div className="flex min-w-0 items-center gap-3">
               <button
                 type="button"
@@ -268,17 +298,42 @@ const Catalog = () => {
               </div>
             </div>
 
-            <WaveformPreview active={isPlaying} progress={progress} seed={currentTrack.bpm} className="h-8" />
+            <WaveformPreview
+              active={isPlaying}
+              onSeek={(nextProgress) => playVersion(currentTrack, currentVersion, nextProgress)}
+              progress={progress}
+              src={currentVersion.src}
+              className="h-8"
+            />
 
-            <Button size="sm" className="h-9 rounded-full px-4">
-              License ${currentTrack.priceFrom}
-            </Button>
+            <TrackActions downloadSrc={currentVersion.src} title={currentTrack.title} />
           </div>
         </div>
       )}
     </div>
   );
 };
+
+const CatalogBreadcrumb = () => (
+  <div className="flex items-center gap-4">
+    <Link
+      to="/"
+      className="flex h-11 w-11 items-center justify-center rounded-xl border border-border/70 bg-card/40 font-body text-sm font-semibold text-foreground"
+    >
+      TV
+    </Link>
+    <nav className="flex flex-wrap items-center gap-2 font-body text-sm text-muted-foreground">
+      <Link to="/" className="inline-flex items-center gap-1 transition-colors hover:text-foreground">
+        <Home className="h-3.5 w-3.5" />
+        Home
+      </Link>
+      <span>/</span>
+      <span>Music Library</span>
+      <span>/</span>
+      <span className="font-semibold text-foreground">All Tracks</span>
+    </nav>
+  </div>
+);
 
 const TrackRow = ({
   activePlayer,
@@ -295,7 +350,7 @@ const TrackRow = ({
   expanded: boolean;
   index: number;
   isPlaying: boolean;
-  onPlayVersion: (track: CatalogTrack, version: TrackAudioVersion) => void;
+  onPlayVersion: (track: CatalogTrack, version: TrackAudioVersion, seekTo?: number | null) => void;
   onToggleExpanded: () => void;
   progress: number;
   selectedVersion: TrackAudioVersion;
@@ -305,13 +360,13 @@ const TrackRow = ({
     initial={{ opacity: 0, y: 8 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ delay: index * 0.035 }}
-    className="border-b border-border/40 py-3 last:border-b-0"
+    className="border-b border-border/40 py-4 last:border-b-0"
   >
-    <div className="grid gap-3 lg:grid-cols-[2.25rem_minmax(12rem,20rem)_4.5rem_minmax(12rem,1fr)_4.25rem_4.5rem_auto] lg:items-center">
+    <div className="grid gap-4 xl:grid-cols-[2.5rem_minmax(12rem,17rem)_minmax(12rem,1fr)_3.25rem_minmax(18rem,32rem)_3.5rem_4.5rem_7.25rem] xl:items-center">
       <button
         type="button"
         onClick={() => onPlayVersion(track, selectedVersion)}
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border/70 text-foreground transition-colors hover:border-foreground"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border/70 text-foreground transition-colors hover:border-foreground"
         aria-label={isPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
       >
         {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="ml-0.5 h-4 w-4" />}
@@ -325,8 +380,12 @@ const TrackRow = ({
           {track.title}
         </Link>
         <div className="mt-1 truncate font-body text-xs text-muted-foreground">
-          {track.genre} / {track.mood}
+          {track.artist} / {categoryLabels[track.category]}
         </div>
+      </div>
+
+      <div className="truncate font-body text-sm text-muted-foreground">
+        {track.genre} / {track.mood} / {splitFilterValues(track.useCase)[0]}
       </div>
 
       <button
@@ -337,44 +396,49 @@ const TrackRow = ({
         +{track.audioVersions.length - 1}
       </button>
 
-      <WaveformPreview active={isPlaying} progress={progress} seed={track.bpm} bars={96} className="h-10" />
+      <WaveformPreview
+        active={isPlaying}
+        bars={92}
+        onSeek={(nextProgress) => onPlayVersion(track, selectedVersion, nextProgress)}
+        progress={progress}
+        src={selectedVersion.src}
+        className="h-10 max-w-[32rem]"
+      />
 
       <span className="font-body text-xs text-muted-foreground">{selectedVersion.duration}</span>
       <span className="font-body text-xs text-muted-foreground">{track.bpm} BPM</span>
-
-      <Button size="sm" variant="ghost" className="h-9 justify-start rounded-full px-3 text-muted-foreground hover:text-foreground">
-        <Plus className="h-4 w-4" />
-        License
-      </Button>
+      <TrackActions downloadSrc={selectedVersion.src} title={track.title} />
     </div>
 
     {expanded && (
-      <div className="mt-3 space-y-1 pl-0 lg:ml-[2.25rem] lg:pl-3">
+      <div className="mt-2 space-y-1 xl:ml-[3.5rem]">
         {track.audioVersions.map((version, versionIndex) => {
           const active = activePlayer?.trackId === track.id && activePlayer.versionId === version.id;
 
           return (
-            <button
+            <div
               key={version.id}
-              type="button"
-              onClick={() => onPlayVersion(track, version)}
-              className="grid w-full gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-muted/30 lg:grid-cols-[1.25rem_minmax(10rem,15rem)_minmax(12rem,1fr)_4rem] lg:items-center"
+              className="grid gap-4 rounded-md px-3 py-2 transition-colors hover:bg-muted/25 xl:grid-cols-[minmax(12rem,17rem)_3.25rem_minmax(18rem,32rem)_3.5rem] xl:items-center"
             >
-              <span className="text-muted-foreground">
+              <button
+                type="button"
+                onClick={() => onPlayVersion(track, version)}
+                className="flex min-w-0 items-center gap-3 text-left font-body text-xs text-muted-foreground transition-colors hover:text-foreground"
+              >
                 {active && isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-              </span>
-              <span className={`font-body text-xs ${active ? "text-foreground" : "text-muted-foreground"}`}>
-                {version.label}
-              </span>
+                <span className={active ? "text-foreground" : undefined}>{version.label}</span>
+              </button>
+              <span />
               <WaveformPreview
                 active={active && isPlaying}
-                bars={80}
+                bars={92}
+                onSeek={(nextProgress) => onPlayVersion(track, version, nextProgress)}
                 progress={active ? progress : 0}
-                seed={track.bpm + versionIndex}
-                className="h-7"
+                src={version.src}
+                className="h-7 max-w-[32rem]"
               />
               <span className="font-body text-xs text-muted-foreground">{version.duration}</span>
-            </button>
+            </div>
           );
         })}
       </div>
@@ -382,47 +446,69 @@ const TrackRow = ({
   </motion.article>
 );
 
-const SelectField = ({
-  children,
-  onChange,
-  value,
-}: {
-  children: ReactNode;
-  onChange: (value: string) => void;
-  value: string;
-}) => (
-  <label className="block">
-    <span className="sr-only">Mood</span>
-    <select
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      className="h-11 w-full rounded-none border border-border/70 bg-transparent px-3 font-body text-sm text-foreground outline-none focus:border-foreground"
+const TrackActions = ({ downloadSrc, title }: { downloadSrc: string; title: string }) => (
+  <div className="flex items-center gap-3 text-muted-foreground">
+    <button type="button" className="transition-colors hover:text-foreground" aria-label={`Save ${title}`}>
+      <Heart className="h-4 w-4" />
+    </button>
+    <button type="button" className="transition-colors hover:text-foreground" aria-label={`Add ${title} to cart`}>
+      <ShoppingBag className="h-4 w-4" />
+    </button>
+    <a
+      href={downloadSrc}
+      download
+      className="transition-colors hover:text-foreground"
+      aria-label={`Download preview for ${title}`}
     >
-      {children}
-    </select>
-  </label>
+      <Download className="h-4 w-4" />
+    </a>
+  </div>
 );
 
-const FilterPill = ({
-  active,
-  children,
-  onClick,
+const FilterGroup = ({
+  label,
+  onChange,
+  options,
+  value,
 }: {
-  active: boolean;
-  children: ReactNode;
-  onClick: () => void;
+  label: string;
+  onChange: (value: string) => void;
+  options: string[];
+  value: string;
 }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className={`h-8 rounded-full border px-3 font-body text-xs transition-colors ${
-      active
-        ? "border-foreground bg-foreground text-background"
-        : "border-border/60 bg-transparent text-muted-foreground hover:border-foreground/60 hover:text-foreground"
-    }`}
-  >
-    {children}
-  </button>
+  <div className="border-t border-border/50 py-5 first:border-t-0 first:pt-0 last:pb-0">
+    <div className="mb-3 font-body text-xs font-semibold uppercase tracking-[0.18em] text-foreground">{label}</div>
+    <div className="space-y-2">
+      {options.map((option) => {
+        const active = value === option;
+
+        return (
+          <button
+            key={option}
+            type="button"
+            onClick={() => onChange(option)}
+            className="flex w-full items-center gap-3 text-left font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <span
+              className={`h-3.5 w-3.5 rounded-[3px] border ${
+                active ? "border-foreground bg-foreground" : "border-border bg-transparent"
+              }`}
+            />
+            <span>{option}</span>
+          </button>
+        );
+      })}
+      {value !== "All" && (
+        <button
+          type="button"
+          onClick={() => onChange(value)}
+          className="pt-1 font-body text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+          Clear
+        </button>
+      )}
+    </div>
+  </div>
 );
 
 export default Catalog;

@@ -20,8 +20,8 @@ This file is the short operational handoff for another AI assistant. It must sta
 ## Current Routes
 
 - `/`: branded landing page
-- `/catalog`: MVP catalog shell with filters, real MP3 previews, version switching, and sticky player UI
-- `/track/:slug`: MVP track detail shell backed by temporary catalog data and real MP3 previews
+- `/catalog`: MVP catalog shell with left sidebar filters, real MP3 previews, click-to-seek waveforms, expandable versions, heart/cart/download actions, and sticky player UI
+- `/track/:slug`: MVP track detail shell backed by temporary catalog data and real MP3 previews, with Versions / Similar / License Info tabs
 - `*`: NotFound fallback
 
 ## Deployment Settings
@@ -55,11 +55,11 @@ npm run lint
 
 - `src/data/catalogTracks.ts` is the temporary source for catalog records.
 - `public/audio/previews/` contains public MP3 previews generated from owner-provided WAVs. Do not commit private master WAV/ZIP files.
-- `src/pages/Catalog.tsx` links each track to `/track/:slug`.
-- `src/pages/TrackDetail.tsx` shows a minimal main player, preview versions, compact license rows, delivery notes, and similar tracks.
-- Catalog and track detail design should stay minimal: dark graphite/white palette, no gold/mustard theme, no separate Details button in rows, no Stems badge for now, and compact waveform rows should be the main music-library element.
+- `src/pages/Catalog.tsx` links each track to `/track/:slug` and uses a three-column desktop rhythm: left filters, center search/list, bottom sticky player.
+- `src/pages/TrackDetail.tsx` shows a minimal main player, version rows, similar rows, and compact license rows hidden behind tabs.
+- Catalog and track detail design should stay minimal: dark graphite/white palette, no gold/mustard theme, no top AI/tool pill list, no separate Details button in rows, no Stems badge for now, and compact waveform rows should be the main music-library element.
 - Stripe buttons are UI placeholders only. No payment should be considered real until webhook-confirmed backend logic exists.
-- Waveform UI is still visual/synthetic, but real MP3 preview playback is connected through `<audio>`. R2/private masters come later.
+- Waveform UI decodes public MP3 previews in the browser, renders audio-based peaks, and supports click-to-seek without pausing playback. R2/private masters come later.
 
 ## Next Recommended Step
 
