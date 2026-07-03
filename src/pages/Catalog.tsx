@@ -3,6 +3,8 @@ import { Link, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowRight,
+  Copy,
+  Download,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -69,6 +71,12 @@ const formatClock = (seconds: number) => {
 const sliderToGain = (value: number) => {
   const clamped = Math.min(1, Math.max(0, value));
   return Math.min(2, (clamped / 0.8) ** 2);
+};
+
+const pickTag = (value: string, seed: number) => {
+  const options = splitFilterValues(value);
+  if (options.length === 0) return null;
+  return options[seed % options.length];
 };
 
 const Catalog = () => {
@@ -302,7 +310,7 @@ const Catalog = () => {
                         ? `Search tracks in ${activeCollection.shortTitle}...`
                         : "Search tracks, genres, moods"
                     }
-                    className="h-10 rounded-full border-white/20 bg-background/50 pl-11 transition-colors focus-visible:border-[#FCD162]/70 focus-visible:ring-0 focus-visible:ring-offset-0"
+                    className="h-10 rounded-full border-white/20 bg-background/50 pl-11 transition-colors focus-visible:border-[#F4C430]/70 focus-visible:ring-0 focus-visible:ring-offset-0"
                   />
                 </div>
                 <div />
@@ -364,18 +372,18 @@ const Catalog = () => {
                 type="button"
                 onClick={() => playVersion(currentTrack, currentVersion)}
                 className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition-colors ${
-                  isPlaying ? "border-transparent" : "border-border/70 hover:border-[#FCD162]"
+                  isPlaying ? "border-transparent" : "border-border/70 hover:border-[#F4C430]"
                 }`}
                 aria-label={isPlaying ? "Pause current track" : "Play current track"}
               >
                 {isPlaying && <PlayProgressRing progress={progress} />}
-                {isPlaying ? <Pause className="h-4 w-4 text-[#FCD162]" /> : <Play className="ml-0.5 h-4 w-4" />}
+                {isPlaying ? <Pause className="h-4 w-4 text-[#F4C430]" /> : <Play className="ml-0.5 h-4 w-4" />}
               </button>
               <div className="min-w-0">
                 <Link
                   to={`/track/${currentTrack.slug}`}
                   className={`block truncate font-body text-sm font-medium transition-colors ${
-                    isPlaying ? "text-[#FCD162]" : "text-foreground hover:text-[#FCD162]"
+                    isPlaying ? "text-[#F4C430]" : "text-foreground hover:text-[#F4C430]"
                   }`}
                 >
                   {currentTrack.title}
@@ -411,11 +419,21 @@ const Catalog = () => {
                   step={0.01}
                   value={volume}
                   onChange={(event) => setVolume(Number(event.target.value))}
-                  className="h-1 w-20 cursor-pointer accent-[#FCD162]"
+                  className="h-1 w-20 cursor-pointer accent-[#F4C430]"
                   aria-label="Volume"
                 />
               </div>
-              <TrackActions title={currentTrack.title} />
+              <div className="flex items-center gap-5 text-muted-foreground">
+                <ActionIcon label="Favorite">
+                  <Heart className="h-5 w-5 stroke-[1.6]" />
+                </ActionIcon>
+                <ActionIcon label="Buy License">
+                  <ShoppingCart className="h-5 w-5 stroke-[1.6]" />
+                </ActionIcon>
+                <ActionIcon label="Download">
+                  <Download className="h-5 w-5 stroke-[1.6]" />
+                </ActionIcon>
+              </div>
             </div>
           </div>
         </div>
@@ -437,7 +455,7 @@ const PlayProgressRing = ({ progress }: { progress: number }) => {
         cy="50"
         r={radius}
         fill="none"
-        stroke="#FCD162"
+        stroke="#F4C430"
         strokeWidth={6}
         strokeLinecap="round"
         strokeDasharray={circumference}
@@ -457,7 +475,7 @@ const SortDropdown = ({ value, onChange }: { value: string; onChange: (value: st
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="inline-flex items-center gap-1 font-semibold text-foreground transition-colors hover:text-[#FCD162]"
+        className="inline-flex items-center gap-1 font-semibold text-foreground transition-colors hover:text-[#F4C430]"
       >
         {value}
         <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
@@ -475,7 +493,7 @@ const SortDropdown = ({ value, onChange }: { value: string; onChange: (value: st
                   setOpen(false);
                 }}
                 className={`block w-full px-3 py-2 text-left font-body text-sm transition-colors hover:bg-white/5 ${
-                  option === value ? "text-[#FCD162]" : "text-foreground"
+                  option === value ? "text-[#F4C430]" : "text-foreground"
                 }`}
               >
                 {option}
@@ -490,12 +508,12 @@ const SortDropdown = ({ value, onChange }: { value: string; onChange: (value: st
 
 const CatalogBreadcrumb = ({ activeCollection }: { activeCollection: MusicCollection | null }) => (
   <nav className="flex flex-wrap items-center gap-2 font-body text-sm text-muted-foreground">
-    <Link to="/" className="inline-flex items-center gap-1 transition-colors hover:text-[#FCD162]">
+    <Link to="/" className="inline-flex items-center gap-1 transition-colors hover:text-[#F4C430]">
       <Home className="h-3.5 w-3.5" />
       Home
     </Link>
     <span>/</span>
-    <Link to="/catalog" className="transition-colors hover:text-[#FCD162]">
+    <Link to="/catalog" className="transition-colors hover:text-[#F4C430]">
       Music Library
     </Link>
     <span>/</span>
@@ -515,11 +533,11 @@ const LibraryHero = () => (
     />
     <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.95)_0%,rgba(0,0,0,0.78)_22%,rgba(0,0,0,0.4)_48%,rgba(0,0,0,0)_74%)]" />
     <div className="absolute inset-y-0 left-0 flex max-w-2xl flex-col justify-center px-8 py-6 md:px-12">
-      <p className="font-body text-[0.7rem] font-semibold uppercase tracking-[0.32em] text-amber-300/90">
+      <p className="font-body text-[0.7rem] font-semibold uppercase tracking-[0.32em] text-[#F4C430]/90">
         Discover
       </p>
       <h1 className="mt-2 whitespace-nowrap font-display text-4xl font-semibold leading-none tracking-tight text-white sm:text-5xl">
-        <span className="text-[#FCD162]">Premium</span> Music Library
+        <span className="text-[#F4C430]">Premium</span> Music Library
       </h1>
       <p className="mt-3 max-w-lg font-body text-sm leading-6 text-white/55">
         Explore our entire library of premium tracks for any project and mood.
@@ -613,14 +631,14 @@ const CollectionStrip = ({
                     }`}
                   >
                     <div
-                      className="absolute inset-0 rounded-lg border border-[#FCD162]/55"
+                      className="absolute inset-0 rounded-lg border border-[#F4C430]/55"
                       style={{
                         maskImage: "linear-gradient(to bottom, #000 0%, #000 18%, transparent 58%)",
                         WebkitMaskImage: "linear-gradient(to bottom, #000 0%, #000 18%, transparent 58%)",
                       }}
                     />
                     <div
-                      className="absolute inset-0 rounded-lg border border-[#FCD162]/75"
+                      className="absolute inset-0 rounded-lg border border-[#F4C430]/75"
                       style={{
                         maskImage: "radial-gradient(58% 55% at 50% 100%, #000 0%, #000 30%, transparent 68%)",
                         WebkitMaskImage: "radial-gradient(58% 55% at 50% 100%, #000 0%, #000 30%, transparent 68%)",
@@ -628,14 +646,14 @@ const CollectionStrip = ({
                     />
                     <div
                       className="absolute inset-x-0 bottom-0 h-2/3"
-                      style={{ background: "radial-gradient(66% 62% at 50% 108%, rgba(252,209,98,0.42), rgba(252,209,98,0) 62%)" }}
+                      style={{ background: "radial-gradient(66% 62% at 50% 108%, rgba(244,196,48,0.42), rgba(244,196,48,0) 62%)" }}
                     />
                   </div>
                   <div style={{ transform: "skewX(9deg)" }} className="absolute inset-x-0 bottom-0 p-4">
                     <h3 className="font-display text-lg font-semibold leading-tight text-white">{collection.shortTitle}</h3>
                     <p className="mt-1 font-body text-xs text-white/60">{collection.trackCount} tracks</p>
                     <div className="mt-2.5">
-                      <span className="block h-px w-[70px] bg-gradient-to-r from-amber-300/80 to-amber-300/0" />
+                      <span className="block h-px w-[70px] bg-gradient-to-r from-[#F4C430]/80 to-[#F4C430]/0" />
                     </div>
                   </div>
                 </button>
@@ -656,7 +674,7 @@ const CollectionLamp = ({ active }: { active: boolean }) => (
     <span
       className={`h-2 w-2 rounded-full transition-all duration-300 ${
         active
-          ? "bg-[#FCD162] shadow-[0_0_10px_3px_rgba(252,209,98,0.8)]"
+          ? "bg-[#F4C430] shadow-[0_0_10px_3px_rgba(244,196,48,0.8)]"
           : "bg-white/30"
       }`}
     />
@@ -687,7 +705,7 @@ const FilterSidebar = ({
           <button
             type="button"
             onClick={onClear}
-            className="font-body text-xs text-muted-foreground transition-colors hover:text-[#FCD162]"
+            className="font-body text-xs text-muted-foreground transition-colors hover:text-[#F4C430]"
           >
             Clear all
           </button>
@@ -748,6 +766,8 @@ const TrackRow = ({
     return played;
   };
 
+  const seed = track.id.split("").reduce((sum, character) => sum + character.charCodeAt(0), 0);
+
   return (
   <motion.article
     initial={{ opacity: 0, y: 14 }}
@@ -760,7 +780,7 @@ const TrackRow = ({
         type="button"
         onClick={() => onPlayVersion(track, selectedVersion)}
         className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-colors duration-200 ${
-          mainIsPlaying ? "border-transparent text-[#FCD162]" : "border-border/70 text-foreground hover:border-[#FCD162] hover:text-[#FCD162]"
+          mainIsPlaying ? "border-transparent text-[#F4C430]" : "border-border/70 text-foreground hover:border-[#F4C430] hover:text-[#F4C430]"
         }`}
         aria-label={mainIsPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
       >
@@ -771,21 +791,32 @@ const TrackRow = ({
       <Link
         to={`/track/${track.slug}`}
         className={`min-w-0 whitespace-nowrap font-body text-base font-medium transition-colors ${
-          mainIsPlaying ? "text-[#FCD162]" : "text-foreground hover:text-[#FCD162]"
+          mainIsPlaying ? "text-[#F4C430]" : "text-foreground hover:text-[#F4C430]"
         }`}
       >
         {track.title}
       </Link>
 
-      <div className="hidden xl:block" aria-hidden="true" />
+      <div className="hidden min-w-0 items-center gap-2 overflow-hidden xl:flex">
+        {[pickTag(track.useCase, seed), pickTag(track.genre, seed + 1), pickTag(track.mood, seed + 2)]
+          .filter((tag): tag is string => Boolean(tag))
+          .map((tag) => (
+            <span
+              key={tag}
+              className="whitespace-nowrap rounded-md border border-white/10 bg-white/[0.03] px-2 py-0.5 font-body text-xs text-muted-foreground"
+            >
+              {tag}
+            </span>
+          ))}
+      </div>
 
       <button
         type="button"
         onClick={onToggleExpanded}
         className={`justify-self-start whitespace-nowrap px-1 py-1 font-body text-xs transition-colors duration-200 ${
           expanded
-            ? "text-foreground underline decoration-[#FCD162] decoration-2 underline-offset-4"
-            : "text-foreground hover:text-[#FCD162]"
+            ? "text-foreground underline decoration-[#F4C430] decoration-2 underline-offset-4"
+            : "text-foreground hover:text-[#F4C430]"
         }`}
       >
         versions +{track.audioVersions.length - 1}
@@ -801,18 +832,26 @@ const TrackRow = ({
         className="h-9 min-w-0"
       />
 
-      <span className={`justify-self-end font-body text-sm ${mainIsPlaying ? "text-[#FCD162]" : "text-muted-foreground"}`}>
+      <span className={`justify-self-end font-body text-sm ${mainIsPlaying ? "text-[#F4C430]" : "text-muted-foreground"}`}>
         {selectedVersion.duration}
       </span>
-      <span className={`justify-self-end font-body text-sm ${mainIsPlaying ? "text-[#FCD162]" : "text-muted-foreground"}`}>
+      <span className={`justify-self-end font-body text-sm ${mainIsPlaying ? "text-[#F4C430]" : "text-muted-foreground"}`}>
         {track.bpm} BPM
       </span>
-      <ActionIconButton label={`Save ${track.title}`}>
-        <Heart className="h-5 w-5 stroke-[1.6]" />
-      </ActionIconButton>
-      <ActionIconButton label={`Add ${track.title} to cart`}>
-        <ShoppingCart className="h-5 w-5 stroke-[1.6]" />
-      </ActionIconButton>
+      <div className="flex items-center justify-end gap-4 text-muted-foreground">
+        <ActionIcon label="Favorite">
+          <Heart className="h-5 w-5 stroke-[1.6]" />
+        </ActionIcon>
+        <ActionIcon label="Similar Tracks">
+          <Copy className="h-5 w-5 stroke-[1.6]" />
+        </ActionIcon>
+        <ActionIcon label="Buy License">
+          <ShoppingCart className="h-5 w-5 stroke-[1.6]" />
+        </ActionIcon>
+        <ActionIcon label="Download">
+          <Download className="h-5 w-5 stroke-[1.6]" />
+        </ActionIcon>
+      </div>
     </div>
 
     <AnimatePresence initial={false}>
@@ -841,13 +880,13 @@ const TrackRow = ({
                   >
                     <span
                       className={`relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors duration-200 ${
-                        active && globalIsPlaying ? "border-transparent text-[#FCD162]" : "border-border/60"
+                        active && globalIsPlaying ? "border-transparent text-[#F4C430]" : "border-border/60"
                       }`}
                     >
                       {active && globalIsPlaying && <PlayProgressRing progress={versionProgress(version.id)} />}
                       {active && globalIsPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="ml-0.5 h-3.5 w-3.5" />}
                     </span>
-                    <span className={`truncate ${active && globalIsPlaying ? "text-[#FCD162]" : active ? "text-foreground" : undefined}`}>{version.label}</span>
+                    <span className={`truncate ${active && globalIsPlaying ? "text-[#F4C430]" : active ? "text-foreground" : undefined}`}>{version.label}</span>
                   </button>
                   <div className="hidden xl:block" />
                   <div className="hidden xl:block" />
@@ -860,14 +899,18 @@ const TrackRow = ({
                     src={version.src}
                     className="h-7 min-w-0 xl:mr-[var(--track-version-wave-inset)]"
                   />
-                  <span className={`justify-self-end font-body text-sm ${active ? "text-[#FCD162]" : "text-muted-foreground"}`}>
+                  <span className={`justify-self-end font-body text-sm ${active ? "text-[#F4C430]" : "text-muted-foreground"}`}>
                     {version.duration}
                   </span>
                   <div className="hidden xl:block" />
-                  <div className="hidden xl:block" />
-                  <ActionIconButton label={`Add ${version.label} to cart`}>
-                    <ShoppingCart className="h-5 w-5 stroke-[1.6]" />
-                  </ActionIconButton>
+                  <div className="flex items-center justify-end gap-4 text-muted-foreground">
+                    <ActionIcon label="Buy License">
+                      <ShoppingCart className="h-5 w-5 stroke-[1.6]" />
+                    </ActionIcon>
+                    <ActionIcon label="Download">
+                      <Download className="h-5 w-5 stroke-[1.6]" />
+                    </ActionIcon>
+                  </div>
                 </div>
               );
             })}
@@ -879,25 +922,18 @@ const TrackRow = ({
   );
 };
 
-const ActionIconButton = ({ children, label }: { children: ReactNode; label: string }) => (
+const ActionIcon = ({ children, label, onClick }: { children: ReactNode; label: string; onClick?: () => void }) => (
   <button
     type="button"
-    className="justify-self-end text-muted-foreground transition-colors duration-200 hover:text-foreground"
+    onClick={onClick}
     aria-label={label}
+    className="group/act relative flex items-center justify-center text-muted-foreground transition-colors duration-200 hover:text-[#F4C430]"
   >
+    <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-white/10 bg-card px-2 py-1 font-body text-[11px] text-foreground opacity-0 shadow-lg transition-opacity duration-150 group-hover/act:opacity-100">
+      {label}
+    </span>
     {children}
   </button>
-);
-
-const TrackActions = ({ title }: { title: string }) => (
-  <div className="flex items-center gap-5 text-muted-foreground">
-    <button type="button" className="transition-colors duration-200 hover:text-foreground" aria-label={`Save ${title}`}>
-      <Heart className="h-5 w-5 stroke-[1.6]" />
-    </button>
-    <button type="button" className="transition-colors duration-200 hover:text-foreground" aria-label={`Add ${title} to cart`}>
-      <ShoppingCart className="h-5 w-5 stroke-[1.6]" />
-    </button>
-  </div>
 );
 
 const FilterGroup = ({
@@ -939,7 +975,7 @@ const FilterGroup = ({
               >
                 <span
                   className={`h-3.5 w-3.5 rounded-[3px] border ${
-                    active ? "border-[#FCD162] bg-[#FCD162]" : "border-border bg-transparent"
+                    active ? "border-[#F4C430] bg-[#F4C430]" : "border-border bg-transparent"
                   }`}
                 />
                 <span>{option}</span>

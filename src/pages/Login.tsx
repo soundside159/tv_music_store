@@ -17,7 +17,7 @@ const Login = () => (
               type="email"
               required
               placeholder="you@example.com"
-              className="h-11 w-full rounded-lg border border-white/15 bg-background/50 px-3 font-body text-sm text-foreground outline-none transition-colors focus:border-[#FCD162]/70"
+              className="h-11 w-full rounded-lg border border-white/15 bg-background/50 px-3 font-body text-sm text-foreground outline-none transition-colors focus:border-[#F4C430]/70"
             />
           </div>
           <div>
@@ -28,18 +28,18 @@ const Login = () => (
               type="password"
               required
               placeholder="********"
-              className="h-11 w-full rounded-lg border border-white/15 bg-background/50 px-3 font-body text-sm text-foreground outline-none transition-colors focus:border-[#FCD162]/70"
+              className="h-11 w-full rounded-lg border border-white/15 bg-background/50 px-3 font-body text-sm text-foreground outline-none transition-colors focus:border-[#F4C430]/70"
             />
           </div>
           <button
             type="submit"
-            className="h-11 w-full rounded-lg bg-[#FCD162] font-body text-sm font-semibold text-background transition-opacity hover:opacity-90"
+            className="h-11 w-full rounded-lg bg-[#F4C430] font-body text-sm font-semibold text-background transition-opacity hover:opacity-90"
           >
             Sign in
           </button>
         </form>
         <p className="mt-4 text-center font-body text-xs text-muted-foreground">
-          No account? <Link to="/login" className="text-[#FCD162] hover:underline">Create one</Link>
+          No account? <Link to="/login" className="text-[#F4C430] hover:underline">Create one</Link>
         </p>
       </div>
     </main>

@@ -37,7 +37,7 @@ const Navigation = () => {
                 onClick={item.onClick}
                 className={`font-body text-sm transition-colors duration-300 hover:text-foreground ${
                   item.href === "/catalog" && location.pathname === "/catalog"
-                    ? "text-[#FCD162]"
+                    ? "text-[#F4C430]"
                     : "text-muted-foreground"
                 }`}
               >
@@ -48,14 +48,14 @@ const Navigation = () => {
               <Link
                 to="/login"
                 aria-label="Account"
-                className="text-muted-foreground transition-colors duration-300 hover:text-[#FCD162]"
+                className="text-muted-foreground transition-colors duration-300 hover:text-[#F4C430]"
               >
                 <User className="h-5 w-5" />
               </Link>
               <button
                 type="button"
                 aria-label="Cart"
-                className="text-muted-foreground transition-colors duration-300 hover:text-[#FCD162]"
+                className="text-muted-foreground transition-colors duration-300 hover:text-[#F4C430]"
               >
                 <ShoppingCart className="h-5 w-5" />
               </button>
@@ -86,7 +86,7 @@ const Navigation = () => {
                   }}
                   className={`py-2 font-body text-base transition-colors duration-300 hover:text-foreground ${
                     item.href === "/catalog" && location.pathname === "/catalog"
-                      ? "text-[#FCD162]"
+                      ? "text-[#F4C430]"
                       : "text-muted-foreground"
                   }`}
                 >
@@ -96,7 +96,7 @@ const Navigation = () => {
               <Link
                 to="/login"
                 onClick={() => setIsOpen(false)}
-                className="mt-2 inline-flex items-center gap-2 py-2 font-body text-base text-muted-foreground transition-colors duration-300 hover:text-[#FCD162]"
+                className="mt-2 inline-flex items-center gap-2 py-2 font-body text-base text-muted-foreground transition-colors duration-300 hover:text-[#F4C430]"
               >
                 <User className="h-5 w-5" />
                 Account

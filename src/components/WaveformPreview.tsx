@@ -171,7 +171,7 @@ const WaveformPreview = ({
       >
         {isLoading || !peaks ? (
           <div className="absolute inset-0 overflow-hidden rounded-sm bg-foreground/[0.04]">
-            <div className="waveform-loading-scan h-full w-1/3 bg-gradient-to-r from-transparent via-[#FCD162]/40 to-transparent" />
+            <div className="waveform-loading-scan h-full w-1/3 bg-gradient-to-r from-transparent via-[#F4C430]/40 to-transparent" />
             <div className="absolute inset-x-0 top-1/2 h-px bg-foreground/10" />
           </div>
         ) : (
@@ -194,7 +194,7 @@ const WaveformPreview = ({
             {peaks.map((peak, index) => {
               const position = index / Math.max(1, peaks.length - 1);
               const played = progress > 0 && position <= progress;
-              const color = played ? "#FCD162" : "currentColor";
+              const color = played ? "#F4C430" : "currentColor";
               const opacity = played ? 0.9 : 0.55;
               const height = Math.max(6, peak * 86);
               const center = 50;
