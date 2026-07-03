@@ -70,6 +70,8 @@ const Catalog = () => {
   const [expandedTrackId, setExpandedTrackId] = useState<string | null>(catalogTracks[0]?.id ?? null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [playedProgress, setPlayedProgress] = useState<Record<string, number>>({});
+  const playedKey = (trackId: string, versionId: string) => `${trackId}:${versionId}`;
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const pendingPlayRef = useRef(false);
   const pendingSeekRef = useRef<number | null>(null);
