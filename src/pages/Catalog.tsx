@@ -203,7 +203,7 @@ const Catalog = () => {
         onLoadedMetadata={(event) => applyPendingStart(event.currentTarget)}
         onTimeUpdate={(event) => {
           const audio = event.currentTarget;
-          if (audio.seeking) return;
+          if (audio.seeking || pendingSeekRef.current !== null) return;
           const nextProgress = audio.duration ? audio.currentTime / audio.duration : 0;
           setProgress(nextProgress);
           if (activePlayer) {
@@ -322,7 +322,7 @@ const Catalog = () => {
                   {currentTrack.title}
                 </Link>
                 <p className="truncate font-body text-xs text-muted-foreground">
-                  {currentVersion.label} / {currentTrack.bpm} BPM
+                  {currentVersion.label}
                 </p>
               </div>
             </div>
@@ -333,7 +333,7 @@ const Catalog = () => {
               onSeek={(nextProgress) => playVersion(currentTrack, currentVersion, nextProgress)}
               progress={progress}
               src={currentVersion.src}
-              className="h-8"
+              className="h-8 md:mr-12"
             />
 
             <div className="flex items-center gap-4 md:gap-5">
@@ -621,7 +621,9 @@ const TrackRow = ({
         type="button"
         onClick={onToggleExpanded}
         className={`justify-self-start whitespace-nowrap px-1 py-1 font-body text-xs transition-colors duration-200 ${
-          expanded ? "text-[#FCD162]" : "text-foreground hover:text-[#FCD162]"
+          expanded
+            ? "text-foreground underline decoration-[#FCD162] decoration-2 underline-offset-4"
+            : "text-foreground hover:text-[#FCD162]"
         }`}
       >
         versions +{track.audioVersions.length - 1}
@@ -682,7 +684,7 @@ const TrackRow = ({
                     >
                       {active && globalIsPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="ml-0.5 h-3.5 w-3.5" />}
                     </span>
-                    <span className={`truncate ${active ? "text-foreground" : undefined}`}>{version.label}</span>
+                    <span className={`truncate ${active && globalIsPlaying ? "text-[#FCD162]" : active ? "text-foreground" : undefined}`}>{version.label}</span>
                   </button>
                   <div className="hidden xl:block" />
                   <div className="hidden xl:block" />
