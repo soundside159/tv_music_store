@@ -20,7 +20,7 @@ This file is the short operational handoff for another AI assistant. It must sta
 ## Current Routes
 
 - `/`: branded landing page
-- `/catalog`: MVP Music Library shell with collection cards, active collection hero, left sidebar filters, real MP3 previews, click-to-seek waveforms, expandable versions, heart/cart actions, and sticky player UI
+- `/catalog`: MVP Music Library shell with collection cards, active collection hero, left sidebar filters, real MP3 previews, click-to-seek waveforms, strict track-row columns, animated expandable versions, heart/cart actions, and sticky player UI
 - `/track/:slug`: MVP track detail shell backed by temporary catalog data and real MP3 previews, with Versions / Similar / License Info tabs
 - `*`: NotFound fallback
 
@@ -57,11 +57,11 @@ npm run lint
 - `src/data/musicCollections.ts` is the temporary source for Music Library collection cards and active collection hero metadata.
 - `public/audio/previews/` contains public MP3 previews generated from owner-provided WAVs. Do not commit private master WAV/ZIP files.
 - `public/images/collections/` contains temporary public collection covers copied from owner-provided test images.
-- `src/pages/Catalog.tsx` links each track to `/track/:slug` and uses this desktop rhythm: top breadcrumb/hero, left filters, center collection strip/search/list, bottom sticky player. Active collection state is stored in `?collection=collection-id`.
+- `src/pages/Catalog.tsx` links each track to `/track/:slug` and uses this desktop rhythm: top breadcrumb/hero, left filters, center collection strip/search/list, bottom sticky player. Active collection state is stored in `?collection=collection-id`. Track rows use fixed columns: play / title / +versions / waveform / duration / BPM / heart / cart.
 - `src/pages/TrackDetail.tsx` shows a minimal main player, version rows, similar rows, and compact license rows hidden behind tabs.
-- Catalog and track detail design should stay minimal: dark graphite/white/cyan palette, no gold/mustard theme, no top AI/tool pill list, no separate Details button in rows, no Stems badge for now, and compact waveform rows should be the main music-library element.
+- Catalog and track detail design should stay minimal: dark graphite/white/cyan palette, no gold/mustard theme, no top AI/tool pill list, no separate Details button in rows, no Stems badge for now, no fake demo tracks just to fill space, and compact waveform rows should be the main music-library element.
 - Stripe buttons are UI placeholders only. No payment should be considered real until webhook-confirmed backend logic exists.
-- Waveform UI decodes public MP3 previews in the browser, renders audio-based peaks, and supports click-to-seek without pausing playback. R2/private masters come later.
+- Waveform UI decodes public MP3 previews in the browser, renders audio-based SVG peaks, shows a scan-line loading state while decoding, colors only already played progress cyan, and supports click-to-seek without pausing playback. Alternate-version waveforms start in the same column as the full mix and use a duration ratio so shorter versions end earlier. R2/private masters come later.
 
 ## Next Recommended Step
 

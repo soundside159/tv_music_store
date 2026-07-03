@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Heart,
   Home,
@@ -40,6 +41,21 @@ const splitFilterValues = (value: string) => value.split("/").map((item) => item
 
 const matchesOption = (value: string, option: string) => value.toLowerCase().includes(option.toLowerCase());
 
+const durationToSeconds = (duration: string) => {
+  const parts = duration.split(":").map((part) => Number(part));
+  if (parts.some((part) => Number.isNaN(part))) return 0;
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return parts[0] ?? 0;
+};
+
+const getDurationRatio = (track: CatalogTrack, version: TrackAudioVersion) => {
+  const trackSeconds = durationToSeconds(track.duration);
+  const versionSeconds = durationToSeconds(version.duration);
+  if (!trackSeconds || !versionSeconds) return 1;
+  return Math.min(1, Math.max(0.08, versionSeconds / trackSeconds));
+};
+
 const Catalog = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeCollectionId = searchParams.get("collection");
@@ -54,7 +70,6 @@ const Catalog = () => {
   const [expandedTrackId, setExpandedTrackId] = useState<string | null>(catalogTracks[0]?.id ?? null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [selectedVersions, setSelectedVersions] = useState<Record<string, TrackVersion>>({});
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const pendingPlayRef = useRef(false);
   const pendingSeekRef = useRef<number | null>(null);
@@ -113,14 +128,10 @@ const Catalog = () => {
       .catch(() => setIsPlaying(false));
   };
 
-  const getSelectedVersion = (track: CatalogTrack) =>
-    track.audioVersions.find((version) => version.id === selectedVersions[track.id]) ?? track.audioVersions[0];
-
   const playVersion = (track: CatalogTrack, version: TrackAudioVersion, seekTo: number | null = null) => {
     const audio = audioRef.current;
     const sameVersion = activePlayer?.trackId === track.id && activePlayer.versionId === version.id;
 
-    setSelectedVersions((current) => ({ ...current, [track.id]: version.id }));
     setExpandedTrackId(track.id);
 
     if (sameVersion && audio) {
@@ -194,16 +205,23 @@ const Catalog = () => {
 
       <main className="px-3 pt-20 sm:px-5 lg:px-6">
         <CatalogBreadcrumb activeCollection={activeCollection} />
-        <LibraryHero activeCollection={activeCollection} />
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeCollection?.id ?? "all-tracks"}
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <LibraryHero activeCollection={activeCollection} />
+          </motion.div>
+        </AnimatePresence>
 
         <section className="mt-4 grid gap-5 lg:grid-cols-[14.5rem_minmax(0,1fr)] xl:grid-cols-[15.5rem_minmax(0,1fr)]">
           <FilterSidebar filters={filters} setFilter={setFilter} />
 
           <section className="min-w-0">
-            <CollectionStrip
-              activeCollection={activeCollection}
-              onSelectCollection={selectCollection}
-            />
+            <CollectionStrip activeCollection={activeCollection} onSelectCollection={selectCollection} />
 
             <div className="mt-4 overflow-hidden rounded-lg border border-border/30 bg-card/25">
               <div className="grid gap-3 border-b border-border/30 bg-background/20 px-4 py-3 md:grid-cols-[minmax(16rem,28rem)_1fr_auto] md:items-center">
@@ -230,28 +248,37 @@ const Catalog = () => {
                 </div>
               </div>
 
-              <div>
-                {filteredTracks.map((track, index) => {
-                  const selectedVersion = getSelectedVersion(track);
-                  const expanded = expandedTrackId === track.id;
-                  const rowIsPlaying = activePlayer?.trackId === track.id && isPlaying;
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={activeCollection?.id ?? "all-tracks"}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  {filteredTracks.map((track, index) => {
+                    const mainVersion = track.audioVersions[0];
+                    const expanded = expandedTrackId === track.id;
+                    const rowIsPlaying =
+                      activePlayer?.trackId === track.id && activePlayer.versionId === mainVersion.id && isPlaying;
 
-                  return (
-                    <TrackRow
-                      key={track.id}
-                      activePlayer={activePlayer}
-                      expanded={expanded}
-                      index={index}
-                      isPlaying={rowIsPlaying}
-                      onPlayVersion={playVersion}
-                      onToggleExpanded={() => setExpandedTrackId(expanded ? null : track.id)}
-                      progress={activeProgressFor(track, selectedVersion)}
-                      selectedVersion={selectedVersion}
-                      track={track}
-                    />
-                  );
-                })}
-              </div>
+                    return (
+                      <TrackRow
+                        key={track.id}
+                        activePlayer={activePlayer}
+                        expanded={expanded}
+                        index={index}
+                        isPlaying={rowIsPlaying}
+                        onPlayVersion={playVersion}
+                        onToggleExpanded={() => setExpandedTrackId(expanded ? null : track.id)}
+                        progress={activeProgressFor(track, mainVersion)}
+                        selectedVersion={mainVersion}
+                        track={track}
+                      />
+                    );
+                  })}
+                </motion.div>
+              </AnimatePresence>
 
               {filteredTracks.length === 0 && (
                 <div className="px-4 py-12 text-center font-body text-sm text-muted-foreground">
@@ -376,50 +403,86 @@ const CollectionStrip = ({
 }: {
   activeCollection: MusicCollection | null;
   onSelectCollection: (collectionId: string | null) => void;
-}) => (
-  <section>
-    <div className="mb-3 flex items-center justify-between gap-4">
-      <h2 className="font-body text-2xl font-medium tracking-normal text-foreground">Collections</h2>
-      <button
-        type="button"
-        onClick={() => onSelectCollection(null)}
-        className="inline-flex items-center gap-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
-      >
-        View all collections
-        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-card/70">
-          <ChevronRight className="h-4 w-4" />
-        </span>
-      </button>
-    </div>
-    <div className="grid auto-cols-[minmax(12rem,15rem)] grid-flow-col gap-3 overflow-x-auto pb-1">
-      {musicCollections.map((collection) => {
-        const active = activeCollection?.id === collection.id;
+}) => {
+  const stripRef = useRef<HTMLDivElement | null>(null);
 
-        return (
+  const scrollCollections = (direction: -1 | 1) => {
+    stripRef.current?.scrollBy({ left: direction * 320, behavior: "smooth" });
+  };
+
+  return (
+    <section>
+      <div className="mb-3 flex items-center justify-between gap-4">
+        <h2 className="font-body text-2xl font-medium tracking-normal text-foreground">Collections</h2>
+        <button
+          type="button"
+          onClick={() => onSelectCollection(null)}
+          className="inline-flex items-center gap-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          View all collections
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-card/70">
+            <ChevronRight className="h-4 w-4" />
+          </span>
+        </button>
+      </div>
+
+      <div className="relative">
+        <div
+          ref={stripRef}
+          className="grid auto-cols-[minmax(12rem,15rem)] grid-flow-col gap-3 overflow-x-auto pb-1 pr-16 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {musicCollections.map((collection) => {
+            const active = activeCollection?.id === collection.id;
+
+            return (
+              <motion.button
+                key={collection.id}
+                type="button"
+                onClick={() => onSelectCollection(collection.id)}
+                whileHover={{ y: -2 }}
+                whileTap={{ scale: 0.98 }}
+                transition={{ duration: 0.18 }}
+                className={`group relative h-32 overflow-hidden rounded-lg border text-left transition-colors duration-300 ${
+                  active ? "border-cyan-300" : "border-border/30 hover:border-foreground/30"
+                }`}
+              >
+                <img
+                  src={collection.image}
+                  alt=""
+                  className="h-full w-full object-cover opacity-70 transition-transform duration-500 group-hover:scale-105"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
+                <div className="absolute inset-x-0 bottom-0 p-4">
+                  <h3 className="font-body text-sm font-semibold text-foreground">{collection.shortTitle}</h3>
+                  <p className="mt-1 font-body text-xs text-foreground/70">{collection.trackCount} tracks</p>
+                </div>
+              </motion.button>
+            );
+          })}
+        </div>
+
+        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center gap-2 bg-gradient-to-l from-background via-background/80 to-transparent pl-10 pr-1">
           <button
-            key={collection.id}
             type="button"
-            onClick={() => onSelectCollection(collection.id)}
-            className={`group relative h-32 overflow-hidden rounded-lg border text-left transition-colors ${
-              active ? "border-cyan-300" : "border-border/30 hover:border-foreground/30"
-            }`}
+            onClick={() => scrollCollections(-1)}
+            className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full border border-border/50 bg-background/80 text-foreground transition-colors hover:border-cyan-300 hover:text-cyan-300"
+            aria-label="Previous collections"
           >
-            <img
-              src={collection.image}
-              alt=""
-              className="h-full w-full object-cover opacity-70 transition-transform duration-500 group-hover:scale-105"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
-            <div className="absolute inset-x-0 bottom-0 p-4">
-              <h3 className="font-body text-sm font-semibold text-foreground">{collection.shortTitle}</h3>
-              <p className="mt-1 font-body text-xs text-foreground/70">{collection.trackCount} tracks</p>
-            </div>
+            <ChevronLeft className="h-4 w-4" />
           </button>
-        );
-      })}
-    </div>
-  </section>
-);
+          <button
+            type="button"
+            onClick={() => scrollCollections(1)}
+            className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full border border-border/50 bg-background/80 text-foreground transition-colors hover:border-cyan-300 hover:text-cyan-300"
+            aria-label="Next collections"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+};
 
 const FilterSidebar = ({
   filters,
@@ -483,11 +546,11 @@ const TrackRow = ({
     transition={{ delay: index * 0.035 }}
     className="border-b border-border/30 last:border-b-0"
   >
-    <div className="grid gap-3 px-4 py-3 xl:grid-cols-[3rem_minmax(12rem,18rem)_3.5rem_minmax(18rem,1fr)_4.25rem_5rem_5.5rem] xl:items-center">
+    <div className="grid gap-3 px-4 py-3 xl:grid-cols-[3rem_minmax(10rem,16rem)_3.75rem_minmax(16rem,1fr)_4.25rem_4.75rem_2.75rem_2.75rem] xl:items-center 2xl:grid-cols-[3rem_minmax(13rem,18rem)_3.75rem_minmax(28rem,1fr)_4.5rem_5.5rem_3rem_3rem]">
       <button
         type="button"
         onClick={() => onPlayVersion(track, selectedVersion)}
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-colors ${
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-colors duration-200 ${
           isPlaying ? "border-cyan-300 text-cyan-300" : "border-border/70 text-foreground hover:border-foreground"
         }`}
         aria-label={isPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
@@ -505,74 +568,112 @@ const TrackRow = ({
       <button
         type="button"
         onClick={onToggleExpanded}
-        className="w-fit rounded-md border border-border/40 bg-muted/25 px-2 py-1 font-body text-xs text-foreground transition-colors hover:border-cyan-300"
+        className="justify-self-start rounded-md border border-border/40 bg-muted/25 px-2 py-1 font-body text-xs text-foreground transition-colors duration-200 hover:border-cyan-300"
       >
         +{track.audioVersions.length - 1}
       </button>
 
       <WaveformPreview
         active={isPlaying}
-        bars={116}
+        bars={180}
+        durationRatio={1}
         onSeek={(nextProgress) => onPlayVersion(track, selectedVersion, nextProgress)}
         progress={progress}
         src={selectedVersion.src}
-        className="h-9"
+        className="h-9 min-w-0"
       />
 
-      <span className={`font-body text-sm ${isPlaying ? "text-cyan-300" : "text-muted-foreground"}`}>
+      <span className={`justify-self-end font-body text-sm ${isPlaying ? "text-cyan-300" : "text-muted-foreground"}`}>
         {selectedVersion.duration}
       </span>
-      <span className={`font-body text-sm ${isPlaying ? "text-cyan-300" : "text-muted-foreground"}`}>
+      <span className={`justify-self-end font-body text-sm ${isPlaying ? "text-cyan-300" : "text-muted-foreground"}`}>
         {track.bpm} BPM
       </span>
-      <TrackActions title={track.title} />
+      <ActionIconButton label={`Save ${track.title}`}>
+        <Heart className="h-5 w-5 stroke-[1.6]" />
+      </ActionIconButton>
+      <ActionIconButton label={`Add ${track.title} to cart`}>
+        <ShoppingCart className="h-5 w-5 stroke-[1.6]" />
+      </ActionIconButton>
     </div>
 
-    {expanded && (
-      <div className="pb-2 xl:ml-[4rem] xl:mr-[10rem]">
-        {track.audioVersions.map((version, versionIndex) => {
-          const active = activePlayer?.trackId === track.id && activePlayer.versionId === version.id;
+    <AnimatePresence initial={false}>
+      {expanded && (
+        <motion.div
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: "auto", opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+          className="overflow-hidden"
+        >
+          <div className="pb-3">
+            {track.audioVersions.slice(1).map((version) => {
+              const active = activePlayer?.trackId === track.id && activePlayer.versionId === version.id;
 
-          return (
-            <div
-              key={version.id}
-              className="grid gap-3 px-4 py-1.5 xl:grid-cols-[14rem_minmax(18rem,1fr)_4.25rem] xl:items-center"
-            >
-              <button
-                type="button"
-                onClick={() => onPlayVersion(track, version)}
-                className="flex min-w-0 items-center gap-3 text-left font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <span className="flex h-7 w-7 items-center justify-center rounded-full border border-border/60">
-                  {active && isPlaying ? <Pause className="h-3.5 w-3.5 text-cyan-300" /> : <Play className="h-3.5 w-3.5" />}
-                </span>
-                <span className={active ? "text-foreground" : undefined}>
-                  {String(index + 1).padStart(2, "0")}.{versionIndex + 1} {version.label}
-                </span>
-              </button>
-              <WaveformPreview
-                active={active && isPlaying}
-                bars={92}
-                onSeek={(nextProgress) => onPlayVersion(track, version, nextProgress)}
-                progress={active ? progress : 0}
-                src={version.src}
-                className="h-7 max-w-[34rem]"
-              />
-              <span className="font-body text-sm text-muted-foreground">{version.duration}</span>
-            </div>
-          );
-        })}
-      </div>
-    )}
+              return (
+                <div
+                  key={version.id}
+                  className="grid gap-3 px-4 py-1.5 xl:grid-cols-[3rem_minmax(10rem,16rem)_3.75rem_minmax(16rem,1fr)_4.25rem_4.75rem_2.75rem_2.75rem] xl:items-center 2xl:grid-cols-[3rem_minmax(13rem,18rem)_3.75rem_minmax(28rem,1fr)_4.5rem_5.5rem_3rem_3rem]"
+                >
+                  <div className="hidden xl:block" />
+                  <button
+                    type="button"
+                    onClick={() => onPlayVersion(track, version)}
+                    className="flex min-w-0 items-center gap-3 text-left font-body text-sm text-muted-foreground transition-colors duration-200 hover:text-foreground"
+                  >
+                    <span
+                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors duration-200 ${
+                        active && isPlaying ? "border-cyan-300 text-cyan-300" : "border-border/60"
+                      }`}
+                    >
+                      {active && isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="ml-0.5 h-3.5 w-3.5" />}
+                    </span>
+                    <span className={`truncate ${active ? "text-foreground" : undefined}`}>{version.label}</span>
+                  </button>
+                  <div className="hidden xl:block" />
+                  <WaveformPreview
+                    active={active && isPlaying}
+                    bars={156}
+                    durationRatio={getDurationRatio(track, version)}
+                    onSeek={(nextProgress) => onPlayVersion(track, version, nextProgress)}
+                    progress={active ? progress : 0}
+                    src={version.src}
+                    className="h-7 min-w-0"
+                  />
+                  <span className={`justify-self-end font-body text-sm ${active ? "text-cyan-300" : "text-muted-foreground"}`}>
+                    {version.duration}
+                  </span>
+                  <div className="hidden xl:block" />
+                  <div className="hidden xl:block" />
+                  <ActionIconButton label={`Add ${version.label} to cart`}>
+                    <ShoppingCart className="h-5 w-5 stroke-[1.6]" />
+                  </ActionIconButton>
+                </div>
+              );
+            })}
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   </motion.article>
+);
+
+const ActionIconButton = ({ children, label }: { children: ReactNode; label: string }) => (
+  <button
+    type="button"
+    className="justify-self-end text-muted-foreground transition-colors duration-200 hover:text-foreground"
+    aria-label={label}
+  >
+    {children}
+  </button>
 );
 
 const TrackActions = ({ title }: { title: string }) => (
   <div className="flex items-center gap-5 text-muted-foreground">
-    <button type="button" className="transition-colors hover:text-foreground" aria-label={`Save ${title}`}>
+    <button type="button" className="transition-colors duration-200 hover:text-foreground" aria-label={`Save ${title}`}>
       <Heart className="h-5 w-5 stroke-[1.6]" />
     </button>
-    <button type="button" className="transition-colors hover:text-foreground" aria-label={`Add ${title} to cart`}>
+    <button type="button" className="transition-colors duration-200 hover:text-foreground" aria-label={`Add ${title} to cart`}>
       <ShoppingCart className="h-5 w-5 stroke-[1.6]" />
     </button>
   </div>

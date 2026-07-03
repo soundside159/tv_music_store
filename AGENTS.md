@@ -37,14 +37,14 @@ Architecture is fixed in the master plan: do not migrate to Next.js, Supabase, o
 ## Repository Structure
 
 - `src/pages/Index.tsx`: main homepage composition
-- `src/pages/Catalog.tsx`: MVP Music Library page with collection cards, active collection hero, left sidebar filters, real preview MP3 playback, compact track rows, expandable versions, action icons, and sticky player shell
+- `src/pages/Catalog.tsx`: MVP Music Library page with collection cards, active collection hero, left sidebar filters, real preview MP3 playback, strict track-row columns, animated expandable versions, action icons, and sticky player shell
 - `src/pages/TrackDetail.tsx`: MVP track detail page backed by real preview MP3s, with a quiet main player and Versions / Similar / License Info tabs
 - `src/pages/NotFound.tsx`: fallback route page
 - `src/components/Navigation.tsx`: fixed full-width header and menu
 - `src/components/CinemaHero.tsx`: hero image and category-specific headline
 - `src/components/Categories.tsx`: category selector buttons
 - `src/components/TrackList.tsx`: temporary fixed track preview panel and player bar
-- `src/components/WaveformPreview.tsx`: shared waveform component that decodes MP3 previews in the browser, renders audio-based peaks, and supports click-to-seek
+- `src/components/WaveformPreview.tsx`: shared waveform component that decodes MP3 previews in the browser, renders audio-based SVG peaks, shows a loading scan while decoding, colors only played progress cyan, and supports click-to-seek without click-to-pause
 - `src/components/Footer.tsx`: contact form UI
 - `src/components/LoadingScreen.tsx`: initial loading screen
 - `src/components/ui/`: shadcn/ui primitives
@@ -103,7 +103,7 @@ If Cloudflare auto-detects Bun, add `SKIP_DEPENDENCY_INSTALL=1` and keep the bui
 Planned app areas:
 
 - `/`: public catalog and homepage
-- `/catalog`: MVP Music Library, currently backed by `src/data/catalogTracks.ts` and `src/data/musicCollections.ts`; keep the UI minimal, dark/neutral, and track-row focused. Current layout uses breadcrumbs, a Music Library hero, horizontal collection cards, active collection hero via `?collection=...`, a left sidebar with Use Case, Genre, and Mood filters, compact rows, expandable version rows, heart/cart actions, and no separate Details button.
+- `/catalog`: MVP Music Library, currently backed by `src/data/catalogTracks.ts` and `src/data/musicCollections.ts`; keep the UI minimal, dark/neutral, and track-row focused. Current layout uses breadcrumbs, a Music Library hero, horizontal collection cards, active collection hero via `?collection=...`, a left sidebar with Use Case, Genre, and Mood filters, compact rows, strict columns (`play / title / +versions / waveform / duration / BPM / heart / cart`), expandable alternate-version rows, heart/cart actions, and no separate Details button.
 - `/track/:slug`: MVP track detail page, currently backed by `src/data/catalogTracks.ts`; keep the main player and licensing info visually quiet. Current layout uses tabs for Versions, Similar, and License Info so licensing text is not dumped into the first viewport.
 - `/playlists` and `/playlist/:slug`: curated playlists
 - `/free`: free tier tracks in exchange for email
@@ -145,7 +145,7 @@ Payments must be confirmed by Stripe webhooks before creating orders, licenses, 
 MVP priority:
 
 1. Keep current branded landing page.
-2. Build `/catalog` on temporary data first. Current status: two real tracks, six public MP3 preview versions, collection cards, active collection hero, and click-to-seek waveform playback from real decoded audio are connected.
+2. Build `/catalog` on temporary data first. Current status: two real tracks, six public MP3 preview versions, collection cards, active collection hero, and click-to-seek waveform playback from real decoded audio are connected. Do not add fake tracks just to fill the layout.
 3. Build `/track/:slug` on temporary data first. Current status: real preview playback, version switching, similar rows, and tabbed license info exist.
 4. Add D1 schema and seed flow.
 5. Add R2 storage strategy for previews and private masters.

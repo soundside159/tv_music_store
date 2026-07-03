@@ -5,6 +5,7 @@ interface WaveformPreviewProps {
   active?: boolean;
   bars?: number;
   className?: string;
+  durationRatio?: number;
   onSeek?: (progress: number) => void;
   progress?: number;
   seed?: number;
@@ -61,19 +62,25 @@ const getPeaks = (src: string, bars: number) => {
       const end = Math.max(start + 1, Math.floor(((index + 1) / bars) * length));
       const sampleStep = Math.max(1, Math.floor((end - start) / 120));
       let peak = 0;
+      let squaredSum = 0;
+      let sampleCount = 0;
 
       for (let channel = 0; channel < channelCount; channel += 1) {
         const data = buffer.getChannelData(channel);
         for (let sample = start; sample < end; sample += sampleStep) {
-          peak = Math.max(peak, Math.abs(data[sample] ?? 0));
+          const value = Math.abs(data[sample] ?? 0);
+          peak = Math.max(peak, value);
+          squaredSum += value * value;
+          sampleCount += 1;
         }
       }
 
-      return peak;
+      const rms = Math.sqrt(squaredSum / Math.max(1, sampleCount));
+      return peak * 0.72 + rms * 0.28;
     });
 
     const maxPeak = Math.max(...peaks, 0.001);
-    return peaks.map((peak) => Math.max(0.08, peak / maxPeak));
+    return peaks.map((peak) => Math.max(0.05, peak / maxPeak));
   });
 
   peaksCache.set(cacheKey, promise);
@@ -84,6 +91,7 @@ const WaveformPreview = ({
   active = false,
   bars = 96,
   className,
+  durationRatio = 1,
   onSeek,
   progress = 0,
   seed = 0,
@@ -93,28 +101,41 @@ const WaveformPreview = ({
     () => Array.from({ length: bars }, (_, index) => (18 + ((index * 17 + seed * 7) % 68)) / 100),
     [bars, seed],
   );
-  const [peaks, setPeaks] = useState(fallbackPeaks);
+  const [peaks, setPeaks] = useState<number[] | null>(src ? null : fallbackPeaks);
+  const [isLoading, setIsLoading] = useState(Boolean(src));
 
   useEffect(() => {
     let cancelled = false;
 
     if (!src) {
       setPeaks(fallbackPeaks);
+      setIsLoading(false);
       return;
     }
 
+    setIsLoading(true);
+    setPeaks(null);
+
     getPeaks(src, bars)
       .then((nextPeaks) => {
-        if (!cancelled) setPeaks(nextPeaks);
+        if (!cancelled) {
+          setPeaks(nextPeaks);
+          setIsLoading(false);
+        }
       })
       .catch(() => {
-        if (!cancelled) setPeaks(fallbackPeaks);
+        if (!cancelled) {
+          setPeaks(Array.from({ length: bars }, () => 0.08));
+          setIsLoading(false);
+        }
       });
 
     return () => {
       cancelled = true;
     };
   }, [bars, fallbackPeaks, src]);
+
+  const safeDurationRatio = Math.max(0.08, Math.min(1, durationRatio));
 
   const seekFromClientX = (clientX: number, element: HTMLDivElement) => {
     if (!onSeek) return;
@@ -127,39 +148,76 @@ const WaveformPreview = ({
   return (
     <div
       className={cn(
-        "flex h-14 w-full items-center gap-0.5 overflow-hidden",
-        onSeek && "cursor-pointer",
+        "relative h-14 w-full overflow-hidden text-foreground",
         className,
       )}
-      role={onSeek ? "slider" : undefined}
-      tabIndex={onSeek ? 0 : undefined}
-      aria-label={onSeek ? "Seek preview" : undefined}
-      aria-valuemin={onSeek ? 0 : undefined}
-      aria-valuemax={onSeek ? 100 : undefined}
-      aria-valuenow={onSeek ? Math.round(progress * 100) : undefined}
-      onClick={(event) => seekFromClientX(event.clientX, event.currentTarget)}
-      onKeyDown={(event) => {
-        if (!onSeek) return;
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onSeek(progress);
-        }
-      }}
     >
-      {peaks.map((peak, index) => {
-        const played = progress > 0 && index / Math.max(1, peaks.length - 1) <= progress;
+      <div
+        className={cn("relative h-full overflow-hidden", onSeek && "cursor-pointer")}
+        style={{ width: `${safeDurationRatio * 100}%` }}
+        role={onSeek ? "slider" : undefined}
+        tabIndex={onSeek ? 0 : undefined}
+        aria-label={onSeek ? "Seek preview" : undefined}
+        aria-valuemin={onSeek ? 0 : undefined}
+        aria-valuemax={onSeek ? 100 : undefined}
+        aria-valuenow={onSeek ? Math.round(progress * 100) : undefined}
+        onClick={(event) => seekFromClientX(event.clientX, event.currentTarget)}
+        onKeyDown={(event) => {
+          if (!onSeek) return;
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onSeek(progress);
+          }
+        }}
+      >
+        {isLoading || !peaks ? (
+          <div className="absolute inset-0 overflow-hidden rounded-sm bg-foreground/[0.04]">
+            <div className="waveform-loading-scan h-full w-1/3 bg-gradient-to-r from-transparent via-cyan-300/40 to-transparent" />
+            <div className="absolute inset-x-0 top-1/2 h-px bg-foreground/10" />
+          </div>
+        ) : (
+          <svg
+            className="h-full w-full"
+            viewBox={`0 0 ${peaks.length} 100`}
+            preserveAspectRatio="none"
+            aria-hidden="true"
+          >
+            <line
+              x1="0"
+              x2={peaks.length}
+              y1="50"
+              y2="50"
+              stroke="currentColor"
+              strokeOpacity="0.12"
+              strokeWidth="1"
+              vectorEffect="non-scaling-stroke"
+            />
+            {peaks.map((peak, index) => {
+              const position = index / Math.max(1, peaks.length - 1);
+              const played = progress > 0 && position <= progress;
+              const color = played ? "rgb(34 211 238)" : "currentColor";
+              const opacity = played ? 0.9 : active ? 0.55 : 0.34;
+              const height = Math.max(6, peak * 86);
+              const center = 50;
 
-        return (
-          <span
-            key={index}
-            className={cn(
-              "w-full min-w-px rounded-full transition-colors",
-              played ? "bg-cyan-400" : active ? "bg-foreground/40" : "bg-foreground/25",
-            )}
-            style={{ height: `${Math.round(peak * 100)}%` }}
-          />
-        );
-      })}
+              return (
+                <line
+                  key={index}
+                  x1={index + 0.5}
+                  x2={index + 0.5}
+                  y1={center - height / 2}
+                  y2={center + height / 2}
+                  stroke={color}
+                  strokeOpacity={opacity}
+                  strokeLinecap="butt"
+                  strokeWidth="1.15"
+                  vectorEffect="non-scaling-stroke"
+                />
+              );
+            })}
+          </svg>
+        )}
+      </div>
     </div>
   );
 };
