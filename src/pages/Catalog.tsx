@@ -259,7 +259,7 @@ const Catalog = () => {
                   {filteredTracks.map((track, index) => {
                     const mainVersion = track.audioVersions[0];
                     const expanded = expandedTrackId === track.id;
-                    const rowIsPlaying =
+                    const mainIsPlaying =
                       activePlayer?.trackId === track.id && activePlayer.versionId === mainVersion.id && isPlaying;
 
                     return (
@@ -267,11 +267,12 @@ const Catalog = () => {
                         key={track.id}
                         activePlayer={activePlayer}
                         expanded={expanded}
+                        globalIsPlaying={isPlaying}
+                        globalProgress={progress}
                         index={index}
-                        isPlaying={rowIsPlaying}
+                        mainIsPlaying={mainIsPlaying}
                         onPlayVersion={playVersion}
                         onToggleExpanded={() => setExpandedTrackId(expanded ? null : track.id)}
-                        progress={activeProgressFor(track, mainVersion)}
                         selectedVersion={mainVersion}
                         track={track}
                       />
@@ -523,21 +524,23 @@ const FilterSidebar = ({
 const TrackRow = ({
   activePlayer,
   expanded,
+  globalIsPlaying,
+  globalProgress,
   index,
-  isPlaying,
+  mainIsPlaying,
   onPlayVersion,
   onToggleExpanded,
-  progress,
   selectedVersion,
   track,
 }: {
   activePlayer: ActivePlayer | null;
   expanded: boolean;
+  globalIsPlaying: boolean;
+  globalProgress: number;
   index: number;
-  isPlaying: boolean;
+  mainIsPlaying: boolean;
   onPlayVersion: (track: CatalogTrack, version: TrackAudioVersion, seekTo?: number | null) => void;
   onToggleExpanded: () => void;
-  progress: number;
   selectedVersion: TrackAudioVersion;
   track: CatalogTrack;
 }) => (
@@ -552,11 +555,11 @@ const TrackRow = ({
         type="button"
         onClick={() => onPlayVersion(track, selectedVersion)}
         className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-colors duration-200 ${
-          isPlaying ? "border-cyan-300 text-cyan-300" : "border-border/70 text-foreground hover:border-foreground"
+          mainIsPlaying ? "border-cyan-300 text-cyan-300" : "border-border/70 text-foreground hover:border-foreground"
         }`}
-        aria-label={isPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
+        aria-label={mainIsPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
       >
-        {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="ml-0.5 h-4 w-4" />}
+        {mainIsPlaying ? <Pause className="h-4 w-4" /> : <Play className="ml-0.5 h-4 w-4" />}
       </button>
 
       <Link
@@ -575,19 +578,19 @@ const TrackRow = ({
       </button>
 
       <WaveformPreview
-        active={isPlaying}
+        active={mainIsPlaying}
         bars={420}
         durationRatio={1}
         onSeek={(nextProgress) => onPlayVersion(track, selectedVersion, nextProgress)}
-        progress={progress}
+        progress={mainIsPlaying || (activePlayer?.trackId === track.id && activePlayer.versionId === selectedVersion.id) ? globalProgress : 0}
         src={selectedVersion.src}
         className="h-9 min-w-0"
       />
 
-      <span className={`justify-self-end font-body text-sm ${isPlaying ? "text-cyan-300" : "text-muted-foreground"}`}>
+      <span className={`justify-self-end font-body text-sm ${mainIsPlaying ? "text-cyan-300" : "text-muted-foreground"}`}>
         {selectedVersion.duration}
       </span>
-      <span className={`justify-self-end font-body text-sm ${isPlaying ? "text-cyan-300" : "text-muted-foreground"}`}>
+      <span className={`justify-self-end font-body text-sm ${mainIsPlaying ? "text-cyan-300" : "text-muted-foreground"}`}>
         {track.bpm} BPM
       </span>
       <ActionIconButton label={`Save ${track.title}`}>
@@ -624,20 +627,20 @@ const TrackRow = ({
                   >
                     <span
                       className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors duration-200 ${
-                        active && isPlaying ? "border-cyan-300 text-cyan-300" : "border-border/60"
+                        active && globalIsPlaying ? "border-cyan-300 text-cyan-300" : "border-border/60"
                       }`}
                     >
-                      {active && isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="ml-0.5 h-3.5 w-3.5" />}
+                      {active && globalIsPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="ml-0.5 h-3.5 w-3.5" />}
                     </span>
                     <span className={`truncate ${active ? "text-foreground" : undefined}`}>{version.label}</span>
                   </button>
                   <div className="hidden xl:block" />
                   <WaveformPreview
-                    active={active && isPlaying}
+                    active={active && globalIsPlaying}
                     bars={360}
                     durationRatio={getDurationRatio(track, version)}
                     onSeek={(nextProgress) => onPlayVersion(track, version, nextProgress)}
-                    progress={active ? progress : 0}
+                    progress={active ? globalProgress : 0}
                     src={version.src}
                     className="h-7 min-w-0"
                   />
