@@ -125,6 +125,7 @@
         minmax(1rem, 1fr)
         var(--track-versions-col)
         var(--track-waveform-col)
+        minmax(1rem, 1fr)
         var(--track-duration-col)
         var(--track-bpm-col)
         var(--track-action-col)

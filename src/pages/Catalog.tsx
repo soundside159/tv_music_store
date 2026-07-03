@@ -57,6 +57,13 @@ const getDurationRatio = (track: CatalogTrack, version: TrackAudioVersion) => {
   return Math.min(1, Math.max(0.08, versionSeconds / trackSeconds));
 };
 
+const formatClock = (seconds: number) => {
+  const safe = Number.isFinite(seconds) && seconds > 0 ? seconds : 0;
+  const m = Math.floor(safe / 60);
+  const s = Math.floor(safe % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+};
+
 const Catalog = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeCollectionId = searchParams.get("collection");
@@ -295,7 +302,7 @@ const Catalog = () => {
       </main>
 
       {currentTrack && currentVersion && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/40 bg-background/95 backdrop-blur-xl">
+        <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-card/95 shadow-[0_-10px_30px_-12px_rgba(0,0,0,0.7)] backdrop-blur-xl">
           <div className="grid min-h-16 w-full gap-3 px-4 py-3 sm:px-6 md:grid-cols-[minmax(12rem,20rem)_minmax(0,1fr)_auto] md:items-center lg:px-8">
             <div className="flex min-w-0 items-center gap-3">
               <button
@@ -328,7 +335,15 @@ const Catalog = () => {
               className="h-8"
             />
 
-            <TrackActions title={currentTrack.title} />
+            <div className="flex items-center gap-4 md:gap-5">
+              <div className="hidden items-center gap-3 font-body text-xs text-muted-foreground sm:flex">
+                <span className="tabular-nums text-foreground/80">
+                  {formatClock(progress * durationToSeconds(currentVersion.duration))}/{currentVersion.duration}
+                </span>
+                <span className="tabular-nums">{currentTrack.bpm} BPM</span>
+              </div>
+              <TrackActions title={currentTrack.title} />
+            </div>
           </div>
         </div>
       )}
@@ -600,6 +615,8 @@ const TrackRow = ({
         className="h-9 min-w-0"
       />
 
+      <div className="hidden xl:block" aria-hidden="true" />
+
       <span className={`justify-self-end font-body text-sm ${mainIsPlaying ? "text-cyan-300" : "text-muted-foreground"}`}>
         {selectedVersion.duration}
       </span>
@@ -658,6 +675,7 @@ const TrackRow = ({
                     src={version.src}
                     className="h-7 min-w-0 xl:mr-[var(--track-version-wave-inset)]"
                   />
+                  <div className="hidden xl:block" />
                   <span className={`justify-self-end font-body text-sm ${active ? "text-cyan-300" : "text-muted-foreground"}`}>
                     {version.duration}
                   </span>
