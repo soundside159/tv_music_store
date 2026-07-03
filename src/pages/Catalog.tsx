@@ -661,7 +661,7 @@ const TrackRow = ({
                     bars={360}
                     durationRatio={getDurationRatio(track, version)}
                     onSeek={(nextProgress) => onPlayVersion(track, version, nextProgress)}
-                    progress={active ? globalProgress : 0}
+                    progress={versionProgress(version.id)}
                     src={version.src}
                     className="h-7 min-w-0"
                   />
