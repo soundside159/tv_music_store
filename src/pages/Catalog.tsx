@@ -82,7 +82,7 @@ const Catalog = () => {
     useCase: "All",
   });
   const [activePlayer, setActivePlayer] = useState<ActivePlayer | null>(null);
-  const [expandedTrackId, setExpandedTrackId] = useState<string | null>(catalogTracks[0]?.id ?? null);
+  const [expandedTrackId, setExpandedTrackId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [playedProgress, setPlayedProgress] = useState<Record<string, number>>({});
@@ -273,13 +273,19 @@ const Catalog = () => {
       />
 
       <main className="px-3 pt-20 sm:px-5 lg:px-6">
-        <CatalogBreadcrumb activeCollection={activeCollection} />
-        <LibraryHero />
+        <div className="animate-rise-in" style={{ animationDelay: "0.05s" }}>
+          <CatalogBreadcrumb activeCollection={activeCollection} />
+        </div>
+        <div className="animate-rise-in" style={{ animationDelay: "0.14s" }}>
+          <LibraryHero />
+        </div>
 
         <section className="mt-4 grid gap-5 lg:grid-cols-[14.5rem_minmax(0,1fr)] xl:grid-cols-[15.5rem_minmax(0,1fr)]">
-          <FilterSidebar filters={filters} setFilter={setFilter} onClear={clearFilters} />
+          <div className="animate-slide-in-left" style={{ animationDelay: "0.24s" }}>
+            <FilterSidebar filters={filters} setFilter={setFilter} onClear={clearFilters} />
+          </div>
 
-          <section className="min-w-0">
+          <section className="min-w-0 animate-rise-in" style={{ animationDelay: "0.3s" }}>
             <CollectionStrip activeCollection={activeCollection} onSelectCollection={selectCollection} />
 
             <div className="mt-4 overflow-hidden rounded-lg border border-border/30 bg-card/25">
@@ -594,7 +600,7 @@ const CollectionStrip = ({
                     onLoad={(event) => {
                       event.currentTarget.style.opacity = "1";
                     }}
-                    style={{ transform: "skewX(9deg) scale(1.32)", opacity: 0, transition: "opacity 0.5s ease" }}
+                    style={{ transform: "skewX(9deg) scale(1.32) translateZ(0)", backfaceVisibility: "hidden", opacity: 0, transition: "opacity 0.5s ease" }}
                     className="absolute inset-0 h-full w-full object-cover"
                   />
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent" />
