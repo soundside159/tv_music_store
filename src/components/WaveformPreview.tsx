@@ -209,9 +209,8 @@ const WaveformPreview = ({
                   y2={center + height / 2}
                   stroke={color}
                   strokeOpacity={opacity}
-                  strokeLinecap="butt"
-                  strokeWidth="1.15"
-                  vectorEffect="non-scaling-stroke"
+                  strokeLinecap="round"
+                  strokeWidth={0.55}
                 />
               );
             })}

@@ -575,7 +575,7 @@ const TrackRow = ({
 
       <WaveformPreview
         active={isPlaying}
-        bars={180}
+        bars={420}
         durationRatio={1}
         onSeek={(nextProgress) => onPlayVersion(track, selectedVersion, nextProgress)}
         progress={progress}
@@ -633,7 +633,7 @@ const TrackRow = ({
                   <div className="hidden xl:block" />
                   <WaveformPreview
                     active={active && isPlaying}
-                    bars={156}
+                    bars={360}
                     durationRatio={getDurationRatio(track, version)}
                     onSeek={(nextProgress) => onPlayVersion(track, version, nextProgress)}
                     progress={active ? progress : 0}
