@@ -34,7 +34,7 @@ type FilterValue = {
   useCase: string;
 };
 
-const useCaseOptions = ["Trailer", "Film", "TV", "YouTube", "Game", "Advertising", "Podcast"];
+const useCaseOptions = ["Movie Trailer", "Film & TV", "Documentary", "Advertising", "Crime & Thriller", "Business", "Video Game", "Sports", "Technology", "Travel", "Nature", "Luxury"];
 const genreOptions = ["Orchestral", "Hybrid", "Electronic", "Cinematic", "Rock", "Ambient"];
 const moodOptions = ["Epic", "Dark", "Inspiring", "Suspense", "Emotional"];
 
@@ -193,6 +193,8 @@ const Catalog = () => {
     }));
   };
 
+  const clearFilters = () => setFilters({ genre: "All", mood: "All", useCase: "All" });
+
   return (
     <div className="min-h-screen bg-background pb-24 text-foreground">
       <Navigation />
@@ -226,7 +228,7 @@ const Catalog = () => {
         <LibraryHero />
 
         <section className="mt-4 grid gap-5 lg:grid-cols-[14.5rem_minmax(0,1fr)] xl:grid-cols-[15.5rem_minmax(0,1fr)]">
-          <FilterSidebar filters={filters} setFilter={setFilter} />
+          <FilterSidebar filters={filters} setFilter={setFilter} onClear={clearFilters} />
 
           <section className="min-w-0">
             <CollectionStrip activeCollection={activeCollection} onSelectCollection={selectCollection} />
@@ -243,7 +245,7 @@ const Catalog = () => {
                         ? `Search tracks in ${activeCollection.shortTitle}...`
                         : "Search tracks, genres, moods"
                     }
-                    className="h-10 rounded-full border-border/40 bg-background/50 pl-11"
+                    className="h-10 rounded-full border-white/20 bg-background/50 pl-11 transition-colors focus-visible:border-[#FCD162]/70 focus-visible:ring-0 focus-visible:ring-offset-0"
                   />
                 </div>
                 <div />
@@ -473,7 +475,7 @@ const CollectionStrip = ({
                   />
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent" />
                   <div
-                    className={`pointer-events-none absolute inset-0 transition-opacity duration-300 delay-150 ${
+                    className={`pointer-events-none absolute inset-0 transition-opacity duration-300 delay-75 ${
                       active ? "opacity-100" : "opacity-0"
                     }`}
                   >
@@ -531,37 +533,55 @@ const CollectionLamp = ({ active }: { active: boolean }) => (
 const FilterSidebar = ({
   filters,
   setFilter,
+  onClear,
 }: {
   filters: FilterValue;
   setFilter: (key: keyof FilterValue, value: string) => void;
-}) => (
-  <aside className="h-fit rounded-lg border border-border/30 bg-card/30 p-4 lg:sticky lg:top-24">
-    <div className="mb-4 flex items-center gap-3 border-b border-border/30 pb-4">
-      <span className="flex h-8 w-8 items-center justify-center rounded-md border border-border/50">
-        <SlidersHorizontal className="h-4 w-4" />
-      </span>
-      <h2 className="font-body text-sm font-semibold uppercase tracking-[0.08em] text-foreground">Filters</h2>
-    </div>
-    <FilterGroup
-      label="Use Case"
-      options={useCaseOptions}
-      value={filters.useCase}
-      onChange={(value) => setFilter("useCase", value)}
-    />
-    <FilterGroup
-      label="Genre"
-      options={genreOptions}
-      value={filters.genre}
-      onChange={(value) => setFilter("genre", value)}
-    />
-    <FilterGroup
-      label="Mood"
-      options={moodOptions}
-      value={filters.mood}
-      onChange={(value) => setFilter("mood", value)}
-    />
-  </aside>
-);
+  onClear: () => void;
+}) => {
+  const hasActive = filters.useCase !== "All" || filters.genre !== "All" || filters.mood !== "All";
+
+  return (
+    <aside className="h-fit rounded-lg border border-border/30 bg-card/30 p-4 lg:sticky lg:top-24">
+      <div className="mb-4 flex items-center justify-between gap-3 border-b border-border/30 pb-4">
+        <div className="flex items-center gap-3">
+          <span className="flex h-8 w-8 items-center justify-center rounded-md border border-border/50">
+            <SlidersHorizontal className="h-4 w-4" />
+          </span>
+          <h2 className="font-body text-sm font-semibold uppercase tracking-[0.08em] text-foreground">Filters</h2>
+        </div>
+        {hasActive && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="font-body text-xs text-muted-foreground transition-colors hover:text-[#FCD162]"
+          >
+            Clear all
+          </button>
+        )}
+      </div>
+      <FilterGroup
+        label="Use Case"
+        options={useCaseOptions}
+        value={filters.useCase}
+        onChange={(value) => setFilter("useCase", value)}
+        defaultOpen
+      />
+      <FilterGroup
+        label="Genre"
+        options={genreOptions}
+        value={filters.genre}
+        onChange={(value) => setFilter("genre", value)}
+      />
+      <FilterGroup
+        label="Mood"
+        options={moodOptions}
+        value={filters.mood}
+        onChange={(value) => setFilter("mood", value)}
+      />
+    </aside>
+  );
+};
 
 const TrackRow = ({
   activePlayer,
@@ -750,43 +770,51 @@ const FilterGroup = ({
   onChange,
   options,
   value,
+  defaultOpen = false,
 }: {
   label: string;
   onChange: (value: string) => void;
   options: string[];
   value: string;
-}) => (
-  <div className="border-t border-border/30 py-4 first:border-t-0 first:pt-0">
-    <div className="mb-3 font-body text-xs font-semibold uppercase tracking-[0.12em] text-foreground">{label}</div>
-    <div className="space-y-2">
-      {options.map((option) => {
-        const active = value === option;
+  defaultOpen?: boolean;
+}) => {
+  const [open, setOpen] = useState(defaultOpen);
 
-        return (
-          <button
-            key={option}
-            type="button"
-            onClick={() => onChange(option)}
-            className="flex w-full items-center gap-2.5 text-left font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <span
-              className={`h-3.5 w-3.5 rounded-[3px] border ${
-                active ? "border-[#FCD162] bg-[#FCD162]" : "border-border bg-transparent"
-              }`}
-            />
-            <span>{option}</span>
-          </button>
-        );
-      })}
+  return (
+    <div className="border-t border-border/30 py-4 first:border-t-0 first:pt-0">
       <button
         type="button"
-        className="inline-flex items-center gap-1 pt-1 font-body text-xs text-muted-foreground transition-colors hover:text-foreground"
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex w-full items-center justify-between font-body text-xs font-semibold uppercase tracking-[0.12em] text-foreground"
       >
-        Show more
-        <ChevronDown className="h-3.5 w-3.5" />
+        {label}
+        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${open ? "" : "-rotate-90"}`} />
       </button>
+      {open && (
+        <div className="mt-3 space-y-2">
+          {options.map((option) => {
+            const active = value === option;
+
+            return (
+              <button
+                key={option}
+                type="button"
+                onClick={() => onChange(option)}
+                className="flex w-full items-center gap-2.5 text-left font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <span
+                  className={`h-3.5 w-3.5 rounded-[3px] border ${
+                    active ? "border-[#FCD162] bg-[#FCD162]" : "border-border bg-transparent"
+                  }`}
+                />
+                <span>{option}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
-  </div>
-);
+  );
+};
 
 export default Catalog;
