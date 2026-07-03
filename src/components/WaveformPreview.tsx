@@ -154,7 +154,7 @@ const WaveformPreview = ({
             key={index}
             className={cn(
               "w-full min-w-px rounded-full transition-colors",
-              played ? "bg-primary" : active ? "bg-foreground/40" : "bg-foreground/25",
+              played ? "bg-cyan-400" : active ? "bg-foreground/40" : "bg-foreground/25",
             )}
             style={{ height: `${Math.round(peak * 100)}%` }}
           />

@@ -24,6 +24,7 @@ export interface CatalogTrack {
   priceFrom: number;
   description: string;
   tags: string[];
+  collectionIds: string[];
   audioVersions: TrackAudioVersion[];
 }
 
@@ -51,6 +52,7 @@ export const catalogTracks: CatalogTrack[] = [
     description:
       "A dark hybrid cue with pressure, low movement, and stripped alternate mixes for tension edits and destructive reveals.",
     tags: ["Trailer", "Horror", "Tension", "Dark"],
+    collectionIds: ["dark-suspense", "hybrid-modern", "action-intense"],
     audioVersions: [
       {
         id: "full",
@@ -88,6 +90,7 @@ export const catalogTracks: CatalogTrack[] = [
     description:
       "A fast orchestral fantasy cue for game worlds, adventure trailers, fantasy sequences, and high-energy story beats.",
     tags: ["Game", "Fantasy", "Adventure", "Epic"],
+    collectionIds: ["epic-adventure", "orchestral", "emotional-inspiring"],
     audioVersions: [
       {
         id: "full",

@@ -37,7 +37,7 @@ Architecture is fixed in the master plan: do not migrate to Next.js, Supabase, o
 ## Repository Structure
 
 - `src/pages/Index.tsx`: main homepage composition
-- `src/pages/Catalog.tsx`: MVP catalog page with left sidebar filters, real preview MP3 playback, compact track rows, expandable versions, action icons, and sticky player shell
+- `src/pages/Catalog.tsx`: MVP Music Library page with collection cards, active collection hero, left sidebar filters, real preview MP3 playback, compact track rows, expandable versions, action icons, and sticky player shell
 - `src/pages/TrackDetail.tsx`: MVP track detail page backed by real preview MP3s, with a quiet main player and Versions / Similar / License Info tabs
 - `src/pages/NotFound.tsx`: fallback route page
 - `src/components/Navigation.tsx`: fixed full-width header and menu
@@ -50,10 +50,12 @@ Architecture is fixed in the master plan: do not migrate to Next.js, Supabase, o
 - `src/components/ui/`: shadcn/ui primitives
 - `src/hooks/`: custom hooks
 - `src/lib/`: shared utilities
-- `src/data/catalogTracks.ts`: temporary catalog data for the two real uploaded tracks and catalog-related TypeScript types; replace with D1-backed API later
+- `src/data/catalogTracks.ts`: temporary catalog data for the two real uploaded tracks, collection ids, and catalog-related TypeScript types; replace with D1-backed API later
+- `src/data/musicCollections.ts`: temporary collection metadata and public cover image paths for the Music Library collection strip and collection hero
 - `src/assets/`: bundled image assets used by Vite
 - `public/`: static public files copied to build output
 - `public/audio/previews/`: public MP3 preview files generated from owner-provided WAVs; do not put private master WAV/ZIP files here
+- `public/images/collections/`: public temporary collection cover images used by `/catalog`
 - `public/_redirects`: Cloudflare Pages SPA fallback
 - `docs/TVMUSICSTORE_MASTER_PLAN.md`: full business, UX, technical, database, admin, email, marketing, and roadmap plan
 - `docs/AI_HANDOFF.md`: short operational handoff for another AI assistant; never include secrets there
@@ -101,7 +103,7 @@ If Cloudflare auto-detects Bun, add `SKIP_DEPENDENCY_INSTALL=1` and keep the bui
 Planned app areas:
 
 - `/`: public catalog and homepage
-- `/catalog`: MVP filterable music catalog, currently backed by `src/data/catalogTracks.ts`; keep the UI minimal, dark/neutral, and track-row focused. Current layout uses a left sidebar with Use Case, Genre, and Mood filters, a center track list, expandable version rows, heart/cart/download actions, and no separate Details button.
+- `/catalog`: MVP Music Library, currently backed by `src/data/catalogTracks.ts` and `src/data/musicCollections.ts`; keep the UI minimal, dark/neutral, and track-row focused. Current layout uses breadcrumbs, a Music Library hero, horizontal collection cards, active collection hero via `?collection=...`, a left sidebar with Use Case, Genre, and Mood filters, compact rows, expandable version rows, heart/cart actions, and no separate Details button.
 - `/track/:slug`: MVP track detail page, currently backed by `src/data/catalogTracks.ts`; keep the main player and licensing info visually quiet. Current layout uses tabs for Versions, Similar, and License Info so licensing text is not dumped into the first viewport.
 - `/playlists` and `/playlist/:slug`: curated playlists
 - `/free`: free tier tracks in exchange for email
@@ -143,7 +145,7 @@ Payments must be confirmed by Stripe webhooks before creating orders, licenses, 
 MVP priority:
 
 1. Keep current branded landing page.
-2. Build `/catalog` on temporary data first. Current status: two real tracks and six public MP3 preview versions are connected; click-to-seek waveform playback works from real decoded audio.
+2. Build `/catalog` on temporary data first. Current status: two real tracks, six public MP3 preview versions, collection cards, active collection hero, and click-to-seek waveform playback from real decoded audio are connected.
 3. Build `/track/:slug` on temporary data first. Current status: real preview playback, version switching, similar rows, and tabbed license info exist.
 4. Add D1 schema and seed flow.
 5. Add R2 storage strategy for previews and private masters.
