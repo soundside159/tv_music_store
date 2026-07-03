@@ -36,8 +36,8 @@ type FilterValue = {
 };
 
 const useCaseOptions = ["Movie Trailer", "Film & TV", "Documentary", "Advertising", "Crime & Thriller", "Business", "Video Game", "Sports", "Technology", "Travel", "Nature", "Luxury"];
-const genreOptions = ["Orchestral", "Hybrid", "Electronic", "Cinematic", "Rock", "Ambient"];
-const moodOptions = ["Epic", "Dark", "Inspiring", "Suspense", "Emotional"];
+const genreOptions = ["Neo-Classical", "Action", "Drama", "Dark Score", "Sci-Fi", "Fantasy", "Horror"];
+const moodOptions = ["Emotional", "Powerful", "Inspiring", "Suspenseful", "Aggressive", "Tense", "Heroic", "Hopeful", "Uplifting", "Beautiful"];
 
 const splitFilterValues = (value: string) => value.split("/").map((item) => item.trim()).filter(Boolean);
 
