@@ -19,7 +19,7 @@ Core positioning: boutique cinematic music licensing from one composer, with dir
 - React Router DOM
 - TanStack Query
 - Lucide React icons
-- Google Fonts: Inter for the modern UI; Cinzel remains loaded only for legacy/homepage compatibility
+- Google Fonts: Inter for all UI and body text; Playfair Display (serif) for display headings via --font-display / font-display
 
 ## Planned Services
 
