@@ -65,6 +65,12 @@ const formatClock = (seconds: number) => {
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
 
+// Perceptual volume: slider 0.8 = unity (100%), below fades correctly, above boosts a bit.
+const sliderToGain = (value: number) => {
+  const clamped = Math.min(1, Math.max(0, value));
+  return Math.min(2, (clamped / 0.8) ** 2);
+};
+
 const Catalog = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeCollectionId = searchParams.get("collection");
@@ -81,11 +87,14 @@ const Catalog = () => {
   const [progress, setProgress] = useState(0);
   const [playedProgress, setPlayedProgress] = useState<Record<string, number>>({});
   const [sort, setSort] = useState("Featured");
-  const [volume, setVolume] = useState(1);
+  const [volume, setVolume] = useState(0.8);
   const playedKey = (trackId: string, versionId: string) => `${trackId}:${versionId}`;
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const pendingPlayRef = useRef(false);
   const pendingSeekRef = useRef<number | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
+  const mediaSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
 
   const filteredTracks = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -123,7 +132,11 @@ const Catalog = () => {
   }, [currentSrc]);
 
   useEffect(() => {
-    if (audioRef.current) audioRef.current.volume = volume;
+    if (gainNodeRef.current) {
+      gainNodeRef.current.gain.value = sliderToGain(volume);
+    } else if (audioRef.current) {
+      audioRef.current.volume = Math.min(1, sliderToGain(volume));
+    }
   }, [volume]);
 
   const selectCollection = (collectionId: string | null) => {
@@ -149,8 +162,33 @@ const Catalog = () => {
       .catch(() => setIsPlaying(false));
   };
 
+  const ensureAudioGraph = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    try {
+      if (!audioCtxRef.current) {
+        const Ctor =
+          window.AudioContext ??
+          (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (!Ctor) return;
+        audioCtxRef.current = new Ctor();
+      }
+      const ctx = audioCtxRef.current;
+      if (ctx.state === "suspended") void ctx.resume();
+      if (!mediaSourceRef.current) {
+        mediaSourceRef.current = ctx.createMediaElementSource(audio);
+        gainNodeRef.current = ctx.createGain();
+        gainNodeRef.current.gain.value = sliderToGain(volume);
+        mediaSourceRef.current.connect(gainNodeRef.current).connect(ctx.destination);
+      }
+    } catch {
+      // Web Audio unavailable; falls back to element volume
+    }
+  };
+
   const playVersion = (track: CatalogTrack, version: TrackAudioVersion, seekTo: number | null = null) => {
     const audio = audioRef.current;
+    ensureAudioGraph();
     const sameVersion = activePlayer?.trackId === track.id && activePlayer.versionId === version.id;
 
     if (sameVersion && audio) {
@@ -470,10 +508,10 @@ const LibraryHero = () => (
     <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.95)_0%,rgba(0,0,0,0.78)_22%,rgba(0,0,0,0.4)_48%,rgba(0,0,0,0)_74%)]" />
     <div className="absolute inset-y-0 left-0 flex max-w-xl flex-col justify-center px-8 py-6 md:px-12">
       <p className="font-body text-[0.7rem] font-semibold uppercase tracking-[0.32em] text-amber-300/90">
-        Discover premium music
+        Discover
       </p>
       <h1 className="mt-2 font-display text-5xl font-semibold leading-none tracking-tight text-white md:text-6xl">
-        Music Library
+        <span className="text-[#FCD162]">Premium</span> Music Library
       </h1>
       <p className="mt-3 max-w-lg font-body text-sm leading-6 text-white/55">
         Explore our entire library of premium tracks for any project and mood.

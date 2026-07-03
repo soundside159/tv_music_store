@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Menu, X } from "lucide-react";
+import { Menu, ShoppingCart, User, X } from "lucide-react";
 
 const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -14,17 +14,9 @@ const Navigation = () => {
     }
   };
 
-  const scrollToContact = (e: React.MouseEvent) => {
-    if (isHome) {
-      e.preventDefault();
-      document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
-    }
-  };
-
   const navItems = [
     { label: "Music Library", href: "/catalog" },
     { label: "Licensing", href: "/#licensing", onClick: scrollToTop },
-    { label: "Contact", href: "/#contact", onClick: scrollToContact },
   ];
 
   return (
@@ -52,12 +44,22 @@ const Navigation = () => {
                 {item.label}
               </a>
             ))}
-            <a
-              href="#contact"
-              className="rounded-full bg-foreground px-5 py-2.5 font-body text-sm text-background transition-colors duration-300 hover:bg-[#FCD162]"
-            >
-              Get Started
-            </a>
+            <div className="flex items-center gap-5">
+              <Link
+                to="/login"
+                aria-label="Account"
+                className="text-muted-foreground transition-colors duration-300 hover:text-[#FCD162]"
+              >
+                <User className="h-5 w-5" />
+              </Link>
+              <button
+                type="button"
+                aria-label="Cart"
+                className="text-muted-foreground transition-colors duration-300 hover:text-[#FCD162]"
+              >
+                <ShoppingCart className="h-5 w-5" />
+              </button>
+            </div>
           </div>
 
           {/* Mobile Menu Button */}
@@ -91,13 +93,14 @@ const Navigation = () => {
                   {item.label}
                 </a>
               ))}
-              <a
-                href="#contact"
+              <Link
+                to="/login"
                 onClick={() => setIsOpen(false)}
-                className="mt-2 rounded-full bg-foreground px-5 py-3 text-center font-body text-sm text-background transition-colors duration-300 hover:bg-[#FCD162]"
+                className="mt-2 inline-flex items-center gap-2 py-2 font-body text-base text-muted-foreground transition-colors duration-300 hover:text-[#FCD162]"
               >
-                Get Started
-              </a>
+                <User className="h-5 w-5" />
+                Account
+              </Link>
             </div>
           </div>
         )}
