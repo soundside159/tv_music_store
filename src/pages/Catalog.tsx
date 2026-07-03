@@ -586,7 +586,7 @@ const TrackRow = ({
 
       <Link
         to={`/track/${track.slug}`}
-        className="min-w-0 truncate pr-8 font-body text-base font-medium text-foreground transition-colors hover:text-cyan-300"
+        className="min-w-0 truncate pr-24 font-body text-base font-medium text-foreground transition-colors hover:text-cyan-300"
       >
         {track.title}
       </Link>
@@ -639,7 +639,7 @@ const TrackRow = ({
               return (
                 <div
                   key={version.id}
-                  className="grid gap-3 px-4 py-1.5 xl:grid-cols-[3rem_minmax(16rem,22rem)_7rem_minmax(16rem,1fr)_4.25rem_4.75rem_2.75rem_2.75rem] xl:items-center 2xl:grid-cols-[3rem_minmax(22rem,28rem)_8rem_minmax(28rem,1fr)_4.5rem_5.5rem_3rem_3rem]"
+                  className="grid gap-3 px-4 py-1.5 xl:grid-cols-[3rem_minmax(10rem,16rem)_3.75rem_minmax(16rem,1fr)_4.25rem_4.75rem_2.75rem_2.75rem] xl:items-center 2xl:grid-cols-[3rem_minmax(13rem,18rem)_3.75rem_minmax(28rem,1fr)_4.5rem_5.5rem_3rem_3rem]"
                 >
                   <div className="hidden xl:block" />
                   <button
