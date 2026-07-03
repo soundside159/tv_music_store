@@ -259,7 +259,7 @@ const Catalog = () => {
                   {filteredTracks.map((track, index) => {
                     const mainVersion = track.audioVersions[0];
                     const expanded = expandedTrackId === track.id;
-                    const rowIsPlaying =
+                    const mainIsPlaying =
                       activePlayer?.trackId === track.id && activePlayer.versionId === mainVersion.id && isPlaying;
 
                     return (
@@ -267,11 +267,12 @@ const Catalog = () => {
                         key={track.id}
                         activePlayer={activePlayer}
                         expanded={expanded}
+                        globalIsPlaying={isPlaying}
+                        globalProgress={progress}
                         index={index}
-                        isPlaying={rowIsPlaying}
+                        mainIsPlaying={mainIsPlaying}
                         onPlayVersion={playVersion}
                         onToggleExpanded={() => setExpandedTrackId(expanded ? null : track.id)}
-                        progress={activeProgressFor(track, mainVersion)}
                         selectedVersion={mainVersion}
                         track={track}
                       />
