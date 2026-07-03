@@ -12,7 +12,7 @@ const GOLD = "#F4C430";
 
 const categories: TrackCategory[] = ["modern-score", "thriller", "game-ost", "production"];
 
-const moods = ["Dark", "Epic", "Emotional", "Tense", "Uplifting", "Mysterious", "Heroic", "Calm"];
+const moods = ["Emotional", "Powerful", "Inspiring", "Suspenseful", "Aggressive", "Tense", "Heroic", "Uplifting"];
 
 const trustPoints = [
   { icon: ShieldCheck, label: "Content ID protected", text: "Every track is registered. Claims removed within 24 hours." },

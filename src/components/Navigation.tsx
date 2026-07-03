@@ -45,7 +45,7 @@ const Navigation = () => {
             ))}
             <div className="flex items-center gap-5">
               <Link
-                to="/login"
+                to="/account"
                 aria-label="Account"
                 className="text-muted-foreground transition-colors duration-300 hover:text-[#F4C430]"
               >
@@ -91,7 +91,7 @@ const Navigation = () => {
                 </a>
               ))}
               <Link
-                to="/login"
+                to="/account"
                 onClick={() => setIsOpen(false)}
                 className="mt-2 inline-flex items-center gap-2 py-2 font-body text-base text-muted-foreground transition-colors duration-300 hover:text-[#F4C430]"
               >

@@ -115,7 +115,7 @@ Planned app areas:
 - `/custom`: adaptation/custom music brief page
 - `/artist/:slug`: public composer pages (three composers)
 - `/blog`: SEO content
-- `/account`: customer dashboard (downloads, license, whitelist, claims, billing)
+- `/account`: customer dashboard (downloads, license, whitelist, claims, billing) — built on mock hooks; guest sees a sign-in prompt. A DevPersonaSwitcher (enable with `?dev=1`, disable `?dev=0`) previews the site as guest/free/pro/max/canceled/composer/admin
 - `/composer`: composer dashboard (uploads, earnings, statements, requests)
 - `/admin`: modular private admin dashboard
 - `/terms`, `/privacy`, `/license-agreement`: legal pages

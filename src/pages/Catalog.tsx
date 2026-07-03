@@ -83,12 +83,14 @@ const Catalog = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeCollectionId = searchParams.get("collection");
   const activeCollection = musicCollections.find((collection) => collection.id === activeCollectionId) ?? null;
-  const [query, setQuery] = useState("");
-  const [filters, setFilters] = useState<FilterValue>({
+  const categoryParam = searchParams.get("category");
+  const moodParam = searchParams.get("mood");
+  const [query, setQuery] = useState(() => searchParams.get("search") ?? "");
+  const [filters, setFilters] = useState<FilterValue>(() => ({
     genre: "All",
-    mood: "All",
+    mood: moodParam && moodOptions.includes(moodParam) ? moodParam : "All",
     useCase: "All",
-  });
+  }));
   const [activePlayer, setActivePlayer] = useState<ActivePlayer | null>(null);
   const [expandedTrackId, setExpandedTrackId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -109,6 +111,7 @@ const Catalog = () => {
 
     const result = catalogTracks.filter((track) => {
       const matchesCollection = !activeCollection || track.collectionIds.includes(activeCollection.id);
+      const matchesCategory = !categoryParam || track.category === categoryParam;
       const matchesUseCase =
         filters.useCase === "All" || splitFilterValues(track.useCase).some((item) => matchesOption(item, filters.useCase));
       const matchesGenre = filters.genre === "All" || matchesOption(track.genre, filters.genre);
@@ -120,13 +123,13 @@ const Catalog = () => {
           .toLowerCase()
           .includes(normalizedQuery);
 
-      return matchesCollection && matchesUseCase && matchesGenre && matchesMood && matchesQuery;
+      return matchesCollection && matchesCategory && matchesUseCase && matchesGenre && matchesMood && matchesQuery;
     });
 
     if (sort === "New") return [...result].reverse();
     if (sort === "Popular") return [...result].sort((a, b) => b.bpm - a.bpm);
     return result;
-  }, [activeCollection, filters, query, sort]);
+  }, [activeCollection, categoryParam, filters, query, sort]);
 
   const currentTrack = catalogTracks.find((track) => track.id === activePlayer?.trackId) ?? filteredTracks[0];
   const currentVersion = currentTrack?.audioVersions.find((version) => version.id === activePlayer?.versionId);
