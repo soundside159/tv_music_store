@@ -501,6 +501,7 @@ const TrackVersionRow = ({
     </span>
     <WaveformPreview
       active={isPlaying}
+      bars={360}
       onSeek={onSeek}
       progress={progress}
       src={version.src}
