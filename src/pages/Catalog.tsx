@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import WaveformPreview from "@/components/WaveformPreview";
-import cinemaHero from "@/assets/cinema-hero.png";
+import cinemaHero from "@/assets/cinema-hero-wide.png";
 import { Input } from "@/components/ui/input";
 import { catalogTracks } from "@/data/catalogTracks";
 import type { CatalogTrack, TrackAudioVersion, TrackVersion } from "@/data/catalogTracks";
@@ -378,8 +378,8 @@ const LibraryHero = () => (
       className="pointer-events-none absolute inset-0 bg-no-repeat"
       style={{
         backgroundImage: `url(${cinemaHero})`,
-        backgroundSize: "2200px auto",
-        backgroundPosition: "center 45%",
+        backgroundSize: "2000px auto",
+        backgroundPosition: "center 55%",
       }}
     />
     <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.93)_0%,rgba(0,0,0,0.5)_50%,rgba(0,0,0,0.25)_100%)]" />
