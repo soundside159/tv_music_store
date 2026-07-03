@@ -667,7 +667,7 @@ const TrackRow = ({
                     onSeek={(nextProgress) => onPlayVersion(track, version, nextProgress)}
                     progress={versionProgress(version.id)}
                     src={version.src}
-                    className="h-7 min-w-0"
+                    className="h-7 min-w-0 xl:mr-[var(--track-version-wave-inset)]"
                   />
                   <span className={`justify-self-end font-body text-sm ${active ? "text-cyan-300" : "text-muted-foreground"}`}>
                     {version.duration}
