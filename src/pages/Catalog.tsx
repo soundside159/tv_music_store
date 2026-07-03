@@ -372,32 +372,65 @@ const CatalogBreadcrumb = ({ activeCollection }: { activeCollection: MusicCollec
   </div>
 );
 
-const LibraryHero = () => (
-  <section className="relative mt-4 h-40 overflow-hidden rounded-xl border border-white/10 bg-[#0a0706] md:h-44">
-    <div
-      className="pointer-events-none absolute inset-0 bg-no-repeat"
-      style={{
-        backgroundImage: `url(${cinemaHero})`,
-        backgroundSize: "2000px auto",
-        backgroundPosition: "center 55%",
-      }}
-    />
-    <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.93)_0%,rgba(0,0,0,0.5)_50%,rgba(0,0,0,0.25)_100%)]" />
-    <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.35)_0%,rgba(0,0,0,0)_28%,rgba(0,0,0,0)_72%,rgba(0,0,0,0.35)_100%)]" />
-    <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_110px_36px_rgba(0,0,0,0.55)]" />
-    <div className="absolute inset-y-0 left-0 flex max-w-xl flex-col justify-center px-8 py-6 md:px-12">
-      <p className="font-body text-[0.7rem] font-semibold uppercase tracking-[0.32em] text-amber-300/90">
-        Discover premium music
-      </p>
-      <h1 className="mt-2 font-display text-5xl font-semibold leading-none tracking-tight text-white md:text-6xl">
-        Music Library
-      </h1>
-      <p className="mt-3 max-w-lg font-body text-sm leading-6 text-white/55">
-        Explore our entire library of premium tracks for any project and mood.
-      </p>
-    </div>
-  </section>
-);
+const LibraryHero = () => {
+  // DEV HERO TUNER (temporary - remove this whole block + panel below when done)
+  const [zoom, setZoom] = useState(2000);
+  const [rotation, setRotation] = useState(0);
+  const [posX, setPosX] = useState(100);
+  const [posY, setPosY] = useState(55);
+
+  return (
+    <section className="relative mt-4 h-40 overflow-hidden rounded-xl border border-white/10 bg-[#0a0706] md:h-44">
+      <div
+        className="pointer-events-none absolute inset-0 bg-no-repeat"
+        style={{
+          backgroundImage: `url(${cinemaHero})`,
+          backgroundSize: `${zoom}px auto`,
+          backgroundPosition: `${posX}% ${posY}%`,
+          transform: `rotate(${rotation}deg) scale(${1 + Math.abs(rotation) / 60})`,
+        }}
+      />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.93)_0%,rgba(0,0,0,0.5)_50%,rgba(0,0,0,0.25)_100%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.35)_0%,rgba(0,0,0,0)_28%,rgba(0,0,0,0)_72%,rgba(0,0,0,0.35)_100%)]" />
+      <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_110px_36px_rgba(0,0,0,0.55)]" />
+      <div className="absolute inset-y-0 left-0 flex max-w-xl flex-col justify-center px-8 py-6 md:px-12">
+        <p className="font-body text-[0.7rem] font-semibold uppercase tracking-[0.32em] text-amber-300/90">
+          Discover premium music
+        </p>
+        <h1 className="mt-2 font-display text-5xl font-semibold leading-none tracking-tight text-white md:text-6xl">
+          Music Library
+        </h1>
+        <p className="mt-3 max-w-lg font-body text-sm leading-6 text-white/55">
+          Explore our entire library of premium tracks for any project and mood.
+        </p>
+      </div>
+
+      {/* DEV HERO TUNER PANEL (temporary) */}
+      <div className="absolute right-2 top-2 z-30 w-56 rounded-md border border-white/15 bg-black/75 p-3 font-body text-[11px] leading-tight text-white/85 backdrop-blur">
+        <div className="mb-2 font-semibold uppercase tracking-wide text-amber-300/90">Hero tuner (dev)</div>
+        <label className="mb-2 block">
+          Zoom: {zoom}px
+          <input type="range" min={800} max={4000} step={20} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} className="mt-1 w-full accent-amber-300" />
+        </label>
+        <label className="mb-2 block">
+          Rotate: {rotation}deg
+          <input type="range" min={-20} max={20} step={1} value={rotation} onChange={(e) => setRotation(Number(e.target.value))} className="mt-1 w-full accent-amber-300" />
+        </label>
+        <label className="mb-2 block">
+          X: {posX}%
+          <input type="range" min={0} max={100} step={1} value={posX} onChange={(e) => setPosX(Number(e.target.value))} className="mt-1 w-full accent-amber-300" />
+        </label>
+        <label className="block">
+          Y: {posY}%
+          <input type="range" min={0} max={100} step={1} value={posY} onChange={(e) => setPosY(Number(e.target.value))} className="mt-1 w-full accent-amber-300" />
+        </label>
+        <div className="mt-2 border-t border-white/10 pt-2 text-white/60">
+          size {zoom}px / pos {posX}% {posY}% / rot {rotation}deg
+        </div>
+      </div>
+    </section>
+  );
+};
 
 const CollectionStrip = ({
   activeCollection,
