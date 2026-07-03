@@ -460,7 +460,7 @@ const CollectionStrip = ({
                   style={{ transform: "skewX(-9deg)" }}
                   className={`group relative h-64 w-full overflow-hidden rounded-lg border text-left transition-[border-color,box-shadow] duration-300 ${
                     active
-                      ? "border-amber-200/60 shadow-[0_0_22px_-4px_rgba(251,191,36,0.45),inset_0_0_18px_-6px_rgba(255,255,255,0.35)]"
+                      ? "border-white/20"
                       : "border-white/15 shadow-[inset_0_0_16px_-8px_rgba(255,255,255,0.3)] hover:border-white/35"
                   }`}
                 >
@@ -471,6 +471,21 @@ const CollectionStrip = ({
                     className="absolute inset-0 h-full w-full object-cover"
                   />
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent" />
+                  {active && (
+                    <>
+                      <div
+                        className="pointer-events-none absolute inset-0 rounded-lg border border-[#FCD162]/55"
+                        style={{
+                          maskImage: "linear-gradient(to bottom, #000 0%, #000 18%, transparent 58%)",
+                          WebkitMaskImage: "linear-gradient(to bottom, #000 0%, #000 18%, transparent 58%)",
+                        }}
+                      />
+                      <div
+                        className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3"
+                        style={{ background: "radial-gradient(66% 62% at 50% 108%, rgba(252,209,98,0.4), rgba(252,209,98,0) 62%)" }}
+                      />
+                    </>
+                  )}
                   <div style={{ transform: "skewX(9deg)" }} className="absolute inset-x-0 bottom-0 p-4">
                     <h3 className="font-display text-lg font-semibold leading-tight text-white">{collection.shortTitle}</h3>
                     <p className="mt-1 font-body text-xs text-white/60">{collection.trackCount} tracks</p>
@@ -493,12 +508,12 @@ const CollectionStrip = ({
 };
 
 const CollectionLamp = ({ active }: { active: boolean }) => (
-  <div className="mt-3 flex justify-center" aria-hidden="true">
+  <div className="mt-3 flex -translate-x-5 justify-center" aria-hidden="true">
     <span
       className={`h-2 w-2 rounded-full transition-all duration-300 ${
         active
-          ? "bg-amber-300 shadow-[0_0_10px_3px_rgba(251,191,36,0.75)]"
-          : "bg-amber-300/25"
+          ? "bg-[#FCD162] shadow-[0_0_10px_3px_rgba(252,209,98,0.8)]"
+          : "bg-white/30"
       }`}
     />
   </div>
