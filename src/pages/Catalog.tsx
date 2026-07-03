@@ -681,7 +681,8 @@ const TrackRow = ({
       )}
     </AnimatePresence>
   </motion.article>
-);
+  );
+};
 
 const ActionIconButton = ({ children, label }: { children: ReactNode; label: string }) => (
   <button
