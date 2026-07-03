@@ -107,6 +107,43 @@
   }
 }
 
+@layer components {
+  @media (min-width: 1280px) {
+    .music-track-grid {
+      --track-play-col: 3rem;
+      --track-title-col: minmax(10rem, 16rem);
+      --track-title-version-gap: 10.25rem;
+      --track-versions-col: 3.75rem;
+      --track-waveform-min-col: 16rem;
+      --track-duration-col: 4.25rem;
+      --track-bpm-col: 4.75rem;
+      --track-action-col: 2.75rem;
+
+      grid-template-columns:
+        var(--track-play-col)
+        var(--track-title-col)
+        var(--track-title-version-gap)
+        var(--track-versions-col)
+        minmax(var(--track-waveform-min-col), 1fr)
+        var(--track-duration-col)
+        var(--track-bpm-col)
+        var(--track-action-col)
+        var(--track-action-col);
+    }
+  }
+
+  @media (min-width: 1536px) {
+    .music-track-grid {
+      --track-title-col: minmax(13rem, 18rem);
+      --track-title-version-gap: 14.25rem;
+      --track-waveform-min-col: 28rem;
+      --track-duration-col: 4.5rem;
+      --track-bpm-col: 5.5rem;
+      --track-action-col: 3rem;
+    }
+  }
+}
+
 @layer utilities {
   .text-gradient-gold {
     @apply bg-clip-text text-transparent;

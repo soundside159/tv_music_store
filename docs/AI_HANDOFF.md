@@ -58,6 +58,7 @@ npm run lint
 - `public/audio/previews/` contains public MP3 previews generated from owner-provided WAVs. Do not commit private master WAV/ZIP files.
 - `public/images/collections/` contains temporary public collection covers copied from owner-provided test images.
 - `src/pages/Catalog.tsx` links each track to `/track/:slug` and uses this desktop rhythm: top breadcrumb/hero, left filters, center collection strip/search/list, bottom sticky player. Active collection state is stored in `?collection=collection-id`. Track rows use fixed columns: play / title / +versions / waveform / duration / BPM / heart / cart.
+- Track row spacing is controlled by `.music-track-grid` in `src/index.css`. Increase `--track-title-version-gap` to create more empty space between the track title and the `+2` versions button; everything from the versions button to the right will shift/compress consistently.
 - `src/pages/TrackDetail.tsx` shows a minimal main player, version rows, similar rows, and compact license rows hidden behind tabs.
 - Catalog and track detail design should stay minimal: dark graphite/white/cyan palette, no gold/mustard theme, no top AI/tool pill list, no separate Details button in rows, no Stems badge for now, no fake demo tracks just to fill space, and compact waveform rows should be the main music-library element.
 - Stripe buttons are UI placeholders only. No payment should be considered real until webhook-confirmed backend logic exists.
