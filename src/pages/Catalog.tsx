@@ -317,6 +317,7 @@ const Catalog = () => {
 
             <WaveformPreview
               active={isPlaying}
+              bars={420}
               onSeek={(nextProgress) => playVersion(currentTrack, currentVersion, nextProgress)}
               progress={progress}
               src={currentVersion.src}
