@@ -217,17 +217,7 @@ const Catalog = () => {
 
       <main className="px-3 pt-20 sm:px-5 lg:px-6">
         <CatalogBreadcrumb activeCollection={activeCollection} />
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeCollection?.id ?? "all-tracks"}
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <LibraryHero />
-          </motion.div>
-        </AnimatePresence>
+        <LibraryHero />
 
         <section className="mt-4 grid gap-5 lg:grid-cols-[14.5rem_minmax(0,1fr)] xl:grid-cols-[15.5rem_minmax(0,1fr)]">
           <FilterSidebar filters={filters} setFilter={setFilter} />
@@ -368,10 +358,14 @@ const CatalogBreadcrumb = ({ activeCollection }: { activeCollection: MusicCollec
 );
 
 const LibraryHero = () => (
-  <section className="relative mt-4 overflow-hidden rounded-xl border border-white/10">
-    <img src={cinemaHero} alt="" className="h-40 w-full object-cover object-[50%_72%] md:h-44" />
-    <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.9)_0%,rgba(0,0,0,0.55)_45%,rgba(0,0,0,0.8)_100%)]" />
-    <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_120px_40px_rgba(0,0,0,0.7)]" />
+  <section className="relative mt-4 h-40 overflow-hidden rounded-xl border border-white/10 bg-[#0a0706] md:h-44">
+    <img
+      src={cinemaHero}
+      alt=""
+      className="pointer-events-none absolute inset-y-0 right-0 h-full w-auto max-w-none select-none object-cover"
+    />
+    <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(10,7,6,0.98)_0%,rgba(10,7,6,0.92)_24%,rgba(10,7,6,0.4)_46%,rgba(10,7,6,0)_66%)]" />
+    <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_120px_40px_rgba(0,0,0,0.6)]" />
     <div className="absolute inset-y-0 left-0 flex max-w-xl flex-col justify-center px-8 py-6 md:px-12">
       <p className="font-body text-[0.7rem] font-semibold uppercase tracking-[0.32em] text-amber-300/90">
         Discover premium music
@@ -436,7 +430,7 @@ const CollectionStrip = ({
       <div className="relative">
         <div
           ref={stripRef}
-          className="grid auto-cols-[11.25rem] grid-flow-col gap-5 overflow-x-auto px-1 pb-2 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="grid auto-cols-[11.25rem] grid-flow-col gap-5 overflow-x-auto pb-3 pl-6 pr-4 pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {musicCollections.map((collection) => {
             const active = activeCollection?.id === collection.id;
