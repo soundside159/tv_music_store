@@ -374,13 +374,17 @@ const CatalogBreadcrumb = ({ activeCollection }: { activeCollection: MusicCollec
 
 const LibraryHero = () => (
   <section className="relative mt-4 h-40 overflow-hidden rounded-xl border border-white/10 bg-[#0a0706] md:h-44">
-    <img
-      src={cinemaHero}
-      alt=""
-      className="pointer-events-none absolute inset-y-0 right-0 h-full w-auto max-w-none select-none object-cover"
+    <div
+      className="pointer-events-none absolute inset-0 bg-no-repeat"
+      style={{
+        backgroundImage: `url(${cinemaHero})`,
+        backgroundSize: "2200px auto",
+        backgroundPosition: "center 45%",
+      }}
     />
-    <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(10,7,6,0.98)_0%,rgba(10,7,6,0.92)_24%,rgba(10,7,6,0.4)_46%,rgba(10,7,6,0)_66%)]" />
-    <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_120px_40px_rgba(0,0,0,0.6)]" />
+    <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.93)_0%,rgba(0,0,0,0.5)_50%,rgba(0,0,0,0.25)_100%)]" />
+    <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.35)_0%,rgba(0,0,0,0)_28%,rgba(0,0,0,0)_72%,rgba(0,0,0,0.35)_100%)]" />
+    <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_110px_36px_rgba(0,0,0,0.55)]" />
     <div className="absolute inset-y-0 left-0 flex max-w-xl flex-col justify-center px-8 py-6 md:px-12">
       <p className="font-body text-[0.7rem] font-semibold uppercase tracking-[0.32em] text-amber-300/90">
         Discover premium music
@@ -615,8 +619,6 @@ const TrackRow = ({
         className="h-9 min-w-0"
       />
 
-      <div className="hidden xl:block" aria-hidden="true" />
-
       <span className={`justify-self-end font-body text-sm ${mainIsPlaying ? "text-cyan-300" : "text-muted-foreground"}`}>
         {selectedVersion.duration}
       </span>
@@ -675,7 +677,6 @@ const TrackRow = ({
                     src={version.src}
                     className="h-7 min-w-0 xl:mr-[var(--track-version-wave-inset)]"
                   />
-                  <div className="hidden xl:block" />
                   <span className={`justify-self-end font-body text-sm ${active ? "text-cyan-300" : "text-muted-foreground"}`}>
                     {version.duration}
                   </span>
