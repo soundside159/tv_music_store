@@ -7,7 +7,6 @@ import {
   ChevronRight,
   Heart,
   Home,
-  Music2,
   Pause,
   Play,
   Search,
@@ -16,6 +15,7 @@ import {
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import WaveformPreview from "@/components/WaveformPreview";
+import cinemaHero from "@/assets/cinema-hero.png";
 import { Input } from "@/components/ui/input";
 import { catalogTracks } from "@/data/catalogTracks";
 import type { CatalogTrack, TrackAudioVersion, TrackVersion } from "@/data/catalogTracks";
@@ -224,7 +224,7 @@ const Catalog = () => {
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
           >
-            <LibraryHero activeCollection={activeCollection} />
+            <LibraryHero />
           </motion.div>
         </AnimatePresence>
 
@@ -366,50 +366,23 @@ const CatalogBreadcrumb = ({ activeCollection }: { activeCollection: MusicCollec
   </div>
 );
 
-const LibraryHero = ({ activeCollection }: { activeCollection: MusicCollection | null }) => {
-  if (activeCollection) {
-    return (
-      <section className="relative mt-4 overflow-hidden rounded-lg border border-border/40">
-        <img
-          src={activeCollection.image}
-          alt=""
-          className="h-56 w-full object-cover opacity-75 md:h-64"
-        />
-        <div className="absolute inset-0 bg-black/40" />
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.82),rgba(0,0,0,0.34),rgba(0,0,0,0.72))]" />
-        <div className="absolute inset-y-0 left-0 flex max-w-xl flex-col justify-center px-8 py-8 md:px-12">
-          <p className="font-body text-xs font-semibold uppercase tracking-[0.3em] text-cyan-300">
-            {activeCollection.eyebrow}
-          </p>
-          <h1 className="mt-4 font-body text-4xl font-semibold tracking-normal text-foreground md:text-5xl">
-            {activeCollection.shortTitle}
-          </h1>
-          <p className="mt-4 max-w-sm font-body text-base leading-7 text-foreground/85">
-            {activeCollection.description}
-          </p>
-          <div className="mt-7 inline-flex items-center gap-3 font-body text-sm text-foreground/80">
-            <Music2 className="h-4 w-4" />
-            {activeCollection.trackCount} tracks
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-  return (
-    <section className="mt-4 rounded-lg border border-border/30 bg-card/25 px-6 py-8 text-center md:py-10">
+const LibraryHero = () => (
+  <section className="relative mt-4 overflow-hidden rounded-lg border border-border/40">
+    <img src={cinemaHero} alt="" className="h-56 w-full object-cover opacity-80 md:h-64" />
+    <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.85),rgba(0,0,0,0.45),rgba(0,0,0,0.12))]" />
+    <div className="absolute inset-y-0 left-0 flex max-w-xl flex-col justify-center px-8 py-8 md:px-12">
       <p className="font-body text-xs font-semibold uppercase tracking-[0.3em] text-cyan-300">
         Discover premium music
       </p>
-      <h1 className="mt-4 font-body text-4xl font-semibold tracking-normal text-foreground md:text-5xl">
+      <h1 className="mt-4 font-display text-4xl font-semibold tracking-normal text-foreground md:text-5xl">
         Music Library
       </h1>
-      <p className="mx-auto mt-4 max-w-xl font-body text-base leading-7 text-muted-foreground">
+      <p className="mt-4 max-w-md font-body text-base leading-7 text-foreground/85">
         Explore our entire library of premium tracks for any project and mood.
       </p>
-    </section>
-  );
-};
+    </div>
+  </section>
+);
 
 const CollectionStrip = ({
   activeCollection,
@@ -450,29 +423,26 @@ const CollectionStrip = ({
 
             return (
               <div key={collection.id} className="flex flex-col items-center">
-                <motion.button
+                <button
                   type="button"
                   onClick={() => onSelectCollection(collection.id)}
-                  whileHover={{ y: -3 }}
-                  whileTap={{ scale: 0.985 }}
-                  transition={{ duration: 0.18 }}
                   style={{ transform: "skewX(-11deg)" }}
-                  className={`group relative h-36 w-full overflow-hidden rounded-md border-2 text-left transition-all duration-300 ${
+                  className={`group relative h-48 w-full overflow-hidden rounded-md border-2 text-left transition-[border-color,box-shadow] duration-300 ${
                     active
-                      ? "border-cyan-300 shadow-[0_0_24px_-2px_rgba(103,232,249,0.6)]"
-                      : "border-border/40 hover:border-cyan-200/70 hover:shadow-[0_0_18px_-4px_rgba(103,232,249,0.45)]"
+                      ? "border-cyan-300 shadow-[0_0_26px_-2px_rgba(103,232,249,0.6)]"
+                      : "border-border/40 hover:border-cyan-200/70 hover:shadow-[0_0_20px_-5px_rgba(103,232,249,0.5)]"
                   }`}
                 >
                   <img
                     src={collection.image}
                     alt=""
-                    style={{ transform: "skewX(11deg) scale(1.32)" }}
-                    className="absolute inset-0 h-full w-full object-cover opacity-75 transition-transform duration-500 group-hover:scale-[1.4]"
+                    style={{ transform: "skewX(11deg) scale(1.3)" }}
+                    className="absolute inset-0 h-full w-full object-cover opacity-80"
                   />
-                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/45 to-transparent" />
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
                   <div style={{ transform: "skewX(11deg)" }} className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-4">
                     <div className="min-w-0">
-                      <h3 className="truncate font-display text-base font-semibold text-foreground">{collection.shortTitle}</h3>
+                      <h3 className="truncate font-display text-lg font-semibold text-foreground">{collection.shortTitle}</h3>
                       <p className="mt-0.5 font-body text-xs text-foreground/70">{collection.trackCount} tracks</p>
                     </div>
                     <span
@@ -483,7 +453,7 @@ const CollectionStrip = ({
                       <ChevronRight className="h-4 w-4" />
                     </span>
                   </div>
-                </motion.button>
+                </button>
                 <CollectionLamp active={active} />
               </div>
             );
@@ -514,22 +484,22 @@ const CollectionStrip = ({
 };
 
 const CollectionLamp = ({ active }: { active: boolean }) => (
-  <div className="mt-3 flex flex-col items-center" aria-hidden="true">
-    <span
-      className={`h-px w-8 transition-colors duration-300 ${
-        active ? "bg-cyan-300/70" : "bg-border/50"
-      }`}
-    />
-    <span className="relative mt-2 flex h-2.5 w-2.5 items-center justify-center">
-      {active && <span className="absolute h-6 w-6 rounded-full bg-cyan-300/25 blur-[4px]" />}
+  <div className="mt-4 flex flex-col items-center" aria-hidden="true">
+    <span className="relative flex h-3.5 w-3.5 items-center justify-center">
+      {active && <span className="absolute h-8 w-8 rounded-full bg-amber-300/30 blur-md" />}
       <span
-        className={`relative h-2.5 w-2.5 rounded-full transition-all duration-300 ${
+        className={`relative h-3 w-3 rounded-full transition-all duration-300 ${
           active
-            ? "bg-cyan-300 shadow-[0_0_12px_3px_rgba(103,232,249,0.85)]"
-            : "bg-muted-foreground/30"
+            ? "bg-amber-200 shadow-[0_0_12px_4px_rgba(251,191,36,0.85),inset_0_0_3px_1px_rgba(255,255,255,0.85)]"
+            : "bg-amber-100/15"
         }`}
       />
     </span>
+    <span
+      className={`mt-1 h-4 w-1.5 rounded-full bg-gradient-to-b blur-[2px] transition-opacity duration-300 ${
+        active ? "from-amber-200/60 to-transparent opacity-90" : "from-white/10 to-transparent opacity-40"
+      }`}
+    />
   </div>
 );
 
