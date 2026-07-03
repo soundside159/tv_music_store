@@ -572,7 +572,7 @@ const TrackRow = ({
     transition={{ delay: index * 0.035 }}
     className="border-b border-border/30 last:border-b-0"
   >
-    <div className="music-track-grid grid gap-3 px-4 py-3 xl:items-center">
+    <div className="music-track-grid grid gap-3 rounded-lg px-4 py-3 transition-colors duration-150 hover:bg-foreground/[0.04] xl:items-center">
       <button
         type="button"
         onClick={() => onPlayVersion(track, selectedVersion)}

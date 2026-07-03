@@ -112,7 +112,7 @@
     .music-track-grid {
       --track-play-col: 3rem;
       --track-title-col: minmax(10rem, 16rem);
-      --track-title-version-gap: 20.5rem;
+      --track-title-version-gap: 41rem;
       --track-versions-col: 3.75rem;
       --track-waveform-min-col: 16rem;
       --track-duration-col: 4.25rem;
@@ -135,7 +135,7 @@
   @media (min-width: 1536px) {
     .music-track-grid {
       --track-title-col: minmax(13rem, 18rem);
-      --track-title-version-gap: 28.5rem;
+      --track-title-version-gap: 57rem;
       --track-waveform-min-col: 28rem;
       --track-duration-col: 4.5rem;
       --track-bpm-col: 5.5rem;
