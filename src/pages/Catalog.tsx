@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  ArrowRight,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -367,17 +368,18 @@ const CatalogBreadcrumb = ({ activeCollection }: { activeCollection: MusicCollec
 );
 
 const LibraryHero = () => (
-  <section className="relative mt-4 overflow-hidden rounded-lg border border-border/40">
-    <img src={cinemaHero} alt="" className="h-56 w-full object-cover opacity-80 md:h-64" />
-    <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.85),rgba(0,0,0,0.45),rgba(0,0,0,0.12))]" />
-    <div className="absolute inset-y-0 left-0 flex max-w-xl flex-col justify-center px-8 py-8 md:px-12">
-      <p className="font-body text-xs font-semibold uppercase tracking-[0.3em] text-cyan-300">
+  <section className="relative mt-4 overflow-hidden rounded-xl border border-white/10">
+    <img src={cinemaHero} alt="" className="h-40 w-full object-cover object-[50%_72%] md:h-44" />
+    <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.9)_0%,rgba(0,0,0,0.55)_45%,rgba(0,0,0,0.8)_100%)]" />
+    <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_120px_40px_rgba(0,0,0,0.7)]" />
+    <div className="absolute inset-y-0 left-0 flex max-w-xl flex-col justify-center px-8 py-6 md:px-12">
+      <p className="font-body text-[0.7rem] font-semibold uppercase tracking-[0.32em] text-amber-300/90">
         Discover premium music
       </p>
-      <h1 className="mt-4 font-display text-4xl font-semibold tracking-normal text-foreground md:text-5xl">
+      <h1 className="mt-2 font-display text-5xl font-semibold leading-none tracking-tight text-white md:text-6xl">
         Music Library
       </h1>
-      <p className="mt-4 max-w-md font-body text-base leading-7 text-foreground/85">
+      <p className="mt-3 max-w-lg font-body text-sm leading-6 text-white/55">
         Explore our entire library of premium tracks for any project and mood.
       </p>
     </div>
@@ -399,24 +401,42 @@ const CollectionStrip = ({
 
   return (
     <section>
-      <div className="mb-3 flex items-center justify-between gap-4">
-        <h2 className="font-body text-2xl font-medium tracking-normal text-foreground">Collections</h2>
-        <button
-          type="button"
-          onClick={() => onSelectCollection(null)}
-          className="inline-flex items-center gap-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          View all collections
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-card/70">
-            <ChevronRight className="h-4 w-4" />
-          </span>
-        </button>
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <h2 className="font-display text-2xl font-semibold tracking-tight text-white">Collections</h2>
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => onSelectCollection(null)}
+            className="inline-flex items-center gap-1.5 font-body text-sm text-white/60 transition-colors hover:text-white"
+          >
+            View all collections
+            <ArrowRight className="h-4 w-4" />
+          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => scrollCollections(-1)}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-white/70 transition-colors hover:border-white/40 hover:text-white"
+              aria-label="Previous collections"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollCollections(1)}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-white/70 transition-colors hover:border-white/40 hover:text-white"
+              aria-label="Next collections"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="relative">
         <div
           ref={stripRef}
-          className="grid auto-cols-[minmax(12rem,15rem)] grid-flow-col gap-6 overflow-x-auto px-1 pb-3 pr-16 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="grid auto-cols-[11.25rem] grid-flow-col gap-5 overflow-x-auto px-1 pb-2 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {musicCollections.map((collection) => {
             const active = activeCollection?.id === collection.id;
@@ -426,32 +446,27 @@ const CollectionStrip = ({
                 <button
                   type="button"
                   onClick={() => onSelectCollection(collection.id)}
-                  style={{ transform: "skewX(-11deg)" }}
-                  className={`group relative h-48 w-full overflow-hidden rounded-md border-2 text-left transition-[border-color,box-shadow] duration-300 ${
+                  style={{ transform: "skewX(-9deg)" }}
+                  className={`group relative h-64 w-full overflow-hidden rounded-lg border text-left transition-[border-color,box-shadow] duration-300 ${
                     active
-                      ? "border-cyan-300 shadow-[0_0_26px_-2px_rgba(103,232,249,0.6)]"
-                      : "border-border/40 hover:border-cyan-200/70 hover:shadow-[0_0_20px_-5px_rgba(103,232,249,0.5)]"
+                      ? "border-amber-200/60 shadow-[0_0_22px_-4px_rgba(251,191,36,0.45),inset_0_0_18px_-6px_rgba(255,255,255,0.35)]"
+                      : "border-white/15 shadow-[inset_0_0_16px_-8px_rgba(255,255,255,0.3)] hover:border-white/35"
                   }`}
                 >
                   <img
                     src={collection.image}
                     alt=""
-                    style={{ transform: "skewX(11deg) scale(1.3)" }}
-                    className="absolute inset-0 h-full w-full object-cover opacity-80"
+                    style={{ transform: "skewX(9deg) scale(1.32)" }}
+                    className="absolute inset-0 h-full w-full object-cover"
                   />
-                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
-                  <div style={{ transform: "skewX(11deg)" }} className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-4">
-                    <div className="min-w-0">
-                      <h3 className="truncate font-display text-lg font-semibold text-foreground">{collection.shortTitle}</h3>
-                      <p className="mt-0.5 font-body text-xs text-foreground/70">{collection.trackCount} tracks</p>
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent" />
+                  <div style={{ transform: "skewX(9deg)" }} className="absolute inset-x-0 bottom-0 p-4">
+                    <h3 className="font-display text-lg font-semibold leading-tight text-white">{collection.shortTitle}</h3>
+                    <p className="mt-1 font-body text-xs text-white/60">{collection.trackCount} tracks</p>
+                    <div className="mt-2.5 flex items-end justify-between">
+                      <span className="block h-px w-[70px] bg-gradient-to-r from-amber-300/80 to-amber-300/0" />
+                      <ArrowRight className="h-4 w-4 text-white/75 transition-colors group-hover:text-white" />
                     </div>
-                    <span
-                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors duration-300 ${
-                        active ? "border-cyan-300 text-cyan-300" : "border-white/40 text-white/80 group-hover:border-cyan-200"
-                      }`}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </span>
                   </div>
                 </button>
                 <CollectionLamp active={active} />
@@ -460,44 +475,19 @@ const CollectionStrip = ({
           })}
         </div>
 
-        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center gap-2 bg-gradient-to-l from-background via-background/80 to-transparent pl-10 pr-1">
-          <button
-            type="button"
-            onClick={() => scrollCollections(-1)}
-            className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full border border-border/50 bg-background/80 text-foreground transition-colors hover:border-cyan-300 hover:text-cyan-300"
-            aria-label="Previous collections"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => scrollCollections(1)}
-            className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full border border-border/50 bg-background/80 text-foreground transition-colors hover:border-cyan-300 hover:text-cyan-300"
-            aria-label="Next collections"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
+        <div className="mt-1 h-px w-full bg-white/5" />
       </div>
     </section>
   );
 };
 
 const CollectionLamp = ({ active }: { active: boolean }) => (
-  <div className="mt-4 flex flex-col items-center" aria-hidden="true">
-    <span className="relative flex h-3.5 w-3.5 items-center justify-center">
-      {active && <span className="absolute h-8 w-8 rounded-full bg-amber-300/30 blur-md" />}
-      <span
-        className={`relative h-3 w-3 rounded-full transition-all duration-300 ${
-          active
-            ? "bg-amber-200 shadow-[0_0_12px_4px_rgba(251,191,36,0.85),inset_0_0_3px_1px_rgba(255,255,255,0.85)]"
-            : "bg-amber-100/15"
-        }`}
-      />
-    </span>
+  <div className="mt-3 flex justify-center" aria-hidden="true">
     <span
-      className={`mt-1 h-4 w-1.5 rounded-full bg-gradient-to-b blur-[2px] transition-opacity duration-300 ${
-        active ? "from-amber-200/60 to-transparent opacity-90" : "from-white/10 to-transparent opacity-40"
+      className={`h-2 w-2 rounded-full transition-all duration-300 ${
+        active
+          ? "bg-amber-300 shadow-[0_0_10px_3px_rgba(251,191,36,0.75)]"
+          : "bg-amber-300/25"
       }`}
     />
   </div>
