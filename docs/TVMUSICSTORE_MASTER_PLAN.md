@@ -1,219 +1,163 @@
-﻿# TVMUSICSTORE.COM — Master Plan / Техническое задание
+# TVMUSICSTORE.COM — Master Plan V2 (подписочная модель, 3 композитора)
 
-> Документ для AI-агента (Codex) и владельца. Описывает бизнес-модель, UX, архитектуру и роадмап.
-> Владелец: композитор, ~300 треков (по ~3 версии каждый), ~40 треков со стемсами.
-> Все треки зарегистрированы в Content ID через EpicElite; владелец может снимать клеймы сам в дашборде.
-> Текущий сайт: лендинг с 4 «кинотеатрами» (Modern Score / Thriller / Game OST / Production Music) — сохранить как бренд-лендинг.
+> Документ для AI-агентов и владельца. V2 заменяет V1 (поштучная модель одного композитора).
+> Главное изменение: монетизация теперь подписка (по образцу tunetank.com) + разовые sync-лицензии, каталог общий на трёх авторов, добавлены роли «композитор» и система выплат.
+> Детальная поэкранная спецификация: `docs/PAGES_SPEC.md`.
 
 ---
 
 ## Текущий статус реализации
 
-- Стек остаётся React + TypeScript + Vite + Tailwind + Cloudflare Pages.
-- `/catalog` и `/track/:slug` уже существуют на временных данных из `src/data/catalogTracks.ts`.
-- Подключены 2 реальных трека владельца и 6 публичных MP3-preview версий в `public/audio/previews/`.
-- WAV-мастера и ZIP/стемы не коммитить в GitHub; позже они должны лежать приватно в Cloudflare R2.
-- Текущий UI-курс: современный минимализм в стиле music library, графит/белый/cyan, без золотой/горчичной темы, компактные строки треков, версии внутри строки.
-- Текущий каталог переименован визуально в `Music Library`: breadcrumbs, общий hero, горизонтальные карточки коллекций, активная коллекция через `?collection=...` с большим hero, слева фильтры Use Case / Genre / Mood, по центру список треков. Строка трека держит фиксированные колонки `play / title / +versions / waveform / duration / BPM / heart / cart`; waveform строится из реального MP3, поддерживает click-to-seek без паузы, cyan показывает только уже проигранный progress, а версии раскрываются анимированно без лишней нумерации.
-- Тестовые публичные обложки коллекций лежат в `public/images/collections/`; временная мета коллекций лежит в `src/data/musicCollections.ts`.
-- Текущая страница трека: лицензии спрятаны во вкладку `License Info`; основной первый экран держит плеер, описание и вкладки `Versions / Similar / License Info`.
+- Стек: React 18 + TypeScript + Vite + Tailwind + shadcn/ui, Cloudflare Pages, деплой из `main`.
+- `/catalog` и `/track/:slug` существуют на временных данных из `src/data/catalogTracks.ts` (2 реальных трека, 6 MP3-превью в `public/audio/previews/`).
+- WAV-мастера и стемсы не коммитить; позже — приватно в Cloudflare R2.
+- UI-курс: тёмный минимализм; **акцентный цвет всех интерактивных состояний (hover/active/progress) — фирменный жёлтый/золотой, единым токеном в Tailwind. Cyan/синий из ранних итераций заменяется на жёлтый (решение владельца, 2026-07-03).** База — графит/нейтральные.
+- Структура каталога (колонки строк, фильтры, коллекции, click-to-seek waveform) — сохраняется как есть, детали в `AGENTS.md`.
 
 ---
 
-## 1. Позиционирование
+## 1. Концепция
 
-**Boutique cinematic music licensing — «музыка уровня кино от одного композитора, без бюрократии стоков».**
+**Нишевый premium-лейбл из трёх композиторов, ~1000 треков:**
 
-Ключевые отличия от массовых стоков (Tunetank, Epidemic, AudioJungle):
+- Автор 1 (владелец платформы): ~250 cinematic/score треков (Modern Score, Thriller, Game OST, Production).
+- Автор 2: ~250 premium sport/electronic.
+- Автор 3: ~400 гитарных треков в cinematic-стилях.
 
-- Один автор, кураторское качество, единый кинематографический почерк (styles: John Williams, Hans Zimmer, Thomas Newman, Ramin Djawadi и т.д.).
-- Прямой контакт с композитором: адаптация трека под проект и кастом-музыка — то, чего нет у стоков.
-- Content ID-гарантия: любой клейм снимается владельцем в течение 24 часов (SLA). Это фича, а не проблема — вынести на видное место.
-- Премиальный визуал («кинотеатры») → ощущение бренда, а не склада треков.
+Позиционирование: **«Кураторский кинематографический каталог — без AI-мусора и стокового однообразия»**. Конкурируем не объёмом, а качеством ниши. Дизайн — минимализм, жёлтый акцент, кинотеатры на главной как бренд-хук.
 
-**Основная ЦА (12 месяцев): видеопродакшны и агентства** (реклама, корпоративное видео, трейлеры). Вторичные: контент-криэйторы (входят через free-тир), гейм-студии и ТВ (через B2B-outreach и кастом).
-
----
-
-## 2. Монетизация — «лестница ценности»
-
-| Ступень | Продукт | Цена | Что входит |
-|---|---|---|---|
-| 0 | Free-тир | $0 + email + атрибуция | 15–20 избранных треков, MP3, только после ввода email |
-| 1 | Online License | $39 | 1 трек (все версии, WAV+MP3), web/соцсети/YouTube/подкасты, 1 проект |
-| 2 | Commercial License | $99 | + реклама (digital ads), корпоративное видео, клиентские проекты |
-| 3 | Broadcast License | $299 | + ТВ, кино, стриминг, трейлеры, игры; **стемсы включены** (если есть) |
-| 4 | Track Adaptation | от $149 | Существующий трек подгоняется под хронометраж/настроение/монтаж клиента |
-| 5 | Custom Music | от $499 | Музыка с нуля под бриф (бренд, фильм, реклама, игра) |
-
-Правила:
-
-- Лицензии поштучные, **без подписки** (подписку рассмотреть только после стабильного спроса, фаза 3+).
-- **Стемсы = апсейл**: на тирах 1–2 докупаются за +$49 (где есть). Не делать стемсы на все 300 треков — только по запросу и для топ-20 продаваемых.
-- Все цены в USD, Stripe Checkout. Скидка «bundle»: 3 трека −15%, 5 треков −25% (автоматически в корзине).
-- На страницах Adaptation/Custom цены «от $…» + форма брифа (как Send Brief у vicatemusic.com).
-- После покупки клиент получает: файлы + PDF-сертификат лицензии + форму whitelist/снятия клейма.
-
-### Content ID flow (критично для доверия)
-
-1. На странице лицензий и после покупки: «Треки защищены Content ID. Получил клейм? Пришли ссылку на видео — снимем в течение 24 ч.»
-2. Форма: email покупателя + ссылка на видео/канал → попадает в очередь админки → владелец снимает клейм в EpicElite → статус «done», клиенту авто-письмо через Resend.
+Все треки всех авторов зарегистрированы в Content ID (EpicElite), каждый автор снимает клеймы по своим трекам → **гарантия «claim removed within 24h» на весь каталог** — главный крючок доверия.
 
 ---
 
-## 3. Клиентские маршруты (funnels на сайте)
+## 2. Монетизация
 
-### Маршрут A — «Occasional buyer» (криэйтор, холодный трафик)
+### 2.1 Подписки (ядро, структура как у Tunetank)
 
-Лендинг (кинотеатры, вау) → кнопка категории → Каталог с фильтрами → прослушал → скачал free-трек за email → welcome-серия писем → промокод −10% на первую покупку → Online $39.
+| План | Цена | Что входит |
+|---|---|---|
+| **Free** | $0, без карты | Прослушивание всего каталога. **3 скачивания/мес** (MP3), personal-лицензия, ручное снятие клейма |
+| **Pro** | $7/мес годовой · $12 помесячно | Безлимит MP3. Personal & small-team (≤5 чел). Whitelist **3 канала** |
+| **Max** | $15/мес годовой · $29 помесячно | + **коммерческая лицензия** (реклама, клиентские проекты, бренды) + **WAV + стемсы** + whitelist **10 каналов** + приоритетная поддержка |
 
-### Маршрут B — «Профи из агентства» (главный, деньги здесь)
+Правила: скачанное и использованное при активной подписке остаётся лицензированным для тех проектов навсегда; новые проекты требуют активной подписки или разовой лицензии.
 
-Прямой заход в /catalog (из рекламы/поиска/outreach) → фильтры или курированный плейлист под use-case («Thriller Trailer», «Corporate Cinematic») → плеер с переключением версий (Full/60s/30s/15s/Loops/Stems) → guest checkout → Commercial $99 / Broadcast $299 → email-реактивация через 30–60 дней.
+### 2.2 Разовые Sync-лицензии (страница /sync)
 
-### Маршрут C — «Кастом-клиент»
+Подписка НЕ покрывает: ТВ-эфир, кино/стриминг, трейлеры, встраивание в игры/приложения.
 
-Каталог/портфолио → «нужно что-то своё» → страница Custom/Adaptation с ценами «от» → бриф-форма (имя, email, референсы, описание, бюджет, дедлайн) → заявка в админку → личный контакт композитора.
+| Лицензия | Цена | Покрытие |
+|---|---|---|
+| Sync Standard | $199 | Игры (инди), онлайн-фильмы, фестивали |
+| Sync Broadcast | $399 | ТВ, стриминг, трейлеры, AAA. Стемсы включены |
 
-### Правила конверсии (реалистичные ориентиры)
+### 2.3 Сервисы
 
-Цель «1 из 10 посетителей покупает» недостижима на холодном трафике — норма индустрии 1–4%. Правильные цели по этапам воронки:
+- Track Adaptation — от $149; Custom Music — от $499. Заявки распределяются между авторами по стилю. Автор-исполнитель получает 50%, платформа 50%.
 
-- Посетитель → прослушал трек: ≥ 40%
-- Прослушал → оставил email (free-скачивание): ≥ 10%
-- Email-база → покупка в течение 90 дней: ≥ 5–10%
-- Посетитель → покупка (общая): 1–3% на старте — это хорошо
-- Повторные покупки: ≥ 25% покупателей возвращаются (сюда бьёт email-маркетинг)
+### 2.4 Лестница целиком
 
-Каждый шаг воронки трекается (см. Аналитика).
-
----
-
-## 4. Структура сайта (страницы)
-
-1. **/** — лендинг с 4 кинотеатрами (существующий). Каждая категория = свой визуал зала. Preview-плеер (как сейчас). CTA: «Explore Catalog». Ниже: как работают лицензии (3 шага), trust-блок (Content ID, 24h claim removal, instant license PDF), featured-плейлисты, кейсы/логотипы клиентов (когда появятся).
-2. **/catalog** — рабочий каталог (референс UX: vicatemusic.com):
-   - Фильтры: категория (4 кинотеатра), жанр, настроение, темп (BPM range), длительность, наличие стемсов, «similar to» (стиль композитора: Zimmer, Williams…).
-   - Поиск текстом. **Логировать все запросы**, отдельно — запросы с 0 результатов (в админку).
-   - Строка трека: play, название, `+versions`, waveform, длительность, BPM, лайк, «＋ в корзину». Версии раскрываются под треком, начинаются в той же waveform-колонке и для коротких версий заканчиваются раньше по duration-ratio.
-   - Sticky-плеер снизу (как сейчас) с переключением версий.
-   - Блок «Similar tracks» при раскрытии трека.
-3. **/track/[slug]** — страница трека (нужна для SEO): плеер всех версий, теги, описание сцены применения, лицензии с ценами, similar tracks.
-4. **/playlists** и **/playlist/[slug]** — курированные подборки под use-case: «Netflix-style Drama», «Thriller Trailer», «Corporate Cinematic», «Game Boss Fight», «Documentary Tension» и т.д. Управляются из админки.
-5. **/free** — free-тир: 15–20 треков, скачивание за email (double opt-in не обязателен, но чекбокс согласия на рассылку). Требование атрибуции + готовый текст для копирования.
-6. **/licensing** — таблица лицензий, FAQ (клеймы, атрибуция, возвраты, что можно/нельзя), сравнение тиров.
-7. **/custom** — Adaptation + Custom: цены «от», процесс (бриф → демо → правки → финал), портфолио/шоурил, бриф-форма.
-8. **/blog** — SEO-статьи (см. Маркетинг).
-9. **/cart**, **/checkout** (Stripe), **/account** — история покупок, повторные скачивания, лицензии PDF, форма claim-снятия.
-10. **/terms**, **/privacy**, **/license-agreement** — юридические тексты.
-
-Checkout: **guest checkout**; аккаунт создаётся автоматически по email после оплаты (magic-link вход, без паролей — проще и безопаснее).
+Free (3 dl/мес) → Pro $7 → Max $15 → Sync $199–399 → Adaptation $149+ → Custom $499+.
 
 ---
 
-## 5. Техническая архитектура (ФИКСИРОВАНО — не менять)
+## 3. Экономика и выплаты
 
-- **Frontend:** React 18 + TypeScript + Vite + Tailwind + shadcn/ui. Хостинг: Cloudflare Pages. Без миграции на Next.js.
-- **API:** Cloudflare Pages Functions / Workers.
-- **База:** Cloudflare D1 (SQLite).
-- **Файлы:** Cloudflare R2, приватный bucket. Отдача покупок через подписанные URL с TTL (напр. 24 ч), повторная генерация из /account.
-- **Превью:** публичные (или через Worker) MP3 ~128 kbps, сгенерированные заранее; WAV/стемсы — только приватно после покупки.
-- **Оплаты:** Stripe Checkout (line items по трекам+тирам) + Stripe Webhooks (`checkout.session.completed` → создать order, сгенерировать license PDF, отправить письмо со ссылками).
-- **Письма:** Resend — транзакционные (чек, лицензия, ссылки, claim-статус) и маркетинговые серии (welcome, abandoned cart, digest, реактивация). Маркетинговые можно реализовать через Workers Cron Triggers + таблицы очередей.
-- **SEO при Vite SPA:** обязателен пре-рендеринг/SSR-подмена для /track/*, /playlist/*, /blog/* — минимум: Worker, отдающий ботам HTML с мета-тегами и контентом (или vite-ssg/prerender на билде). Sitemap.xml, schema.org (MusicRecording, Product, Offer), OG-теги.
-- **Аналитика:** Cloudflare Web Analytics + собственные события в D1 (play, version_switch, add_to_cart, checkout_start, purchase, free_download, search, search_zero_results). Дашборд в админке.
+1. Вся выручка минус комиссии Stripe = net revenue.
+2. **50% — платформа** (владелец: разработка, хостинг, маркетинг, помощник).
+3. **50% — пул авторов**, пропорционально скачиваниям треков автора за месяц (1 скачивание = 1 балл; вес Max-скачиваний ×2 — настраиваемый параметр, на старте все равны). Sync/custom: авторские 50% идут напрямую автору трека/заказа.
+4. Владелец получает два дохода: платформенные 50% + авторская доля по своим трекам.
+5. Выплаты: ежемесячно до 15 числа, порог $50, вручную (Wise). В админке — авто-расчёт + PDF-statement каждому автору.
+6. Все проценты/веса/пороги — редактируемые параметры в админке, не хардкод.
+7. ⚠️ До запуска: бухгалтер (UK-структура, выплаты в Польшу), **Stripe Tax включить** (VAT на цифровые подписки для EU — обязательно).
+8. С каждым автором — договор: лицензия платформе на дистрибуцию, право снятия каталога с уведомлением 30 дней, подтверждение авторства и Content ID-регистрации.
 
-### Схема D1 (основные таблицы)
+---
+
+## 4. Три роли и три кабинета
+
+### 4.1 Клиент (/account)
+
+Маршрут: слушает всё свободно → жмёт Download → регистрация (email magic-link или Google) → Free 3 скачивания/мес со счётчиком → упёрся в лимит / нужен WAV / whitelist / коммерческая лицензия → /pricing → Stripe Billing.
+
+Кабинет: Overview, Downloads (история + re-download), License (план + sync-лицензии PDF), Whitelist channels (Pro 3 / Max 10, статусы), Claims (заявка + статусы ≤24h), Billing (Stripe portal, при отмене — 1 вопрос «почему»), Support.
+
+### 4.2 Композитор (/composer)
+
+Dashboard (скачивания, прогноз заработка, топ-треки) · My Tracks (статусы модерации) · Upload (WAV + метаданные → на модерацию) · Earnings (баллы, суммы, statements) · Requests (whitelist/claim по своим трекам, custom-брифы) · Profile (публичный + payout details).
+
+### 4.3 Админ (/admin) — модульная структура
+
+Dashboard (MRR, подписки, конверсия) · Tracks (+модерация загрузок) · Playlists/Storefront · Plans & Licensing (цены/лимиты/тексты без деплоя) · Customers (mini-CRM) · Finance (расчёт выплат, statements, mark paid) · Composers · Analytics (воронка, топ-треки, поиск-без-результатов, причины отмен) · Marketing (промокоды, рассылки) · Requests & Support · Blog.
+
+---
+
+## 5. Структура сайта
+
+`/` (кинотеатры + к релизу 15-сек AI-видео по клику, CTA «Start free — 3 downloads/month») · `/catalog` (есть; + фильтр по автору, бейджи планов, счётчик лимита) · `/pricing` (Free/Pro/Max, annual по умолчанию, сравнительная таблица, FAQ) · `/sync` · `/custom` · `/artist/:slug` ×3 · `/track/:slug` (есть) · `/playlists`, `/playlist/:slug` · `/blog` · `/licensing` · `/account` · `/composer` · `/admin` · `/terms`, `/privacy`, `/license-agreement`.
+
+Полная поблочная спецификация каждой страницы — `docs/PAGES_SPEC.md`.
+
+---
+
+## 6. Техническая архитектура
+
+Стек фиксирован: Vite + React 18 + TS + Tailwind + shadcn/ui, Cloudflare Pages + Functions/Workers, D1, R2, Resend. Без Next.js/Supabase/WordPress.
+
+- **Stripe Billing** (подписки monthly/annual, prorate) + Stripe Checkout (sync/custom) + **Stripe Tax**. Webhooks: `customer.subscription.*`, `invoice.paid`, `checkout.session.completed`. Платежи реальны только после webhook-подтверждения.
+- **Entitlements-слой в Worker:** каждый download-запрос проверяет план и лимит → подписанный R2-URL (MP3 всем, WAV/stems только Max).
+- Auth: email magic-link + Google OAuth; роли customer/composer/admin в одной таблице users.
+
+### Схема D1 (V2)
 
 ```
-tracks(id, slug, title, style_of, category, bpm, duration, description, has_stems, is_free, status[draft|scheduled|published], publish_at, created_at)
-track_versions(id, track_id, type[full|60s|30s|15s|loop|stem], duration, r2_key_wav, r2_key_mp3_preview)
-tags(id, name, type[genre|mood|instrument|usecase]) / track_tags(track_id, tag_id)
-playlists(id, slug, title, description, cover, sort) / playlist_tracks(playlist_id, track_id, sort)
-customers(id, email, name, created_at, source)
-orders(id, customer_id, stripe_session_id, total, status, created_at)
-order_items(id, order_id, track_id, license_tier[online|commercial|broadcast], stems_addon, price)
-licenses(id, order_item_id, pdf_r2_key, license_number)
-downloads(id, customer_id, order_item_id, expires_at, url_token)
-free_downloads(id, email, track_id, created_at)
-claim_requests(id, customer_id, video_url, status[new|in_progress|done], created_at, resolved_at)
-briefs(id, name, email, type[adaptation|custom], references, description, budget, deadline, status)
-promo_codes(id, code, percent_off, valid_until, max_uses, uses)
-license_tiers(id, name, price, terms_md)  -- цены/условия редактируются из админки
-email_log(id, customer_id, type, sent_at)
-search_log(id, query, results_count, created_at)
-support_tickets(id, customer_id, subject, message, status, created_at)
-admin_users(id, email, role)
+users(id, email, name, role[customer|composer|admin], google_id, created_at)
+composers(id, user_id, slug, display_name, bio, payout_details, revenue_weight)
+tracks(id, slug, title, composer_id, category, bpm, duration, description, has_stems,
+       moderation_status[pending|approved|rejected], status[draft|scheduled|published], publish_at)
+track_versions(id, track_id, type, duration, r2_key_wav, r2_key_mp3_preview)
+tags / track_tags · playlists / playlist_tracks
+subscriptions(id, user_id, stripe_sub_id, plan[free|pro|max], interval, status, current_period_end)
+download_log(id, user_id, track_id, composer_id, plan_at_download, format, created_at)
+whitelist_channels(id, user_id, channel_url, status[pending|active|rejected])
+claim_requests(id, user_id, composer_id, track_id, video_url, status, created_at, resolved_at)
+payout_periods(id, month, platform_revenue, author_pool, status[draft|final|paid])
+payout_lines(id, period_id, composer_id, downloads_count, weighted_points, amount, statement_pdf_key)
+sync_orders(id, user_id, track_id, tier, price, license_pdf_key)
+briefs(id, name, email, type[adaptation|custom], assigned_composer_id, references, description, budget, deadline, status)
+plan_config(id, plan, price_monthly, price_annual, download_limit, features_json)
+promo_codes · email_log · search_log · support_tickets · contact_messages
 ```
 
----
-
-## 6. Админка (/admin, доступ только владельцу)
-
-1. **Треки:** загрузка WAV → авто-генерация MP3-превью (Worker/ffmpeg на этапе загрузки или локальный скрипт), теги, категории, версии, стемсы, статус draft/published, **отложенная публикация по дате**.
-2. **Плейлисты/витрина:** создание подборок, featured-треки на лендинге, порядок.
-3. **Лицензии и цены:** редактирование тиров, цен, текстов условий (без деплоя).
-4. **Заказы и клиенты (mini-CRM):** список клиентов, их покупки, LTV, email; экспорт CSV.
-5. **Аналитика:** продажи, топ-треки по прослушиваниям/покупкам, воронка (visit → play → cart → purchase), **поисковые запросы без результатов** (= что писать/сочинять дальше).
-6. **Промокоды:** создание, лимиты, срок.
-7. **Очереди:** claim-заявки (new → done, авто-письмо клиенту), брифы adaptation/custom.
-8. **Email:** ручная рассылка по базе (новые релизы, скидки) + статусы автоматических серий.
-9. **Поддержка:** простые тикеты (форма на сайте → таблица → ответ по email).
+Whitelist на старте — ручной процесс (заявка → автор добавляет канал в EpicElite → отмечает active). В UI обещаем «within 24 hours», не «instantly».
 
 ---
 
-## 7. Email-воронки (Resend + Cron)
+## 7. Метрики
 
-1. **Welcome-серия** (после free-скачивания): D0 — файл + знакомство с каталогом; D2 — как работают лицензии + про Content ID-гарантию; D5 — подборка под нишу клиента; D8 — промокод −10% на первую покупку (срок 7 дней).
-2. **Брошенная корзина:** через 24 ч после add_to_cart без покупки — напоминание + прямая ссылка на checkout.
-3. **Ежемесячный дайджест:** новые релизы, новый плейлист, кейс клиента.
-4. **Реактивация покупателей:** через 45 дней после покупки — «похожие на купленный трек» + скидка на вторую лицензию.
-
----
-
-## 8. Маркетинг
-
-### Делегируется помощнику (SMM + контент)
-
-- **YouTube-канал** (приоритет №1): каждый трек = видео (визуал кинотеатра + waveform), плейлисты по жанрам, SEO-заголовки («Dark Thriller Trailer Music No Copyright…»). 3–5 видео/неделю из готового каталога.
-- **Instagram/TikTok reels:** «сцена без музыки vs с музыкой», behind-the-scenes, 3–4/неделю.
-- **Reddit/форумы** (r/videography, r/editors, r/Filmmakers, r/gamedev): полезные ответы, без спама, ссылка в профиле.
-- **Блог для SEO** (2–4 статьи/месяц, черновики можно AI + правка): «Best thriller trailer music 2026», «Music licensing for corporate video explained», «How to remove a Content ID claim», «Netflix-style score: how it works». Каждая статья ведёт на плейлист/каталог.
-- **LinkedIn:** ведение страницы, репосты кейсов.
-
-### Остаётся у владельца
-
-- **B2B-outreach:** 10 персональных контактов/неделю — видеопродакшны, рекламные агентства, трейлер-хаусы, инди-гейм-студии. Шаблон: короткое письмо + ссылка на релевантный плейлист + предложение бесплатного теста трека в черновике проекта. LinkedIn + email.
-- Кастом-заказы, адаптации, снятие клеймов, новые треки.
-- Партнёрства (фаза 2+): видеостоки/футаж-сайты, школы монтажа, YouTube-каналы про видеопродакшн (промокоды/аффилиат 20%).
+- **MRR** — главная цифра. Вехи: $500 MRR к 6 мес, $2000 MRR к 12 мес.
+- Free→Paid: 3–6% от зарегистрированных free-аккаунтов.
+- Churn <7%/мес; годовые подписки — главный инструмент удержания.
+- Посетитель → free-аккаунт: 5–8%. LTV ≥ 3× CAC.
+- Баланс скачиваний по авторам — следить помесячно.
 
 ---
 
-## 9. Роадмап
+## 8. Роадмап
 
-### Фаза 0 — Подготовка данных (параллельно с разработкой)
+**Фаза 1 — Подписочный MVP:** типы + мок-слой (`src/types`, `src/mocks`) → фронт всех страниц на моках (design-first) → auth + Stripe Billing/Tax + entitlements + R2 + лимиты → кабинет клиента → заливка каталогов трёх авторов. Критерий: путь «услышал → free-аккаунт → лимит → оплатил Pro» работает без админа.
 
-- Прогнать все 300 треков через тегирование (жанр/настроение/BPM/use-case/style-of). Можно полуавтоматически.
-- Отобрать 15–20 треков для free-тира, 40–60 для стартовых плейлистов.
-- Написать тексты лицензий (юр. страницы), FAQ.
+**Фаза 2 — Крючки и авторы:** whitelist, claim-очередь, кабинет композитора, админ-финансы с выплатами и statements, email-воронки (welcome, «лимит исчерпан», win-back), страницы авторов, /sync + /custom.
 
-### Фаза 1 — MVP (цель: принимать деньги)
+**Фаза 3 — Рост:** AI-видео на главной, blog/SEO, промокоды, опрос при отмене, партнёрства, приём внешних композиторов.
 
-- Каталог с фильтрами и sticky-плеером, страницы треков, guest checkout Stripe, license PDF, доставка файлов через R2 signed URLs, free-тир за email, лендинг-кинотеатры → каталог, базовая админка (треки, теги, цены, заказы), transactional emails.
-
-### Фаза 2 — Воронки и рост
-
-- Welcome-серия, abandoned cart, digest, реактивация; плейлисты; промокоды; аналитика и воронка в админке; поиск + логи запросов; similar-to; account с magic-link; claim-очередь и бриф-формы; блог; пре-рендеринг SEO-страниц.
-
-### Фаза 3 — Масштаб
-
-- Bundle-скидки, аффилиатка, B2B-страница для агентств (оптовые условия), стемсы для топ-20, рассмотрение подписки, интеграции (плагин для видеоредакторов / API — если будет спрос).
+**Порядок разработки (строго):** 1) `src/types` + `src/mocks` с генератором фейков; 2) страницы на моках, дизайн итерируется; 3) логика подключается заменой мок-хуков на API — компоненты не переписываются; 4) реальный каталог.
 
 ---
 
-## 10. KPI (проверять ежемесячно)
+## 9. Открытые вопросы
 
-- Трафик: посетители, источники (organic / YouTube / соцсети / outreach).
-- Email-база: прирост/месяц (цель: +200–500/мес после запуска воронок).
-- Конверсия по этапам (раздел 3), выручка по ступеням лестницы, средний чек, повторные покупки.
-- Из админки: топ поисковых запросов без результата → план новых треков.
+1. Эксклюзив каталогов авторов на платформе — да/нет.
+2. Бухгалтер: UK-структура, Stripe Tax, выплаты в Польшу.
+3. Вес Max-скачиваний ×2 — с первого дня или все равны (рекомендация: равны).
+4. Названия планов: Pro/Max или свои (Creator/Studio).

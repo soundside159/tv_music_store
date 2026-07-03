@@ -4,9 +4,11 @@ This file is the quick working map for AI assistants and developers. The full pr
 
 ## Product
 
-TVMUSICSTORE is a cinematic music stock site for selling original tracks with different license options. The first version is a React marketing/catalog frontend. Later versions will add account login, payments, licenses, private downloads, and an admin area.
+TVMUSICSTORE is a cinematic music subscription site (model V2). Three composers, ~1000 tracks total. Monetization: Free (3 downloads/month) / Pro $7/mo annual / Max $15/mo annual subscriptions (Tunetank-style), plus one-time Sync licenses ($199/$399) and adaptation/custom services. Revenue: 50% platform, 50% author pool split by downloads.
 
-Core positioning: boutique cinematic music licensing from one composer, with direct contact, track adaptation/custom music, and Content ID claim removal support within 24 hours.
+Core positioning: curated cinematic catalog from three real composers (no AI music), with Content ID claim removal within 24 hours and channel whitelisting as the trust hook.
+
+Full business model: `docs/TVMUSICSTORE_MASTER_PLAN.md` (V2). Page-by-page spec: `docs/PAGES_SPEC.md`.
 
 ## Current Stack
 
@@ -36,7 +38,7 @@ Architecture is fixed in the master plan: do not migrate to Next.js, Supabase, o
 
 ## Repository Structure
 
-- `src/pages/Index.tsx`: main homepage composition
+- `src/pages/Index.tsx`: Tunetank-style utility homepage (hero with search, category chips, trending tracks, collection cards, mood chips, plans teaser, trust/SEO block). The former cinema-themed landing is retired: components `CinemaHero`, `Categories`, `CategoryCard`, `LoadingScreen`, `TrackList` are unused and kept only as reference (full copy in the owner's design-backup-cinema folder and in git history) — do not wire them back without an explicit owner request; they can be deleted
 - `src/pages/Catalog.tsx`: MVP Music Library page with collection cards, active collection hero, left sidebar filters, real preview MP3 playback, strict track-row columns, animated expandable versions, action icons, and sticky player shell
 - `src/pages/TrackDetail.tsx`: MVP track detail page backed by real preview MP3s, with a quiet main player and Versions / Similar / License Info tabs
 - `src/pages/NotFound.tsx`: fallback route page
@@ -92,6 +94,7 @@ If Cloudflare auto-detects Bun, add `SKIP_DEPENDENCY_INSTALL=1` and keep the bui
 
 - Keep user-facing source code in TypeScript/React.
 - Follow existing Tailwind and shadcn/ui patterns.
+- Accent color for all interactive states (hover/active/focus/progress) is the brand gold/yellow, defined once as a Tailwind token. No blue/cyan interactive states anywhere (owner decision 2026-07-03). Base palette stays dark graphite/neutral.
 - Use Vite asset imports for bundled images, not hardcoded `/src/assets/...` URLs.
 - Do not commit `node_modules`, `dist`, `.env`, tokens, passwords, API keys, or private audio masters.
 - Preview/demo audio can be public later; master WAV/ZIP files must be private in R2 later.
@@ -106,52 +109,36 @@ Planned app areas:
 - `/catalog`: MVP Music Library, currently backed by `src/data/catalogTracks.ts` and `src/data/musicCollections.ts`; keep the UI minimal, dark/neutral, and track-row focused. Current layout uses breadcrumbs, a Music Library hero, horizontal collection cards, active collection hero via `?collection=...`, a left sidebar with Use Case, Genre, and Mood filters, compact rows, strict columns (`play / title / +versions / waveform / duration / BPM / heart / cart`), expandable alternate-version rows, heart/cart actions, and no separate Details button.
 - `/track/:slug`: MVP track detail page, currently backed by `src/data/catalogTracks.ts`; keep the main player and licensing info visually quiet. Current layout uses tabs for Versions, Similar, and License Info so licensing text is not dumped into the first viewport.
 - `/playlists` and `/playlist/:slug`: curated playlists
-- `/free`: free tier tracks in exchange for email
+- `/pricing`: subscription plans Free/Pro/Max, annual default, comparison table, FAQ
+- `/sync`: one-time sync licenses (Standard $199 / Broadcast $399)
 - `/licensing`: license information and FAQ
 - `/custom`: adaptation/custom music brief page
+- `/artist/:slug`: public composer pages (three composers)
 - `/blog`: SEO content
-- `/cart` and `/checkout`: Stripe checkout flow
-- `/account`: future user account and purchases
-- `/admin`: future private admin dashboard
+- `/account`: customer dashboard (downloads, license, whitelist, claims, billing)
+- `/composer`: composer dashboard (uploads, earnings, statements, requests)
+- `/admin`: modular private admin dashboard
 - `/terms`, `/privacy`, `/license-agreement`: legal pages
 
-Planned data entities:
+Planned data entities (full V2 schema in `docs/TVMUSICSTORE_MASTER_PLAN.md`, section 6):
 
-- `users`
-- `tracks`
-- `track_versions`
-- `tags`
-- `track_tags`
-- `playlists`
-- `playlist_tracks`
-- `customers`
-- `licenses`
-- `orders`
-- `order_items`
-- `downloads`
-- `free_downloads`
-- `claim_requests`
-- `briefs`
-- `promo_codes`
-- `license_tiers`
-- `email_events`
-- `contact_messages`
-- `search_log`
-- `support_tickets`
-- `admin_users`
+- `users` (roles: customer/composer/admin), `composers`
+- `tracks` (+ composer_id, moderation_status), `track_versions`, `tags`, `track_tags`
+- `playlists`, `playlist_tracks`
+- `subscriptions`, `plan_config`, `download_log`
+- `whitelist_channels`, `claim_requests`
+- `payout_periods`, `payout_lines`
+- `sync_orders`, `briefs`
+- `promo_codes`, `email_log`, `contact_messages`, `search_log`, `support_tickets`
 
-Payments must be confirmed by Stripe webhooks before creating orders, licenses, or download access.
+Payments and subscriptions must be confirmed by Stripe webhooks before granting entitlements or download access.
 
-MVP priority:
+Development order (V2, strict — see `docs/PAGES_SPEC.md` section 5):
 
-1. Keep current branded landing page.
-2. Build `/catalog` on temporary data first. Current status: two real tracks, six public MP3 preview versions, collection cards, active collection hero, and click-to-seek waveform playback from real decoded audio are connected. Do not add fake tracks just to fill the layout.
-3. Build `/track/:slug` on temporary data first. Current status: real preview playback, version switching, similar rows, and tabbed license info exist.
-4. Add D1 schema and seed flow.
-5. Add R2 storage strategy for previews and private masters.
-6. Add Resend domain and transactional email scaffolding.
-7. Add Stripe Checkout and webhooks.
-8. Add basic `/admin` for tracks, tags, prices, orders, and customers.
+1. `src/types/` + `src/mocks/`: domain types matching the D1 schema and a fake-data layer accessed only through hooks. Components must never hardcode data.
+2. Design-first frontend on mocks: public pages → `/account` → `/composer` → `/admin`. Owner iterates on design freely at this stage.
+3. Logic: auth (magic link + Google) → Stripe Billing + Tax + webhooks → entitlements + R2 signed URLs → download limits → whitelist/claims → payouts → Resend. Only the data hooks change; components stay.
+4. Upload the real three-composer catalog. Do not add fake tracks to the public catalog; fake data lives only in `src/mocks/`.
 
 ## Documentation Rule
 

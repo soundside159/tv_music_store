@@ -16,6 +16,7 @@ const Navigation = () => {
 
   const navItems = [
     { label: "Music Library", href: "/catalog" },
+    { label: "Pricing", href: "/pricing" },
     { label: "Licensing", href: "/#licensing", onClick: scrollToTop },
   ];
 
@@ -36,9 +37,7 @@ const Navigation = () => {
                 href={item.href}
                 onClick={item.onClick}
                 className={`font-body text-sm transition-colors duration-300 hover:text-foreground ${
-                  item.href === "/catalog" && location.pathname === "/catalog"
-                    ? "text-[#F4C430]"
-                    : "text-muted-foreground"
+                  location.pathname === item.href ? "text-[#F4C430]" : "text-muted-foreground"
                 }`}
               >
                 {item.label}
@@ -85,9 +84,7 @@ const Navigation = () => {
                     setIsOpen(false);
                   }}
                   className={`py-2 font-body text-base transition-colors duration-300 hover:text-foreground ${
-                    item.href === "/catalog" && location.pathname === "/catalog"
-                      ? "text-[#F4C430]"
-                      : "text-muted-foreground"
+                    location.pathname === item.href ? "text-[#F4C430]" : "text-muted-foreground"
                   }`}
                 >
                   {item.label}

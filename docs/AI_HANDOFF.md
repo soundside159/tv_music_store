@@ -19,7 +19,7 @@ This file is the short operational handoff for another AI assistant. It must sta
 
 ## Current Routes
 
-- `/`: branded landing page
+- `/`: Tunetank-style utility homepage (search hero, trending tracks, collections, plans teaser). Cinema-themed landing retired 2026-07-03, backed up in git history and the owner's design-backup-cinema folder
 - `/catalog`: MVP Music Library shell with collection cards, active collection hero, left sidebar filters, real MP3 previews, click-to-seek waveforms, strict track-row columns, animated expandable versions, heart/cart actions, and sticky player UI
 - `/track/:slug`: MVP track detail shell backed by temporary catalog data and real MP3 previews, with Versions / Similar / License Info tabs
 - `*`: NotFound fallback
@@ -60,17 +60,21 @@ npm run lint
 - `src/pages/Catalog.tsx` links each track to `/track/:slug` and uses this desktop rhythm: top breadcrumb/hero, left filters, center collection strip/search/list, bottom sticky player. Active collection state is stored in `?collection=collection-id`. Track rows use fixed columns: play / title / +versions / waveform / duration / BPM / heart / cart.
 - Track row spacing is controlled by `.music-track-grid` in `src/index.css`. Increase `--track-title-version-gap` to create more empty space between the track title and the `+2` versions button; everything from the versions button to the right will shift/compress consistently.
 - `src/pages/TrackDetail.tsx` shows a minimal main player, version rows, similar rows, and compact license rows hidden behind tabs.
-- Catalog and track detail design should stay minimal: dark graphite/white/cyan palette, no gold/mustard theme, no top AI/tool pill list, no separate Details button in rows, no Stems badge for now, no fake demo tracks just to fill space, and compact waveform rows should be the main music-library element.
+- Catalog and track detail design should stay minimal: dark graphite/neutral base, **brand gold/yellow as the single accent for all interactive states (hover/active/progress) — the earlier cyan/blue accent is deprecated by owner decision 2026-07-03**, no top AI/tool pill list, no separate Details button in rows, no fake demo tracks just to fill space, and compact waveform rows should be the main music-library element.
 - Stripe buttons are UI placeholders only. No payment should be considered real until webhook-confirmed backend logic exists.
 - Waveform UI decodes public MP3 previews in the browser, renders audio-based SVG peaks, shows a scan-line loading state while decoding, colors only already played progress cyan, and supports click-to-seek without pausing playback. Alternate-version waveforms start in the same column as the full mix and use a duration ratio so shorter versions end earlier. R2/private masters come later.
 
+## Business Model (V2 — subscription)
+
+The project moved from single-composer per-track licensing (V1) to a three-composer subscription model (V2): Free 3 downloads/month, Pro $7/mo annual, Max $15/mo annual, plus one-time Sync licenses and custom work. Revenue split 50% platform / 50% author pool by downloads. Read `docs/TVMUSICSTORE_MASTER_PLAN.md` (V2) and `docs/PAGES_SPEC.md` before building anything.
+
 ## Next Recommended Step
 
-Build the first backend foundation:
+Design-first, mocks before backend (strict order from `docs/PAGES_SPEC.md` section 5):
 
-1. Add Cloudflare D1 schema for tracks, versions, license tiers, orders, licenses, customers, downloads, and contact messages.
-2. Add seed data that mirrors `src/data/catalogTracks.ts`.
-3. Add read-only Pages Functions/API endpoints for catalog and track detail.
-4. Switch the frontend from mock imports to API data after the API is stable.
+1. `src/types/`: domain types matching the V2 D1 schema (users, composers, subscriptions, download_log, payouts, etc.).
+2. `src/mocks/`: fake-data layer (3 composers, users on every plan, download history, payout periods) accessed only through hooks (`useCurrentUser`, `useSubscription`, `usePlans`, `useTracks`). Existing `src/data/catalogTracks.ts` keeps powering `/catalog` until migrated.
+3. Build pages on mocks: `/pricing` → `/account` → `/composer` → `/admin`. Owner iterates on design at this stage.
+4. Only after the owner approves the frontend: D1 schema, auth, Stripe Billing + Tax + webhooks, R2 entitlements, Resend.
 
-Resend and Stripe should come after the core database shape is committed, because emails and payments depend on orders/licenses data.
+Payments and subscriptions are real only after Stripe webhook confirmation.
