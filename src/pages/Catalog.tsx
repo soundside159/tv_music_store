@@ -13,6 +13,7 @@ import {
   Search,
   ShoppingCart,
   SlidersHorizontal,
+  Volume2,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import WaveformPreview from "@/components/WaveformPreview";
@@ -79,6 +80,8 @@ const Catalog = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [playedProgress, setPlayedProgress] = useState<Record<string, number>>({});
+  const [sort, setSort] = useState("Featured");
+  const [volume, setVolume] = useState(1);
   const playedKey = (trackId: string, versionId: string) => `${trackId}:${versionId}`;
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const pendingPlayRef = useRef(false);
@@ -87,7 +90,7 @@ const Catalog = () => {
   const filteredTracks = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
-    return catalogTracks.filter((track) => {
+    const result = catalogTracks.filter((track) => {
       const matchesCollection = !activeCollection || track.collectionIds.includes(activeCollection.id);
       const matchesUseCase =
         filters.useCase === "All" || splitFilterValues(track.useCase).some((item) => matchesOption(item, filters.useCase));
@@ -102,7 +105,11 @@ const Catalog = () => {
 
       return matchesCollection && matchesUseCase && matchesGenre && matchesMood && matchesQuery;
     });
-  }, [activeCollection, filters, query]);
+
+    if (sort === "New") return [...result].reverse();
+    if (sort === "Popular") return [...result].sort((a, b) => b.bpm - a.bpm);
+    return result;
+  }, [activeCollection, filters, query, sort]);
 
   const currentTrack = catalogTracks.find((track) => track.id === activePlayer?.trackId) ?? filteredTracks[0];
   const currentVersion = currentTrack?.audioVersions.find((version) => version.id === activePlayer?.versionId);
@@ -114,6 +121,10 @@ const Catalog = () => {
 
     audio.load();
   }, [currentSrc]);
+
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.volume = volume;
+  }, [volume]);
 
   const selectCollection = (collectionId: string | null) => {
     const nextParams = new URLSearchParams(searchParams);
@@ -251,10 +262,7 @@ const Catalog = () => {
                 <div />
                 <div className="flex items-center gap-2 justify-self-start font-body text-sm text-muted-foreground md:justify-self-end">
                   <span>Sort by:</span>
-                  <button type="button" className="inline-flex items-center gap-1 font-semibold text-foreground">
-                    Featured
-                    <ChevronDown className="h-3.5 w-3.5" />
-                  </button>
+                  <SortDropdown value={sort} onChange={setSort} />
                 </div>
               </div>
 
@@ -309,9 +317,12 @@ const Catalog = () => {
               <button
                 type="button"
                 onClick={() => playVersion(currentTrack, currentVersion)}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border/70 text-foreground transition-colors hover:border-[#FCD162]"
+                className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition-colors ${
+                  isPlaying ? "border-transparent" : "border-border/70 hover:border-[#FCD162]"
+                }`}
                 aria-label={isPlaying ? "Pause current track" : "Play current track"}
               >
+                {isPlaying && <PlayProgressRing progress={progress} />}
                 {isPlaying ? <Pause className="h-4 w-4 text-[#FCD162]" /> : <Play className="ml-0.5 h-4 w-4" />}
               </button>
               <div className="min-w-0">
@@ -345,6 +356,19 @@ const Catalog = () => {
                 </span>
                 <span className="tabular-nums">{currentTrack.bpm} BPM</span>
               </div>
+              <div className="hidden items-center gap-2 sm:flex">
+                <Volume2 className="h-4 w-4 text-muted-foreground" />
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={volume}
+                  onChange={(event) => setVolume(Number(event.target.value))}
+                  className="h-1 w-20 cursor-pointer accent-[#FCD162]"
+                  aria-label="Volume"
+                />
+              </div>
               <TrackActions title={currentTrack.title} />
             </div>
           </div>
@@ -354,25 +378,83 @@ const Catalog = () => {
   );
 };
 
+const PlayProgressRing = ({ progress }: { progress: number }) => {
+  const radius = 46;
+  const circumference = 2 * Math.PI * radius;
+  const clamped = Math.min(1, Math.max(0, progress));
+
+  return (
+    <svg className="pointer-events-none absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r={radius} fill="none" stroke="rgba(255,255,255,0.16)" strokeWidth={6} />
+      <circle
+        cx="50"
+        cy="50"
+        r={radius}
+        fill="none"
+        stroke="#FCD162"
+        strokeWidth={6}
+        strokeLinecap="round"
+        strokeDasharray={circumference}
+        strokeDashoffset={circumference * (1 - clamped)}
+      />
+    </svg>
+  );
+};
+
+const sortOptions = ["Featured", "New", "Popular"];
+
+const SortDropdown = ({ value, onChange }: { value: string; onChange: (value: string) => void }) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="inline-flex items-center gap-1 font-semibold text-foreground transition-colors hover:text-[#FCD162]"
+      >
+        {value}
+        <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden="true" />
+          <div className="absolute right-0 z-50 mt-2 w-32 overflow-hidden rounded-md border border-white/10 bg-card shadow-lg">
+            {sortOptions.map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => {
+                  onChange(option);
+                  setOpen(false);
+                }}
+                className={`block w-full px-3 py-2 text-left font-body text-sm transition-colors hover:bg-white/5 ${
+                  option === value ? "text-[#FCD162]" : "text-foreground"
+                }`}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
 const CatalogBreadcrumb = ({ activeCollection }: { activeCollection: MusicCollection | null }) => (
-  <div className="flex items-center gap-3">
-    <Link
-      to="/"
-      className="flex h-7 w-8 items-center justify-center rounded-md border border-border/50 bg-card/50 font-body text-xs font-semibold text-foreground"
-    >
-      TV
+  <nav className="flex flex-wrap items-center gap-2 font-body text-sm text-muted-foreground">
+    <Link to="/" className="inline-flex items-center gap-1 transition-colors hover:text-[#FCD162]">
+      <Home className="h-3.5 w-3.5" />
+      Home
     </Link>
-    <nav className="flex flex-wrap items-center gap-2 font-body text-sm text-muted-foreground">
-      <Link to="/" className="inline-flex items-center gap-1 transition-colors hover:text-foreground">
-        <Home className="h-3.5 w-3.5" />
-        Home
-      </Link>
-      <span>/</span>
-      <span>Music Library</span>
-      <span>/</span>
-      <span className="font-semibold text-foreground">{activeCollection?.title ?? "All Tracks"}</span>
-    </nav>
-  </div>
+    <span>/</span>
+    <Link to="/catalog" className="transition-colors hover:text-[#FCD162]">
+      Music Library
+    </Link>
+    <span>/</span>
+    <span className="font-semibold text-foreground">{activeCollection?.title ?? "All Tracks"}</span>
+  </nav>
 );
 
 const LibraryHero = () => (
@@ -626,11 +708,12 @@ const TrackRow = ({
       <button
         type="button"
         onClick={() => onPlayVersion(track, selectedVersion)}
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-colors duration-200 ${
-          mainIsPlaying ? "border-[#FCD162] text-[#FCD162]" : "border-border/70 text-foreground hover:border-[#FCD162] hover:text-[#FCD162]"
+        className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-colors duration-200 ${
+          mainIsPlaying ? "border-transparent text-[#FCD162]" : "border-border/70 text-foreground hover:border-[#FCD162] hover:text-[#FCD162]"
         }`}
         aria-label={mainIsPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
       >
+        {mainIsPlaying && <PlayProgressRing progress={versionProgress(selectedVersion.id)} />}
         {mainIsPlaying ? <Pause className="h-4 w-4" /> : <Play className="ml-0.5 h-4 w-4" />}
       </button>
 
@@ -706,10 +789,11 @@ const TrackRow = ({
                     className="flex min-w-0 items-center gap-3 text-left font-body text-sm text-muted-foreground transition-colors duration-200 hover:text-foreground"
                   >
                     <span
-                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors duration-200 ${
-                        active && globalIsPlaying ? "border-[#FCD162] text-[#FCD162]" : "border-border/60"
+                      className={`relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors duration-200 ${
+                        active && globalIsPlaying ? "border-transparent text-[#FCD162]" : "border-border/60"
                       }`}
                     >
+                      {active && globalIsPlaying && <PlayProgressRing progress={versionProgress(version.id)} />}
                       {active && globalIsPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="ml-0.5 h-3.5 w-3.5" />}
                     </span>
                     <span className={`truncate ${active && globalIsPlaying ? "text-[#FCD162]" : active ? "text-foreground" : undefined}`}>{version.label}</span>
