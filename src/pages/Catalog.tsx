@@ -560,8 +560,9 @@ const TrackRow = ({
 }) => {
   const versionProgress = (versionId: string) => {
     const isActive = activePlayer?.trackId === track.id && activePlayer.versionId === versionId;
-    if (isActive) return globalProgress;
-    return playedProgress[`${track.id}:${versionId}`] ?? 0;
+    const played = playedProgress[`${track.id}:${versionId}`] ?? 0;
+    if (isActive) return Math.max(globalProgress, played);
+    return played;
   };
 
   return (
