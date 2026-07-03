@@ -524,21 +524,23 @@ const FilterSidebar = ({
 const TrackRow = ({
   activePlayer,
   expanded,
+  globalIsPlaying,
+  globalProgress,
   index,
-  isPlaying,
+  mainIsPlaying,
   onPlayVersion,
   onToggleExpanded,
-  progress,
   selectedVersion,
   track,
 }: {
   activePlayer: ActivePlayer | null;
   expanded: boolean;
+  globalIsPlaying: boolean;
+  globalProgress: number;
   index: number;
-  isPlaying: boolean;
+  mainIsPlaying: boolean;
   onPlayVersion: (track: CatalogTrack, version: TrackAudioVersion, seekTo?: number | null) => void;
   onToggleExpanded: () => void;
-  progress: number;
   selectedVersion: TrackAudioVersion;
   track: CatalogTrack;
 }) => (
@@ -553,11 +555,11 @@ const TrackRow = ({
         type="button"
         onClick={() => onPlayVersion(track, selectedVersion)}
         className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-colors duration-200 ${
-          isPlaying ? "border-cyan-300 text-cyan-300" : "border-border/70 text-foreground hover:border-foreground"
+          mainIsPlaying ? "border-cyan-300 text-cyan-300" : "border-border/70 text-foreground hover:border-foreground"
         }`}
-        aria-label={isPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
+        aria-label={mainIsPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
       >
-        {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="ml-0.5 h-4 w-4" />}
+        {mainIsPlaying ? <Pause className="h-4 w-4" /> : <Play className="ml-0.5 h-4 w-4" />}
       </button>
 
       <Link
@@ -576,19 +578,19 @@ const TrackRow = ({
       </button>
 
       <WaveformPreview
-        active={isPlaying}
+        active={mainIsPlaying}
         bars={420}
         durationRatio={1}
         onSeek={(nextProgress) => onPlayVersion(track, selectedVersion, nextProgress)}
-        progress={progress}
+        progress={mainIsPlaying || (activePlayer?.trackId === track.id && activePlayer.versionId === selectedVersion.id) ? globalProgress : 0}
         src={selectedVersion.src}
         className="h-9 min-w-0"
       />
 
-      <span className={`justify-self-end font-body text-sm ${isPlaying ? "text-cyan-300" : "text-muted-foreground"}`}>
+      <span className={`justify-self-end font-body text-sm ${mainIsPlaying ? "text-cyan-300" : "text-muted-foreground"}`}>
         {selectedVersion.duration}
       </span>
-      <span className={`justify-self-end font-body text-sm ${isPlaying ? "text-cyan-300" : "text-muted-foreground"}`}>
+      <span className={`justify-self-end font-body text-sm ${mainIsPlaying ? "text-cyan-300" : "text-muted-foreground"}`}>
         {track.bpm} BPM
       </span>
       <ActionIconButton label={`Save ${track.title}`}>
