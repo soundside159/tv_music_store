@@ -639,7 +639,7 @@ const TrackRow = ({
               return (
                 <div
                   key={version.id}
-                  className="grid gap-3 px-4 py-1.5 xl:grid-cols-[3rem_minmax(10rem,16rem)_7.5rem_minmax(16rem,1fr)_4.25rem_4.75rem_2.75rem_2.75rem] xl:items-center 2xl:grid-cols-[3rem_minmax(13rem,18rem)_9rem_minmax(28rem,1fr)_4.5rem_5.5rem_3rem_3rem]"
+                  className="grid gap-3 px-4 py-1.5 xl:grid-cols-[3rem_minmax(10rem,16rem)_14rem_minmax(16rem,1fr)_4.25rem_4.75rem_2.75rem_2.75rem] xl:items-center 2xl:grid-cols-[3rem_minmax(13rem,18rem)_18rem_minmax(28rem,1fr)_4.5rem_5.5rem_3rem_3rem]"
                 >
                   <div className="hidden xl:block" />
                   <button
