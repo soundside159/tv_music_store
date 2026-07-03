@@ -209,7 +209,7 @@ const Catalog = () => {
           setProgress(nextProgress);
           if (activePlayer) {
             const key = playedKey(activePlayer.trackId, activePlayer.versionId);
-            setPlayedProgress((prev) => (nextProgress > (prev[key] ?? 0) ? { ...prev, [key]: nextProgress } : prev));
+            setPlayedProgress((prev) => ({ ...prev, [key]: nextProgress }));
           }
         }}
         onEnded={() => {
@@ -582,7 +582,7 @@ const TrackRow = ({
   const versionProgress = (versionId: string) => {
     const isActive = activePlayer?.trackId === track.id && activePlayer.versionId === versionId;
     const played = playedProgress[`${track.id}:${versionId}`] ?? 0;
-    if (isActive) return Math.max(globalProgress, played);
+    if (isActive) return globalProgress;
     return played;
   };
 
