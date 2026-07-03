@@ -45,7 +45,7 @@ const Navigation = () => {
                 onClick={item.onClick}
                 className={`font-body text-sm transition-colors duration-300 hover:text-foreground ${
                   item.href === "/catalog" && location.pathname === "/catalog"
-                    ? "text-cyan-300"
+                    ? "text-[#FCD162]"
                     : "text-muted-foreground"
                 }`}
               >
@@ -54,7 +54,7 @@ const Navigation = () => {
             ))}
             <a
               href="#contact"
-              className="rounded-full bg-foreground px-5 py-2.5 font-body text-sm text-background transition-colors duration-300 hover:bg-cyan-300"
+              className="rounded-full bg-foreground px-5 py-2.5 font-body text-sm text-background transition-colors duration-300 hover:bg-[#FCD162]"
             >
               Get Started
             </a>
@@ -84,7 +84,7 @@ const Navigation = () => {
                   }}
                   className={`py-2 font-body text-base transition-colors duration-300 hover:text-foreground ${
                     item.href === "/catalog" && location.pathname === "/catalog"
-                      ? "text-cyan-300"
+                      ? "text-[#FCD162]"
                       : "text-muted-foreground"
                   }`}
                 >
@@ -94,7 +94,7 @@ const Navigation = () => {
               <a
                 href="#contact"
                 onClick={() => setIsOpen(false)}
-                className="mt-2 rounded-full bg-foreground px-5 py-3 text-center font-body text-sm text-background transition-colors duration-300 hover:bg-cyan-300"
+                className="mt-2 rounded-full bg-foreground px-5 py-3 text-center font-body text-sm text-background transition-colors duration-300 hover:bg-[#FCD162]"
               >
                 Get Started
               </a>

@@ -142,8 +142,6 @@ const Catalog = () => {
     const audio = audioRef.current;
     const sameVersion = activePlayer?.trackId === track.id && activePlayer.versionId === version.id;
 
-    setExpandedTrackId(track.id);
-
     if (sameVersion && audio) {
       if (seekTo !== null) {
         if (Number.isFinite(audio.duration) && audio.duration > 0) {
@@ -205,6 +203,7 @@ const Catalog = () => {
         onLoadedMetadata={(event) => applyPendingStart(event.currentTarget)}
         onTimeUpdate={(event) => {
           const audio = event.currentTarget;
+          if (audio.seeking) return;
           const nextProgress = audio.duration ? audio.currentTime / audio.duration : 0;
           setProgress(nextProgress);
           if (activePlayer) {
@@ -308,15 +307,17 @@ const Catalog = () => {
               <button
                 type="button"
                 onClick={() => playVersion(currentTrack, currentVersion)}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border/70 text-foreground transition-colors hover:border-cyan-300"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border/70 text-foreground transition-colors hover:border-[#FCD162]"
                 aria-label={isPlaying ? "Pause current track" : "Play current track"}
               >
-                {isPlaying ? <Pause className="h-4 w-4 text-cyan-300" /> : <Play className="ml-0.5 h-4 w-4" />}
+                {isPlaying ? <Pause className="h-4 w-4 text-[#FCD162]" /> : <Play className="ml-0.5 h-4 w-4" />}
               </button>
               <div className="min-w-0">
                 <Link
                   to={`/track/${currentTrack.slug}`}
-                  className="block truncate font-body text-sm font-medium text-foreground transition-colors hover:text-cyan-300"
+                  className={`block truncate font-body text-sm font-medium transition-colors ${
+                    isPlaying ? "text-[#FCD162]" : "text-foreground hover:text-[#FCD162]"
+                  }`}
                 >
                   {currentTrack.title}
                 </Link>
@@ -598,7 +599,7 @@ const TrackRow = ({
         type="button"
         onClick={() => onPlayVersion(track, selectedVersion)}
         className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-colors duration-200 ${
-          mainIsPlaying ? "border-cyan-300 text-cyan-300" : "border-border/70 text-foreground hover:border-foreground"
+          mainIsPlaying ? "border-[#FCD162] text-[#FCD162]" : "border-border/70 text-foreground hover:border-[#FCD162] hover:text-[#FCD162]"
         }`}
         aria-label={mainIsPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
       >
@@ -607,7 +608,9 @@ const TrackRow = ({
 
       <Link
         to={`/track/${track.slug}`}
-        className="min-w-0 whitespace-nowrap font-body text-base font-medium text-foreground transition-colors hover:text-cyan-300"
+        className={`min-w-0 whitespace-nowrap font-body text-base font-medium transition-colors ${
+          mainIsPlaying ? "text-[#FCD162]" : "text-foreground hover:text-[#FCD162]"
+        }`}
       >
         {track.title}
       </Link>
@@ -617,7 +620,9 @@ const TrackRow = ({
       <button
         type="button"
         onClick={onToggleExpanded}
-        className="justify-self-start whitespace-nowrap rounded-md border border-border/40 bg-muted/25 px-2 py-1 font-body text-xs text-foreground transition-colors duration-200 hover:border-cyan-300"
+        className={`justify-self-start whitespace-nowrap px-1 py-1 font-body text-xs transition-colors duration-200 ${
+          expanded ? "text-[#FCD162]" : "text-foreground hover:text-[#FCD162]"
+        }`}
       >
         versions +{track.audioVersions.length - 1}
       </button>
@@ -632,10 +637,10 @@ const TrackRow = ({
         className="h-9 min-w-0"
       />
 
-      <span className={`justify-self-end font-body text-sm ${mainIsPlaying ? "text-cyan-300" : "text-muted-foreground"}`}>
+      <span className={`justify-self-end font-body text-sm ${mainIsPlaying ? "text-[#FCD162]" : "text-muted-foreground"}`}>
         {selectedVersion.duration}
       </span>
-      <span className={`justify-self-end font-body text-sm ${mainIsPlaying ? "text-cyan-300" : "text-muted-foreground"}`}>
+      <span className={`justify-self-end font-body text-sm ${mainIsPlaying ? "text-[#FCD162]" : "text-muted-foreground"}`}>
         {track.bpm} BPM
       </span>
       <ActionIconButton label={`Save ${track.title}`}>
@@ -672,7 +677,7 @@ const TrackRow = ({
                   >
                     <span
                       className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors duration-200 ${
-                        active && globalIsPlaying ? "border-cyan-300 text-cyan-300" : "border-border/60"
+                        active && globalIsPlaying ? "border-[#FCD162] text-[#FCD162]" : "border-border/60"
                       }`}
                     >
                       {active && globalIsPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="ml-0.5 h-3.5 w-3.5" />}
@@ -690,7 +695,7 @@ const TrackRow = ({
                     src={version.src}
                     className="h-7 min-w-0 xl:mr-[var(--track-version-wave-inset)]"
                   />
-                  <span className={`justify-self-end font-body text-sm ${active ? "text-cyan-300" : "text-muted-foreground"}`}>
+                  <span className={`justify-self-end font-body text-sm ${active ? "text-[#FCD162]" : "text-muted-foreground"}`}>
                     {version.duration}
                   </span>
                   <div className="hidden xl:block" />
@@ -756,7 +761,7 @@ const FilterGroup = ({
           >
             <span
               className={`h-3.5 w-3.5 rounded-[3px] border ${
-                active ? "border-cyan-300 bg-cyan-300" : "border-border bg-transparent"
+                active ? "border-[#FCD162] bg-[#FCD162]" : "border-border bg-transparent"
               }`}
             />
             <span>{option}</span>
