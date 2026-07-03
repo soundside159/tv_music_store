@@ -542,6 +542,7 @@ const TrackRow = ({
   mainIsPlaying,
   onPlayVersion,
   onToggleExpanded,
+  playedProgress,
   selectedVersion,
   track,
 }: {
@@ -553,16 +554,24 @@ const TrackRow = ({
   mainIsPlaying: boolean;
   onPlayVersion: (track: CatalogTrack, version: TrackAudioVersion, seekTo?: number | null) => void;
   onToggleExpanded: () => void;
+  playedProgress: Record<string, number>;
   selectedVersion: TrackAudioVersion;
   track: CatalogTrack;
-}) => (
+}) => {
+  const versionProgress = (versionId: string) => {
+    const isActive = activePlayer?.trackId === track.id && activePlayer.versionId === versionId;
+    if (isActive) return globalProgress;
+    return playedProgress[`${track.id}:${versionId}`] ?? 0;
+  };
+
+  return (
   <motion.article
     initial={{ opacity: 0, y: 8 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ delay: index * 0.035 }}
     className="border-b border-border/30 last:border-b-0"
   >
-    <div className="grid gap-3 px-4 py-3 xl:grid-cols-[3rem_minmax(10rem,16rem)_3.75rem_minmax(16rem,1fr)_4.25rem_4.75rem_2.75rem_2.75rem] xl:items-center 2xl:grid-cols-[3rem_minmax(13rem,18rem)_3.75rem_minmax(28rem,1fr)_4.5rem_5.5rem_3rem_3rem]">
+    <div className="grid gap-3 px-4 py-3 xl:grid-cols-[3rem_minmax(10rem,16rem)_3.75rem_minmax(16rem,1fr)_4.25rem_4.75rem_2.75rem_2.75rem] xl:items-center 2xl:grid-cols-[3rem_minmax(16rem,22rem)_3.75rem_minmax(28rem,1fr)_4.5rem_5.5rem_3rem_3rem]">
       <button
         type="button"
         onClick={() => onPlayVersion(track, selectedVersion)}
@@ -576,7 +585,7 @@ const TrackRow = ({
 
       <Link
         to={`/track/${track.slug}`}
-        className="min-w-0 truncate font-body text-base font-medium text-foreground transition-colors hover:text-cyan-300"
+        className="min-w-0 truncate pr-8 font-body text-base font-medium text-foreground transition-colors hover:text-cyan-300"
       >
         {track.title}
       </Link>
@@ -594,7 +603,7 @@ const TrackRow = ({
         bars={420}
         durationRatio={1}
         onSeek={(nextProgress) => onPlayVersion(track, selectedVersion, nextProgress)}
-        progress={mainIsPlaying || (activePlayer?.trackId === track.id && activePlayer.versionId === selectedVersion.id) ? globalProgress : 0}
+        progress={versionProgress(selectedVersion.id)}
         src={selectedVersion.src}
         className="h-9 min-w-0"
       />
