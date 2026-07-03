@@ -241,7 +241,7 @@ const TrackDetail = () => {
 
                 <WaveformPreview
                   active={mainIsPlaying}
-                  bars={132}
+                  bars={360}
                   onSeek={(nextProgress) => playVersion(track, mainVersion, nextProgress)}
                   progress={mainProgress}
                   src={mainVersion.src}
