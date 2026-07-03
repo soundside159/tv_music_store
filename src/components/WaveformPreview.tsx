@@ -88,7 +88,6 @@ const getPeaks = (src: string, bars: number) => {
 };
 
 const WaveformPreview = ({
-  active = false,
   bars = 96,
   className,
   durationRatio = 1,
@@ -196,7 +195,7 @@ const WaveformPreview = ({
               const position = index / Math.max(1, peaks.length - 1);
               const played = progress > 0 && position <= progress;
               const color = played ? "#FCD162" : "currentColor";
-              const opacity = played ? 0.9 : active ? 0.55 : 0.34;
+              const opacity = played ? 0.9 : 0.55;
               const height = Math.max(6, peak * 86);
               const center = 50;
 

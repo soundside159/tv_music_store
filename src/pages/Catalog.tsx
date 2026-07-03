@@ -472,27 +472,35 @@ const CollectionStrip = ({
                     className="absolute inset-0 h-full w-full object-cover"
                   />
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent" />
-                  {active && (
-                    <>
-                      <div
-                        className="pointer-events-none absolute inset-0 rounded-lg border border-[#FCD162]/55"
-                        style={{
-                          maskImage: "linear-gradient(to bottom, #000 0%, #000 18%, transparent 58%)",
-                          WebkitMaskImage: "linear-gradient(to bottom, #000 0%, #000 18%, transparent 58%)",
-                        }}
-                      />
-                      <div
-                        className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3"
-                        style={{ background: "radial-gradient(66% 62% at 50% 108%, rgba(252,209,98,0.4), rgba(252,209,98,0) 62%)" }}
-                      />
-                    </>
-                  )}
+                  <div
+                    className={`pointer-events-none absolute inset-0 transition-opacity duration-300 delay-150 ${
+                      active ? "opacity-100" : "opacity-0"
+                    }`}
+                  >
+                    <div
+                      className="absolute inset-0 rounded-lg border border-[#FCD162]/55"
+                      style={{
+                        maskImage: "linear-gradient(to bottom, #000 0%, #000 18%, transparent 58%)",
+                        WebkitMaskImage: "linear-gradient(to bottom, #000 0%, #000 18%, transparent 58%)",
+                      }}
+                    />
+                    <div
+                      className="absolute inset-0 rounded-lg border border-[#FCD162]/75"
+                      style={{
+                        maskImage: "radial-gradient(58% 55% at 50% 100%, #000 0%, #000 30%, transparent 68%)",
+                        WebkitMaskImage: "radial-gradient(58% 55% at 50% 100%, #000 0%, #000 30%, transparent 68%)",
+                      }}
+                    />
+                    <div
+                      className="absolute inset-x-0 bottom-0 h-2/3"
+                      style={{ background: "radial-gradient(66% 62% at 50% 108%, rgba(252,209,98,0.42), rgba(252,209,98,0) 62%)" }}
+                    />
+                  </div>
                   <div style={{ transform: "skewX(9deg)" }} className="absolute inset-x-0 bottom-0 p-4">
                     <h3 className="font-display text-lg font-semibold leading-tight text-white">{collection.shortTitle}</h3>
                     <p className="mt-1 font-body text-xs text-white/60">{collection.trackCount} tracks</p>
-                    <div className="mt-2.5 flex items-end justify-between">
+                    <div className="mt-2.5">
                       <span className="block h-px w-[70px] bg-gradient-to-r from-amber-300/80 to-amber-300/0" />
-                      <ArrowRight className="h-4 w-4 text-white/75 transition-colors group-hover:text-white" />
                     </div>
                   </div>
                 </button>
