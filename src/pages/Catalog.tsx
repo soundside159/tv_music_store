@@ -443,34 +443,49 @@ const CollectionStrip = ({
       <div className="relative">
         <div
           ref={stripRef}
-          className="grid auto-cols-[minmax(12rem,15rem)] grid-flow-col gap-3 overflow-x-auto pb-1 pr-16 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="grid auto-cols-[minmax(12rem,15rem)] grid-flow-col gap-6 overflow-x-auto px-1 pb-3 pr-16 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {musicCollections.map((collection) => {
             const active = activeCollection?.id === collection.id;
 
             return (
-              <motion.button
-                key={collection.id}
-                type="button"
-                onClick={() => onSelectCollection(collection.id)}
-                whileHover={{ y: -2 }}
-                whileTap={{ scale: 0.98 }}
-                transition={{ duration: 0.18 }}
-                className={`group relative h-32 overflow-hidden rounded-lg border text-left transition-colors duration-300 ${
-                  active ? "border-cyan-300" : "border-border/30 hover:border-foreground/30"
-                }`}
-              >
-                <img
-                  src={collection.image}
-                  alt=""
-                  className="h-full w-full object-cover opacity-70 transition-transform duration-500 group-hover:scale-105"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
-                <div className="absolute inset-x-0 bottom-0 p-4">
-                  <h3 className="font-body text-sm font-semibold text-foreground">{collection.shortTitle}</h3>
-                  <p className="mt-1 font-body text-xs text-foreground/70">{collection.trackCount} tracks</p>
-                </div>
-              </motion.button>
+              <div key={collection.id} className="flex flex-col items-center">
+                <motion.button
+                  type="button"
+                  onClick={() => onSelectCollection(collection.id)}
+                  whileHover={{ y: -3 }}
+                  whileTap={{ scale: 0.985 }}
+                  transition={{ duration: 0.18 }}
+                  style={{ transform: "skewX(-11deg)" }}
+                  className={`group relative h-36 w-full overflow-hidden rounded-md border-2 text-left transition-all duration-300 ${
+                    active
+                      ? "border-cyan-300 shadow-[0_0_24px_-2px_rgba(103,232,249,0.6)]"
+                      : "border-border/40 hover:border-cyan-200/70 hover:shadow-[0_0_18px_-4px_rgba(103,232,249,0.45)]"
+                  }`}
+                >
+                  <img
+                    src={collection.image}
+                    alt=""
+                    style={{ transform: "skewX(11deg) scale(1.32)" }}
+                    className="absolute inset-0 h-full w-full object-cover opacity-75 transition-transform duration-500 group-hover:scale-[1.4]"
+                  />
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/45 to-transparent" />
+                  <div style={{ transform: "skewX(11deg)" }} className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-4">
+                    <div className="min-w-0">
+                      <h3 className="truncate font-display text-base font-semibold text-foreground">{collection.shortTitle}</h3>
+                      <p className="mt-0.5 font-body text-xs text-foreground/70">{collection.trackCount} tracks</p>
+                    </div>
+                    <span
+                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors duration-300 ${
+                        active ? "border-cyan-300 text-cyan-300" : "border-white/40 text-white/80 group-hover:border-cyan-200"
+                      }`}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </span>
+                  </div>
+                </motion.button>
+                <CollectionLamp active={active} />
+              </div>
             );
           })}
         </div>
@@ -497,6 +512,26 @@ const CollectionStrip = ({
     </section>
   );
 };
+
+const CollectionLamp = ({ active }: { active: boolean }) => (
+  <div className="mt-3 flex flex-col items-center" aria-hidden="true">
+    <span
+      className={`h-px w-8 transition-colors duration-300 ${
+        active ? "bg-cyan-300/70" : "bg-border/50"
+      }`}
+    />
+    <span className="relative mt-2 flex h-2.5 w-2.5 items-center justify-center">
+      {active && <span className="absolute h-6 w-6 rounded-full bg-cyan-300/25 blur-[4px]" />}
+      <span
+        className={`relative h-2.5 w-2.5 rounded-full transition-all duration-300 ${
+          active
+            ? "bg-cyan-300 shadow-[0_0_12px_3px_rgba(103,232,249,0.85)]"
+            : "bg-muted-foreground/30"
+        }`}
+      />
+    </span>
+  </div>
+);
 
 const FilterSidebar = ({
   filters,
@@ -596,9 +631,9 @@ const TrackRow = ({
       <button
         type="button"
         onClick={onToggleExpanded}
-        className="justify-self-start rounded-md border border-border/40 bg-muted/25 px-2 py-1 font-body text-xs text-foreground transition-colors duration-200 hover:border-cyan-300"
+        className="justify-self-start whitespace-nowrap rounded-md border border-border/40 bg-muted/25 px-2 py-1 font-body text-xs text-foreground transition-colors duration-200 hover:border-cyan-300"
       >
-        +{track.audioVersions.length - 1}
+        versions +{track.audioVersions.length - 1}
       </button>
 
       <WaveformPreview
