@@ -572,7 +572,7 @@ const TrackRow = ({
     transition={{ delay: index * 0.035 }}
     className="border-b border-border/30 last:border-b-0"
   >
-    <div className="grid gap-3 px-4 py-3 xl:grid-cols-[3rem_minmax(10rem,16rem)_7.5rem_minmax(16rem,1fr)_4.25rem_4.75rem_2.75rem_2.75rem] xl:items-center 2xl:grid-cols-[3rem_minmax(13rem,18rem)_9rem_minmax(28rem,1fr)_4.5rem_5.5rem_3rem_3rem]">
+    <div className="grid gap-3 px-4 py-3 xl:grid-cols-[3rem_minmax(10rem,16rem)_14rem_minmax(16rem,1fr)_4.25rem_4.75rem_2.75rem_2.75rem] xl:items-center 2xl:grid-cols-[3rem_minmax(13rem,18rem)_18rem_minmax(28rem,1fr)_4.5rem_5.5rem_3rem_3rem]">
       <button
         type="button"
         onClick={() => onPlayVersion(track, selectedVersion)}
@@ -594,7 +594,7 @@ const TrackRow = ({
       <button
         type="button"
         onClick={onToggleExpanded}
-        className="ml-10 justify-self-start rounded-md border border-border/40 bg-muted/25 px-2 py-1 font-body text-xs text-foreground transition-colors duration-200 hover:border-cyan-300 2xl:ml-14"
+        className="ml-28 justify-self-start rounded-md border border-border/40 bg-muted/25 px-2 py-1 font-body text-xs text-foreground transition-colors duration-200 hover:border-cyan-300 2xl:ml-40"
       >
         +{track.audioVersions.length - 1}
       </button>
