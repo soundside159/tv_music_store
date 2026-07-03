@@ -281,14 +281,16 @@ const Catalog = () => {
         </div>
 
         <section className="mt-4 grid gap-5 lg:grid-cols-[14.5rem_minmax(0,1fr)] xl:grid-cols-[15.5rem_minmax(0,1fr)]">
-          <div className="animate-slide-in-left" style={{ animationDelay: "0.24s" }}>
+          <div className="animate-slide-in-left" style={{ animationDelay: "0.4s" }}>
             <FilterSidebar filters={filters} setFilter={setFilter} onClear={clearFilters} />
           </div>
 
-          <section className="min-w-0 animate-rise-in" style={{ animationDelay: "0.3s" }}>
-            <CollectionStrip activeCollection={activeCollection} onSelectCollection={selectCollection} />
+          <section className="min-w-0">
+            <div className="animate-rise-in" style={{ animationDelay: "0.26s" }}>
+              <CollectionStrip activeCollection={activeCollection} onSelectCollection={selectCollection} />
+            </div>
 
-            <div className="mt-4 overflow-hidden rounded-lg border border-border/30 bg-card/25">
+            <div className="mt-4 animate-fade-in overflow-hidden rounded-lg border border-border/30 bg-card/25" style={{ animationDelay: "0.5s" }}>
               <div className="grid gap-3 border-b border-border/30 bg-background/20 px-4 py-3 md:grid-cols-[minmax(16rem,28rem)_1fr_auto] md:items-center">
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -589,7 +591,7 @@ const CollectionStrip = ({
                   style={{ transform: "skewX(-9deg)" }}
                   className={`group relative h-64 w-full overflow-hidden rounded-lg border bg-white/[0.04] text-left transition-[border-color,box-shadow] duration-300 ${
                     active
-                      ? "border-white/20"
+                      ? "border-white/20 shadow-[inset_0_0_16px_-8px_rgba(255,255,255,0)]"
                       : "border-white/15 shadow-[inset_0_0_16px_-8px_rgba(255,255,255,0.3)] hover:border-white/35"
                   }`}
                 >
@@ -605,6 +607,7 @@ const CollectionStrip = ({
                   />
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent" />
                   <div
+                    style={{ willChange: "opacity" }}
                     className={`pointer-events-none absolute inset-0 transition-opacity duration-300 delay-75 ${
                       active ? "opacity-100" : "opacity-0"
                     }`}
@@ -749,7 +752,7 @@ const TrackRow = ({
   <motion.article
     initial={{ opacity: 0, y: 14 }}
     animate={{ opacity: 1, y: 0 }}
-    transition={{ duration: 0.45, delay: index * 0.06, ease: [0.22, 1, 0.36, 1] }}
+    transition={{ duration: 0.45, delay: 0.55 + index * 0.06, ease: [0.22, 1, 0.36, 1] }}
     className="border-b border-border/30 last:border-b-0"
   >
     <div className="music-track-grid grid gap-3 rounded-lg px-4 py-3 transition-colors duration-150 hover:bg-foreground/[0.04] xl:items-center">
