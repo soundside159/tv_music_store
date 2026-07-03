@@ -627,20 +627,20 @@ const TrackRow = ({
                   >
                     <span
                       className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors duration-200 ${
-                        active && isPlaying ? "border-cyan-300 text-cyan-300" : "border-border/60"
+                        active && globalIsPlaying ? "border-cyan-300 text-cyan-300" : "border-border/60"
                       }`}
                     >
-                      {active && isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="ml-0.5 h-3.5 w-3.5" />}
+                      {active && globalIsPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="ml-0.5 h-3.5 w-3.5" />}
                     </span>
                     <span className={`truncate ${active ? "text-foreground" : undefined}`}>{version.label}</span>
                   </button>
                   <div className="hidden xl:block" />
                   <WaveformPreview
-                    active={active && isPlaying}
+                    active={active && globalIsPlaying}
                     bars={360}
                     durationRatio={getDurationRatio(track, version)}
                     onSeek={(nextProgress) => onPlayVersion(track, version, nextProgress)}
-                    progress={active ? progress : 0}
+                    progress={active ? globalProgress : 0}
                     src={version.src}
                     className="h-7 min-w-0"
                   />
