@@ -197,11 +197,20 @@ const Catalog = () => {
         onLoadedMetadata={(event) => applyPendingStart(event.currentTarget)}
         onTimeUpdate={(event) => {
           const audio = event.currentTarget;
-          setProgress(audio.duration ? audio.currentTime / audio.duration : 0);
+          const nextProgress = audio.duration ? audio.currentTime / audio.duration : 0;
+          setProgress(nextProgress);
+          if (activePlayer) {
+            const key = playedKey(activePlayer.trackId, activePlayer.versionId);
+            setPlayedProgress((prev) => (nextProgress > (prev[key] ?? 0) ? { ...prev, [key]: nextProgress } : prev));
+          }
         }}
         onEnded={() => {
           setIsPlaying(false);
           setProgress(0);
+          if (activePlayer) {
+            const key = playedKey(activePlayer.trackId, activePlayer.versionId);
+            setPlayedProgress((prev) => ({ ...prev, [key]: 1 }));
+          }
         }}
       />
 
