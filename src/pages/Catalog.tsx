@@ -506,11 +506,11 @@ const LibraryHero = () => (
       }}
     />
     <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.95)_0%,rgba(0,0,0,0.78)_22%,rgba(0,0,0,0.4)_48%,rgba(0,0,0,0)_74%)]" />
-    <div className="absolute inset-y-0 left-0 flex max-w-xl flex-col justify-center px-8 py-6 md:px-12">
+    <div className="absolute inset-y-0 left-0 flex max-w-2xl flex-col justify-center px-8 py-6 md:px-12">
       <p className="font-body text-[0.7rem] font-semibold uppercase tracking-[0.32em] text-amber-300/90">
         Discover
       </p>
-      <h1 className="mt-2 font-display text-5xl font-semibold leading-none tracking-tight text-white md:text-6xl">
+      <h1 className="mt-2 whitespace-nowrap font-display text-4xl font-semibold leading-none tracking-tight text-white sm:text-5xl">
         <span className="text-[#FCD162]">Premium</span> Music Library
       </h1>
       <p className="mt-3 max-w-lg font-body text-sm leading-6 text-white/55">
@@ -581,7 +581,7 @@ const CollectionStrip = ({
                   type="button"
                   onClick={() => onSelectCollection(collection.id)}
                   style={{ transform: "skewX(-9deg)" }}
-                  className={`group relative h-64 w-full overflow-hidden rounded-lg border text-left transition-[border-color,box-shadow] duration-300 ${
+                  className={`group relative h-64 w-full overflow-hidden rounded-lg border bg-white/[0.04] text-left transition-[border-color,box-shadow] duration-300 ${
                     active
                       ? "border-white/20"
                       : "border-white/15 shadow-[inset_0_0_16px_-8px_rgba(255,255,255,0.3)] hover:border-white/35"
@@ -590,7 +590,11 @@ const CollectionStrip = ({
                   <img
                     src={collection.image}
                     alt=""
-                    style={{ transform: "skewX(9deg) scale(1.32)" }}
+                    decoding="async"
+                    onLoad={(event) => {
+                      event.currentTarget.style.opacity = "1";
+                    }}
+                    style={{ transform: "skewX(9deg) scale(1.32)", opacity: 0, transition: "opacity 0.5s ease" }}
                     className="absolute inset-0 h-full w-full object-cover"
                   />
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent" />
@@ -737,9 +741,9 @@ const TrackRow = ({
 
   return (
   <motion.article
-    initial={{ opacity: 0, y: 8 }}
+    initial={{ opacity: 0, y: 14 }}
     animate={{ opacity: 1, y: 0 }}
-    transition={{ delay: index * 0.035 }}
+    transition={{ duration: 0.45, delay: index * 0.06, ease: [0.22, 1, 0.36, 1] }}
     className="border-b border-border/30 last:border-b-0"
   >
     <div className="music-track-grid grid gap-3 rounded-lg px-4 py-3 transition-colors duration-150 hover:bg-foreground/[0.04] xl:items-center">
