@@ -284,6 +284,7 @@ const Catalog = () => {
                         mainIsPlaying={mainIsPlaying}
                         onPlayVersion={playVersion}
                         onToggleExpanded={() => setExpandedTrackId(expanded ? null : track.id)}
+                        playedProgress={playedProgress}
                         selectedVersion={mainVersion}
                         track={track}
                       />
