@@ -166,13 +166,16 @@ export const TrackRow = ({
       <button
         type="button"
         onClick={onToggleExpanded}
-        className={`hidden justify-self-start whitespace-nowrap px-1 py-1 font-body text-xs transition-colors duration-200 xl:block ${
+        className={`group/ver relative hidden justify-self-start whitespace-nowrap px-1 py-1 font-body text-xs transition-colors duration-200 xl:block ${
           expanded
             ? "text-foreground underline decoration-[#F4C430] decoration-2 underline-offset-4"
             : "text-foreground hover:text-[#F4C430]"
         }`}
       >
-        versions +{track.audioVersions.length - 1}
+        <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-white/10 bg-card px-2 py-1 font-body text-[11px] text-foreground opacity-0 shadow-lg transition-opacity duration-150 group-hover/ver:opacity-100">
+          Versions
+        </span>
+        +{track.audioVersions.length - 1}
       </button>
 
       <WaveformPreview
@@ -433,7 +436,7 @@ export const TrackRowList = ({ tracks }: { tracks: CatalogTrack[] }) => {
   const engine = useTrackAudioEngine();
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border/30 bg-card/25">
+    <div className="rounded-lg border border-border/30 bg-card/25">
       {engine.audioElement}
       {tracks.map((track, index) => {
         const mainVersion = track.audioVersions[0];

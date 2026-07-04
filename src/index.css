@@ -134,17 +134,17 @@
       --track-play-col: 2.75rem;
       --track-title-col: minmax(9rem, 13rem);
       --track-version-wave-inset: 6rem;
-      --track-versions-col: 5.25rem;
+      --track-versions-col: 2.25rem;
       --track-waveform-col: 14rem;
-      --track-duration-col: 3.25rem;
-      --track-bpm-col: 3.75rem;
+      --track-duration-col: auto;
+      --track-bpm-col: auto;
       --track-action-col: 2.5rem;
-      --track-actions-col: 7.75rem;
+      --track-actions-col: auto;
 
       grid-template-columns:
         var(--track-play-col)
         var(--track-title-col)
-        minmax(4rem, 22rem)
+        minmax(4rem, 26rem)
         var(--track-versions-col)
         minmax(var(--track-waveform-col), 1.4fr)
         var(--track-duration-col)
@@ -158,10 +158,7 @@
       --track-title-col: minmax(11rem, 16rem);
       --track-version-wave-inset: 9rem;
       --track-waveform-col: 22rem;
-      --track-duration-col: 3.5rem;
-      --track-bpm-col: 4.25rem;
       --track-action-col: 2.75rem;
-      --track-actions-col: 9rem;
     }
   }
 }

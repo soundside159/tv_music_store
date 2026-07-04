@@ -29,7 +29,7 @@ const Index = () => {
       <Navigation />
       <main className="pt-16 md:pt-20">
         {/* Hero: straight to the music */}
-        <section className="mx-auto w-full max-w-5xl px-4 pb-12 pt-10 sm:px-6 md:pt-12">
+        <section className="mx-auto w-full max-w-7xl px-4 pb-12 pt-10 sm:px-6 md:pt-12">
           <h1 className="max-w-3xl font-display text-3xl font-bold leading-tight text-foreground md:text-4xl">
             Cinematic music for your next video
           </h1>
@@ -70,7 +70,7 @@ const Index = () => {
         </section>
 
         {/* Browse by collection */}
-        <section className="mx-auto w-full max-w-5xl px-4 pb-16 sm:px-6">
+        <section className="mx-auto w-full max-w-7xl px-4 pb-16 sm:px-6">
           <div className="flex items-center justify-between">
             <h2 className="text-xl text-foreground md:text-2xl">Browse collections</h2>
             <Link
@@ -117,7 +117,7 @@ const Index = () => {
 
         {/* Plans teaser */}
         <section className="border-y border-border bg-card/50">
-          <div className="mx-auto w-full max-w-5xl px-4 py-16 sm:px-6">
+          <div className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6">
             <h2 className="text-center text-xl text-foreground md:text-2xl">
               Simple plans, clear licenses
             </h2>
@@ -153,7 +153,7 @@ const Index = () => {
         </section>
 
         {/* Trust */}
-        <section className="mx-auto w-full max-w-5xl px-4 py-16 sm:px-6">
+        <section className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6">
           <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-4">
             {trustPoints.map((tp) => (
               <div key={tp.label}>

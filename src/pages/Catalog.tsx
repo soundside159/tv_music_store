@@ -270,7 +270,7 @@ const Catalog = () => {
               <CollectionStrip activeCollection={activeCollection} onSelectCollection={selectCollection} />
             </div>
 
-            <div className="mt-4 animate-fade-in overflow-hidden rounded-lg border border-border/30 bg-card/25" style={{ animationDelay: "0.5s" }}>
+            <div className="mt-4 animate-fade-in rounded-lg border border-border/30 bg-card/25" style={{ animationDelay: "0.5s" }}>
               <div className="grid gap-3 border-b border-border/30 bg-background/20 px-4 py-3 md:grid-cols-[minmax(16rem,28rem)_1fr_auto] md:items-center">
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
