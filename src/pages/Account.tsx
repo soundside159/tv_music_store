@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   CreditCard,
   Download,
   FileText,
   LayoutDashboard,
   LifeBuoy,
+  LogOut,
   ShieldCheck,
   Youtube,
 } from "lucide-react";
@@ -20,6 +21,7 @@ import {
   useSubscription,
 } from "@/hooks/useMockData";
 import { mockClaimRequests, mockSyncOrders, mockWhitelistChannels } from "@/mocks";
+import { logout } from "@/hooks/useAuth";
 
 const GOLD = "#F4C430";
 
@@ -38,7 +40,13 @@ const sections: { id: SectionId; label: string; icon: typeof LayoutDashboard }[]
 const trackTitle = (trackId: string) =>
   catalogTracks.find((t) => t.id === trackId)?.title ?? `Track ${trackId.replace("trk_", "#")}`;
 
-const fmtDate = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+const fmtDate = (iso: string) => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? "—"
+    : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+};
 
 const SectionCard = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <div className="rounded-xl border border-border bg-card p-6">
@@ -52,6 +60,7 @@ const EmptyNote = ({ text }: { text: string }) => (
 );
 
 const Account = () => {
+  const navigate = useNavigate();
   const user = useCurrentUser();
   const subscription = useSubscription();
   const plans = usePlans();
@@ -112,6 +121,17 @@ const Account = () => {
                   {s.label}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={async () => {
+                  await logout();
+                  navigate("/");
+                }}
+                className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <LogOut className="h-4 w-4" />
+                Sign out
+              </button>
             </nav>
           </aside>
 

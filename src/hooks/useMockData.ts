@@ -14,6 +14,7 @@ import {
   mockPersonas,
   mockPlans,
 } from "@/mocks";
+import { useAuthSession } from "@/hooks/useAuth";
 
 // ---------------------------------------------------------------------------
 // Persona switching (design-first): the owner can preview the site as any
@@ -57,7 +58,14 @@ export const useMockPersona = (): Persona => {
 // Swap the internals for API calls later; signatures stay stable.
 // ---------------------------------------------------------------------------
 
-export const useCurrentUser = (): User | null => useMockPersona().user;
+// Live session (real auth via /api/me) wins over the dev persona switcher.
+// While /api/me is loading or returns guest, personas keep powering previews.
+
+export const useCurrentUser = (): User | null => {
+  const live = useAuthSession();
+  const persona = useMockPersona();
+  return live.status === "authed" ? live.user : persona.user;
+};
 
 /** Composer profile of the current user, if they are a composer (admin previews as cmp_1). */
 export const useComposer = (): Composer | null => {
@@ -67,13 +75,20 @@ export const useComposer = (): Composer | null => {
   return mockComposers.find((c) => c.userId === user.id) ?? null;
 };
 
-export const useSubscription = (): Subscription | null => useMockPersona().subscription;
+export const useSubscription = (): Subscription | null => {
+  const live = useAuthSession();
+  const persona = useMockPersona();
+  return live.status === "authed" ? live.subscription : persona.subscription;
+};
 
 export const usePlans = (): PlanConfig[] => mockPlans;
 
 /** Downloads visible to the current user (their own history). */
 export const useMyDownloads = (): DownloadLogEntry[] => {
+  const live = useAuthSession();
   const user = useCurrentUser();
+  // Live users: real download history endpoint comes with phase 3.3 (R2 files).
+  if (live.status === "authed") return [];
   return user
     ? mockDownloadLog
         .filter((d) => d.userId === user.id)
