@@ -128,7 +128,7 @@ export const TrackRow = ({
     transition={{ duration: 0.45, delay: 0.55 + index * 0.06, ease: [0.22, 1, 0.36, 1] }}
     className="border-b border-border/30 last:border-b-0"
   >
-    <div className="music-track-grid grid gap-3 rounded-lg px-4 py-3 transition-colors duration-150 hover:bg-foreground/[0.04] xl:items-center">
+    <div className="music-track-grid grid gap-2.5 rounded-lg px-4 py-3 transition-colors duration-150 hover:bg-foreground/[0.04] xl:items-center">
       <button
         type="button"
         onClick={() => onPlayVersion(track, selectedVersion)}
@@ -143,7 +143,7 @@ export const TrackRow = ({
 
       <Link
         to={`/track/${track.slug}`}
-        className={`min-w-0 whitespace-nowrap font-body text-base font-medium transition-colors ${
+        className={`min-w-0 truncate whitespace-nowrap font-body text-sm font-medium transition-colors ${
           mainIsPlaying ? "text-[#F4C430]" : "text-foreground hover:text-[#F4C430]"
         }`}
       >
@@ -166,7 +166,7 @@ export const TrackRow = ({
       <button
         type="button"
         onClick={onToggleExpanded}
-        className={`justify-self-start whitespace-nowrap px-1 py-1 font-body text-xs transition-colors duration-200 ${
+        className={`hidden justify-self-start whitespace-nowrap px-1 py-1 font-body text-xs transition-colors duration-200 xl:block ${
           expanded
             ? "text-foreground underline decoration-[#F4C430] decoration-2 underline-offset-4"
             : "text-foreground hover:text-[#F4C430]"
@@ -182,22 +182,24 @@ export const TrackRow = ({
         onSeek={(nextProgress) => onPlayVersion(track, selectedVersion, nextProgress)}
         progress={versionProgress(selectedVersion.id)}
         src={selectedVersion.src}
-        className="h-9 min-w-0"
+        className="hidden h-9 min-w-0 md:block"
       />
 
-      <span className={`justify-self-end font-body text-sm ${mainIsPlaying ? "text-[#F4C430]" : "text-muted-foreground"}`}>
+      <span className={`hidden justify-self-end font-body text-sm md:block ${mainIsPlaying ? "text-[#F4C430]" : "text-muted-foreground"}`}>
         {selectedVersion.duration}
       </span>
-      <span className={`justify-self-end font-body text-sm ${mainIsPlaying ? "text-[#F4C430]" : "text-muted-foreground"}`}>
+      <span className={`hidden justify-self-end font-body text-sm xl:block ${mainIsPlaying ? "text-[#F4C430]" : "text-muted-foreground"}`}>
         {track.bpm} BPM
       </span>
-      <div className="flex items-center justify-end gap-4 text-muted-foreground">
+      <div className="flex items-center justify-end gap-3 text-muted-foreground">
         <ActionIcon label="Favorite">
           <Heart className="h-5 w-5 stroke-[1.6]" />
         </ActionIcon>
-        <ActionIcon label="Similar Tracks">
-          <Copy className="h-5 w-5 stroke-[1.6]" />
-        </ActionIcon>
+        <span className="hidden xl:contents">
+          <ActionIcon label="Similar Tracks">
+            <Copy className="h-5 w-5 stroke-[1.6]" />
+          </ActionIcon>
+        </span>
         <ActionIcon label="Buy License">
           <ShoppingCart className="h-5 w-5 stroke-[1.6]" />
         </ActionIcon>
@@ -223,7 +225,7 @@ export const TrackRow = ({
               return (
                 <div
                   key={version.id}
-                  className="music-track-grid grid gap-3 px-4 py-1.5 xl:items-center"
+                  className="music-track-grid grid gap-2.5 px-4 py-1.5 xl:items-center"
                 >
                   <div className="hidden xl:block" />
                   <button

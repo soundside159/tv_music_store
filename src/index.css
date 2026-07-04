@@ -108,24 +108,45 @@
 }
 
 @layer components {
+  /* Responsive track row (Tunetank-style degradation):
+     <768px:      play | title | actions (heart/cart/download)
+     768–1279px:  play | title | waveform (flex) | duration | actions
+     1280–1535px: + tags, versions, BPM — full row, tight gaps
+     1536px+:     same, roomier */
+  .music-track-grid {
+    grid-template-columns: 2.75rem minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  @media (min-width: 768px) {
+    .music-track-grid {
+      grid-template-columns:
+        2.75rem
+        minmax(8rem, 14rem)
+        minmax(6rem, 1fr)
+        3rem
+        auto;
+    }
+  }
+
   @media (min-width: 1280px) {
     .music-track-grid {
-      --track-play-col: 3rem;
-      --track-title-col: minmax(10rem, 16rem);
+      --track-play-col: 2.75rem;
+      --track-title-col: minmax(9rem, 13rem);
       --track-version-wave-inset: 6rem;
-      --track-versions-col: 6rem;
-      --track-waveform-col: 18rem;
-      --track-duration-col: 4.25rem;
-      --track-bpm-col: 4.75rem;
-      --track-action-col: 2.75rem;
-      --track-actions-col: 9rem;
+      --track-versions-col: 5.25rem;
+      --track-waveform-col: 14rem;
+      --track-duration-col: 3.25rem;
+      --track-bpm-col: 3.75rem;
+      --track-action-col: 2.5rem;
+      --track-actions-col: 7.75rem;
 
       grid-template-columns:
         var(--track-play-col)
         var(--track-title-col)
-        minmax(1rem, 1fr)
+        minmax(4rem, 22rem)
         var(--track-versions-col)
-        minmax(var(--track-waveform-col), 1fr)
+        minmax(var(--track-waveform-col), 1.4fr)
         var(--track-duration-col)
         var(--track-bpm-col)
         var(--track-actions-col);
@@ -134,13 +155,13 @@
 
   @media (min-width: 1536px) {
     .music-track-grid {
-      --track-title-col: minmax(13rem, 18rem);
+      --track-title-col: minmax(11rem, 16rem);
       --track-version-wave-inset: 9rem;
-      --track-waveform-col: 28rem;
-      --track-duration-col: 4.5rem;
-      --track-bpm-col: 5.5rem;
-      --track-action-col: 3rem;
-      --track-actions-col: 11rem;
+      --track-waveform-col: 22rem;
+      --track-duration-col: 3.5rem;
+      --track-bpm-col: 4.25rem;
+      --track-action-col: 2.75rem;
+      --track-actions-col: 9rem;
     }
   }
 }
