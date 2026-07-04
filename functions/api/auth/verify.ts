@@ -1,6 +1,7 @@
 import {
   json,
   newId,
+  OWNER_EMAIL,
   readJson,
   sessionCookieHeader,
   SESSION_DAYS,
@@ -34,17 +35,22 @@ export const onRequestPost = async (ctx: Ctx) => {
     .bind(email)
     .first<{ id: string; email: string; name: string | null; role: string }>();
 
+  const ownerRole = email === OWNER_EMAIL ? "admin" : "customer";
+
   if (!user) {
     const id = newId("usr");
-    await ctx.env.DB.prepare(`INSERT INTO users (id, email, role) VALUES (?1, ?2, 'customer')`)
-      .bind(id, email)
+    await ctx.env.DB.prepare(`INSERT INTO users (id, email, role) VALUES (?1, ?2, ?3)`)
+      .bind(id, email, ownerRole)
       .run();
     await ctx.env.DB.prepare(
       `INSERT INTO subscriptions (id, user_id, plan, status) VALUES (?1, ?2, 'free', 'active')`,
     )
       .bind(newId("sub"), id)
       .run();
-    user = { id, email, name: null, role: "customer" };
+    user = { id, email, name: null, role: ownerRole };
+  } else if (ownerRole === "admin" && user.role !== "admin") {
+    await ctx.env.DB.prepare(`UPDATE users SET role = 'admin' WHERE id = ?1`).bind(user.id).run();
+    user = { ...user, role: "admin" };
   }
 
   const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
