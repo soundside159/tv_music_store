@@ -301,6 +301,8 @@ export const useTrackAudioEngine = () => {
   const [playedProgress, setPlayedProgress] = useState<Record<string, number>>({});
   const [expandedTrackId, setExpandedTrackId] = useState<string | null>(null);
   const [volume, setVolume] = useState(0.8);
+  const [activeTrack, setActiveTrack] = useState<CatalogTrack | null>(null);
+  const [activeVersion, setActiveVersion] = useState<TrackAudioVersion | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const pendingPlayRef = useRef(false);
   const pendingSeekRef = useRef<number | null>(null);
@@ -364,6 +366,8 @@ export const useTrackAudioEngine = () => {
   const playVersion = (track: CatalogTrack, version: TrackAudioVersion, seekTo: number | null = null) => {
     const audio = audioRef.current;
     ensureAudioGraph();
+    setActiveTrack(track);
+    setActiveVersion(version);
     const sameVersion = activePlayer?.trackId === track.id && activePlayer.versionId === version.id;
 
     if (sameVersion && audio) {
@@ -439,6 +443,8 @@ export const useTrackAudioEngine = () => {
 
   return {
     activePlayer,
+    activeTrack,
+    activeVersion,
     audioElement,
     expandedTrackId,
     isPlaying,

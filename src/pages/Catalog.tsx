@@ -13,7 +13,7 @@ import {
 import Navigation from "@/components/Navigation";
 import cinemaHero from "@/assets/cinema-hero-wide.png";
 import { Input } from "@/components/ui/input";
-import { catalogTracks } from "@/data/catalogTracks";
+import { useTracks } from "@/hooks/useTracks";
 import { musicCollections } from "@/data/musicCollections";
 import type { MusicCollection } from "@/data/musicCollections";
 import { TrackRow } from "@/components/TrackRowPlayer";
@@ -58,11 +58,12 @@ const Catalog = () => {
   const [expandedTrackId, setExpandedTrackId] = useState<string | null>(null);
   const [sort, setSort] = useState("Featured");
   const { activePlayer, isPlaying, progress, playedProgress, playVersion } = usePlayer();
+  const { tracks } = useTracks();
 
   const filteredTracks = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
-    const result = catalogTracks.filter((track) => {
+    const result = tracks.filter((track) => {
       const matchesCollection = !activeCollection || track.collectionIds.includes(activeCollection.id);
       const matchesCategory = !categoryParam || track.category === categoryParam;
       const matchesUseCase =
@@ -82,7 +83,7 @@ const Catalog = () => {
     if (sort === "New") return [...result].reverse();
     if (sort === "Popular") return [...result].sort((a, b) => b.bpm - a.bpm);
     return result;
-  }, [activeCollection, categoryParam, filters, query, sort]);
+  }, [tracks, activeCollection, categoryParam, filters, query, sort]);
 
   const selectCollection = (collectionId: string | null) => {
     const nextParams = new URLSearchParams(searchParams);
@@ -245,7 +246,7 @@ const CatalogBreadcrumb = ({ activeCollection }: { activeCollection: MusicCollec
 );
 
 const LibraryHero = () => (
-  <section className="mt-4">
+  <section className="mt-4 lg:pl-[16.75rem] xl:pl-[17.75rem]">
     <p className="font-body text-[0.7rem] font-semibold uppercase tracking-[0.32em] text-[#F4C430]/90">
       Discover
     </p>

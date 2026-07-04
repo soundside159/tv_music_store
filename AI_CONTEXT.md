@@ -122,9 +122,19 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   playlists) all consume the shared player, so music keeps playing across page navigation.
   `src/pages/TrackDetail.tsx` is also wired to the global player now (its play buttons feed the
   shared engine; a thin local wrapper still tracks the selected version per track for display).
-- Cart, Download, Favorite, Similar Tracks, Login are **UI placeholders** — no backend yet.
-- Backend (Cloudflare D1 / R2 / Stripe / Resend) not built — see master plan roadmap.
+- **IMPORTANT — backend IS largely built** (this file previously under-stated it). See `functions/api/*`
+  (Cloudflare Pages Functions), `migrations/0001_init.sql` (D1 schema), `src/hooks/useAuth.ts`,
+  and `docs/SETUP_BACKEND.md`. Working: Google OAuth + email-code auth, sessions, `/api/me`,
+  `/api/tracks` (D1), `/api/admin/users`, `/api/health`, Resend login emails. D1 schema is broad
+  (subscriptions, download_log, composer payouts, sync orders, etc.).
+- **Frontend still reads mock `src/data/catalogTracks.ts`, NOT `/api/tracks`.** Wiring catalog /
+  track / collections to the live API is the main open gap.
+- No `/api/download` + R2 delivery/gating yet (table `download_log` exists).
+- No Stripe/checkout/webhook functions yet (tables `subscriptions`/`plan_config` exist).
+- Cart / Download / Favorite / Similar Tracks buttons are still UI placeholders.
 - Confirm exact gold hex with owner (`#F4C430` is an estimate from a screenshot).
+- NOTE: this repo is large and evolving (another AI added many pages/backend). Re-scan
+  `functions/`, `migrations/`, `src/pages/`, `src/hooks/` before assuming what exists.
 
 ## 9. How to continue (for the next AI)
 
@@ -154,3 +164,16 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   killed playback on nav) -> switched to `<Link>`. Wired `TrackDetail` to the global player too.
   Player is now single/global across the whole site. Minor leftover `<a href>` in AuthModal /
   NotFound (rare, non-critical).
+- **2026-07-04 (catalog -> live API):** decoupled the player from mock data (engine now stores the
+  active track/version objects; PlayerProvider reads those instead of looking up catalogTracks).
+  Extended /api/tracks to return collection_ids. Added src/hooks/useTracks.ts (fetch /api/tracks ->
+  map to CatalogTrack, fallback to mock catalogTracks when API is down or DB empty). Wired Catalog
+  to useTracks(). Still on mock (to convert next): TrackDetail, Index, CollectionDetail,
+  PlaylistDetail — they still import catalogTracks directly.
+- **2026-07-04 (layout align):** constrained the Navigation header to the same content container as
+  <main> (mx-auto max-w-[92rem] px-4 sm:px-6) so logo/search/icons line up with page content;
+  indented the catalog hero text (lg:pl-[16.75rem] xl:pl-[17.75rem]) to start at the track play
+  column. NOTE: at this handoff, the catalog->API work + player refactor + these align tweaks were
+  UNCOMMITTED in the working tree (files: Catalog.tsx, Navigation.tsx, PlayerProvider.tsx,
+  TrackRowPlayer.tsx, functions/api/tracks.ts, and NEW src/hooks/useTracks.ts). Run deploy.bat to
+  commit+push them. Reminder: only ONE AI should edit these files at a time to avoid clobbering.

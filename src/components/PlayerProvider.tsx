@@ -1,8 +1,7 @@
-import { useMemo, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Download, Heart, Pause, Play, ShoppingCart, Volume2 } from "lucide-react";
 import WaveformPreview from "@/components/WaveformPreview";
-import { catalogTracks } from "@/data/catalogTracks";
 import {
   ActionIcon,
   PlayProgressRing,
@@ -17,12 +16,8 @@ export { usePlayer } from "@/components/playerContext";
 export const PlayerProvider = ({ children }: { children: ReactNode }) => {
   const engine = useTrackAudioEngine();
   const { isPlaying, progress, playVersion, volume, setVolume } = engine;
-
-  const { currentTrack, currentVersion } = useMemo(() => {
-    const track = catalogTracks.find((item) => item.id === engine.activePlayer?.trackId) ?? null;
-    const version = track?.audioVersions.find((item) => item.id === engine.activePlayer?.versionId) ?? null;
-    return { currentTrack: track, currentVersion: version };
-  }, [engine.activePlayer]);
+  const currentTrack = engine.activeTrack;
+  const currentVersion = engine.activeVersion;
 
   return (
     <PlayerContext.Provider value={engine}>

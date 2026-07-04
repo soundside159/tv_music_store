@@ -45,11 +45,22 @@ export const onRequestGet = async (ctx: Ctx) => {
     byTrack.set(v.track_id, list);
   }
 
+  const collectionRows = await ctx.env.DB.prepare(
+    `SELECT collection_id, track_id FROM collection_tracks`,
+  ).all<{ collection_id: string; track_id: string }>();
+  const collectionsByTrack = new Map<string, string[]>();
+  for (const c of collectionRows.results) {
+    const list = collectionsByTrack.get(c.track_id) ?? [];
+    list.push(c.collection_id);
+    collectionsByTrack.set(c.track_id, list);
+  }
+
   return json({
     tracks: tracks.results.map((t) => ({
       ...t,
       tags: t.tags ? (JSON.parse(t.tags) as string[]) : [],
       versions: byTrack.get(t.id) ?? [],
+      collection_ids: collectionsByTrack.get(t.id) ?? [],
     })),
   });
 };
