@@ -137,9 +137,9 @@
       --track-play-col: 2.75rem;
       --track-title-col: minmax(9rem, 13rem);
       --track-version-wave-inset: 6rem;
-      --track-tags-col: 17rem;
+      --track-tags-col: minmax(8rem, 17rem);
       --track-versions-col: 2.25rem;
-      --track-waveform-col: 14rem;
+      --track-waveform-col: 11rem;
       --track-duration-col: 3.25rem;
       --track-bpm-col: 4.5rem;
       --track-action-col: 2.5rem;
@@ -161,8 +161,8 @@
     .music-track-grid {
       --track-title-col: minmax(11rem, 16rem);
       --track-version-wave-inset: 9rem;
-      --track-tags-col: 19rem;
-      --track-waveform-col: 22rem;
+      --track-tags-col: minmax(10rem, 19rem);
+      --track-waveform-col: 18rem;
       --track-action-col: 2.75rem;
     }
   }
