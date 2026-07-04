@@ -1,38 +1,23 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowRight,
-  Download,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Heart,
   Home,
-  Pause,
-  Play,
   Search,
-  ShoppingCart,
   SlidersHorizontal,
-  Volume2,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
-import WaveformPreview from "@/components/WaveformPreview";
 import cinemaHero from "@/assets/cinema-hero-wide.png";
 import { Input } from "@/components/ui/input";
 import { catalogTracks } from "@/data/catalogTracks";
-import type { CatalogTrack, TrackAudioVersion } from "@/data/catalogTracks";
 import { musicCollections } from "@/data/musicCollections";
 import type { MusicCollection } from "@/data/musicCollections";
-import {
-  ActionIcon,
-  PlayProgressRing,
-  TrackRow,
-  durationToSeconds,
-  formatClock,
-  sliderToGain,
-} from "@/components/TrackRowPlayer";
-import type { ActivePlayer } from "@/components/TrackRowPlayer";
+import { TrackRow } from "@/components/TrackRowPlayer";
+import { usePlayer } from "@/components/PlayerProvider";
 
 type FilterValue = {
   genre: string;
@@ -70,20 +55,9 @@ const Catalog = () => {
       useCase: fromParam(searchParams.get("usecase"), useCaseOptions),
     };
   });
-  const [activePlayer, setActivePlayer] = useState<ActivePlayer | null>(null);
   const [expandedTrackId, setExpandedTrackId] = useState<string | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [playedProgress, setPlayedProgress] = useState<Record<string, number>>({});
   const [sort, setSort] = useState("Featured");
-  const [volume, setVolume] = useState(0.8);
-  const playedKey = (trackId: string, versionId: string) => `${trackId}:${versionId}`;
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const pendingPlayRef = useRef(false);
-  const pendingSeekRef = useRef<number | null>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const gainNodeRef = useRef<GainNode | null>(null);
-  const mediaSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const { activePlayer, isPlaying, progress, playedProgress, playVersion } = usePlayer();
 
   const filteredTracks = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -110,25 +84,6 @@ const Catalog = () => {
     return result;
   }, [activeCollection, categoryParam, filters, query, sort]);
 
-  const currentTrack = catalogTracks.find((track) => track.id === activePlayer?.trackId) ?? filteredTracks[0];
-  const currentVersion = currentTrack?.audioVersions.find((version) => version.id === activePlayer?.versionId);
-  const currentSrc = currentVersion?.src;
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio || !currentSrc) return;
-
-    audio.load();
-  }, [currentSrc]);
-
-  useEffect(() => {
-    if (gainNodeRef.current) {
-      gainNodeRef.current.gain.value = sliderToGain(volume);
-    } else if (audioRef.current) {
-      audioRef.current.volume = Math.min(1, sliderToGain(volume));
-    }
-  }, [volume]);
-
   const selectCollection = (collectionId: string | null) => {
     const nextParams = new URLSearchParams(searchParams);
     if (collectionId) nextParams.set("collection", collectionId);
@@ -136,94 +91,6 @@ const Catalog = () => {
     setSearchParams(nextParams);
     setExpandedTrackId(null);
   };
-
-  const applyPendingStart = (audio: HTMLAudioElement) => {
-    if (pendingSeekRef.current !== null && Number.isFinite(audio.duration) && audio.duration > 0) {
-      audio.currentTime = audio.duration * pendingSeekRef.current;
-      pendingSeekRef.current = null;
-    }
-
-    if (!pendingPlayRef.current) return;
-    pendingPlayRef.current = false;
-
-    audio
-      .play()
-      .then(() => setIsPlaying(true))
-      .catch(() => setIsPlaying(false));
-  };
-
-  const ensureAudioGraph = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    try {
-      if (!audioCtxRef.current) {
-        const Ctor =
-          window.AudioContext ??
-          (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-        if (!Ctor) return;
-        audioCtxRef.current = new Ctor();
-      }
-      const ctx = audioCtxRef.current;
-      if (ctx.state === "suspended") void ctx.resume();
-      if (!mediaSourceRef.current) {
-        mediaSourceRef.current = ctx.createMediaElementSource(audio);
-        gainNodeRef.current = ctx.createGain();
-        gainNodeRef.current.gain.value = sliderToGain(volume);
-        mediaSourceRef.current.connect(gainNodeRef.current).connect(ctx.destination);
-      }
-    } catch {
-      // Web Audio unavailable; falls back to element volume
-    }
-  };
-
-  const playVersion = (track: CatalogTrack, version: TrackAudioVersion, seekTo: number | null = null) => {
-    const audio = audioRef.current;
-    ensureAudioGraph();
-    const sameVersion = activePlayer?.trackId === track.id && activePlayer.versionId === version.id;
-
-    if (sameVersion && audio) {
-      if (seekTo !== null) {
-        if (Number.isFinite(audio.duration) && audio.duration > 0) {
-          audio.currentTime = audio.duration * seekTo;
-          setProgress(seekTo);
-        }
-        audio
-          .play()
-          .then(() => setIsPlaying(true))
-          .catch(() => setIsPlaying(false));
-        return;
-      }
-
-      if (isPlaying) {
-        audio.pause();
-        setIsPlaying(false);
-        return;
-      }
-
-      audio
-        .play()
-        .then(() => setIsPlaying(true))
-        .catch(() => setIsPlaying(false));
-      return;
-    }
-
-    pendingSeekRef.current = seekTo;
-    pendingPlayRef.current = true;
-    setProgress(seekTo ?? 0);
-    setActivePlayer({ trackId: track.id, versionId: version.id });
-
-    if (!audio) return;
-
-    audio.src = version.src;
-    audio.load();
-    audio
-      .play()
-      .then(() => setIsPlaying(true))
-      .catch(() => setIsPlaying(false));
-  };
-
-  const activeProgressFor = (track: CatalogTrack, version: TrackAudioVersion) =>
-    activePlayer?.trackId === track.id && activePlayer.versionId === version.id ? progress : 0;
 
   const setFilter = (key: keyof FilterValue, value: string) => {
     setFilters((current) => ({
@@ -237,30 +104,6 @@ const Catalog = () => {
   return (
     <div className="min-h-screen bg-background pb-24 text-foreground">
       <Navigation />
-      <audio
-        ref={audioRef}
-        src={currentSrc}
-        preload="metadata"
-        onLoadedMetadata={(event) => applyPendingStart(event.currentTarget)}
-        onTimeUpdate={(event) => {
-          const audio = event.currentTarget;
-          if (audio.seeking || pendingSeekRef.current !== null) return;
-          const nextProgress = audio.duration ? audio.currentTime / audio.duration : 0;
-          setProgress(nextProgress);
-          if (activePlayer) {
-            const key = playedKey(activePlayer.trackId, activePlayer.versionId);
-            setPlayedProgress((prev) => ({ ...prev, [key]: nextProgress }));
-          }
-        }}
-        onEnded={() => {
-          setIsPlaying(false);
-          setProgress(0);
-          if (activePlayer) {
-            const key = playedKey(activePlayer.trackId, activePlayer.versionId);
-            setPlayedProgress((prev) => ({ ...prev, [key]: 1 }));
-          }
-        }}
-      />
 
       <main className="mx-auto w-full max-w-[92rem] px-4 pt-20 sm:px-6">
         <div className="animate-rise-in" style={{ animationDelay: "0.05s" }}>
@@ -341,81 +184,6 @@ const Catalog = () => {
           </section>
         </section>
       </main>
-
-      {currentTrack && currentVersion && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-card/95 shadow-[0_-10px_30px_-12px_rgba(0,0,0,0.7)] backdrop-blur-xl">
-          <div className="grid min-h-16 w-full gap-3 px-4 py-3 sm:px-6 md:grid-cols-[minmax(12rem,20rem)_minmax(0,1fr)_auto] md:items-center lg:px-8">
-            <div className="flex min-w-0 items-center gap-3">
-              <button
-                type="button"
-                onClick={() => playVersion(currentTrack, currentVersion)}
-                className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition-colors ${
-                  isPlaying ? "border-transparent" : "border-border/70 hover:border-[#F4C430]"
-                }`}
-                aria-label={isPlaying ? "Pause current track" : "Play current track"}
-              >
-                {isPlaying && <PlayProgressRing progress={progress} />}
-                {isPlaying ? <Pause className="h-4 w-4 text-[#F4C430]" /> : <Play className="ml-0.5 h-4 w-4" />}
-              </button>
-              <div className="min-w-0">
-                <Link
-                  to={`/track/${currentTrack.slug}`}
-                  className={`block truncate font-body text-sm font-medium transition-colors ${
-                    isPlaying ? "text-[#F4C430]" : "text-foreground hover:text-[#F4C430]"
-                  }`}
-                >
-                  {currentTrack.title}
-                </Link>
-                <p className="truncate font-body text-xs text-muted-foreground">
-                  {currentVersion.label}
-                </p>
-              </div>
-            </div>
-
-            <WaveformPreview
-              active={isPlaying}
-              bars={420}
-              onSeek={(nextProgress) => playVersion(currentTrack, currentVersion, nextProgress)}
-              progress={progress}
-              src={currentVersion.src}
-              className="h-8 md:mr-12"
-            />
-
-            <div className="flex items-center gap-4 md:gap-5">
-              <div className="hidden items-center gap-3 font-body text-xs text-muted-foreground sm:flex">
-                <span className="tabular-nums text-foreground/80">
-                  {formatClock(progress * durationToSeconds(currentVersion.duration))}/{currentVersion.duration}
-                </span>
-                <span className="tabular-nums">{currentTrack.bpm} BPM</span>
-              </div>
-              <div className="hidden items-center gap-2 sm:flex">
-                <Volume2 className="h-4 w-4 text-muted-foreground" />
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={volume}
-                  onChange={(event) => setVolume(Number(event.target.value))}
-                  className="h-1 w-20 cursor-pointer accent-[#F4C430]"
-                  aria-label="Volume"
-                />
-              </div>
-              <div className="flex items-center gap-5 text-muted-foreground">
-                <ActionIcon label="Favorite">
-                  <Heart className="h-5 w-5 stroke-[1.6]" />
-                </ActionIcon>
-                <ActionIcon label="Buy License">
-                  <ShoppingCart className="h-5 w-5 stroke-[1.6]" />
-                </ActionIcon>
-                <ActionIcon label="Download">
-                  <Download className="h-5 w-5 stroke-[1.6]" />
-                </ActionIcon>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

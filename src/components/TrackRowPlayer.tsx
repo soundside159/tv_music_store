@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Copy, Download, Heart, Pause, Play, ShoppingCart } from "lucide-react";
 import WaveformPreview from "@/components/WaveformPreview";
 import type { CatalogTrack, TrackAudioVersion, TrackVersion } from "@/data/catalogTracks";
+import { usePlayer } from "@/components/playerContext";
 
 // Shared track-row player pieces. Single source of truth for how a track row
 // looks and plays everywhere (catalog, homepage trending, artist pages).
@@ -299,6 +300,7 @@ export const useTrackAudioEngine = () => {
   const [progress, setProgress] = useState(0);
   const [playedProgress, setPlayedProgress] = useState<Record<string, number>>({});
   const [expandedTrackId, setExpandedTrackId] = useState<string | null>(null);
+  const [volume, setVolume] = useState(0.8);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const pendingPlayRef = useRef(false);
   const pendingSeekRef = useRef<number | null>(null);
@@ -311,6 +313,14 @@ export const useTrackAudioEngine = () => {
       audioRef.current?.pause();
     };
   }, []);
+
+  useEffect(() => {
+    if (gainNodeRef.current) {
+      gainNodeRef.current.gain.value = sliderToGain(volume);
+    } else if (audioRef.current) {
+      audioRef.current.volume = Math.min(1, sliderToGain(volume));
+    }
+  }, [volume]);
 
   const ensureAudioGraph = () => {
     const audio = audioRef.current;
@@ -328,7 +338,7 @@ export const useTrackAudioEngine = () => {
       if (!mediaSourceRef.current) {
         mediaSourceRef.current = ctx.createMediaElementSource(audio);
         gainNodeRef.current = ctx.createGain();
-        gainNodeRef.current.gain.value = sliderToGain(0.8);
+        gainNodeRef.current.gain.value = sliderToGain(volume);
         mediaSourceRef.current.connect(gainNodeRef.current).connect(ctx.destination);
       }
     } catch {
@@ -436,16 +446,19 @@ export const useTrackAudioEngine = () => {
     playedProgress,
     progress,
     setExpandedTrackId,
+    setVolume,
+    volume,
   };
 };
 
+export type PlayerEngine = ReturnType<typeof useTrackAudioEngine>;
+
 /** Drop-in track list with full playback — visually identical to the catalog rows. */
 export const TrackRowList = ({ tracks }: { tracks: CatalogTrack[] }) => {
-  const engine = useTrackAudioEngine();
+  const engine = usePlayer();
 
   return (
     <div className="rounded-lg border border-border/30 bg-card/25">
-      {engine.audioElement}
       {tracks.map((track, index) => {
         const mainVersion = track.audioVersions[0];
         const expanded = engine.expandedTrackId === track.id;

@@ -21,6 +21,7 @@ import Admin from "./pages/Admin";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import DevPersonaSwitcher from "./components/DevPersonaSwitcher";
+import { PlayerProvider } from "./components/PlayerProvider";
 
 const queryClient = new QueryClient();
 
@@ -31,7 +32,8 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <DevPersonaSwitcher />
-        <Routes>
+        <PlayerProvider>
+          <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/catalog" element={<Catalog />} />
           <Route path="/collections" element={<Collections />} />
@@ -50,7 +52,8 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
-        </Routes>
+          </Routes>
+        </PlayerProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
