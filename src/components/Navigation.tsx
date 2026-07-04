@@ -45,15 +45,15 @@ const Navigation = () => {
             </Link>
             <div className="hidden items-center gap-7 md:flex">
               {navItems.map((item) => (
-                <a
+                <Link
                   key={item.label}
-                  href={item.href}
+                  to={item.href}
                   className={`whitespace-nowrap font-body text-sm transition-colors duration-300 hover:text-foreground ${
                     location.pathname === item.href ? "text-[#F4C430]" : "text-muted-foreground"
                   }`}
                 >
                   {item.label}
-                </a>
+                </Link>
               ))}
             </div>
           </div>
@@ -110,16 +110,16 @@ const Navigation = () => {
                 />
               </form>
               {navItems.map((item) => (
-                <a
+                <Link
                   key={item.label}
-                  href={item.href}
+                  to={item.href}
                   onClick={() => setIsOpen(false)}
                   className={`py-2 font-body text-base transition-colors duration-300 hover:text-foreground ${
                     location.pathname === item.href ? "text-[#F4C430]" : "text-muted-foreground"
                   }`}
                 >
                   {item.label}
-                </a>
+                </Link>
               ))}
               <button
                 type="button"
