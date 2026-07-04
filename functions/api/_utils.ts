@@ -12,8 +12,20 @@ export interface D1Database {
   prepare(query: string): D1PreparedStatement;
 }
 
+export interface R2ObjectBody {
+  body: ReadableStream;
+  httpMetadata?: { contentType?: string };
+  size: number;
+}
+
+export interface R2Bucket {
+  get(key: string): Promise<R2ObjectBody | null>;
+  put(key: string, value: ReadableStream | ArrayBuffer | string): Promise<unknown>;
+}
+
 export interface Env {
   DB: D1Database;
+  R2?: R2Bucket;
   RESEND_API_KEY?: string;
   EMAIL_FROM?: string; // e.g. "TV Music Store <login@tvmusicstore.com>"
   STRIPE_SECRET_KEY?: string;
@@ -30,7 +42,12 @@ export interface Ctx {
 export const json = (data: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(data), {
     status,
-    headers: { "content-type": "application/json; charset=utf-8", ...headers },
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      // API responses must never be cached at the edge (stale /api/health confused us once).
+      "cache-control": "no-store",
+      ...headers,
+    },
   });
 
 export const readJson = async <T>(request: Request): Promise<T | null> => {

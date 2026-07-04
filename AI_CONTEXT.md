@@ -170,6 +170,19 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   map to CatalogTrack, fallback to mock catalogTracks when API is down or DB empty). Wired Catalog
   to useTracks(). Still on mock (to convert next): TrackDetail, Index, CollectionDetail,
   PlaylistDetail — they still import catalogTracks directly.
+- **2026-07-05 (real downloads):** new `functions/api/download.ts` — POST, session required,
+  enforces plan gates (Free: 3 mp3/month via download_log count; WAV only for Max), logs every
+  download to `download_log`, streams the file (R2 `r2_key_wav` for WAV when the bucket is bound;
+  otherwise fetches the public preview mp3 same-origin; mock-catalog fallback accepts client `src`
+  only if it matches `/audio/previews/*.mp3`). Frontend: `src/lib/downloadTrack.ts`
+  (`downloadTrackVersion` + sonner toasts: 401 → dispatches `tvms:open-auth` which Navigation
+  listens for to open AuthModal; `limit`/`plan` codes → toast with "See plans" action). Wired all
+  Download buttons: TrackRowPlayer main row + alt versions, PlayerProvider mini-player. Also added
+  `cache-control: no-store` to the API `json()` helper (stale cached /api/health confused us), R2
+  typings in `_utils.ts` Env, and fixed two pre-existing tsc errors from the last session: missing
+  `useRef` import in Catalog.tsx (runtime crash risk) and missing `styleOf`/`priceFrom` in
+  useTracks mapTrack. Pending: Account → Downloads history for live users (useMyDownloads returns
+  [] when authed — needs a /api/me/downloads endpoint), R2 bucket binding + master uploads, Stripe.
 - **2026-07-04 (layout align):** constrained the Navigation header to the same content container as
   <main> (mx-auto max-w-[92rem] px-4 sm:px-6) so logo/search/icons line up with page content;
   indented the catalog hero text (lg:pl-[16.75rem] xl:pl-[17.75rem]) to start at the track play

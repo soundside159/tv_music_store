@@ -1,6 +1,7 @@
 import { type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Download, Heart, Pause, Play, ShoppingCart, Volume2 } from "lucide-react";
+import { downloadTrackVersion } from "@/lib/downloadTrack";
 import WaveformPreview from "@/components/WaveformPreview";
 import {
   ActionIcon,
@@ -87,7 +88,18 @@ export const PlayerProvider = ({ children }: { children: ReactNode }) => {
                 <ActionIcon label="Buy License">
                   <ShoppingCart className="h-5 w-5 stroke-[1.6]" />
                 </ActionIcon>
-                <ActionIcon label="Download">
+                <ActionIcon
+                  label="Download"
+                  onClick={() =>
+                    void downloadTrackVersion({
+                      slug: currentTrack.slug,
+                      versionId: currentVersion.id,
+                      src: currentVersion.src,
+                      title: currentTrack.title,
+                      label: currentVersion.label,
+                    })
+                  }
+                >
                   <Download className="h-5 w-5 stroke-[1.6]" />
                 </ActionIcon>
               </div>

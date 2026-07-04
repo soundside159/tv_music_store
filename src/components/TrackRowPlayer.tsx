@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Copy, Download, Heart, Pause, Play, ShoppingCart } from "lucide-react";
+import { downloadTrackVersion } from "@/lib/downloadTrack";
 import WaveformPreview from "@/components/WaveformPreview";
 import type { CatalogTrack, TrackAudioVersion, TrackVersion } from "@/data/catalogTracks";
 import { usePlayer } from "@/components/playerContext";
@@ -215,7 +216,18 @@ export const TrackRow = ({
         <ActionIcon label="Buy License">
           <ShoppingCart className="h-5 w-5 stroke-[1.6]" />
         </ActionIcon>
-        <ActionIcon label="Download">
+        <ActionIcon
+          label="Download"
+          onClick={() =>
+            void downloadTrackVersion({
+              slug: track.slug,
+              versionId: selectedVersion.id,
+              src: selectedVersion.src,
+              title: track.title,
+              label: selectedVersion.label,
+            })
+          }
+        >
           <Download className="h-5 w-5 stroke-[1.6]" />
         </ActionIcon>
       </div>
@@ -274,7 +286,18 @@ export const TrackRow = ({
                     <ActionIcon label="Buy License">
                       <ShoppingCart className="h-5 w-5 stroke-[1.6]" />
                     </ActionIcon>
-                    <ActionIcon label="Download">
+                    <ActionIcon
+                      label="Download"
+                      onClick={() =>
+                        void downloadTrackVersion({
+                          slug: track.slug,
+                          versionId: version.id,
+                          src: version.src,
+                          title: track.title,
+                          label: version.label,
+                        })
+                      }
+                    >
                       <Download className="h-5 w-5 stroke-[1.6]" />
                     </ActionIcon>
                   </div>

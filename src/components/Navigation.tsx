@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Menu, Search, ShoppingCart, User, X } from "lucide-react";
 import AuthModal from "@/components/AuthModal";
@@ -17,6 +17,13 @@ const Navigation = () => {
     if (user) navigate("/account");
     else setAuthOpen(true);
   };
+
+  // Any part of the app can request the sign-in dialog (e.g. Download as guest).
+  useEffect(() => {
+    const open = () => setAuthOpen(true);
+    window.addEventListener("tvms:open-auth", open);
+    return () => window.removeEventListener("tvms:open-auth", open);
+  }, []);
 
   const navItems = [
     { label: "Music Library", href: "/catalog" },

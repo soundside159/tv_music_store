@@ -28,6 +28,8 @@ const mapTrack = (t: ApiTrack): CatalogTrack => ({
   genre: t.genre ?? "",
   mood: t.mood ?? "",
   useCase: t.use_case ?? "",
+  styleOf: "",
+  priceFrom: 0,
   bpm: t.bpm ?? 0,
   duration: t.duration ?? "",
   description: t.description ?? "",
