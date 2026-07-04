@@ -68,13 +68,28 @@ npm run lint
 
 The project moved from single-composer per-track licensing (V1) to a three-composer subscription model (V2): Free 3 downloads/month, Pro $7/mo annual, Max $15/mo annual, plus one-time Sync licenses and custom work. Revenue split 50% platform / 50% author pool by downloads. Read `docs/TVMUSICSTORE_MASTER_PLAN.md` (V2) and `docs/PAGES_SPEC.md` before building anything.
 
-## Next Recommended Step
+## Backend Status (updated 2026-07-04)
 
-Design-first, mocks before backend (strict order from `docs/PAGES_SPEC.md` section 5):
+The design-first mock phase is DONE (types, mocks, all pages built). Phase 3 (live backend) is underway. Already LIVE on production:
 
-1. `src/types/`: domain types matching the V2 D1 schema (users, composers, subscriptions, download_log, payouts, etc.).
-2. `src/mocks/`: fake-data layer (3 composers, users on every plan, download history, payout periods) accessed only through hooks (`useCurrentUser`, `useSubscription`, `usePlans`, `useTracks`). Existing `src/data/catalogTracks.ts` keeps powering `/catalog` until migrated.
-3. Build pages on mocks: `/pricing` → `/account` → `/composer` → `/admin`. Owner iterates on design at this stage.
-4. Only after the owner approves the frontend: D1 schema, auth, Stripe Billing + Tax + webhooks, R2 entitlements, Resend.
+- D1 database bound (`DB`), 22 tables from `migrations/0001_init.sql`, seeded plans/composers. Check `/api/health` for binding status.
+- Auth, three ways, all working: email + 6-digit code (Resend; domain `e.tvmusicstore.com` verified; from `no-reply@e.tvmusicstore.com`, reply-to `contact@tvmusicstore.com`); email + password (PBKDF2, `password_hash` column is auto-added by code); Google OAuth (`/api/auth/google` + `/api/auth/google/callback`, secrets live in Cloudflare).
+- Sessions: httpOnly cookie, 30 days. `/api/me` GET returns user + subscription + downloads used; PATCH updates display name.
+- Owner rule: `soundside159@gmail.com` is ALWAYS admin — self-healed on every `/api/me` GET; hardcoded as `OWNER_EMAIL` in `functions/api/_utils.ts`.
+- Admin users API: `/api/admin/users` (GET list, PATCH role). Admin page → Customers section is live with role dropdowns; the owner assigns roles (customer/composer/admin) himself.
+- Tunetank-style auth modal (`src/components/AuthModal.tsx`) opens from the navbar person icon (portal to body — do not move it back inside the fixed nav). `/login` page is the fallback with a password option.
+- Live session store: `src/hooks/useAuth.ts`. `useMockData` hooks prefer the live session; mock personas apply ONLY in dev mode (`?dev=1` → localStorage `tvms.dev`) and never for real visitors.
+- Account page: grouped sidebar (Account / Plan / Music / Support + gold "Admin panel" link for admins), Profile section with display-name editing.
+
+NOT yet live (still mocks): Stripe (owner will register and put keys in Cloudflare), R2 downloads/entitlements, composer cabinet (`/composer` is a design mock — a real account with role=composer sees nothing there yet; that is expected, Phase 2), all admin modules except Customers, whitelist/claim flows.
+
+## Next Recommended Step (in order)
+
+1. **Stripe Billing** (Phase 3.3): Checkout for Pro/Max (monthly + annual), webhooks (`customer.subscription.*`, `invoice.paid`, `checkout.session.completed`) → `subscriptions` table, customer portal button in Account → Plan & Billing. Blocked until the owner adds `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` to Cloudflare.
+2. **R2 + entitlements**: real downloads with plan limits (the Free 3/month counter already works via `download_log`).
+3. **Admin Content (Storefront) editor**: the owner's concrete requirements are written in `docs/PAGES_SPEC.md` section 4.1 — trending/collections/playlists management, cover-image upload to R2, unified tags (use cases/moods/genres), inline track preview, alt-versions always follow the main track. Also: whitelist requests list must show requester email, plan, date.
+4. **Composer cabinet live wiring** (Phase 2 of the master plan): real composer profiles linked to users with role=composer, plus a "Composer panel" link in Account for them.
+
+Keep the owner's workflow simple: he runs `deploy.bat`, tests in the browser like a normal user, and must never be sent to Cloudflare logs or wrangler commands unless truly unavoidable. Secrets live only in Cloudflare dashboard — never in chat or git.
 
 Payments and subscriptions are real only after Stripe webhook confirmation.
