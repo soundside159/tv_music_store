@@ -131,22 +131,26 @@
 
   @media (min-width: 1280px) {
     .music-track-grid {
+      /* Fixed widths everywhere except the waveform (the only flex column) —
+         otherwise each row (its own grid) resolves columns differently and
+         the columns stop lining up between rows. */
       --track-play-col: 2.75rem;
       --track-title-col: minmax(9rem, 13rem);
       --track-version-wave-inset: 6rem;
+      --track-tags-col: 17rem;
       --track-versions-col: 2.25rem;
       --track-waveform-col: 14rem;
-      --track-duration-col: auto;
-      --track-bpm-col: auto;
+      --track-duration-col: 3.25rem;
+      --track-bpm-col: 4.5rem;
       --track-action-col: 2.5rem;
-      --track-actions-col: auto;
+      --track-actions-col: 7.75rem;
 
       grid-template-columns:
         var(--track-play-col)
         var(--track-title-col)
-        minmax(4rem, 26rem)
+        var(--track-tags-col)
         var(--track-versions-col)
-        minmax(var(--track-waveform-col), 1.4fr)
+        minmax(var(--track-waveform-col), 1fr)
         var(--track-duration-col)
         var(--track-bpm-col)
         var(--track-actions-col);
@@ -157,6 +161,7 @@
     .music-track-grid {
       --track-title-col: minmax(11rem, 16rem);
       --track-version-wave-inset: 9rem;
+      --track-tags-col: 19rem;
       --track-waveform-col: 22rem;
       --track-action-col: 2.75rem;
     }

@@ -119,7 +119,16 @@ export const TrackRow = ({
     return played;
   };
 
-  const seed = track.id.split("").reduce((sum, character) => sum + character.charCodeAt(0), 0);
+  // Fixed tag order: 1 = Use Case, 2 = Genre, 3 = Mood. Each links to the
+  // catalog with only that filter active.
+  const firstOf = (value: string) => splitFilterValues(value)[0] ?? null;
+  const rowTags = [
+    { param: "usecase", label: firstOf(track.useCase) },
+    { param: "genre", label: firstOf(track.genre) },
+    { param: "mood", label: firstOf(track.mood) },
+  ]
+    .filter((t): t is { param: string; label: string } => Boolean(t.label))
+    .map((t) => ({ label: t.label, to: `/catalog?${t.param}=${encodeURIComponent(t.label)}` }));
 
   return (
   <motion.article
@@ -151,22 +160,21 @@ export const TrackRow = ({
       </Link>
 
       <div className="hidden min-w-0 items-center gap-2 overflow-hidden xl:flex">
-        {[pickTag(track.useCase, seed), pickTag(track.genre, seed + 1), pickTag(track.mood, seed + 2)]
-          .filter((tag): tag is string => Boolean(tag))
-          .map((tag) => (
-            <span
-              key={tag}
-              className="whitespace-nowrap rounded-md border border-white/10 bg-white/[0.03] px-2 py-0.5 font-body text-xs text-muted-foreground"
-            >
-              {tag}
-            </span>
-          ))}
+        {rowTags.map((tag) => (
+          <Link
+            key={tag.to}
+            to={tag.to}
+            className="whitespace-nowrap rounded-md border border-white/10 bg-white/[0.03] px-2 py-0.5 font-body text-xs text-muted-foreground transition-colors duration-200 hover:border-[#F4C430]/60 hover:text-[#F4C430]"
+          >
+            {tag.label}
+          </Link>
+        ))}
       </div>
 
       <button
         type="button"
         onClick={onToggleExpanded}
-        className={`group/ver relative hidden justify-self-start whitespace-nowrap px-1 py-1 font-body text-xs transition-colors duration-200 xl:block ${
+        className={`group/ver relative hidden justify-self-center whitespace-nowrap px-1 py-1 font-body text-xs tabular-nums transition-colors duration-200 xl:block ${
           expanded
             ? "text-foreground underline decoration-[#F4C430] decoration-2 underline-offset-4"
             : "text-foreground hover:text-[#F4C430]"
@@ -188,10 +196,10 @@ export const TrackRow = ({
         className="hidden h-9 min-w-0 md:block"
       />
 
-      <span className={`hidden justify-self-end font-body text-sm md:block ${mainIsPlaying ? "text-[#F4C430]" : "text-muted-foreground"}`}>
+      <span className={`hidden justify-self-end font-body text-sm tabular-nums md:block ${mainIsPlaying ? "text-[#F4C430]" : "text-muted-foreground"}`}>
         {selectedVersion.duration}
       </span>
-      <span className={`hidden justify-self-end font-body text-sm xl:block ${mainIsPlaying ? "text-[#F4C430]" : "text-muted-foreground"}`}>
+      <span className={`hidden justify-self-end whitespace-nowrap font-body text-sm tabular-nums xl:block ${mainIsPlaying ? "text-[#F4C430]" : "text-muted-foreground"}`}>
         {track.bpm} BPM
       </span>
       <div className="flex items-center justify-end gap-3 text-muted-foreground">

@@ -1,11 +1,10 @@
 import { Link } from "react-router-dom";
-import { ArrowRight, Check, Music2, ShieldCheck, Users } from "lucide-react";
+import { ArrowRight, Check, Layers, Library, ListMusic, Music2, ShieldCheck, Users } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { TrackRowList } from "@/components/TrackRowPlayer";
 import { catalogTracks, categoryLabels } from "@/data/catalogTracks";
 import type { TrackCategory } from "@/data/catalogTracks";
-import { musicCollections } from "@/data/musicCollections";
 import { usePlans } from "@/hooks/useMockData";
 
 const GOLD = "#F4C430";
@@ -53,6 +52,34 @@ const Index = () => {
           </div>
         </section>
 
+        {/* Section cards: Catalog / Collections / Playlists */}
+        <section className="mx-auto w-full max-w-7xl px-4 pb-14 sm:px-6">
+          <div className="grid gap-4 sm:grid-cols-3">
+            {[
+              { to: "/catalog", icon: Library, title: "Catalog", text: "Every track in the library" },
+              { to: "/collections", icon: Layers, title: "Collections", text: "Curated by style and genre" },
+              { to: "/playlists", icon: ListMusic, title: "Playlists", text: "Handpicked for your use case" },
+            ].map((c) => (
+              <Link
+                key={c.to}
+                to={c.to}
+                className="group flex items-center gap-4 rounded-xl border border-border bg-card p-5 transition-colors hover:border-[#F4C430]/60"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground transition-colors group-hover:text-[#F4C430]">
+                  <c.icon className="h-5 w-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-body text-sm font-semibold text-foreground transition-colors group-hover:text-[#F4C430]">
+                    {c.title}
+                  </span>
+                  <span className="block truncate font-body text-xs text-muted-foreground">{c.text}</span>
+                </span>
+                <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-all group-hover:translate-x-0.5 group-hover:text-[#F4C430]" />
+              </Link>
+            ))}
+          </div>
+        </section>
+
         {/* Trending / latest tracks */}
         <section className="mx-auto w-full max-w-7xl px-4 pb-16 sm:px-6">
           <div className="flex items-center justify-between">
@@ -71,38 +98,8 @@ const Index = () => {
 
         {/* Browse by collection */}
         <section className="mx-auto w-full max-w-7xl px-4 pb-16 sm:px-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl text-foreground md:text-2xl">Browse collections</h2>
-            <Link
-              to="/catalog"
-              className="inline-flex items-center gap-1 font-body text-sm text-muted-foreground transition-colors hover:text-[#F4C430]"
-            >
-              All collections <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
-            {musicCollections.slice(0, 8).map((c) => (
-              <Link
-                key={c.id}
-                to={`/catalog?collection=${c.id}`}
-                className="group overflow-hidden rounded-xl border border-border bg-card transition-colors hover:border-[#F4C430]/60"
-              >
-                <div className="aspect-[4/3] w-full overflow-hidden">
-                  <img
-                    src={c.image}
-                    alt={c.shortTitle}
-                    loading="lazy"
-                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                  />
-                </div>
-                <div className="p-3">
-                  <p className="font-body text-sm font-semibold text-foreground">{c.shortTitle}</p>
-                  <p className="font-body text-xs text-muted-foreground">{c.trackCount} tracks</p>
-                </div>
-              </Link>
-            ))}
-          </div>
-          <div className="mt-6 flex flex-wrap gap-2">
+          <h2 className="text-xl text-foreground md:text-2xl">Browse by mood</h2>
+          <div className="mt-4 flex flex-wrap gap-2">
             {moods.map((m) => (
               <Link
                 key={m}

@@ -110,7 +110,8 @@ Planned app areas:
 - `/`: public catalog and homepage
 - `/catalog`: MVP Music Library, currently backed by `src/data/catalogTracks.ts` and `src/data/musicCollections.ts`; keep the UI minimal, dark/neutral, and track-row focused. Current layout uses breadcrumbs, a Music Library hero, horizontal collection cards, active collection hero via `?collection=...`, a left sidebar with Use Case, Genre, and Mood filters, compact rows, strict columns (`play / title / +versions / waveform / duration / BPM / heart / cart`), expandable alternate-version rows, heart/cart actions, and no separate Details button.
 - `/track/:slug`: MVP track detail page, currently backed by `src/data/catalogTracks.ts`; keep the main player and licensing info visually quiet. Current layout uses tabs for Versions, Similar, and License Info so licensing text is not dumped into the first viewport.
-- `/playlists` and `/playlist/:slug`: curated playlists
+- `/collections` and `/collection/:slug` (built): collection card grid and collection page (hero + TrackRowList). Collections = permanent style/genre groups from `src/data/musicCollections.ts`
+- `/playlists` and `/playlist/:slug` (built on mocks): curated use-case playlists from `src/mocks/playlists.ts`, later managed in admin. Full IA map: `docs/IA_REDESIGN_PLAN.md`. Track tags are ordered Use Case / Genre / Mood and link to `/catalog?usecase=|genre=|mood=`
 - `/pricing`: subscription plans Free/Pro/Max, annual default, comparison table, FAQ
 - `/sync`: one-time sync licenses (Standard $199 / Broadcast $399) — built: tier cards, how-it-works, quote request form (UI-only)
 - `/custom` (built): adaptation from $149 / custom from $499, process steps, composer cards from mocks, brief form (UI-only)

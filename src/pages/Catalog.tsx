@@ -53,13 +53,23 @@ const Catalog = () => {
   const activeCollectionId = searchParams.get("collection");
   const activeCollection = musicCollections.find((collection) => collection.id === activeCollectionId) ?? null;
   const categoryParam = searchParams.get("category");
-  const moodParam = searchParams.get("mood");
   const [query, setQuery] = useState(() => searchParams.get("search") ?? "");
-  const [filters, setFilters] = useState<FilterValue>(() => ({
-    genre: "All",
-    mood: moodParam && moodOptions.includes(moodParam) ? moodParam : "All",
-    useCase: "All",
-  }));
+  const [filters, setFilters] = useState<FilterValue>(() => {
+    // Tag clicks arrive as ?usecase= / ?genre= / ?mood=; map them onto the
+    // sidebar option if one matches, otherwise use the raw value (filtering
+    // still works via matchesOption's includes()).
+    const fromParam = (param: string | null, options: string[]) => {
+      if (!param) return "All";
+      return (
+        options.find((o) => matchesOption(o, param) || matchesOption(param, o)) ?? param
+      );
+    };
+    return {
+      genre: fromParam(searchParams.get("genre"), genreOptions),
+      mood: fromParam(searchParams.get("mood"), moodOptions),
+      useCase: fromParam(searchParams.get("usecase"), useCaseOptions),
+    };
+  });
   const [activePlayer, setActivePlayer] = useState<ActivePlayer | null>(null);
   const [expandedTrackId, setExpandedTrackId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -252,7 +262,7 @@ const Catalog = () => {
         }}
       />
 
-      <main className="px-3 pt-20 sm:px-5 lg:px-6">
+      <main className="mx-auto w-full max-w-[92rem] px-4 pt-20 sm:px-6">
         <div className="animate-rise-in" style={{ animationDelay: "0.05s" }}>
           <CatalogBreadcrumb activeCollection={activeCollection} />
         </div>
@@ -266,11 +276,7 @@ const Catalog = () => {
           </div>
 
           <section className="min-w-0">
-            <div className="animate-rise-in" style={{ animationDelay: "0.26s" }}>
-              <CollectionStrip activeCollection={activeCollection} onSelectCollection={selectCollection} />
-            </div>
-
-            <div className="mt-4 animate-fade-in rounded-lg border border-border/30 bg-card/25" style={{ animationDelay: "0.5s" }}>
+            <div className="animate-fade-in rounded-lg border border-border/30 bg-card/25" style={{ animationDelay: "0.5s" }}>
               <div className="grid gap-3 border-b border-border/30 bg-background/20 px-4 py-3 md:grid-cols-[minmax(16rem,28rem)_1fr_auto] md:items-center">
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -471,27 +477,16 @@ const CatalogBreadcrumb = ({ activeCollection }: { activeCollection: MusicCollec
 );
 
 const LibraryHero = () => (
-  <section className="relative mt-4 h-40 overflow-hidden rounded-xl border border-white/10 bg-[#0a0706] md:h-44">
-    <div
-      className="pointer-events-none absolute inset-0 bg-no-repeat"
-      style={{
-        backgroundImage: `url(${cinemaHero})`,
-        backgroundSize: "2200px auto",
-        backgroundPosition: "100% 48%",
-      }}
-    />
-    <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.95)_0%,rgba(0,0,0,0.78)_22%,rgba(0,0,0,0.4)_48%,rgba(0,0,0,0)_74%)]" />
-    <div className="absolute inset-y-0 left-0 flex max-w-2xl flex-col justify-center px-8 py-6 md:px-12">
-      <p className="font-body text-[0.7rem] font-semibold uppercase tracking-[0.32em] text-[#F4C430]/90">
-        Discover
-      </p>
-      <h1 className="mt-2 whitespace-nowrap font-display text-4xl font-semibold leading-none tracking-tight text-white sm:text-5xl">
-        <span className="text-[#F4C430]">Premium</span> Music Library
-      </h1>
-      <p className="mt-3 max-w-lg font-body text-sm leading-6 text-white/55">
-        Explore our entire library of premium tracks for any project and mood.
-      </p>
-    </div>
+  <section className="mt-4">
+    <p className="font-body text-[0.7rem] font-semibold uppercase tracking-[0.32em] text-[#F4C430]/90">
+      Discover
+    </p>
+    <h1 className="mt-2 font-display text-4xl font-bold leading-none tracking-tight text-white sm:text-5xl">
+      <span className="text-[#F4C430]">Premium</span> Music Library
+    </h1>
+    <p className="mt-3 max-w-lg font-body text-sm leading-6 text-white/55">
+      Explore our entire library of premium tracks for any project and mood.
+    </p>
   </section>
 );
 

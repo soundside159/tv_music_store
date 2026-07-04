@@ -5,6 +5,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import Catalog from "./pages/Catalog";
+import Collections from "./pages/Collections";
+import CollectionDetail from "./pages/CollectionDetail";
+import Playlists from "./pages/Playlists";
+import PlaylistDetail from "./pages/PlaylistDetail";
 import TrackDetail from "./pages/TrackDetail";
 import Pricing from "./pages/Pricing";
 import Sync from "./pages/Sync";
@@ -30,6 +34,10 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/catalog" element={<Catalog />} />
+          <Route path="/collections" element={<Collections />} />
+          <Route path="/collection/:slug" element={<CollectionDetail />} />
+          <Route path="/playlists" element={<Playlists />} />
+          <Route path="/playlist/:slug" element={<PlaylistDetail />} />
           <Route path="/track/:slug" element={<TrackDetail />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/sync" element={<Sync />} />
