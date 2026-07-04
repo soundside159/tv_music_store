@@ -46,6 +46,8 @@ Architecture is fixed in the master plan: do not migrate to Next.js, Supabase, o
 - `src/components/CinemaHero.tsx`: hero image and category-specific headline
 - `src/components/Categories.tsx`: category selector buttons
 - `src/components/TrackList.tsx`: temporary fixed track preview panel and player bar
+- `src/components/TrackRowPlayer.tsx`: single source of truth for track rows — exports `TrackRow`, `ActionIcon`, `PlayProgressRing`, playback helpers, `useTrackAudioEngine` and `TrackRowList` (drop-in list with full playback). Catalog imports from here; homepage Trending uses `TrackRowList`. Any track-row visual change must be made HERE, never duplicated
+- `src/components/Navigation.tsx`: header with logo+nav links on the left, search input (submits to `/catalog?search=`) + account + cart on the right
 - `src/components/WaveformPreview.tsx`: shared waveform component that decodes MP3 previews in the browser, renders audio-based SVG peaks, shows a loading scan while decoding, colors only played progress cyan, and supports click-to-seek without click-to-pause
 - `src/components/Footer.tsx`: contact form UI
 - `src/components/LoadingScreen.tsx`: initial loading screen

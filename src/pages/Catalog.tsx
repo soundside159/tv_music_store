@@ -1,9 +1,8 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowRight,
-  Copy,
   Download,
   ChevronDown,
   ChevronLeft,
@@ -22,14 +21,18 @@ import WaveformPreview from "@/components/WaveformPreview";
 import cinemaHero from "@/assets/cinema-hero-wide.png";
 import { Input } from "@/components/ui/input";
 import { catalogTracks } from "@/data/catalogTracks";
-import type { CatalogTrack, TrackAudioVersion, TrackVersion } from "@/data/catalogTracks";
+import type { CatalogTrack, TrackAudioVersion } from "@/data/catalogTracks";
 import { musicCollections } from "@/data/musicCollections";
 import type { MusicCollection } from "@/data/musicCollections";
-
-type ActivePlayer = {
-  trackId: string;
-  versionId: TrackVersion;
-};
+import {
+  ActionIcon,
+  PlayProgressRing,
+  TrackRow,
+  durationToSeconds,
+  formatClock,
+  sliderToGain,
+} from "@/components/TrackRowPlayer";
+import type { ActivePlayer } from "@/components/TrackRowPlayer";
 
 type FilterValue = {
   genre: string;
@@ -44,40 +47,6 @@ const moodOptions = ["Emotional", "Powerful", "Inspiring", "Suspenseful", "Aggre
 const splitFilterValues = (value: string) => value.split("/").map((item) => item.trim()).filter(Boolean);
 
 const matchesOption = (value: string, option: string) => value.toLowerCase().includes(option.toLowerCase());
-
-const durationToSeconds = (duration: string) => {
-  const parts = duration.split(":").map((part) => Number(part));
-  if (parts.some((part) => Number.isNaN(part))) return 0;
-  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-  if (parts.length === 2) return parts[0] * 60 + parts[1];
-  return parts[0] ?? 0;
-};
-
-const getDurationRatio = (track: CatalogTrack, version: TrackAudioVersion) => {
-  const trackSeconds = durationToSeconds(track.duration);
-  const versionSeconds = durationToSeconds(version.duration);
-  if (!trackSeconds || !versionSeconds) return 1;
-  return Math.min(1, Math.max(0.08, versionSeconds / trackSeconds));
-};
-
-const formatClock = (seconds: number) => {
-  const safe = Number.isFinite(seconds) && seconds > 0 ? seconds : 0;
-  const m = Math.floor(safe / 60);
-  const s = Math.floor(safe % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
-};
-
-// Perceptual volume: slider 0.8 = unity (100%), below fades correctly, above boosts a bit.
-const sliderToGain = (value: number) => {
-  const clamped = Math.min(1, Math.max(0, value));
-  return Math.min(2, (clamped / 0.8) ** 2);
-};
-
-const pickTag = (value: string, seed: number) => {
-  const options = splitFilterValues(value);
-  if (options.length === 0) return null;
-  return options[seed % options.length];
-};
 
 const Catalog = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -445,29 +414,6 @@ const Catalog = () => {
   );
 };
 
-const PlayProgressRing = ({ progress }: { progress: number }) => {
-  const radius = 46;
-  const circumference = 2 * Math.PI * radius;
-  const clamped = Math.min(1, Math.max(0, progress));
-
-  return (
-    <svg className="pointer-events-none absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 100 100" aria-hidden="true">
-      <circle cx="50" cy="50" r={radius} fill="none" stroke="rgba(255,255,255,0.16)" strokeWidth={6} />
-      <circle
-        cx="50"
-        cy="50"
-        r={radius}
-        fill="none"
-        stroke="#F4C430"
-        strokeWidth={6}
-        strokeLinecap="round"
-        strokeDasharray={circumference}
-        strokeDashoffset={circumference * (1 - clamped)}
-      />
-    </svg>
-  );
-};
-
 const sortOptions = ["Featured", "New", "Popular"];
 
 const SortDropdown = ({ value, onChange }: { value: string; onChange: (value: string) => void }) => {
@@ -736,208 +682,6 @@ const FilterSidebar = ({
     </aside>
   );
 };
-
-const TrackRow = ({
-  activePlayer,
-  expanded,
-  globalIsPlaying,
-  globalProgress,
-  index,
-  mainIsPlaying,
-  onPlayVersion,
-  onToggleExpanded,
-  playedProgress,
-  selectedVersion,
-  track,
-}: {
-  activePlayer: ActivePlayer | null;
-  expanded: boolean;
-  globalIsPlaying: boolean;
-  globalProgress: number;
-  index: number;
-  mainIsPlaying: boolean;
-  onPlayVersion: (track: CatalogTrack, version: TrackAudioVersion, seekTo?: number | null) => void;
-  onToggleExpanded: () => void;
-  playedProgress: Record<string, number>;
-  selectedVersion: TrackAudioVersion;
-  track: CatalogTrack;
-}) => {
-  const versionProgress = (versionId: string) => {
-    const isActive = activePlayer?.trackId === track.id && activePlayer.versionId === versionId;
-    const played = playedProgress[`${track.id}:${versionId}`] ?? 0;
-    if (isActive) return globalProgress;
-    return played;
-  };
-
-  const seed = track.id.split("").reduce((sum, character) => sum + character.charCodeAt(0), 0);
-
-  return (
-  <motion.article
-    initial={{ opacity: 0, y: 14 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ duration: 0.45, delay: 0.55 + index * 0.06, ease: [0.22, 1, 0.36, 1] }}
-    className="border-b border-border/30 last:border-b-0"
-  >
-    <div className="music-track-grid grid gap-3 rounded-lg px-4 py-3 transition-colors duration-150 hover:bg-foreground/[0.04] xl:items-center">
-      <button
-        type="button"
-        onClick={() => onPlayVersion(track, selectedVersion)}
-        className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-colors duration-200 ${
-          mainIsPlaying ? "border-transparent text-[#F4C430]" : "border-border/70 text-foreground hover:border-[#F4C430] hover:text-[#F4C430]"
-        }`}
-        aria-label={mainIsPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
-      >
-        {mainIsPlaying && <PlayProgressRing progress={versionProgress(selectedVersion.id)} />}
-        {mainIsPlaying ? <Pause className="h-4 w-4" /> : <Play className="ml-0.5 h-4 w-4" />}
-      </button>
-
-      <Link
-        to={`/track/${track.slug}`}
-        className={`min-w-0 whitespace-nowrap font-body text-base font-medium transition-colors ${
-          mainIsPlaying ? "text-[#F4C430]" : "text-foreground hover:text-[#F4C430]"
-        }`}
-      >
-        {track.title}
-      </Link>
-
-      <div className="hidden min-w-0 items-center gap-2 overflow-hidden xl:flex">
-        {[pickTag(track.useCase, seed), pickTag(track.genre, seed + 1), pickTag(track.mood, seed + 2)]
-          .filter((tag): tag is string => Boolean(tag))
-          .map((tag) => (
-            <span
-              key={tag}
-              className="whitespace-nowrap rounded-md border border-white/10 bg-white/[0.03] px-2 py-0.5 font-body text-xs text-muted-foreground"
-            >
-              {tag}
-            </span>
-          ))}
-      </div>
-
-      <button
-        type="button"
-        onClick={onToggleExpanded}
-        className={`justify-self-start whitespace-nowrap px-1 py-1 font-body text-xs transition-colors duration-200 ${
-          expanded
-            ? "text-foreground underline decoration-[#F4C430] decoration-2 underline-offset-4"
-            : "text-foreground hover:text-[#F4C430]"
-        }`}
-      >
-        versions +{track.audioVersions.length - 1}
-      </button>
-
-      <WaveformPreview
-        active={mainIsPlaying}
-        bars={420}
-        durationRatio={1}
-        onSeek={(nextProgress) => onPlayVersion(track, selectedVersion, nextProgress)}
-        progress={versionProgress(selectedVersion.id)}
-        src={selectedVersion.src}
-        className="h-9 min-w-0"
-      />
-
-      <span className={`justify-self-end font-body text-sm ${mainIsPlaying ? "text-[#F4C430]" : "text-muted-foreground"}`}>
-        {selectedVersion.duration}
-      </span>
-      <span className={`justify-self-end font-body text-sm ${mainIsPlaying ? "text-[#F4C430]" : "text-muted-foreground"}`}>
-        {track.bpm} BPM
-      </span>
-      <div className="flex items-center justify-end gap-4 text-muted-foreground">
-        <ActionIcon label="Favorite">
-          <Heart className="h-5 w-5 stroke-[1.6]" />
-        </ActionIcon>
-        <ActionIcon label="Similar Tracks">
-          <Copy className="h-5 w-5 stroke-[1.6]" />
-        </ActionIcon>
-        <ActionIcon label="Buy License">
-          <ShoppingCart className="h-5 w-5 stroke-[1.6]" />
-        </ActionIcon>
-        <ActionIcon label="Download">
-          <Download className="h-5 w-5 stroke-[1.6]" />
-        </ActionIcon>
-      </div>
-    </div>
-
-    <AnimatePresence initial={false}>
-      {expanded && (
-        <motion.div
-          initial={{ height: 0, opacity: 0 }}
-          animate={{ height: "auto", opacity: 1 }}
-          exit={{ height: 0, opacity: 0 }}
-          transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-          className="overflow-hidden"
-        >
-          <div className="pb-3">
-            {track.audioVersions.slice(1).map((version) => {
-              const active = activePlayer?.trackId === track.id && activePlayer.versionId === version.id;
-
-              return (
-                <div
-                  key={version.id}
-                  className="music-track-grid grid gap-3 px-4 py-1.5 xl:items-center"
-                >
-                  <div className="hidden xl:block" />
-                  <button
-                    type="button"
-                    onClick={() => onPlayVersion(track, version)}
-                    className="flex min-w-0 items-center gap-3 text-left font-body text-sm text-muted-foreground transition-colors duration-200 hover:text-foreground"
-                  >
-                    <span
-                      className={`relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors duration-200 ${
-                        active && globalIsPlaying ? "border-transparent text-[#F4C430]" : "border-border/60"
-                      }`}
-                    >
-                      {active && globalIsPlaying && <PlayProgressRing progress={versionProgress(version.id)} />}
-                      {active && globalIsPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="ml-0.5 h-3.5 w-3.5" />}
-                    </span>
-                    <span className={`truncate ${active && globalIsPlaying ? "text-[#F4C430]" : active ? "text-foreground" : undefined}`}>{version.label}</span>
-                  </button>
-                  <div className="hidden xl:block" />
-                  <div className="hidden xl:block" />
-                  <WaveformPreview
-                    active={active && globalIsPlaying}
-                    bars={360}
-                    durationRatio={getDurationRatio(track, version)}
-                    onSeek={(nextProgress) => onPlayVersion(track, version, nextProgress)}
-                    progress={versionProgress(version.id)}
-                    src={version.src}
-                    className="h-7 min-w-0 xl:mr-[var(--track-version-wave-inset)]"
-                  />
-                  <span className={`justify-self-end font-body text-sm ${active ? "text-[#F4C430]" : "text-muted-foreground"}`}>
-                    {version.duration}
-                  </span>
-                  <div className="hidden xl:block" />
-                  <div className="flex items-center justify-end gap-4 text-muted-foreground">
-                    <ActionIcon label="Buy License">
-                      <ShoppingCart className="h-5 w-5 stroke-[1.6]" />
-                    </ActionIcon>
-                    <ActionIcon label="Download">
-                      <Download className="h-5 w-5 stroke-[1.6]" />
-                    </ActionIcon>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  </motion.article>
-  );
-};
-
-const ActionIcon = ({ children, label, onClick }: { children: ReactNode; label: string; onClick?: () => void }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    aria-label={label}
-    className="group/act relative flex items-center justify-center text-muted-foreground transition-colors duration-200 hover:text-[#F4C430]"
-  >
-    <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-white/10 bg-card px-2 py-1 font-body text-[11px] text-foreground opacity-0 shadow-lg transition-opacity duration-150 group-hover/act:opacity-100">
-      {label}
-    </span>
-    {children}
-  </button>
-);
 
 const FilterGroup = ({
   label,

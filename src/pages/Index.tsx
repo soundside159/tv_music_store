@@ -1,8 +1,8 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, Check, Music2, Search, ShieldCheck, Users } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ArrowRight, Check, Music2, ShieldCheck, Users } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
+import { TrackRowList } from "@/components/TrackRowPlayer";
 import { catalogTracks, categoryLabels } from "@/data/catalogTracks";
 import type { TrackCategory } from "@/data/catalogTracks";
 import { musicCollections } from "@/data/musicCollections";
@@ -22,14 +22,7 @@ const trustPoints = [
 ];
 
 const Index = () => {
-  const navigate = useNavigate();
   const plans = usePlans();
-  const [query, setQuery] = useState("");
-
-  const submitSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    navigate(query.trim() ? `/catalog?search=${encodeURIComponent(query.trim())}` : "/catalog");
-  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -44,24 +37,7 @@ const Index = () => {
             A curated catalog from three real composers. Monetization-safe, claim-free,
             licensed in one click.
           </p>
-          <form onSubmit={submitSearch} className="mt-7 flex max-w-xl items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search tracks: dark trailer, epic adventure, tension..."
-                className="w-full rounded-full border border-border bg-card py-3 pl-11 pr-4 font-body text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-[#F4C430] focus:outline-none"
-              />
-            </div>
-            <button
-              type="submit"
-              className="rounded-full bg-[#F4C430] px-6 py-3 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
-            >
-              Search
-            </button>
-          </form>
-          <div className="mt-4 flex flex-wrap items-center gap-2">
+          <div className="mt-6 flex flex-wrap items-center gap-2">
             {categories.map((c) => (
               <Link
                 key={c}
@@ -78,7 +54,7 @@ const Index = () => {
         </section>
 
         {/* Trending / latest tracks */}
-        <section className="mx-auto w-full max-w-5xl px-4 pb-16 sm:px-6">
+        <section className="mx-auto w-full max-w-7xl px-4 pb-16 sm:px-6">
           <div className="flex items-center justify-between">
             <h2 className="text-xl text-foreground md:text-2xl">Trending tracks</h2>
             <Link
@@ -88,37 +64,8 @@ const Index = () => {
               View all <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
-          <div className="mt-4 divide-y divide-border/60 rounded-xl border border-border bg-card">
-            {catalogTracks.map((t) => (
-              <Link
-                key={t.id}
-                to={`/track/${t.slug}`}
-                className="group flex items-center gap-4 p-4 transition-colors hover:bg-secondary/40"
-              >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors group-hover:border-[#F4C430] group-hover:text-[#F4C430]">
-                  <Music2 className="h-4 w-4" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-body text-sm font-semibold text-foreground transition-colors group-hover:text-[#F4C430]">
-                    {t.title}
-                  </span>
-                  <span className="block truncate font-body text-xs text-muted-foreground">
-                    by {t.artist}
-                  </span>
-                </span>
-                <span className="hidden shrink-0 items-center gap-1.5 md:flex">
-                  {t.tags.slice(0, 3).map((tag) => (
-                    <span
-                      key={tag}
-                      className="rounded-full border border-border px-2.5 py-0.5 font-body text-xs text-muted-foreground"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </span>
-                <span className="shrink-0 font-body text-xs text-muted-foreground">{t.duration}</span>
-              </Link>
-            ))}
+          <div className="mt-4">
+            <TrackRowList tracks={catalogTracks} />
           </div>
         </section>
 
