@@ -36,15 +36,15 @@ const Index = () => {
       <Navigation />
       <main className="pt-16 md:pt-20">
         {/* Hero: straight to the music */}
-        <section className="mx-auto w-full max-w-5xl px-4 pb-16 pt-14 text-center sm:px-6 md:pt-20">
-          <h1 className="mx-auto max-w-3xl text-3xl leading-tight text-foreground md:text-5xl">
+        <section className="mx-auto w-full max-w-5xl px-4 pb-12 pt-10 sm:px-6 md:pt-12">
+          <h1 className="max-w-3xl font-display text-3xl font-bold leading-tight text-foreground md:text-4xl">
             Cinematic music for your next video
           </h1>
-          <p className="mx-auto mt-4 max-w-xl font-body text-sm text-muted-foreground md:text-base">
+          <p className="mt-3 max-w-xl font-body text-sm text-muted-foreground md:text-base">
             A curated catalog from three real composers. Monetization-safe, claim-free,
             licensed in one click.
           </p>
-          <form onSubmit={submitSearch} className="mx-auto mt-8 flex max-w-xl items-center gap-2">
+          <form onSubmit={submitSearch} className="mt-7 flex max-w-xl items-center gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
@@ -61,7 +61,7 @@ const Index = () => {
               Search
             </button>
           </form>
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+          <div className="mt-4 flex flex-wrap items-center gap-2">
             {categories.map((c) => (
               <Link
                 key={c}
@@ -71,10 +71,10 @@ const Index = () => {
                 {categoryLabels[c]}
               </Link>
             ))}
+            <span className="ml-1 font-body text-xs text-muted-foreground">
+              Start free — 3 downloads every month. No credit card.
+            </span>
           </div>
-          <p className="mt-8 font-body text-xs text-muted-foreground">
-            Start free — 3 downloads every month. No credit card.
-          </p>
         </section>
 
         {/* Trending / latest tracks */}
@@ -103,11 +103,18 @@ const Index = () => {
                     {t.title}
                   </span>
                   <span className="block truncate font-body text-xs text-muted-foreground">
-                    {t.genre} · {t.mood}
+                    by {t.artist}
                   </span>
                 </span>
-                <span className="hidden shrink-0 font-body text-xs text-muted-foreground sm:block">
-                  {categoryLabels[t.category]}
+                <span className="hidden shrink-0 items-center gap-1.5 md:flex">
+                  {t.tags.slice(0, 3).map((tag) => (
+                    <span
+                      key={tag}
+                      className="rounded-full border border-border px-2.5 py-0.5 font-body text-xs text-muted-foreground"
+                    >
+                      {tag}
+                    </span>
+                  ))}
                 </span>
                 <span className="shrink-0 font-body text-xs text-muted-foreground">{t.duration}</span>
               </Link>
