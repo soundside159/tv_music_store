@@ -9,6 +9,8 @@ import TrackDetail from "./pages/TrackDetail";
 import Pricing from "./pages/Pricing";
 import Sync from "./pages/Sync";
 import Custom from "./pages/Custom";
+import Artist from "./pages/Artist";
+import Licensing from "./pages/Licensing";
 import Account from "./pages/Account";
 import Composer from "./pages/Composer";
 import Admin from "./pages/Admin";
@@ -32,6 +34,8 @@ const App = () => (
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/sync" element={<Sync />} />
           <Route path="/custom" element={<Custom />} />
+          <Route path="/artist/:slug" element={<Artist />} />
+          <Route path="/licensing" element={<Licensing />} />
           <Route path="/account" element={<Account />} />
           <Route path="/composer" element={<Composer />} />
           <Route path="/admin" element={<Admin />} />

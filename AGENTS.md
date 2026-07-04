@@ -112,8 +112,8 @@ Planned app areas:
 - `/pricing`: subscription plans Free/Pro/Max, annual default, comparison table, FAQ
 - `/sync`: one-time sync licenses (Standard $199 / Broadcast $399) — built: tier cards, how-it-works, quote request form (UI-only)
 - `/custom` (built): adaptation from $149 / custom from $499, process steps, composer cards from mocks, brief form (UI-only)
-- `/licensing`: license information and FAQ
-- `/artist/:slug`: public composer pages (three composers)
+- `/licensing` (built): use-case table across Free/Pro/Max/Sync + FAQ accordion; linked from the header
+- `/artist/:slug` (built on mocks): composer hero (bio, styles, stats), published tracks list, plan/custom CTAs; slugs from `src/mocks/composers.ts`
 - `/blog`: SEO content
 - `/account`: customer dashboard (downloads, license, whitelist, claims, billing) — built on mock hooks; guest sees a sign-in prompt. A DevPersonaSwitcher (enable with `?dev=1`, disable `?dev=0`) previews the site as guest/free/pro/max/canceled/composer/admin
 - `/composer` (built on mocks): dashboard (daily downloads bars, month earnings estimate, top tracks), my tracks table, upload form (UI-only), earnings by month with statements, claim/brief requests, profile. Composer resolved via `useComposer()`; admin persona previews as composer 1

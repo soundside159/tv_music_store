@@ -5,19 +5,11 @@ import { Menu, ShoppingCart, User, X } from "lucide-react";
 const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
-  const isHome = location.pathname === "/";
-
-  const scrollToTop = (e: React.MouseEvent) => {
-    if (isHome) {
-      e.preventDefault();
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  };
 
   const navItems = [
     { label: "Music Library", href: "/catalog" },
     { label: "Pricing", href: "/pricing" },
-    { label: "Licensing", href: "/#licensing", onClick: scrollToTop },
+    { label: "Licensing", href: "/licensing" },
   ];
 
   return (
@@ -35,7 +27,6 @@ const Navigation = () => {
               <a
                 key={item.label}
                 href={item.href}
-                onClick={item.onClick}
                 className={`font-body text-sm transition-colors duration-300 hover:text-foreground ${
                   location.pathname === item.href ? "text-[#F4C430]" : "text-muted-foreground"
                 }`}
@@ -79,10 +70,7 @@ const Navigation = () => {
                 <a
                   key={item.label}
                   href={item.href}
-                  onClick={(e) => {
-                    if (item.onClick) item.onClick(e);
-                    setIsOpen(false);
-                  }}
+                  onClick={() => setIsOpen(false)}
                   className={`py-2 font-body text-base transition-colors duration-300 hover:text-foreground ${
                     location.pathname === item.href ? "text-[#F4C430]" : "text-muted-foreground"
                   }`}
