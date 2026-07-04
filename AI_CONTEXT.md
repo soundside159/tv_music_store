@@ -120,8 +120,8 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   `src/components/PlayerProvider.tsx` (mounted in `App.tsx` around `<Routes>`); context/hook in
   `src/components/playerContext.ts` (`usePlayer`). Catalog and `TrackRowList` (home/collections/
   playlists) all consume the shared player, so music keeps playing across page navigation.
-  **Still separate:** `src/pages/TrackDetail.tsx` has its OWN `<audio>` preview player — not yet
-  wired to the global player (follow-up if we want the detail page to feed the global bar too).
+  `src/pages/TrackDetail.tsx` is also wired to the global player now (its play buttons feed the
+  shared engine; a thin local wrapper still tracks the selected version per track for display).
 - Cart, Download, Favorite, Similar Tracks, Login are **UI placeholders** — no backend yet.
 - Backend (Cloudflare D1 / R2 / Stripe / Resend) not built — see master plan roadmap.
 - Confirm exact gold hex with owner (`#F4C430` is an estimate from a screenshot).
@@ -150,3 +150,7 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   duplicate inline engine + bottom bar from `Catalog.tsx`; switched `TrackRowList` to the shared
   player. Bottom mini-player now persists and keeps playing across pages. TrackDetail's own player
   is still independent (pending).
+- **2026-07-04 (unify player):** Navigation header links were plain `<a href>` (full page reload
+  killed playback on nav) -> switched to `<Link>`. Wired `TrackDetail` to the global player too.
+  Player is now single/global across the whole site. Minor leftover `<a href>` in AuthModal /
+  NotFound (rare, non-critical).

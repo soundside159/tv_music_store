@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
@@ -18,11 +18,7 @@ import WaveformPreview from "@/components/WaveformPreview";
 import { Button } from "@/components/ui/button";
 import { catalogTracks, categoryLabels } from "@/data/catalogTracks";
 import type { CatalogTrack, TrackAudioVersion, TrackVersion } from "@/data/catalogTracks";
-
-type ActivePlayer = {
-  trackId: string;
-  versionId: TrackVersion;
-};
+import { usePlayer } from "@/components/playerContext";
 
 type DetailTab = "versions" | "similar" | "license";
 
@@ -57,43 +53,14 @@ const TrackDetail = () => {
   const { slug } = useParams();
   const track = catalogTracks.find((item) => item.slug === slug);
   const [activeTab, setActiveTab] = useState<DetailTab>("versions");
-  const [activePlayer, setActivePlayer] = useState<ActivePlayer | null>(
-    track ? { trackId: track.id, versionId: track.audioVersions[0].id } : null,
-  );
   const [selectedVersions, setSelectedVersions] = useState<Record<string, TrackVersion>>({});
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const pendingPlayRef = useRef(false);
-  const pendingSeekRef = useRef<number | null>(null);
+  const { activePlayer, isPlaying, progress, playVersion: playFromEngine } = usePlayer();
 
   const similarTracks = useMemo(() => {
     if (!track) return [];
 
     return catalogTracks.filter((item) => item.id !== track.id).slice(0, 4);
   }, [track]);
-
-  const currentTrack = catalogTracks.find((item) => item.id === activePlayer?.trackId) ?? track;
-  const currentVersion =
-    currentTrack?.audioVersions.find((version) => version.id === activePlayer?.versionId) ??
-    currentTrack?.audioVersions[0];
-  const currentSrc = currentVersion?.src;
-
-  useEffect(() => {
-    if (!track) return;
-
-    setActivePlayer({ trackId: track.id, versionId: track.audioVersions[0].id });
-    setSelectedVersions({});
-    setProgress(0);
-    setIsPlaying(false);
-  }, [track]);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio || !currentSrc) return;
-
-    audio.load();
-  }, [currentSrc]);
 
   if (!track) {
     return (
@@ -114,69 +81,12 @@ const TrackDetail = () => {
     );
   }
 
-  const applyPendingStart = (audio: HTMLAudioElement) => {
-    if (pendingSeekRef.current !== null && Number.isFinite(audio.duration) && audio.duration > 0) {
-      audio.currentTime = audio.duration * pendingSeekRef.current;
-      pendingSeekRef.current = null;
-    }
-
-    if (!pendingPlayRef.current) return;
-    pendingPlayRef.current = false;
-
-    audio
-      .play()
-      .then(() => setIsPlaying(true))
-      .catch(() => setIsPlaying(false));
-  };
-
   const getSelectedVersion = (item: CatalogTrack) =>
     item.audioVersions.find((version) => version.id === selectedVersions[item.id]) ?? item.audioVersions[0];
 
   const playVersion = (item: CatalogTrack, version: TrackAudioVersion, seekTo: number | null = null) => {
-    const audio = audioRef.current;
-    const sameVersion = activePlayer?.trackId === item.id && activePlayer.versionId === version.id;
-
     setSelectedVersions((current) => ({ ...current, [item.id]: version.id }));
-
-    if (sameVersion && audio) {
-      if (seekTo !== null) {
-        if (Number.isFinite(audio.duration) && audio.duration > 0) {
-          audio.currentTime = audio.duration * seekTo;
-          setProgress(seekTo);
-        }
-        audio
-          .play()
-          .then(() => setIsPlaying(true))
-          .catch(() => setIsPlaying(false));
-        return;
-      }
-
-      if (isPlaying) {
-        audio.pause();
-        setIsPlaying(false);
-        return;
-      }
-
-      audio
-        .play()
-        .then(() => setIsPlaying(true))
-        .catch(() => setIsPlaying(false));
-      return;
-    }
-
-    pendingSeekRef.current = seekTo;
-    pendingPlayRef.current = true;
-    setProgress(seekTo ?? 0);
-    setActivePlayer({ trackId: item.id, versionId: version.id });
-
-    if (!audio) return;
-
-    audio.src = version.src;
-    audio.load();
-    audio
-      .play()
-      .then(() => setIsPlaying(true))
-      .catch(() => setIsPlaying(false));
+    playFromEngine(item, version, seekTo);
   };
 
   const mainVersion = getSelectedVersion(track);
@@ -186,21 +96,6 @@ const TrackDetail = () => {
   return (
     <div className="min-h-screen bg-background pb-16">
       <Navigation />
-      <audio
-        ref={audioRef}
-        src={currentSrc}
-        preload="metadata"
-        onLoadedMetadata={(event) => applyPendingStart(event.currentTarget)}
-        onTimeUpdate={(event) => {
-          const audio = event.currentTarget;
-          setProgress(audio.duration ? audio.currentTime / audio.duration : 0);
-        }}
-        onEnded={() => {
-          setIsPlaying(false);
-          setProgress(0);
-        }}
-      />
-
       <main className="px-4 pt-24 sm:px-6 lg:px-8">
         <TrackBreadcrumb trackTitle={track.title} />
 
