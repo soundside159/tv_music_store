@@ -1,0 +1,428 @@
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  BarChart3,
+  DollarSign,
+  Inbox,
+  LayoutDashboard,
+  Music2,
+  Users,
+} from "lucide-react";
+import Navigation from "@/components/Navigation";
+import Footer from "@/components/Footer";
+import { useCurrentUser } from "@/hooks/useMockData";
+import {
+  mockAdminCustomers,
+  mockAdminStats,
+  mockBriefs,
+  mockClaimRequests,
+  mockComposers,
+  mockComposerTracks,
+  mockPayoutLines,
+  mockPayoutPeriods,
+  mockWhitelistChannels,
+  PLATFORM_SHARE,
+} from "@/mocks";
+
+const GOLD = "#F4C430";
+
+type SectionId = "dashboard" | "finance" | "tracks" | "customers" | "requests";
+
+const sections: { id: SectionId; label: string; icon: typeof LayoutDashboard }[] = [
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "finance", label: "Finance", icon: DollarSign },
+  { id: "tracks", label: "Tracks", icon: Music2 },
+  { id: "customers", label: "Customers", icon: Users },
+  { id: "requests", label: "Requests", icon: Inbox },
+];
+
+const composerName = (id: string) =>
+  mockComposers.find((c) => c.id === id)?.displayName ?? id;
+
+const Card = ({ title, children, className = "" }: { title?: string; children: React.ReactNode; className?: string }) => (
+  <div className={`rounded-xl border border-border bg-card p-6 ${className}`}>
+    {title && <h2 className="font-body text-base font-semibold text-foreground">{title}</h2>}
+    <div className={title ? "mt-4" : ""}>{children}</div>
+  </div>
+);
+
+const Stat = ({ label, value, sub }: { label: string; value: string; sub?: string }) => (
+  <Card>
+    <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+    <p className="mt-1 font-body text-3xl font-semibold text-foreground">{value}</p>
+    {sub && <p className="mt-1 font-body text-xs text-muted-foreground">{sub}</p>}
+  </Card>
+);
+
+const StatusPill = ({ text, active }: { text: string; active: boolean }) => (
+  <span
+    className={`rounded-full px-2.5 py-0.5 font-body text-xs ${
+      active ? "bg-[#F4C430]/15 text-[#F4C430]" : "bg-secondary text-muted-foreground"
+    }`}
+  >
+    {text}
+  </span>
+);
+
+const Admin = () => {
+  const user = useCurrentUser();
+  const [section, setSection] = useState<SectionId>("dashboard");
+  const [openPeriod, setOpenPeriod] = useState<string | null>(null);
+  const s = mockAdminStats;
+
+  if (!user || user.role !== "admin") {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navigation />
+        <main className="mx-auto flex min-h-[60vh] w-full max-w-md flex-col items-center justify-center px-4 pt-20 text-center">
+          <h1 className="text-2xl text-foreground">Admin area</h1>
+          <p className="mt-3 font-body text-sm text-muted-foreground">
+            Owner access only. Sign in with the admin account.
+          </p>
+          <Link
+            to="/login"
+            className="mt-6 rounded-lg bg-[#F4C430] px-6 py-2.5 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
+          >
+            Sign in
+          </Link>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  const pendingTracks = mockComposerTracks.filter((t) => t.status === "pending");
+
+  return (
+    <div className="min-h-screen bg-background">
+      <Navigation />
+      <main className="mx-auto w-full max-w-6xl px-4 pb-24 pt-24 sm:px-6 md:pt-28">
+        <div className="flex flex-col gap-8 md:flex-row">
+          <aside className="shrink-0 md:w-56">
+            <p className="flex items-center gap-2 px-3 font-body text-sm font-semibold text-foreground">
+              <BarChart3 className="h-4 w-4" style={{ color: GOLD }} />
+              Admin
+            </p>
+            <nav className="mt-4 flex gap-1 overflow-x-auto md:flex-col">
+              {sections.map((sec) => (
+                <button
+                  key={sec.id}
+                  type="button"
+                  onClick={() => setSection(sec.id)}
+                  className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors ${
+                    section === sec.id ? "bg-secondary text-[#F4C430]" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <sec.icon className="h-4 w-4" />
+                  {sec.label}
+                </button>
+              ))}
+            </nav>
+          </aside>
+
+          <div className="flex min-w-0 flex-1 flex-col gap-6">
+            {section === "dashboard" && (
+              <>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <Stat label="MRR" value={`$${s.mrr}`} sub={`+${s.mrrGrowthPct}% vs last month`} />
+                  <Stat
+                    label="Subscribers"
+                    value={`${s.subscribers.pro + s.subscribers.max}`}
+                    sub={`Pro ${s.subscribers.pro} · Max ${s.subscribers.max} · Free ${s.subscribers.free}`}
+                  />
+                  <Stat label="Free → Paid" value={`${s.freeToPaidPct}%`} sub={`churn ${s.churnPct}%/mo`} />
+                  <Stat label="Downloads (30d)" value={`${s.downloads30d}`} sub={`${s.signups30d} new signups`} />
+                </div>
+                <Card title="Revenue streams (this month)">
+                  <ul className="flex flex-col gap-3">
+                    {s.revenueStreams.map((r) => {
+                      const total = s.revenueStreams.reduce((a, b) => a + b.amount, 0);
+                      const pct = (r.amount / total) * 100;
+                      return (
+                        <li key={r.label}>
+                          <div className="flex justify-between font-body text-sm">
+                            <span className="text-foreground">{r.label}</span>
+                            <span className="font-semibold" style={{ color: GOLD }}>${r.amount}</span>
+                          </div>
+                          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+                            <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: GOLD }} />
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </Card>
+                <Card title="Funnel (30 days)">
+                  <div className="grid grid-cols-2 gap-4 font-body text-sm sm:grid-cols-4">
+                    <div>
+                      <p className="text-2xl font-semibold text-foreground">{s.visitors30d}</p>
+                      <p className="text-xs text-muted-foreground">visitors</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-semibold text-foreground">{s.signups30d}</p>
+                      <p className="text-xs text-muted-foreground">free accounts ({((s.signups30d / s.visitors30d) * 100).toFixed(1)}%)</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-semibold text-foreground">{s.downloads30d}</p>
+                      <p className="text-xs text-muted-foreground">downloads</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-semibold" style={{ color: GOLD }}>
+                        {Math.round(s.signups30d * (s.freeToPaidPct / 100))}
+                      </p>
+                      <p className="text-xs text-muted-foreground">new paid subs</p>
+                    </div>
+                  </div>
+                </Card>
+              </>
+            )}
+
+            {section === "finance" && (
+              <>
+                <Card title="Payout periods">
+                  <div className="flex flex-col gap-3">
+                    {mockPayoutPeriods.map((p) => {
+                      const lines = mockPayoutLines.filter((l) => l.periodId === p.id);
+                      const open = openPeriod === p.id;
+                      return (
+                        <div key={p.id} className="rounded-lg border border-border">
+                          <button
+                            type="button"
+                            onClick={() => setOpenPeriod(open ? null : p.id)}
+                            className="flex w-full items-center justify-between gap-4 p-4 text-left"
+                          >
+                            <span className="font-body text-sm font-semibold text-foreground">{p.month}</span>
+                            <span className="hidden font-body text-xs text-muted-foreground sm:block">
+                              net ${p.netRevenue} · platform ${p.platformShare} · authors ${p.authorPool}
+                            </span>
+                            <StatusPill text={p.status} active={p.status === "paid"} />
+                          </button>
+                          {open && (
+                            <div className="border-t border-border/60 p-4">
+                              <table className="w-full font-body text-sm">
+                                <thead>
+                                  <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+                                    <th className="pb-2 pr-4">Composer</th>
+                                    <th className="pb-2 pr-4">Downloads</th>
+                                    <th className="pb-2">Amount</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {lines.map((l) => (
+                                    <tr key={l.id} className="border-t border-border/40">
+                                      <td className="py-2 pr-4 text-foreground">{composerName(l.composerId)}</td>
+                                      <td className="py-2 pr-4 text-muted-foreground">{l.downloadsCount}</td>
+                                      <td className="py-2 font-semibold" style={{ color: GOLD }}>
+                                        ${l.amount.toFixed(2)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                              {p.status !== "paid" && (
+                                <div className="mt-4 flex gap-3">
+                                  <button
+                                    type="button"
+                                    className="rounded-lg border border-border px-4 py-2 font-body text-xs font-semibold text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
+                                  >
+                                    Generate statements
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="rounded-lg bg-[#F4C430] px-4 py-2 font-body text-xs font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
+                                  >
+                                    Mark paid
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+                <Card title="Split settings">
+                  <div className="grid gap-3 font-body text-sm sm:grid-cols-3">
+                    <label className="flex flex-col gap-1 text-muted-foreground">
+                      Platform share, %
+                      <input
+                        defaultValue={PLATFORM_SHARE * 100}
+                        className="rounded-lg border border-border bg-background px-3 py-2 text-foreground focus:border-[#F4C430] focus:outline-none"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-muted-foreground">
+                      Max-download weight
+                      <input
+                        defaultValue={1}
+                        className="rounded-lg border border-border bg-background px-3 py-2 text-foreground focus:border-[#F4C430] focus:outline-none"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-muted-foreground">
+                      Payout threshold, $
+                      <input
+                        defaultValue={50}
+                        className="rounded-lg border border-border bg-background px-3 py-2 text-foreground focus:border-[#F4C430] focus:outline-none"
+                      />
+                    </label>
+                  </div>
+                </Card>
+              </>
+            )}
+
+            {section === "tracks" && (
+              <>
+                {pendingTracks.length > 0 && (
+                  <Card title={`Moderation queue (${pendingTracks.length})`}>
+                    <ul className="divide-y divide-border/60">
+                      {pendingTracks.map((t) => (
+                        <li key={t.id} className="flex items-center justify-between gap-4 py-2.5">
+                          <span className="font-body text-sm text-foreground">
+                            {t.title}
+                            <span className="ml-2 text-xs text-muted-foreground">{composerName(t.composerId)}</span>
+                          </span>
+                          <span className="flex gap-2">
+                            <button
+                              type="button"
+                              className="rounded-lg bg-[#F4C430] px-3 py-1.5 font-body text-xs font-semibold text-background hover:bg-[#F4C430]/85"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-lg border border-border px-3 py-1.5 font-body text-xs text-muted-foreground hover:border-destructive hover:text-destructive"
+                            >
+                              Reject
+                            </button>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </Card>
+                )}
+                <Card title={`Catalog (${mockComposerTracks.length})`}>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[480px] font-body text-sm">
+                      <thead>
+                        <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                          <th className="py-2 pr-4">Title</th>
+                          <th className="py-2 pr-4">Composer</th>
+                          <th className="py-2">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {mockComposerTracks.map((t) => (
+                          <tr key={t.id} className="border-b border-border/50 last:border-0">
+                            <td className="py-2.5 pr-4 text-foreground">{t.title}</td>
+                            <td className="py-2.5 pr-4 text-muted-foreground">{composerName(t.composerId)}</td>
+                            <td className="py-2.5">
+                              <StatusPill text={t.published ? "published" : t.status} active={t.published} />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              </>
+            )}
+
+            {section === "customers" && (
+              <Card title={`Customers (${mockAdminCustomers.length})`}>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[560px] font-body text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                        <th className="py-2 pr-4">Customer</th>
+                        <th className="py-2 pr-4">Plan</th>
+                        <th className="py-2 pr-4">LTV</th>
+                        <th className="py-2 pr-4">Downloads</th>
+                        <th className="py-2">Joined</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {mockAdminCustomers.map((c) => (
+                        <tr key={c.id} className="border-b border-border/50 last:border-0">
+                          <td className="py-2.5 pr-4">
+                            <span className="block text-foreground">{c.name}</span>
+                            <span className="block text-xs text-muted-foreground">{c.email}</span>
+                          </td>
+                          <td className="py-2.5 pr-4">
+                            <StatusPill text={c.plan} active={c.plan !== "free"} />
+                          </td>
+                          <td className="py-2.5 pr-4 font-semibold" style={{ color: GOLD }}>${c.ltv}</td>
+                          <td className="py-2.5 pr-4 text-muted-foreground">{c.downloads}</td>
+                          <td className="py-2.5 text-muted-foreground">{c.joined}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <button
+                  type="button"
+                  className="mt-4 rounded-lg border border-border px-4 py-2 font-body text-xs font-semibold text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
+                >
+                  Export CSV
+                </button>
+              </Card>
+            )}
+
+            {section === "requests" && (
+              <>
+                <Card title="Whitelist requests">
+                  <ul className="divide-y divide-border/60">
+                    {mockWhitelistChannels.map((w) => (
+                      <li key={w.id} className="flex items-center justify-between gap-4 py-2.5">
+                        <span className="truncate font-body text-sm text-foreground">{w.channelUrl}</span>
+                        <StatusPill text={w.status} active={w.status === "active"} />
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+                <Card title="Claim removals">
+                  <ul className="divide-y divide-border/60">
+                    {mockClaimRequests.map((c) => (
+                      <li key={c.id} className="flex items-center justify-between gap-4 py-2.5">
+                        <span className="min-w-0">
+                          <span className="block truncate font-body text-sm text-foreground">{c.videoUrl}</span>
+                          <span className="block font-body text-xs text-muted-foreground">
+                            {composerName(c.composerId)}
+                          </span>
+                        </span>
+                        <StatusPill text={c.status === "done" ? "resolved" : c.status.replace("_", " ")} active={c.status === "done"} />
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+                <Card title="Briefs">
+                  <ul className="divide-y divide-border/60">
+                    {mockBriefs.map((b) => (
+                      <li key={b.id} className="py-3">
+                        <div className="flex items-center justify-between gap-4">
+                          <span className="font-body text-sm font-semibold text-foreground">
+                            {b.name} · <span className="font-normal capitalize">{b.type}</span>
+                          </span>
+                          <span className="font-body text-xs text-muted-foreground">{b.budget}</span>
+                        </div>
+                        <p className="mt-1 font-body text-xs text-muted-foreground">{b.description}</p>
+                        <p className="mt-1 font-body text-xs">
+                          <span className="text-muted-foreground">Assigned: </span>
+                          <span style={{ color: GOLD }}>
+                            {b.assignedComposerId ? composerName(b.assignedComposerId) : "unassigned"}
+                          </span>
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              </>
+            )}
+          </div>
+        </div>
+      </main>
+      <Footer />
+    </div>
+  );
+};
+
+export default Admin;

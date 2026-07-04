@@ -117,7 +117,7 @@ Planned app areas:
 - `/blog`: SEO content
 - `/account`: customer dashboard (downloads, license, whitelist, claims, billing) — built on mock hooks; guest sees a sign-in prompt. A DevPersonaSwitcher (enable with `?dev=1`, disable `?dev=0`) previews the site as guest/free/pro/max/canceled/composer/admin
 - `/composer` (built on mocks): dashboard (daily downloads bars, month earnings estimate, top tracks), my tracks table, upload form (UI-only), earnings by month with statements, claim/brief requests, profile. Composer resolved via `useComposer()`; admin persona previews as composer 1
-- `/admin`: modular private admin dashboard
+- `/admin` (built on mocks, admin persona only): Dashboard (MRR, subscribers, free→paid, funnel, revenue streams), Finance (payout periods with per-composer lines, generate statements / mark paid, split settings), Tracks (moderation queue + catalog), Customers (mini-CRM), Requests (whitelist/claims/briefs). Remaining planned modules: Playlists, Plans editor, Analytics deep-dive, Marketing, Blog
 - `/terms`, `/privacy`, `/license-agreement`: legal pages
 
 Planned data entities (full V2 schema in `docs/TVMUSICSTORE_MASTER_PLAN.md`, section 6):

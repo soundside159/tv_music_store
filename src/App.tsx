@@ -11,6 +11,7 @@ import Sync from "./pages/Sync";
 import Custom from "./pages/Custom";
 import Account from "./pages/Account";
 import Composer from "./pages/Composer";
+import Admin from "./pages/Admin";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import DevPersonaSwitcher from "./components/DevPersonaSwitcher";
@@ -33,6 +34,7 @@ const App = () => (
           <Route path="/custom" element={<Custom />} />
           <Route path="/account" element={<Account />} />
           <Route path="/composer" element={<Composer />} />
+          <Route path="/admin" element={<Admin />} />
           <Route path="/login" element={<Login />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

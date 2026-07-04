@@ -15,3 +15,5 @@ export {
 } from "./requests";
 export { mockComposerTracks } from "./tracks";
 export type { ComposerTrackRow } from "./tracks";
+export { mockAdminStats, mockAdminCustomers } from "./adminStats";
+export type { AdminStats, AdminCustomerRow } from "./adminStats";
