@@ -26,6 +26,9 @@ const listeners = new Set<() => void>();
 
 const getPersonaId = (): PersonaId => {
   try {
+    // Personas are a design-preview tool. They only apply while dev mode is
+    // ON (?dev=1). Without it every visitor is a plain guest — no fake users.
+    if (localStorage.getItem("tvms.dev") !== "1") return "guest";
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw && mockPersonas.some((p) => p.id === raw)) return raw as PersonaId;
   } catch {
