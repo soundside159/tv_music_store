@@ -160,7 +160,8 @@ export const sendEmail = async (
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      from: env.EMAIL_FROM ?? "TV Music Store <onboarding@resend.dev>",
+      from: env.EMAIL_FROM ?? "TV Music Store <no-reply@e.tvmusicstore.com>",
+      reply_to: "contact@tvmusicstore.com",
       to,
       subject,
       html,

@@ -32,12 +32,22 @@ export const onRequestPost = async (ctx: Ctx) => {
     .bind(email, code)
     .run();
 
-  const sent = await sendEmail(
-    ctx.env,
-    email,
-    `${code} — your TV Music Store login code`,
-    `<p>Your login code:</p><p style="font-size:28px;font-weight:bold;letter-spacing:4px">${code}</p><p>It expires in 10 minutes. If you didn't request it, ignore this email.</p>`,
-  );
+  const html = `
+<div style="margin:0 auto;max-width:480px;font-family:Arial,Helvetica,sans-serif">
+  <div style="background:#111;padding:20px;text-align:center;border-radius:12px 12px 0 0">
+    <span style="color:#F4C430;font-size:16px;font-weight:bold;letter-spacing:3px">TV MUSIC STORE</span>
+  </div>
+  <div style="background:#fff;border:1px solid #eee;border-top:0;padding:36px 24px;text-align:center;border-radius:0 0 12px 12px">
+    <p style="margin:0 0 6px;color:#111;font-size:34px;font-weight:bold;letter-spacing:6px">${code}</p>
+    <p style="margin:0;color:#555;font-size:14px;line-height:1.6">
+      This is your single-use login code for TV&nbsp;Music&nbsp;Store.<br/>
+      It expires 10 minutes from when it was requested.
+    </p>
+    <p style="margin:18px 0 0;color:#999;font-size:12px">Didn't request it? Just ignore this email.</p>
+  </div>
+</div>`;
+
+  const sent = await sendEmail(ctx.env, email, "Here is your code", html);
   if (!sent) console.log(`[auth dev-fallback] login code for ${email}: ${code}`);
 
   return json({ ok: true });
