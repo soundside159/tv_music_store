@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { requestLoginCode, verifyLoginCode } from "@/hooks/useAuth";
 
@@ -84,7 +85,9 @@ const AuthModal = ({ open, onClose }: AuthModalProps) => {
     else setError(res.error ?? "Invalid code");
   };
 
-  return (
+  // Portal to <body>: the fixed navbar uses backdrop-blur, which would trap
+  // this fixed overlay inside it and pin the dialog to the top of the screen.
+  return createPortal(
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm"
       onMouseDown={(e) => {
@@ -141,13 +144,15 @@ const AuthModal = ({ open, onClose }: AuthModalProps) => {
                 placeholder="E-mail"
                 className={inputClass}
               />
-              <button
-                type="submit"
-                disabled={busy}
-                className="h-12 w-full rounded-lg bg-[#F4C430] font-body text-sm font-semibold text-background transition-opacity hover:opacity-90 disabled:opacity-50"
-              >
-                {busy ? "Sending..." : "Send Code"}
-              </button>
+              {email.trim().length > 0 && (
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="h-12 w-full rounded-lg bg-[#F4C430] font-body text-sm font-semibold text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+                >
+                  {busy ? "Sending..." : "Send Code"}
+                </button>
+              )}
             </form>
           </div>
         ) : (
@@ -195,7 +200,8 @@ const AuthModal = ({ open, onClose }: AuthModalProps) => {
           </p>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };
 
