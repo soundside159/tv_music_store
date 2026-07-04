@@ -110,13 +110,13 @@ Planned app areas:
 - `/track/:slug`: MVP track detail page, currently backed by `src/data/catalogTracks.ts`; keep the main player and licensing info visually quiet. Current layout uses tabs for Versions, Similar, and License Info so licensing text is not dumped into the first viewport.
 - `/playlists` and `/playlist/:slug`: curated playlists
 - `/pricing`: subscription plans Free/Pro/Max, annual default, comparison table, FAQ
-- `/sync`: one-time sync licenses (Standard $199 / Broadcast $399)
+- `/sync`: one-time sync licenses (Standard $199 / Broadcast $399) — built: tier cards, how-it-works, quote request form (UI-only)
+- `/custom` (built): adaptation from $149 / custom from $499, process steps, composer cards from mocks, brief form (UI-only)
 - `/licensing`: license information and FAQ
-- `/custom`: adaptation/custom music brief page
 - `/artist/:slug`: public composer pages (three composers)
 - `/blog`: SEO content
 - `/account`: customer dashboard (downloads, license, whitelist, claims, billing) — built on mock hooks; guest sees a sign-in prompt. A DevPersonaSwitcher (enable with `?dev=1`, disable `?dev=0`) previews the site as guest/free/pro/max/canceled/composer/admin
-- `/composer`: composer dashboard (uploads, earnings, statements, requests)
+- `/composer` (built on mocks): dashboard (daily downloads bars, month earnings estimate, top tracks), my tracks table, upload form (UI-only), earnings by month with statements, claim/brief requests, profile. Composer resolved via `useComposer()`; admin persona previews as composer 1
 - `/admin`: modular private admin dashboard
 - `/terms`, `/privacy`, `/license-agreement`: legal pages
 

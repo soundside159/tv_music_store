@@ -1,5 +1,6 @@
 import { useCallback, useSyncExternalStore } from "react";
 import type {
+  Composer,
   DownloadLogEntry,
   Persona,
   PersonaId,
@@ -8,6 +9,7 @@ import type {
   User,
 } from "@/types/domain";
 import {
+  mockComposers,
   mockDownloadLog,
   mockPersonas,
   mockPlans,
@@ -56,6 +58,14 @@ export const useMockPersona = (): Persona => {
 // ---------------------------------------------------------------------------
 
 export const useCurrentUser = (): User | null => useMockPersona().user;
+
+/** Composer profile of the current user, if they are a composer (admin previews as cmp_1). */
+export const useComposer = (): Composer | null => {
+  const user = useCurrentUser();
+  if (!user) return null;
+  if (user.role === "admin") return mockComposers[0];
+  return mockComposers.find((c) => c.userId === user.id) ?? null;
+};
 
 export const useSubscription = (): Subscription | null => useMockPersona().subscription;
 
