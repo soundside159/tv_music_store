@@ -65,7 +65,7 @@ const Index = () => {
             </Link>
           </div>
           <div className="mt-4">
-            <TrackRowList tracks={catalogTracks} />
+            <TrackRowList tracks={catalogTracks.slice(0, 8)} />
           </div>
         </section>
 
