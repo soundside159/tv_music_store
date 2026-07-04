@@ -1,37 +1,39 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Navigation from "@/components/Navigation";
-import { requestLoginCode, verifyLoginCode } from "@/hooks/useAuth";
+import { loginWithPassword, registerWithPassword } from "@/hooks/useAuth";
 
 const inputClass =
   "h-11 w-full rounded-lg border border-white/15 bg-background/50 px-3 font-body text-sm text-foreground outline-none transition-colors focus:border-[#F4C430]/70";
 
+const labelClass =
+  "mb-1 block font-body text-xs font-medium uppercase tracking-wide text-muted-foreground";
+
 const Login = () => {
   const navigate = useNavigate();
-  const [step, setStep] = useState<"email" | "code">("email");
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const submitEmail = async (event: React.FormEvent) => {
+  const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setBusy(true);
     setError(null);
-    const res = await requestLoginCode(email.trim());
+    const res =
+      mode === "signin"
+        ? await loginWithPassword(email.trim(), password)
+        : await registerWithPassword(email.trim(), password, name.trim() || undefined);
     setBusy(false);
-    if (res.ok) setStep("code");
+    if (res.ok) navigate("/account");
     else setError(res.error ?? "Something went wrong");
   };
 
-  const submitCode = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setBusy(true);
+  const switchMode = (next: "signin" | "signup") => {
+    setMode(next);
     setError(null);
-    const res = await verifyLoginCode(email.trim(), code.trim());
-    setBusy(false);
-    if (res.ok) navigate("/account");
-    else setError(res.error ?? "Invalid code");
   };
 
   return (
@@ -39,83 +41,95 @@ const Login = () => {
       <Navigation />
       <main className="flex min-h-screen items-center justify-center px-4 py-24">
         <div className="w-full max-w-sm rounded-xl border border-white/10 bg-card/40 p-8">
-          <h1 className="font-display text-3xl font-semibold text-white">Sign in</h1>
+          <h1 className="font-display text-3xl font-semibold text-white">
+            {mode === "signin" ? "Sign in" : "Create account"}
+          </h1>
           <p className="mt-2 font-body text-sm text-muted-foreground">
-            {step === "email"
-              ? "Enter your email — we'll send you a 6-digit login code. No password needed."
-              : `We sent a code to ${email}. Enter it below.`}
+            {mode === "signin"
+              ? "Access your downloads, licenses and billing."
+              : "Free plan included — 3 downloads every month."}
           </p>
 
-          {step === "email" ? (
-            <form className="mt-6 space-y-4" onSubmit={submitEmail}>
+          <form className="mt-6 space-y-4" onSubmit={submit}>
+            {mode === "signup" && (
               <div>
-                <label className="mb-1 block font-body text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Email
-                </label>
+                <label className={labelClass}>Name (optional)</label>
                 <input
-                  type="email"
-                  required
-                  autoFocus
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Your name or studio"
                   className={inputClass}
                 />
               </div>
-              <button
-                type="submit"
-                disabled={busy}
-                className="h-11 w-full rounded-lg bg-[#F4C430] font-body text-sm font-semibold text-background transition-opacity hover:opacity-90 disabled:opacity-50"
-              >
-                {busy ? "Sending..." : "Send code"}
-              </button>
-            </form>
-          ) : (
-            <form className="mt-6 space-y-4" onSubmit={submitCode}>
-              <div>
-                <label className="mb-1 block font-body text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Login code
-                </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]{6}"
-                  maxLength={6}
-                  required
-                  autoFocus
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-                  placeholder="123456"
-                  className={`${inputClass} text-center text-lg tracking-[0.5em]`}
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={busy || code.length !== 6}
-                className="h-11 w-full rounded-lg bg-[#F4C430] font-body text-sm font-semibold text-background transition-opacity hover:opacity-90 disabled:opacity-50"
-              >
-                {busy ? "Checking..." : "Sign in"}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setStep("email");
-                  setCode("");
-                  setError(null);
-                }}
-                className="w-full font-body text-xs text-muted-foreground transition-colors hover:text-foreground"
-              >
-                Use a different email
-              </button>
-            </form>
-          )}
+            )}
+            <div>
+              <label className={labelClass}>Email</label>
+              <input
+                type="email"
+                required
+                autoFocus
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Password</label>
+              <input
+                type="password"
+                required
+                minLength={8}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={mode === "signup" ? "At least 8 characters" : "********"}
+                className={inputClass}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={busy}
+              className="h-11 w-full rounded-lg bg-[#F4C430] font-body text-sm font-semibold text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {busy
+                ? mode === "signin"
+                  ? "Signing in..."
+                  : "Creating account..."
+                : mode === "signin"
+                  ? "Sign in"
+                  : "Create account"}
+            </button>
+          </form>
 
           {error && (
             <p className="mt-4 text-center font-body text-xs text-red-400">{error}</p>
           )}
 
           <p className="mt-4 text-center font-body text-xs text-muted-foreground">
-            New here? Signing in creates your free account automatically.
+            {mode === "signin" ? (
+              <>
+                No account?{" "}
+                <button
+                  type="button"
+                  onClick={() => switchMode("signup")}
+                  className="text-[#F4C430] hover:underline"
+                >
+                  Create one
+                </button>
+              </>
+            ) : (
+              <>
+                Already have an account?{" "}
+                <button
+                  type="button"
+                  onClick={() => switchMode("signin")}
+                  className="text-[#F4C430] hover:underline"
+                >
+                  Sign in
+                </button>
+              </>
+            )}
           </p>
         </div>
       </main>

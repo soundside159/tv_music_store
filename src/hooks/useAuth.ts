@@ -128,6 +128,32 @@ export const verifyLoginCode = async (
   }
 };
 
+const passwordCall = async (
+  path: string,
+  payload: Record<string, string>,
+): Promise<{ ok: boolean; error?: string }> => {
+  try {
+    const res = await fetch(path, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(payload),
+    });
+    const data = (await res.json()) as { ok?: boolean; error?: string };
+    if (!res.ok || !data.ok) return { ok: false, error: data.error ?? "Request failed" };
+    await refreshSession();
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Network error. Try again." };
+  }
+};
+
+export const loginWithPassword = (email: string, password: string) =>
+  passwordCall("/api/auth/login", { email, password });
+
+export const registerWithPassword = (email: string, password: string, name?: string) =>
+  passwordCall("/api/auth/register", name ? { email, password, name } : { email, password });
+
 export const logout = async (): Promise<void> => {
   try {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });

@@ -76,6 +76,72 @@ export const getSessionUser = async (ctx: Ctx): Promise<SessionUser | null> => {
   return row ?? null;
 };
 
+// ---------------------------------------------------------------------------
+// Password auth (PBKDF2 via WebCrypto — no external services needed)
+// ---------------------------------------------------------------------------
+
+/** The site owner: this email automatically gets the admin role. */
+export const OWNER_EMAIL = "soundside159@gmail.com";
+
+const PBKDF2_ITERATIONS = 100_000;
+
+const toB64 = (buf: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+const fromB64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+
+const deriveBits = async (password: string, salt: Uint8Array, iterations: number) => {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"],
+  );
+  return crypto.subtle.deriveBits(
+    { name: "PBKDF2", hash: "SHA-256", salt: salt as unknown as BufferSource, iterations },
+    key,
+    256,
+  );
+};
+
+/** Returns "pbkdf2$<iterations>$<saltB64>$<hashB64>". */
+export const hashPassword = async (password: string): Promise<string> => {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const bits = await deriveBits(password, salt, PBKDF2_ITERATIONS);
+  return `pbkdf2$${PBKDF2_ITERATIONS}$${toB64(salt.buffer)}$${toB64(bits)}`;
+};
+
+export const verifyPassword = async (password: string, stored: string): Promise<boolean> => {
+  const parts = stored.split("$");
+  if (parts.length !== 4 || parts[0] !== "pbkdf2") return false;
+  const iterations = Number(parts[1]);
+  const salt = fromB64(parts[2]);
+  const expected = parts[3];
+  const bits = await deriveBits(password, salt, iterations);
+  return toB64(bits) === expected;
+};
+
+/** Adds users.password_hash on first use — saves the owner a wrangler migration. */
+export const ensurePasswordColumn = async (db: D1Database): Promise<void> => {
+  try {
+    await db.prepare(`ALTER TABLE users ADD COLUMN password_hash TEXT`).run();
+  } catch {
+    // column already exists — fine
+  }
+};
+
+/** Creates a session row and returns the Set-Cookie header value. */
+export const openSession = async (db: D1Database, userId: string): Promise<string> => {
+  const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
+  await db
+    .prepare(
+      `INSERT INTO sessions (token, user_id, expires_at)
+       VALUES (?1, ?2, datetime('now', '+${SESSION_DAYS} days'))`,
+    )
+    .bind(token, userId)
+    .run();
+  return sessionCookieHeader(token, SESSION_DAYS * 86400);
+};
+
 /** Sends an email via Resend if configured; otherwise logs (dev fallback). */
 export const sendEmail = async (
   env: Env,
