@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   BarChart3,
@@ -13,7 +13,6 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { useCurrentUser } from "@/hooks/useMockData";
 import {
-  mockAdminCustomers,
   mockAdminStats,
   mockBriefs,
   mockClaimRequests,
@@ -42,6 +41,18 @@ const sections: { id: SectionId; label: string; icon: typeof LayoutDashboard }[]
 
 const composerName = (id: string) =>
   mockComposers.find((c) => c.id === id)?.displayName ?? id;
+
+interface LiveUser {
+  id: string;
+  email: string;
+  name: string | null;
+  role: string;
+  created_at: string;
+  plan: string | null;
+  downloads: number;
+}
+
+const ROLES = ["customer", "composer", "admin"] as const;
 
 const Card = ({ title, children, className = "" }: { title?: string; children: React.ReactNode; className?: string }) => (
   <div className={`rounded-xl border border-border bg-card p-6 ${className}`}>
@@ -72,7 +83,46 @@ const Admin = () => {
   const user = useCurrentUser();
   const [section, setSection] = useState<SectionId>("dashboard");
   const [openPeriod, setOpenPeriod] = useState<string | null>(null);
+  const [liveUsers, setLiveUsers] = useState<LiveUser[] | null>(null);
+  const [usersError, setUsersError] = useState<string | null>(null);
+  const [savingUserId, setSavingUserId] = useState<string | null>(null);
   const s = mockAdminStats;
+
+  const isAdmin = !!user && user.role === "admin";
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    fetch("/api/admin/users", { credentials: "include" })
+      .then(async (res) => {
+        const data = (await res.json()) as { users?: LiveUser[]; error?: string };
+        if (!res.ok || !data.users) throw new Error(data.error ?? "Failed to load users");
+        setLiveUsers(data.users);
+      })
+      .catch((e: Error) => setUsersError(e.message));
+  }, [isAdmin]);
+
+  const changeRole = async (userId: string, role: string) => {
+    if (!liveUsers) return;
+    const prev = liveUsers;
+    setSavingUserId(userId);
+    setUsersError(null);
+    setLiveUsers(prev.map((u) => (u.id === userId ? { ...u, role } : u)));
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ userId, role }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Update failed");
+    } catch (e) {
+      setLiveUsers(prev);
+      setUsersError(e instanceof Error ? e.message : "Update failed");
+    } finally {
+      setSavingUserId(null);
+    }
+  };
 
   if (!user || user.role !== "admin") {
     return (
@@ -401,42 +451,60 @@ const Admin = () => {
             )}
 
             {section === "customers" && (
-              <Card title={`Customers (${mockAdminCustomers.length})`}>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[560px] font-body text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                        <th className="py-2 pr-4">Customer</th>
-                        <th className="py-2 pr-4">Plan</th>
-                        <th className="py-2 pr-4">LTV</th>
-                        <th className="py-2 pr-4">Downloads</th>
-                        <th className="py-2">Joined</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {mockAdminCustomers.map((c) => (
-                        <tr key={c.id} className="border-b border-border/50 last:border-0">
-                          <td className="py-2.5 pr-4">
-                            <span className="block text-foreground">{c.name}</span>
-                            <span className="block text-xs text-muted-foreground">{c.email}</span>
-                          </td>
-                          <td className="py-2.5 pr-4">
-                            <StatusPill text={c.plan} active={c.plan !== "free"} />
-                          </td>
-                          <td className="py-2.5 pr-4 font-semibold" style={{ color: GOLD }}>${c.ltv}</td>
-                          <td className="py-2.5 pr-4 text-muted-foreground">{c.downloads}</td>
-                          <td className="py-2.5 text-muted-foreground">{c.joined}</td>
+              <Card title={`Customers${liveUsers ? ` (${liveUsers.length})` : ""}`}>
+                {usersError && (
+                  <p className="mb-3 font-body text-xs text-red-400">{usersError}</p>
+                )}
+                {!liveUsers && !usersError && (
+                  <p className="font-body text-sm text-muted-foreground">Loading users...</p>
+                )}
+                {liveUsers && liveUsers.length === 0 && (
+                  <p className="font-body text-sm text-muted-foreground">No registered users yet.</p>
+                )}
+                {liveUsers && liveUsers.length > 0 && (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[640px] font-body text-sm">
+                      <thead>
+                        <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                          <th className="py-2 pr-4">User</th>
+                          <th className="py-2 pr-4">Role</th>
+                          <th className="py-2 pr-4">Plan</th>
+                          <th className="py-2 pr-4">Downloads</th>
+                          <th className="py-2">Joined</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <button
-                  type="button"
-                  className="mt-4 rounded-lg border border-border px-4 py-2 font-body text-xs font-semibold text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
-                >
-                  Export CSV
-                </button>
+                      </thead>
+                      <tbody>
+                        {liveUsers.map((u) => (
+                          <tr key={u.id} className="border-b border-border/50 last:border-0">
+                            <td className="py-2.5 pr-4">
+                              <span className="block text-foreground">{u.name ?? u.email.split("@")[0]}</span>
+                              <span className="block text-xs text-muted-foreground">{u.email}</span>
+                            </td>
+                            <td className="py-2.5 pr-4">
+                              <select
+                                value={u.role}
+                                disabled={savingUserId === u.id}
+                                onChange={(e) => void changeRole(u.id, e.target.value)}
+                                className="rounded-md border border-border bg-background px-2 py-1 font-body text-xs text-foreground focus:border-[#F4C430] focus:outline-none disabled:opacity-50"
+                              >
+                                {ROLES.map((r) => (
+                                  <option key={r} value={r}>{r}</option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="py-2.5 pr-4">
+                              <StatusPill text={u.plan ?? "free"} active={!!u.plan && u.plan !== "free"} />
+                            </td>
+                            <td className="py-2.5 pr-4 text-muted-foreground">{u.downloads}</td>
+                            <td className="py-2.5 text-muted-foreground">
+                              {u.created_at ? u.created_at.slice(0, 10) : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </Card>
             )}
 

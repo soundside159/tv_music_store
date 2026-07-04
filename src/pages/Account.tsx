@@ -164,6 +164,20 @@ const Account = () => {
                   </div>
                 </div>
               ))}
+              {user.role === "admin" && (
+                <div className="shrink-0 md:mb-5">
+                  <p className="px-3 pb-1.5 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
+                    Admin
+                  </p>
+                  <Link
+                    to="/admin"
+                    className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-[#F4C430] transition-colors hover:bg-secondary"
+                  >
+                    <ShieldCheck className="h-4 w-4" />
+                    Admin panel
+                  </Link>
+                </div>
+              )}
               <button
                 type="button"
                 onClick={async () => {
