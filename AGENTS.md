@@ -61,6 +61,9 @@ Architecture is fixed in the master plan: do not migrate to Next.js, Supabase, o
 - `public/audio/previews/`: public MP3 preview files generated from owner-provided WAVs; do not put private master WAV/ZIP files here
 - `public/images/collections/`: public temporary collection cover images used by `/catalog`
 - `public/_redirects`: Cloudflare Pages SPA fallback
+- `migrations/0001_init.sql`: D1 schema (V2) + seeds (plans, composers). Applied by the owner via wrangler — see `docs/SETUP_BACKEND.md`
+- `functions/api/`: Cloudflare Pages Functions (backend). Live endpoints: `GET /api/health`, `GET /api/tracks`, `POST /api/auth/request-code`, `POST /api/auth/verify`, `POST /api/auth/logout`, `GET /api/me`. Shared helpers in `functions/api/_utils.ts` (Env bindings: DB, RESEND_API_KEY, EMAIL_FROM, STRIPE_*, GOOGLE_*). Email falls back to console logs until RESEND_API_KEY is set. Never commit secrets
+- `docs/SETUP_BACKEND.md`: owner's step-by-step for D1 creation, Pages bindings and secret slots
 - `docs/TVMUSICSTORE_MASTER_PLAN.md`: full business, UX, technical, database, admin, email, marketing, and roadmap plan
 - `docs/AI_HANDOFF.md`: short operational handoff for another AI assistant; never include secrets there
 

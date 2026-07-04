@@ -5,6 +5,7 @@ import {
   DollarSign,
   Inbox,
   LayoutDashboard,
+  ListMusic,
   Music2,
   Users,
 } from "lucide-react";
@@ -20,18 +21,21 @@ import {
   mockComposerTracks,
   mockPayoutLines,
   mockPayoutPeriods,
+  mockPlaylists,
   mockWhitelistChannels,
   PLATFORM_SHARE,
 } from "@/mocks";
+import { catalogTracks } from "@/data/catalogTracks";
 
 const GOLD = "#F4C430";
 
-type SectionId = "dashboard" | "finance" | "tracks" | "customers" | "requests";
+type SectionId = "dashboard" | "finance" | "tracks" | "playlists" | "customers" | "requests";
 
 const sections: { id: SectionId; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "finance", label: "Finance", icon: DollarSign },
   { id: "tracks", label: "Tracks", icon: Music2 },
+  { id: "playlists", label: "Playlists", icon: ListMusic },
   { id: "customers", label: "Customers", icon: Users },
   { id: "requests", label: "Requests", icon: Inbox },
 ];
@@ -323,6 +327,75 @@ const Admin = () => {
                       </tbody>
                     </table>
                   </div>
+                </Card>
+              </>
+            )}
+
+            {section === "playlists" && (
+              <>
+                <Card title={`Curated playlists (${mockPlaylists.length})`}>
+                  <ul className="divide-y divide-border/60">
+                    {mockPlaylists.map((pl) => (
+                      <li key={pl.id} className="flex items-center justify-between gap-4 py-2.5">
+                        <span className="min-w-0">
+                          <span className="block truncate font-body text-sm font-semibold text-foreground">
+                            {pl.title}
+                          </span>
+                          <span className="block truncate font-body text-xs text-muted-foreground">
+                            {pl.trackIds.length} tracks · /playlist/{pl.slug}
+                          </span>
+                        </span>
+                        <span className="flex shrink-0 gap-2">
+                          <button
+                            type="button"
+                            className="rounded-lg border border-border px-3 py-1.5 font-body text-xs text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-lg border border-border px-3 py-1.5 font-body text-xs text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
+                          >
+                            Delete
+                          </button>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+                <Card title="New playlist">
+                  <form className="flex flex-col gap-3" onSubmit={(e) => e.preventDefault()}>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <input
+                        placeholder="Title (e.g. Wedding Stories)"
+                        className="rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
+                      />
+                      <input
+                        placeholder="Cover image URL"
+                        className="rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
+                      />
+                    </div>
+                    <textarea
+                      placeholder="Short description"
+                      rows={2}
+                      className="rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
+                    />
+                    <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">Tracks</p>
+                    <div className="grid max-h-56 gap-1 overflow-y-auto rounded-lg border border-border p-3 sm:grid-cols-2">
+                      {catalogTracks.map((t) => (
+                        <label key={t.id} className="flex items-center gap-2 font-body text-sm text-foreground/90">
+                          <input type="checkbox" className="accent-[#F4C430]" />
+                          <span className="truncate">{t.title}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <button
+                      type="submit"
+                      className="self-start rounded-lg bg-[#F4C430] px-5 py-2 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
+                    >
+                      Create playlist
+                    </button>
+                  </form>
                 </Card>
               </>
             )}
