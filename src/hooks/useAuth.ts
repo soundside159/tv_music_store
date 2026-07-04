@@ -154,6 +154,24 @@ export const loginWithPassword = (email: string, password: string) =>
 export const registerWithPassword = (email: string, password: string, name?: string) =>
   passwordCall("/api/auth/register", name ? { email, password, name } : { email, password });
 
+/** Update the display name of the signed-in user. */
+export const updateProfile = async (name: string): Promise<{ ok: boolean; error?: string }> => {
+  try {
+    const res = await fetch("/api/me", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ name }),
+    });
+    const data = (await res.json()) as { ok?: boolean; error?: string };
+    if (!res.ok || !data.ok) return { ok: false, error: data.error ?? "Update failed" };
+    await refreshSession();
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Network error. Try again." };
+  }
+};
+
 export const logout = async (): Promise<void> => {
   try {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });

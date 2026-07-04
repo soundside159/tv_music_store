@@ -8,6 +8,7 @@ import {
   LifeBuoy,
   LogOut,
   ShieldCheck,
+  UserRound,
   Youtube,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
@@ -21,20 +22,51 @@ import {
   useSubscription,
 } from "@/hooks/useMockData";
 import { mockClaimRequests, mockSyncOrders, mockWhitelistChannels } from "@/mocks";
-import { logout } from "@/hooks/useAuth";
+import { logout, updateProfile } from "@/hooks/useAuth";
 
 const GOLD = "#F4C430";
 
-type SectionId = "overview" | "downloads" | "license" | "whitelist" | "claims" | "billing" | "support";
+type SectionId =
+  | "profile"
+  | "overview"
+  | "downloads"
+  | "license"
+  | "whitelist"
+  | "claims"
+  | "billing"
+  | "support";
 
-const sections: { id: SectionId; label: string; icon: typeof LayoutDashboard }[] = [
-  { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "downloads", label: "Downloads", icon: Download },
-  { id: "license", label: "License", icon: FileText },
-  { id: "whitelist", label: "Whitelist", icon: Youtube },
-  { id: "claims", label: "Claims", icon: ShieldCheck },
-  { id: "billing", label: "Billing", icon: CreditCard },
-  { id: "support", label: "Support", icon: LifeBuoy },
+interface SectionItem {
+  id: SectionId;
+  label: string;
+  icon: typeof LayoutDashboard;
+}
+
+const sectionGroups: { label: string; items: SectionItem[] }[] = [
+  {
+    label: "Account",
+    items: [
+      { id: "profile", label: "Profile", icon: UserRound },
+      { id: "overview", label: "Overview", icon: LayoutDashboard },
+      { id: "downloads", label: "Downloads", icon: Download },
+    ],
+  },
+  {
+    label: "Plan",
+    items: [{ id: "billing", label: "Plan & Billing", icon: CreditCard }],
+  },
+  {
+    label: "Music",
+    items: [
+      { id: "whitelist", label: "Whitelisting", icon: Youtube },
+      { id: "license", label: "Licenses", icon: FileText },
+      { id: "claims", label: "Copyright Claims", icon: ShieldCheck },
+    ],
+  },
+  {
+    label: "Support",
+    items: [{ id: "support", label: "Support", icon: LifeBuoy }],
+  },
 ];
 
 const trackTitle = (trackId: string) =>
@@ -66,7 +98,11 @@ const Account = () => {
   const plans = usePlans();
   const downloads = useMyDownloads();
   const remaining = useDownloadsRemaining();
-  const [section, setSection] = useState<SectionId>("overview");
+  const [section, setSection] = useState<SectionId>("profile");
+  const [editingName, setEditingName] = useState(false);
+  const [draftName, setDraftName] = useState("");
+  const [profileBusy, setProfileBusy] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
   const plan = plans.find((p) => p.id === subscription?.plan);
   const whitelists = user ? mockWhitelistChannels.filter((w) => w.userId === user.id) : [];
@@ -103,23 +139,30 @@ const Account = () => {
         <div className="flex flex-col gap-8 md:flex-row">
           {/* Sidebar */}
           <aside className="shrink-0 md:w-56">
-            <p className="px-3 font-body text-sm font-semibold text-foreground">{user.name}</p>
-            <p className="px-3 font-body text-xs text-muted-foreground">{user.email}</p>
-            <nav className="mt-4 flex gap-1 overflow-x-auto md:flex-col">
-              {sections.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => setSection(s.id)}
-                  className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors ${
-                    section === s.id
-                      ? "bg-secondary text-[#F4C430]"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <s.icon className="h-4 w-4" />
-                  {s.label}
-                </button>
+            <nav className="flex gap-4 overflow-x-auto md:flex-col md:gap-0">
+              {sectionGroups.map((group) => (
+                <div key={group.label} className="shrink-0 md:mb-5">
+                  <p className="px-3 pb-1.5 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
+                    {group.label}
+                  </p>
+                  <div className="flex gap-1 md:flex-col">
+                    {group.items.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => setSection(s.id)}
+                        className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors ${
+                          section === s.id
+                            ? "bg-secondary text-[#F4C430]"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <s.icon className="h-4 w-4" />
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
               <button
                 type="button"
@@ -145,6 +188,105 @@ const Account = () => {
                   Resubscribe
                 </Link>
               </div>
+            )}
+
+            {section === "profile" && (
+              <SectionCard title="Personal Profile">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div
+                      className="flex h-14 w-14 items-center justify-center rounded-full font-body text-xl font-bold text-background"
+                      style={{ backgroundColor: GOLD }}
+                    >
+                      {(user.name || user.email).charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="font-body text-base font-semibold text-foreground">
+                        {user.name || user.email.split("@")[0]}
+                      </p>
+                      <p className="font-body text-xs text-muted-foreground">{user.email}</p>
+                    </div>
+                  </div>
+                  {!editingName && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDraftName(user.name ?? "");
+                        setProfileError(null);
+                        setEditingName(true);
+                      }}
+                      className="rounded-lg border border-border px-4 py-2 font-body text-sm text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
+                    >
+                      Edit profile
+                    </button>
+                  )}
+                </div>
+
+                {editingName && (
+                  <form
+                    className="mt-5 flex flex-wrap gap-2"
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      setProfileBusy(true);
+                      setProfileError(null);
+                      const res = await updateProfile(draftName.trim());
+                      setProfileBusy(false);
+                      if (res.ok) setEditingName(false);
+                      else setProfileError(res.error ?? "Update failed");
+                    }}
+                  >
+                    <input
+                      value={draftName}
+                      onChange={(e) => setDraftName(e.target.value)}
+                      maxLength={60}
+                      required
+                      autoFocus
+                      placeholder="Display name"
+                      className="h-10 flex-1 min-w-[200px] rounded-lg border border-border bg-background px-3 font-body text-sm text-foreground focus:border-[#F4C430] focus:outline-none"
+                    />
+                    <button
+                      type="submit"
+                      disabled={profileBusy || draftName.trim().length === 0}
+                      className="rounded-lg bg-[#F4C430] px-4 py-2 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85 disabled:opacity-50"
+                    >
+                      {profileBusy ? "Saving..." : "Save"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingName(false);
+                        setProfileError(null);
+                      }}
+                      className="rounded-lg border border-border px-4 py-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      Cancel
+                    </button>
+                  </form>
+                )}
+                {profileError && (
+                  <p className="mt-3 font-body text-xs text-red-400">{profileError}</p>
+                )}
+
+                <div className="mt-6 overflow-hidden rounded-lg border border-border">
+                  <div className="flex items-center gap-4 border-b border-border px-4 py-3.5">
+                    <span className="w-32 shrink-0 font-body text-xs uppercase tracking-wide text-muted-foreground">
+                      Display name
+                    </span>
+                    <span className="font-body text-sm text-foreground">
+                      {user.name || user.email.split("@")[0]}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-4 px-4 py-3.5">
+                    <span className="w-32 shrink-0 font-body text-xs uppercase tracking-wide text-muted-foreground">
+                      Email
+                    </span>
+                    <span className="font-body text-sm text-foreground">{user.email}</span>
+                  </div>
+                </div>
+                <p className="mt-3 font-body text-xs text-muted-foreground">
+                  Need to change your email? Contact us at contact@tvmusicstore.com.
+                </p>
+              </SectionCard>
             )}
 
             {section === "overview" && (
