@@ -285,6 +285,31 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   purchases (still mocks); (4) license PDF generation after purchase. WARNING for AI: cowork
   sandbox<->host sync truncates EDITED files sandbox-side this machine; after editing, re-push
   file content into the sandbox via heredoc before trusting lint.
+- **2026-07-05 (email polish + task backlog):** Stripe subscriptions CONFIRMED WORKING end-to-end
+  in test mode (owner paid with 4242, plan appeared in Account — webhook is live). Owner added
+  PAYPAL_CLIENT_ID/PAYPAL_SECRET but /api/paypal/config still said configured:false — vars need a
+  fresh deploy to apply; told him to check names + redeploy. Login-code email improved: reply_to
+  removed from sendEmail (pure no-reply), dark footer added with "Need help? Contact us at
+  contact@tvmusicstore.com" + copyright. Owner set up Cloudflare Email Routing:
+  contact@tvmusicstore.com -> forwards to tvmusicstore@gmail.com (catch-all Drop).
+  NEW TASK BACKLOG (owner-requested, in priority order):
+  (1) CATALOG LOAD ORDER BUG: waveforms/tracks visibly load bottom-up or in random order after
+  admin reorders content (e.g. rows 5-9 render before 1-4). Investigate /api/tracks ORDER BY +
+  how WaveformPreview instances fetch/decode concurrently; ensure deterministic sort and ideally
+  top-down loading priority (queue by row index / IntersectionObserver).
+  (2) WAVEFORM BARS: bars are too thin and their width SCALES with window width (bars count is
+  fixed, e.g. bars={360}). Wanted: fixed bar width (thicker), bar COUNT adapts to container width
+  on resize (recompute buckets from decoded peaks; ResizeObserver). Applies to track rows, track
+  page, bottom mini-player.
+  (3) ADMIN MAILBOX (owner's plan is correct): Email Routing rule contact@ -> Email WORKER (needs
+  a small separate Worker — Pages Functions can't receive email; bind same D1) -> store inbound
+  in D1 (new tables: mail_threads, mail_messages) -> Admin "Inbox" section: thread list + dialog
+  view; if sender email matches users table show name/plan/purchases; Reply sends via Resend
+  FROM "TV Music Store <contact@tvmusicstore.com>" — REQUIRES verifying root domain
+  tvmusicstore.com in Resend (currently only e.tvmusicstore.com is verified) -> store outbound in
+  same thread. Keep the gmail forward as backup copy (Email Routing can do worker+forward).
+  (4) Still pending from earlier: Download-options modal (tunetank style), 1000x1000 cover upload
+  + thumbnails, Account->Licenses from real sync_orders, license PDFs.
 - **2026-07-04 (layout align):** constrained the Navigation header to the same content container as
   <main> (mx-auto max-w-[92rem] px-4 sm:px-6) so logo/search/icons line up with page content;
   indented the catalog hero text (lg:pl-[16.75rem] xl:pl-[17.75rem]) to start at the track play

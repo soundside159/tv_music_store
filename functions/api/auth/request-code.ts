@@ -37,13 +37,21 @@ export const onRequestPost = async (ctx: Ctx) => {
   <div style="background:#111;padding:20px;text-align:center;border-radius:12px 12px 0 0">
     <span style="color:#F4C430;font-size:16px;font-weight:bold;letter-spacing:3px">TV MUSIC STORE</span>
   </div>
-  <div style="background:#fff;border:1px solid #eee;border-top:0;padding:36px 24px;text-align:center;border-radius:0 0 12px 12px">
+  <div style="background:#fff;border:1px solid #eee;border-top:0;padding:36px 24px;text-align:center">
     <p style="margin:0 0 6px;color:#111;font-size:34px;font-weight:bold;letter-spacing:6px">${code}</p>
     <p style="margin:0;color:#555;font-size:14px;line-height:1.6">
       This is your single-use login code for TV&nbsp;Music&nbsp;Store.<br/>
       It expires 10 minutes from when it was requested.
     </p>
     <p style="margin:18px 0 0;color:#999;font-size:12px">Didn't request it? Just ignore this email.</p>
+  </div>
+  <div style="background:#111;padding:18px 24px;text-align:center;border-radius:0 0 12px 12px">
+    <p style="margin:0;color:#aaa;font-size:12px;line-height:1.7">
+      Need help? Contact us at
+      <a href="mailto:contact@tvmusicstore.com" style="color:#F4C430;text-decoration:none">contact@tvmusicstore.com</a>
+      <br/>
+      <span style="color:#666">&copy; ${new Date().getFullYear()} TV Music Store &middot; tvmusicstore.com</span>
+    </p>
   </div>
 </div>`;
 

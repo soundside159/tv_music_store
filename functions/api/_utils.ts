@@ -184,8 +184,9 @@ export const sendEmail = async (
       "content-type": "application/json",
     },
     body: JSON.stringify({
+      // No reply_to: transactional mail is no-reply; the contact address is
+      // shown in the email footer instead.
       from: env.EMAIL_FROM ?? "TV Music Store <no-reply@e.tvmusicstore.com>",
-      reply_to: "contact@tvmusicstore.com",
       to,
       subject,
       html,
