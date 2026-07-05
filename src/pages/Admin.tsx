@@ -175,11 +175,7 @@ const Admin = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
-      <main
-        className={`w-full px-4 pb-24 pt-24 sm:px-6 md:pt-28 ${
-          section === "tracksedit" ? "max-w-none" : "max-w-6xl"
-        }`}
-      >
+      <main className="mx-auto w-full max-w-6xl px-4 pb-24 pt-24 sm:px-6 md:pt-28">
         <div className="flex flex-col gap-8 md:flex-row">
           <aside className="shrink-0 md:w-56">
             <nav className="flex flex-col gap-1">
@@ -239,7 +235,11 @@ const Admin = () => {
             </nav>
           </aside>
 
-          <div className="flex min-w-0 flex-1 flex-col gap-6">
+          <div
+            className={`flex min-w-0 flex-1 flex-col gap-6 ${
+              section === "tracksedit" ? "xl:mr-[calc((72rem_-_100vw)/2)]" : ""
+            }`}
+          >
             {section === "dashboard" && (
               <>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

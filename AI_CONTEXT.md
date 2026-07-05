@@ -539,3 +539,19 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   is intentional (standard fixed-sidebar admin layout) and the only way to keep the menu from
   moving; re-add `mx-auto` to the non-tracksedit branch if the owner wants them centered again
   (but that reintroduces the jump). tsc 0.
+- **2026-07-05 (admin width — FINAL, sidebar fixed + only Tracks Edit content bleeds right):**
+  left-anchoring the whole admin (previous entry) made ALL sections hug the left / feel stretched —
+  owner disliked it. Correct solution: `<main>` is CENTERED again for every section
+  (`mx-auto w-full max-w-6xl`), so the sidebar sits in the same centered spot on every view (no
+  jump) and normal sections look balanced as before. Only the Tracks Edit CONTENT column bleeds to
+  the right screen edge, without touching the sidebar: the content `<div>` (sibling of the sidebar
+  in the flex row) gets `section === "tracksedit" && xl:mr-[calc((72rem_-_100vw)/2)]` — a negative
+  right margin equal to the centered container's right gutter, so the flex-1 content grows past
+  main's right edge to ~the viewport edge while the sidebar (also inside the centered main) stays
+  put. AdminTracksEdit grid `[minmax(44rem,1fr)_minmax(32rem,1fr)]` then splits that widened area
+  into table + Edit panel. `72rem` = max-w-6xl; underscores in the calc are Tailwind's space
+  encoding (`72rem - 100vw`), matching the existing `calc(100vh-7rem)` style in the repo. tsc 0.
+  NOTE: could not run `vite build` in the sandbox — node_modules were installed on Windows so the
+  Linux `@rollup/rollup-linux-x64-gnu` native binary is missing (env-only issue); deploy.bat
+  builds on the host. If the right-bleed ever needs a bigger gap from the edge, add a positive rem
+  to the calc (e.g. `+2rem`).
