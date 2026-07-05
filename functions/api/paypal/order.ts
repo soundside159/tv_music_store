@@ -26,28 +26,34 @@ export const onRequestPost = async (ctx: Ctx) => {
   );
 
   const total = named.reduce((s, i) => s + i.price, 0);
-  const token = await paypalToken(ctx.env);
-  const order = await paypalCall<{ id: string }>(ctx.env, token, "POST", "/v2/checkout/orders", {
-    intent: "CAPTURE",
-    purchase_units: [
-      {
-        custom_id: user.id,
-        amount: {
-          currency_code: "USD",
-          value: total.toFixed(2),
-          breakdown: {
-            item_total: { currency_code: "USD", value: total.toFixed(2) },
+  try {
+    const token = await paypalToken(ctx.env);
+    const order = await paypalCall<{ id: string }>(ctx.env, token, "POST", "/v2/checkout/orders", {
+      intent: "CAPTURE",
+      purchase_units: [
+        {
+          custom_id: user.id,
+          amount: {
+            currency_code: "USD",
+            value: total.toFixed(2),
+            breakdown: {
+              item_total: { currency_code: "USD", value: total.toFixed(2) },
+            },
           },
+          items: named.map((i) => ({
+            name: `${i.title} — ${i.tier} license`.slice(0, 127),
+            quantity: "1",
+            unit_amount: { currency_code: "USD", value: i.price.toFixed(2) },
+            sku: `${i.slug}|${i.tier}`.slice(0, 127),
+          })),
         },
-        items: named.map((i) => ({
-          name: `${i.title} — ${i.tier} license`.slice(0, 127),
-          quantity: "1",
-          unit_amount: { currency_code: "USD", value: i.price.toFixed(2) },
-          sku: `${i.slug}|${i.tier}`.slice(0, 127),
-        })),
-      },
-    ],
-  });
-
-  return json({ ok: true, id: order.id });
+      ],
+    });
+    return json({ ok: true, id: order.id });
+  } catch (e) {
+    // Surface the real PayPal reason (auth failure, env mismatch, restricted
+    // account, etc.) instead of a black-box 500 -> generic "Could not start".
+    const msg = e instanceof Error ? e.message : "PayPal request failed";
+    return json({ error: `PayPal: ${msg}`, env: ctx.env.PAYPAL_ENV === "sandbox" ? "sandbox" : "live" }, 502);
+  }
 };

@@ -645,3 +645,16 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   (`/api/license-pdf?track=<trackId>`) so customers can grab a plan license PDF for any past
   download (e.g. for a YouTube Content ID dispute). Frontend tsc 0, lint clean; new/edited server
   files typecheck clean (host verified past NUL-mirror noise).
+- **2026-07-05 (PayPal "Could not start checkout" diagnostics):** owner hit a generic "Could not
+  start checkout" on the /cart PayPal button. Root cause hidden because `functions/api/paypal/
+  order.ts` did NOT wrap paypalToken/paypalCall in try/catch — any PayPal failure (auth 401, env
+  mismatch, restricted account) threw -> Pages Function 500 with no JSON -> frontend fell back to
+  the generic message. Fix: wrapped the order creation in try/catch returning
+  `{ error: "PayPal: <real reason>", env }` (502); Cart's `post()` already reads `error` on
+  non-2xx and createOrder throws it into onError -> the real reason now shows in the toast.
+  MOST LIKELY cause given config reports configured:true (both keys set) but the call fails:
+  a sandbox/live mismatch — sandbox REST-app credentials while PAYPAL_ENV is unset (=> code uses
+  the LIVE api-m.paypal.com base -> auth 401). Fix path: for sandbox testing set PAYPAL_ENV=sandbox
+  AND use sandbox app credentials AND pay with a sandbox buyer account; for live, use live-app
+  credentials with PAYPAL_ENV unset. (capture.ts left un-wrapped for now — the failing step is
+  order/createOrder.) Note test prices $1/$2/$3 are unrelated (valid amounts).
