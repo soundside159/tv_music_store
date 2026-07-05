@@ -250,9 +250,10 @@ export const onRequestPost = async (ctx: Ctx) => {
     collectionChanges?: { add?: string[]; remove?: string[] };
     categoryChanges?: { add?: string[]; remove?: string[] };
     trendingChange?: "add" | "remove";
-    // add_vocab / delete_vocab fields
+    // add_vocab / delete_vocab / set_vocab fields
     facet?: string;
     value?: string;
+    values?: string[];
     fields?: {
       title?: string;
       bpm?: number;
@@ -559,6 +560,32 @@ export const onRequestPost = async (ctx: Ctx) => {
           await db.prepare(`UPDATE tracks SET ${col} = ?2 WHERE id = ?1`).bind(r.id, vals.join(" / ")).run();
         }
       }
+      return json({ ok: true, values: list });
+    }
+
+    case "set_vocab": {
+      // Replace the whole ordered list for a facet (used for reordering).
+      const facet = body.facet as VocabFacet;
+      if (!VOCAB_KEY[facet]) return json({ error: "Unknown facet" }, 400);
+      if (!Array.isArray(body.values)) return json({ error: "values required" }, 400);
+      const seen = new Set<string>();
+      const list: string[] = [];
+      for (const raw of body.values) {
+        if (typeof raw !== "string") continue;
+        const v = raw.trim();
+        const k = v.toLowerCase();
+        if (v && !seen.has(k)) {
+          seen.add(k);
+          list.push(v);
+        }
+      }
+      await db
+        .prepare(
+          `INSERT INTO site_config (key, value) VALUES (?1, ?2)
+           ON CONFLICT(key) DO UPDATE SET value = ?2`,
+        )
+        .bind(VOCAB_KEY[facet], JSON.stringify(list))
+        .run();
       return json({ ok: true, values: list });
     }
 

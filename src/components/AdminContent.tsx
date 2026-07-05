@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Pause, Play, Plus, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Pause, Play, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { usePlayer } from "@/components/playerContext";
 import { useTracks } from "@/hooks/useTracks";
@@ -453,76 +453,116 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
         <div className="mt-5 flex flex-col gap-6">
           <p className="font-body text-sm text-muted-foreground">
             The Use Case / Genre / Mood values shown in the catalog filters and the Tracks Edit
-            panel. Deleting a value also removes it from any track that uses it.
+            panel — in the same order they appear on the site. Use the arrows to reorder; deleting a
+            value also removes it from any track that uses it.
           </p>
           {(
             [
-              ["useCase", "Usage"],
-              ["mood", "Mood"],
+              ["useCase", "Use Case"],
               ["genre", "Genre"],
+              ["mood", "Mood"],
             ] as Array<[keyof Vocabularies, string]>
-          ).map(([key, label]) => (
-            <div key={key} className="rounded-lg border border-border/60 p-4">
-              <p className="mb-3 font-body text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {label} <span className="text-muted-foreground/60">({vocab[key].length})</span>
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {vocab[key].map((value) => (
-                  <span
-                    key={value}
-                    className="flex items-center gap-1.5 rounded-full border border-border bg-secondary/40 py-1 pl-3 pr-1.5 font-body text-xs text-foreground"
-                  >
-                    {value}
-                    <button
-                      type="button"
-                      aria-label={`Delete ${value}`}
-                      disabled={busy}
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            `Delete "${value}" from ${label}? It will be removed from any track using it.`,
-                          )
-                        ) {
-                          void run({ action: "delete_vocab", facet: key, value }, "Value deleted");
-                        }
-                      }}
-                      className="flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive"
+          ).map(([key, label]) => {
+            const list = vocab[key];
+            const saveOrder = (next: string[]) =>
+              void run({ action: "set_vocab", facet: key, values: next }, "Order updated");
+            const move = (index: number, dir: -1 | 1) => {
+              const j = index + dir;
+              if (j < 0 || j >= list.length) return;
+              const next = [...list];
+              [next[index], next[j]] = [next[j], next[index]];
+              saveOrder(next);
+            };
+            return (
+              <div key={key} className="rounded-lg border border-border/60 p-4">
+                <p className="mb-3 font-body text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {label} <span className="text-muted-foreground/60">({list.length})</span>
+                </p>
+                <div className="flex flex-col divide-y divide-border/40 overflow-hidden rounded-lg border border-border/40">
+                  {list.map((value, i) => (
+                    <div
+                      key={value}
+                      className="flex items-center justify-between gap-3 bg-background/40 px-3 py-2"
                     >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
-                {vocab[key].length === 0 && (
-                  <span className="font-body text-xs text-muted-foreground">No values yet.</span>
-                )}
-              </div>
-              <form
-                className="mt-3 flex gap-2"
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  const value = (vocabInput[key] ?? "").trim();
-                  if (!value) return;
-                  const ok = await run({ action: "add_vocab", facet: key, value }, "Value added");
-                  if (ok) setVocabInput((prev) => ({ ...prev, [key]: "" }));
-                }}
-              >
-                <input
-                  placeholder={`Add a ${label.toLowerCase()} value...`}
-                  value={vocabInput[key] ?? ""}
-                  onChange={(e) => setVocabInput((prev) => ({ ...prev, [key]: e.target.value }))}
-                  className={`${inputCls} w-64 max-w-full`}
-                />
-                <button
-                  type="submit"
-                  disabled={busy || !(vocabInput[key] ?? "").trim()}
-                  className={btnCls}
+                      <span className="flex min-w-0 items-center gap-2 font-body text-sm text-foreground">
+                        <span className="w-5 shrink-0 text-right font-body text-xs tabular-nums text-muted-foreground/60">
+                          {i + 1}
+                        </span>
+                        <span className="truncate">{value}</span>
+                      </span>
+                      <span className="flex shrink-0 items-center gap-0.5">
+                        <button
+                          type="button"
+                          aria-label={`Move ${value} up`}
+                          disabled={busy || i === 0}
+                          onClick={() => move(i, -1)}
+                          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:text-[#F4C430] disabled:opacity-30 disabled:hover:text-muted-foreground"
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Move ${value} down`}
+                          disabled={busy || i === list.length - 1}
+                          onClick={() => move(i, 1)}
+                          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:text-[#F4C430] disabled:opacity-30 disabled:hover:text-muted-foreground"
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Delete ${value}`}
+                          disabled={busy}
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Delete "${value}" from ${label}? It will be removed from any track using it.`,
+                              )
+                            ) {
+                              void run({ action: "delete_vocab", facet: key, value }, "Value deleted");
+                            }
+                          }}
+                          className="ml-1 flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </span>
+                    </div>
+                  ))}
+                  {list.length === 0 && (
+                    <p className="bg-background/40 px-3 py-2 font-body text-xs text-muted-foreground">
+                      No values yet.
+                    </p>
+                  )}
+                </div>
+                <form
+                  className="mt-3 flex gap-2"
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    const value = (vocabInput[key] ?? "").trim();
+                    if (!value) return;
+                    const ok = await run({ action: "add_vocab", facet: key, value }, "Value added");
+                    if (ok) setVocabInput((prev) => ({ ...prev, [key]: "" }));
+                  }}
                 >
-                  <Plus className="mr-1 inline h-3 w-3" />
-                  Add
-                </button>
-              </form>
-            </div>
-          ))}
+                  <input
+                    placeholder={`Add a ${label.toLowerCase()} value...`}
+                    value={vocabInput[key] ?? ""}
+                    onChange={(e) => setVocabInput((prev) => ({ ...prev, [key]: e.target.value }))}
+                    className={`${inputCls} w-64 max-w-full`}
+                  />
+                  <button
+                    type="submit"
+                    disabled={busy || !(vocabInput[key] ?? "").trim()}
+                    className={btnCls}
+                  >
+                    <Plus className="mr-1 inline h-3 w-3" />
+                    Add
+                  </button>
+                </form>
+              </div>
+            );
+          })}
         </div>
       )}
 
