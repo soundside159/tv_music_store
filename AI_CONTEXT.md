@@ -323,6 +323,15 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   domain tvmusicstore.com in Resend -> Gmail "Send mail as" contact@tvmusicstore.com via
   smtp.resend.com:465 (user "resend", password = Resend API key); inbound already forwards
   contact@ -> gmail via Email Routing. In-site admin Inbox stays a future task.
+- **2026-07-05 (entrance stagger fix + bigger header logo):** the "holes on filter toggle" bug
+  was NOT waveform loading — it was the framer-motion row entrance (delay 0.55 + index*0.06 on
+  every mount): retained rows repositioned instantly, newly mounted ones sat invisible waiting
+  for their staggered slot. Fix: `useEntranceStagger()` hook in TrackRowPlayer.tsx (ref flips
+  after 1.6s window); Catalog + TrackRowList pass `entranceDelay={done ? 0 : 0.55+index*0.06}`
+  to TrackRow — first page load keeps the cinematic stagger, later filter changes fade rows in
+  immediately (0.25s, no delay). Header logo bumped to h-8/w-8 (md: h-9/w-9). BIMI explicitly
+  skipped per owner. NOTE: waveform FIFO queue from previous entry stays — it handles the
+  decode order; this entry handles the visibility holes.
 - **2026-07-04 (layout align):** constrained the Navigation header to the same content container as
   <main> (mx-auto max-w-[92rem] px-4 sm:px-6) so logo/search/icons line up with page content;
   indented the catalog hero text (lg:pl-[16.75rem] xl:pl-[17.75rem]) to start at the track play

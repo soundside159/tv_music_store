@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { useTracks } from "@/hooks/useTracks";
 import type { MusicCollection } from "@/data/musicCollections";
 import { useCollections } from "@/hooks/useContent";
-import { TrackRow } from "@/components/TrackRowPlayer";
+import { TrackRow, useEntranceStagger } from "@/components/TrackRowPlayer";
 import { usePlayer } from "@/components/PlayerProvider";
 
 type FilterValue = {
@@ -60,6 +60,7 @@ const Catalog = () => {
   const [sort, setSort] = useState("Featured");
   const { activePlayer, isPlaying, progress, playedProgress, playVersion } = usePlayer();
   const { tracks } = useTracks();
+  const staggerDone = useEntranceStagger();
 
   const filteredTracks = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -169,6 +170,7 @@ const Catalog = () => {
                       <TrackRow
                         key={track.id}
                         activePlayer={activePlayer}
+                        entranceDelay={staggerDone.current ? 0 : 0.55 + index * 0.06}
                         expanded={expanded}
                         globalIsPlaying={isPlaying}
                         globalProgress={progress}

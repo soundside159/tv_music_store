@@ -18,6 +18,22 @@ export type ActivePlayer = {
 export const splitFilterValues = (value: string) =>
   value.split("/").map((item) => item.trim()).filter(Boolean);
 
+/**
+ * Staggered row entrance only for the list's FIRST appearance. After the
+ * initial window, re-renders (filter toggles, admin re-sorts) pass delay 0 so
+ * new rows fade in immediately — no "holes" while rows wait for their slot.
+ */
+export const useEntranceStagger = (windowMs = 1600) => {
+  const doneRef = useRef(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      doneRef.current = true;
+    }, windowMs);
+    return () => window.clearTimeout(timer);
+  }, [windowMs]);
+  return doneRef;
+};
+
 export const durationToSeconds = (duration: string) => {
   const parts = duration.split(":").map((part) => Number(part));
   if (parts.some((part) => Number.isNaN(part))) return 0;
@@ -91,6 +107,7 @@ export const ActionIcon = ({ children, label, onClick }: { children: ReactNode; 
 
 export const TrackRow = ({
   activePlayer,
+  entranceDelay,
   expanded,
   globalIsPlaying,
   globalProgress,
@@ -103,6 +120,7 @@ export const TrackRow = ({
   track,
 }: {
   activePlayer: ActivePlayer | null;
+  entranceDelay?: number;
   expanded: boolean;
   globalIsPlaying: boolean;
   globalProgress: number;
@@ -136,7 +154,11 @@ export const TrackRow = ({
   <motion.article
     initial={{ opacity: 0, y: 14 }}
     animate={{ opacity: 1, y: 0 }}
-    transition={{ duration: 0.45, delay: 0.55 + index * 0.06, ease: [0.22, 1, 0.36, 1] }}
+    transition={{
+      duration: entranceDelay === 0 ? 0.25 : 0.45,
+      delay: entranceDelay ?? 0.55 + index * 0.06,
+      ease: [0.22, 1, 0.36, 1],
+    }}
     className="border-b border-border/30 last:border-b-0"
   >
     <div className="music-track-grid grid gap-2.5 rounded-lg px-4 py-3 transition-colors duration-150 hover:bg-foreground/[0.04] xl:items-center">
@@ -485,6 +507,7 @@ export type PlayerEngine = ReturnType<typeof useTrackAudioEngine>;
 /** Drop-in track list with full playback — visually identical to the catalog rows. */
 export const TrackRowList = ({ tracks }: { tracks: CatalogTrack[] }) => {
   const engine = usePlayer();
+  const staggerDone = useEntranceStagger();
 
   return (
     <div className="rounded-lg border border-border/30 bg-card/25">
@@ -500,6 +523,7 @@ export const TrackRowList = ({ tracks }: { tracks: CatalogTrack[] }) => {
           <TrackRow
             key={track.id}
             activePlayer={engine.activePlayer}
+            entranceDelay={staggerDone.current ? 0 : 0.55 + index * 0.06}
             expanded={expanded}
             globalIsPlaying={engine.isPlaying}
             globalProgress={engine.progress}
