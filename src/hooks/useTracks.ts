@@ -17,6 +17,7 @@ type ApiTrack = {
   tags: string[];
   versions: ApiVersion[];
   collection_ids?: string[];
+  cover?: string | null;
 };
 
 const mapTrack = (t: ApiTrack): CatalogTrack => ({
@@ -35,6 +36,7 @@ const mapTrack = (t: ApiTrack): CatalogTrack => ({
   description: t.description ?? "",
   tags: t.tags ?? [],
   collectionIds: t.collection_ids ?? [],
+  cover: t.cover || undefined,
   audioVersions: (t.versions ?? []).map((v) => ({
     id: v.version_id as TrackVersion,
     label: v.label,

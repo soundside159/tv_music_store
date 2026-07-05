@@ -1,10 +1,10 @@
 import { getSessionUser, json, newId, OWNER_EMAIL, readJson, type Ctx, type D1Database } from "../_utils";
 import { seedCollections, seedTracks } from "./_seed_data";
 
-// Admin content editor API (collections, playlists, trending).
+// Admin content editor API (collections, playlists, trending, track editing).
 // GET  -> { collections, playlists, trending } with ordered track ids.
 // POST { action, ... } -> seed_catalog | upsert_collection | delete_collection |
-//        upsert_playlist | delete_playlist | set_tracks | set_trending
+//        upsert_playlist | delete_playlist | set_tracks | set_trending | update_track
 
 const requireAdmin = async (ctx: Ctx) => {
   const user = await getSessionUser(ctx);
@@ -13,6 +13,15 @@ const requireAdmin = async (ctx: Ctx) => {
     return { error: json({ error: "Admin only" }, 403) };
   }
   return { user };
+};
+
+/** Adds tracks.cover on first use — saves the owner a wrangler migration. */
+const ensureTrackCoverColumn = async (db: D1Database) => {
+  try {
+    await db.prepare(`ALTER TABLE tracks ADD COLUMN cover TEXT`).run();
+  } catch {
+    // column already exists — fine
+  }
 };
 
 const ensureSiteConfig = async (db: D1Database) => {
@@ -148,6 +157,13 @@ export const onRequestPost = async (ctx: Ctx) => {
     shortTitle?: string;
     description?: string;
     image?: string;
+    // update_track fields
+    genre?: string;
+    mood?: string;
+    useCase?: string;
+    bpm?: number;
+    tags?: string[];
+    cover?: string;
   }>(ctx.request);
   if (!body?.action) return json({ error: "action required" }, 400);
 
@@ -241,6 +257,35 @@ export const onRequestPost = async (ctx: Ctx) => {
         .bind(JSON.stringify(body.trackIds.slice(0, 24)))
         .run();
       return json({ ok: true });
+    }
+
+    case "update_track": {
+      if (!body.id) return json({ error: "id required" }, 400);
+      const title = body.title?.trim();
+      if (!title) return json({ error: "Title required" }, 400);
+      await ensureTrackCoverColumn(db);
+      const exists = await db.prepare(`SELECT id FROM tracks WHERE id = ?1`).bind(body.id).first();
+      if (!exists) return json({ error: "Track not found" }, 404);
+      const bpm = Number.isFinite(body.bpm) ? Math.round(body.bpm as number) : null;
+      await db
+        .prepare(
+          `UPDATE tracks SET title = ?2, genre = ?3, mood = ?4, use_case = ?5, bpm = ?6,
+                  description = ?7, tags = ?8, cover = ?9
+            WHERE id = ?1`,
+        )
+        .bind(
+          body.id,
+          title,
+          body.genre ?? "",
+          body.mood ?? "",
+          body.useCase ?? "",
+          bpm,
+          body.description ?? "",
+          JSON.stringify(Array.isArray(body.tags) ? body.tags.slice(0, 12) : []),
+          body.cover ?? "",
+        )
+        .run();
+      return json({ ok: true, id: body.id });
     }
 
     default:

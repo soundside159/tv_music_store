@@ -12,6 +12,7 @@ export interface CartItem {
   title: string;
   artist: string;
   tier: LicenseTierId;
+  cover?: string;
 }
 
 const STORAGE_KEY = "tvms_cart_v1";

@@ -176,11 +176,19 @@ export const TrackRow = ({
 
       <Link
         to={`/track/${track.slug}`}
-        className={`min-w-0 truncate whitespace-nowrap font-body text-sm font-medium transition-colors ${
+        className={`flex min-w-0 items-center gap-3 font-body text-sm font-medium transition-colors ${
           mainIsPlaying ? "text-[#F4C430]" : "text-foreground hover:text-[#F4C430]"
         }`}
       >
-        {track.title}
+        {track.cover && (
+          <img
+            src={track.cover}
+            alt=""
+            loading="lazy"
+            className="hidden h-9 w-9 shrink-0 rounded-md border border-border/50 object-cover sm:block"
+          />
+        )}
+        <span className="min-w-0 truncate whitespace-nowrap">{track.title}</span>
       </Link>
 
       <div className="hidden min-w-0 items-center gap-2 overflow-hidden xl:flex">

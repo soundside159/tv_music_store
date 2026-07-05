@@ -174,7 +174,11 @@ const Cart = () => {
                       className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-secondary to-background"
                       aria-label={item.title}
                     >
-                      <Music className="h-6 w-6 text-[#F4C430]/70" />
+                      {item.cover ? (
+                        <img src={item.cover} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <Music className="h-6 w-6 text-[#F4C430]/70" />
+                      )}
                     </Link>
                     <div className="min-w-0 flex-1">
                       <Link

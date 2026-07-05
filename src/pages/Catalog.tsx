@@ -18,16 +18,13 @@ import type { MusicCollection } from "@/data/musicCollections";
 import { useCollections } from "@/hooks/useContent";
 import { TrackRow } from "@/components/TrackRowPlayer";
 import { usePlayer } from "@/components/PlayerProvider";
+import { genreOptions, moodOptions, useCaseOptions } from "@/lib/tagOptions";
 
 type FilterValue = {
   genre: string;
   mood: string;
   useCase: string;
 };
-
-const useCaseOptions = ["Movie Trailer", "Film & TV", "Documentary", "Advertising", "Crime & Thriller", "Business", "Video Game", "Sports", "Technology", "Travel", "Nature", "Luxury"];
-const genreOptions = ["Neo-Classical", "Action", "Drama", "Dark Score", "Sci-Fi", "Fantasy", "Horror"];
-const moodOptions = ["Emotional", "Powerful", "Inspiring", "Suspenseful", "Aggressive", "Tense", "Heroic", "Hopeful", "Uplifting", "Beautiful"];
 
 const splitFilterValues = (value: string) => value.split("/").map((item) => item.trim()).filter(Boolean);
 

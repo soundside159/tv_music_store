@@ -378,3 +378,18 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   UNCOMMITTED in the working tree (files: Catalog.tsx, Navigation.tsx, PlayerProvider.tsx,
   TrackRowPlayer.tsx, functions/api/tracks.ts, and NEW src/hooks/useTracks.ts). Run deploy.bat to
   commit+push them. Reminder: only ONE AI should edit these files at a time to avoid clobbering.
+- **2026-07-05 (track covers + admin track editor):** tracks got real cover art. DB: lazy
+  `ALTER TABLE tracks ADD COLUMN cover` (ensureTrackCoverColumn in admin/content.ts — no manual
+  migration); /api/tracks SELECTs cover with a legacy fallback (try/catch) for pre-column DBs.
+  Admin API: new action `update_track` (title, use_case/genre/mood, bpm, description, tags[],
+  cover) in /api/admin/content. Admin UI: new "Tracks" tab in AdminContent — list with cover
+  thumbs, per-track editor: Use Case / Genre / Mood as checkbox chips (canonical lists moved to
+  NEW `src/lib/tagOptions.ts`, Catalog imports from there now), BPM, description, extra tags
+  (comma input), cover URL + Upload (1000x1000 recommended; reuses /api/admin/upload -> R2
+  covers/); saved edits merge into the local list via trackOverrides (no refetch needed). Editing
+  is disabled while the catalog is on mock fallback (source !== "api"). Frontend covers:
+  `CatalogTrack.cover?` + useTracks maps it; TrackDetail square cover shows real art (placeholder
+  kept as fallback); CartItem.cover -> cart rows render art; TrackRow title cell shows a 36px
+  rounded thumb when cover exists (grid unchanged — thumb lives inside the title Link, hidden
+  <sm). lint 0 errors, tsc clean. Remaining backlog: admin mailbox (Inbox), Account -> Licenses
+  from real sync_orders, license PDFs (+ "Include PDF License" checkbox in the download modal).

@@ -42,6 +42,8 @@ export interface CatalogTrack {
   tags: string[];
   collectionIds: string[];
   audioVersions: TrackAudioVersion[];
+  /** Square cover art URL (1000x1000 recommended). Optional — placeholder shown when absent. */
+  cover?: string;
 }
 
 export const categoryLabels: Record<TrackCategory, string> = {

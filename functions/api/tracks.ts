@@ -13,6 +13,7 @@ interface TrackRow {
   duration: string | null;
   description: string | null;
   tags: string | null;
+  cover: string | null;
 }
 
 interface VersionRow {
@@ -26,12 +27,24 @@ interface VersionRow {
 export const onRequestGet = async (ctx: Ctx) => {
   if (!ctx.env.DB) return json({ error: "DB not bound. See docs/SETUP_BACKEND.md" }, 503);
 
-  const tracks = await ctx.env.DB.prepare(
-    `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags
-       FROM tracks
-      WHERE status = 'published' AND moderation_status = 'approved'
-      ORDER BY created_at DESC`,
-  ).all<TrackRow>();
+  // `cover` is added lazily by the admin editor; older DBs may not have it yet.
+  let tracks: { results: TrackRow[] };
+  try {
+    tracks = await ctx.env.DB.prepare(
+      `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, cover
+         FROM tracks
+        WHERE status = 'published' AND moderation_status = 'approved'
+        ORDER BY created_at DESC`,
+    ).all<TrackRow>();
+  } catch {
+    const legacy = await ctx.env.DB.prepare(
+      `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags
+         FROM tracks
+        WHERE status = 'published' AND moderation_status = 'approved'
+        ORDER BY created_at DESC`,
+    ).all<Omit<TrackRow, "cover">>();
+    tracks = { results: legacy.results.map((t) => ({ ...t, cover: null })) };
+  }
 
   const versions = await ctx.env.DB.prepare(
     `SELECT track_id, version_id, label, duration, preview_src

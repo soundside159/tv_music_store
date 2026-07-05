@@ -92,13 +92,19 @@ const TrackDetail = () => {
         <section className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
           {/* Left: cover + info */}
           <div className="h-fit rounded-xl border border-border bg-card p-6">
-            {/* Square cover — real artwork comes with track upload later. */}
+            {/* Square cover — real artwork from Admin -> Content -> Tracks; placeholder otherwise. */}
             <div className="relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-secondary via-background to-secondary">
-              <Music className="h-16 w-16 text-[#F4C430]/40" />
-              <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 font-body text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70">
-                <img src="/logo.svg" alt="" className="h-3.5 w-auto opacity-70" />
-                TV Music Store
-              </span>
+              {track.cover ? (
+                <img src={track.cover} alt={`${track.title} cover art`} className="h-full w-full object-cover" />
+              ) : (
+                <>
+                  <Music className="h-16 w-16 text-[#F4C430]/40" />
+                  <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 font-body text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70">
+                    <img src="/logo.svg" alt="" className="h-3.5 w-auto opacity-70" />
+                    TV Music Store
+                  </span>
+                </>
+              )}
             </div>
 
             <h1 className="mt-5 font-body text-2xl font-semibold text-foreground">{track.title}</h1>
@@ -215,6 +221,7 @@ const TrackDetail = () => {
                       title: track.title,
                       artist: track.artist,
                       tier: selectedTier,
+                      cover: track.cover,
                     })
                   }
                   className="inline-flex items-center gap-2 rounded-lg bg-[#F4C430] px-6 py-2.5 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
