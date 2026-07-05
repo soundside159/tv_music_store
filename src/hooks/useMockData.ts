@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import type {
   Composer,
   DownloadLogEntry,
@@ -90,8 +90,30 @@ export const usePlans = (): PlanConfig[] => mockPlans;
 export const useMyDownloads = (): DownloadLogEntry[] => {
   const live = useAuthSession();
   const user = useCurrentUser();
-  // Live users: real download history endpoint comes with phase 3.3 (R2 files).
-  if (live.status === "authed") return [];
+  const [liveRows, setLiveRows] = useState<DownloadLogEntry[]>([]);
+
+  useEffect(() => {
+    if (live.status !== "authed" || !live.user) return;
+    let cancelled = false;
+    fetch("/api/downloads", { credentials: "include" })
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = (await res.json()) as { downloads?: Omit<DownloadLogEntry, "userId">[] };
+        if (!cancelled && data.downloads) {
+          setLiveRows(
+            data.downloads.map((d) => ({ ...d, userId: live.user?.id ?? "" }) as DownloadLogEntry),
+          );
+        }
+      })
+      .catch(() => {
+        // API unreachable — history simply stays empty
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [live.status, live.user]);
+
+  if (live.status === "authed") return liveRows;
   return user
     ? mockDownloadLog
         .filter((d) => d.userId === user.id)

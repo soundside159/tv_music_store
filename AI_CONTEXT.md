@@ -200,6 +200,13 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   `max-w-[92rem]` is kept as fallback. Logo: owner wants his exact PNG instead of the redrawn
   logo.svg — waiting for him to drop `logo.png` into `public/`; then switch Navigation img,
   favicon links (index.html) and regenerate favicon.ico from it.
+- **2026-07-05 (download history):** new GET `/api/downloads` (user's last 100 download_log rows,
+  LEFT JOIN tracks for titles, slug prettified as fallback). `useMyDownloads` now fetches it for
+  live sessions (mock personas unchanged); `DownloadLogEntry` gained optional `trackTitle`;
+  Account renders `d.trackTitle ?? trackTitle(d.trackId)`. Account → Downloads + Overview recent
+  list now show real history. "Re-download" button is still a placeholder. NEXT BIG STEP: Stripe
+  (waiting for the owner to register stripe.com and add STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET
+  to Cloudflare), then admin Content editor per PAGES_SPEC 4.1.
 - **2026-07-04 (layout align):** constrained the Navigation header to the same content container as
   <main> (mx-auto max-w-[92rem] px-4 sm:px-6) so logo/search/icons line up with page content;
   indented the catalog hero text (lg:pl-[16.75rem] xl:pl-[17.75rem]) to start at the track play

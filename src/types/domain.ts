@@ -69,6 +69,8 @@ export interface DownloadLogEntry {
   planAtDownload: PlanId;
   format: DownloadFormat;
   createdAt: string; // ISO datetime
+  /** Present on live API entries; mock entries resolve titles via catalogTracks. */
+  trackTitle?: string;
 }
 
 export interface WhitelistChannel {

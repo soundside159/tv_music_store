@@ -346,7 +346,7 @@ const Account = () => {
                     <ul className="divide-y divide-border/60">
                       {downloads.slice(0, 5).map((d) => (
                         <li key={d.id} className="flex items-center justify-between py-2.5">
-                          <span className="truncate font-body text-sm text-foreground">{trackTitle(d.trackId)}</span>
+                          <span className="truncate font-body text-sm text-foreground">{d.trackTitle ?? trackTitle(d.trackId)}</span>
                           <span className="ml-4 shrink-0 font-body text-xs uppercase text-muted-foreground">
                             {d.format} · {fmtDate(d.createdAt)}
                           </span>
@@ -377,7 +377,7 @@ const Account = () => {
                       <tbody>
                         {downloads.map((d) => (
                           <tr key={d.id} className="border-b border-border/50 last:border-0">
-                            <td className="py-2.5 pr-4 text-foreground">{trackTitle(d.trackId)}</td>
+                            <td className="py-2.5 pr-4 text-foreground">{d.trackTitle ?? trackTitle(d.trackId)}</td>
                             <td className="py-2.5 pr-4 uppercase text-muted-foreground">{d.format}</td>
                             <td className="py-2.5 pr-4 capitalize text-muted-foreground">{d.planAtDownload}</td>
                             <td className="py-2.5 pr-4 text-muted-foreground">{fmtDate(d.createdAt)}</td>
