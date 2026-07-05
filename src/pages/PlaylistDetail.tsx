@@ -2,16 +2,19 @@ import { Link, useParams } from "react-router-dom";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { TrackRowList } from "@/components/TrackRowPlayer";
-import { catalogTracks } from "@/data/catalogTracks";
-import { mockPlaylists } from "@/mocks";
+import type { CatalogTrack } from "@/data/catalogTracks";
+import { usePlaylists } from "@/hooks/useContent";
+import { useTracks } from "@/hooks/useTracks";
 
 const PlaylistDetail = () => {
   const { slug } = useParams();
-  const playlist = mockPlaylists.find((p) => p.slug === slug);
+  const playlists = usePlaylists();
+  const { tracks: allTracks } = useTracks();
+  const playlist = playlists.find((p) => p.slug === slug || p.id === slug);
   const tracks = playlist
     ? playlist.trackIds
-        .map((id) => catalogTracks.find((t) => t.id === id))
-        .filter((t): t is (typeof catalogTracks)[number] => Boolean(t))
+        .map((id) => allTracks.find((t) => t.id === id))
+        .filter((t): t is CatalogTrack => Boolean(t))
     : [];
 
   if (!playlist) {

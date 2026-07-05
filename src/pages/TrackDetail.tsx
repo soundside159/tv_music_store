@@ -16,8 +16,9 @@ import {
 import Navigation from "@/components/Navigation";
 import WaveformPreview from "@/components/WaveformPreview";
 import { Button } from "@/components/ui/button";
-import { catalogTracks, categoryLabels } from "@/data/catalogTracks";
+import { categoryLabels } from "@/data/catalogTracks";
 import type { CatalogTrack, TrackAudioVersion, TrackVersion } from "@/data/catalogTracks";
+import { useTracks } from "@/hooks/useTracks";
 import { usePlayer } from "@/components/playerContext";
 
 type DetailTab = "versions" | "similar" | "license";
@@ -51,6 +52,7 @@ const licenseTiers = [
 
 const TrackDetail = () => {
   const { slug } = useParams();
+  const { tracks: catalogTracks } = useTracks();
   const track = catalogTracks.find((item) => item.slug === slug);
   const [activeTab, setActiveTab] = useState<DetailTab>("versions");
   const [selectedVersions, setSelectedVersions] = useState<Record<string, TrackVersion>>({});
@@ -60,7 +62,7 @@ const TrackDetail = () => {
     if (!track) return [];
 
     return catalogTracks.filter((item) => item.id !== track.id).slice(0, 4);
-  }, [track]);
+  }, [track, catalogTracks]);
 
   if (!track) {
     return (

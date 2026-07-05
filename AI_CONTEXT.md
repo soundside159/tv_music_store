@@ -227,8 +227,21 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   or DB empty). Wired: Index "Trending tracks" block (admin-picked order, fallback first 8),
   Catalog (activeCollection lookup + collections strip), Collections page, CollectionDetail
   (tracks now from useTracks too). STILL ON MOCKS: Playlists / PlaylistDetail pages (wire to
-  /api/content playlists next), TrackDetail (still imports catalogTracks directly). Also pending:
+  /api/content playlists next), TrackDetail (still imports catalogTracks directly) — UPDATE same
+  day: DONE. Playlists + PlaylistDetail use usePlaylists() (live /api/content, slug=id for live
+  rows, mock fallback), TrackDetail + PlaylistDetail use useTracks(). The whole storefront now
+  follows Admin -> Content edits. Also pending:
   cover upload via R2, per-track tag editing (spec 4.1), Stripe (owner registration).
+- **2026-07-05 (R2 + panel images prep):** owner created R2 bucket **tvmusicstore-files**
+  (public access disabled — correct). NEXT AI: (1) tell owner to bind it in Pages: Workers &
+  Pages -> tv_music_store -> Settings -> Bindings -> Add -> R2 bucket, variable name **R2**,
+  bucket tvmusicstore-files, then deploy; (2) build `/api/admin/upload` (admin-only PUT image ->
+  R2 key covers/...) + public `/api/file/[[path]].ts` serving R2 objects, wire an Upload button in
+  AdminContent cover field; (3) later WAV masters go to R2 keys stored in
+  track_versions.r2_key_wav (download.ts already reads them). Homepage 3 panel cards now take
+  background images from `/images/panels/{catalog,collections,playlists}.png` (800x168, graceful
+  if missing) — owner will drop the PNG files into public/images/panels/ himself; lucide icon in
+  those cards is hidden when backgrounds land (class "hidden").
 - **2026-07-04 (layout align):** constrained the Navigation header to the same content container as
   <main> (mx-auto max-w-[92rem] px-4 sm:px-6) so logo/search/icons line up with page content;
   indented the catalog hero text (lg:pl-[16.75rem] xl:pl-[17.75rem]) to start at the track play

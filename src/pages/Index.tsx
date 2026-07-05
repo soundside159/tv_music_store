@@ -58,16 +58,17 @@ const Index = () => {
         <section className="mx-auto w-full max-w-7xl px-4 pb-14 sm:px-6">
           <div className="grid gap-4 sm:grid-cols-3">
             {[
-              { to: "/catalog", icon: Library, title: "Catalog", text: "Every track in the library" },
-              { to: "/collections", icon: Layers, title: "Collections", text: "Curated by style and genre" },
-              { to: "/playlists", icon: ListMusic, title: "Playlists", text: "Handpicked for your use case" },
+              { to: "/catalog", icon: Library, title: "Catalog", text: "Every track in the library", bg: "/images/panels/catalog.png" },
+              { to: "/collections", icon: Layers, title: "Collections", text: "Curated by style and genre", bg: "/images/panels/collections.png" },
+              { to: "/playlists", icon: ListMusic, title: "Playlists", text: "Handpicked for your use case", bg: "/images/panels/playlists.png" },
             ].map((c) => (
               <Link
                 key={c.to}
                 to={c.to}
-                className="group flex items-center gap-4 rounded-xl border border-border bg-card p-5 transition-colors hover:border-[#F4C430]/60"
+                style={{ backgroundImage: `url('${c.bg}')` }}
+                className="group flex items-center gap-4 rounded-xl border border-border bg-card bg-cover bg-center p-5 transition-colors hover:border-[#F4C430]/60"
               >
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground transition-colors group-hover:text-[#F4C430]">
+                <span className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground transition-colors group-hover:text-[#F4C430]">
                   <c.icon className="h-5 w-5" />
                 </span>
                 <span className="min-w-0 flex-1">

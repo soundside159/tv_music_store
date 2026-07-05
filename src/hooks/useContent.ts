@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { musicCollections, type MusicCollection } from "@/data/musicCollections";
+import { mockPlaylists } from "@/mocks";
 import type { CatalogTrack } from "@/data/catalogTracks";
 import { useTracks } from "@/hooks/useTracks";
 
@@ -63,6 +64,48 @@ export const useCollections = (): MusicCollection[] => {
     };
   }, []);
   return list;
+};
+
+export interface LivePlaylist {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  image: string;
+  trackIds: string[];
+}
+
+/** Playlists for /playlists pages (live, mock fallback). */
+export const usePlaylists = (): LivePlaylist[] => {
+  const [list, setList] = useState<LivePlaylist[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void fetchContent().then((data) => {
+      if (cancelled || !data?.playlists?.length) return;
+      setList(
+        data.playlists.map((p) => ({
+          id: p.id,
+          slug: p.id,
+          title: p.title,
+          description: p.description ?? "",
+          image: p.image || "/images/collections/orchestral.jpg",
+          trackIds: p.trackIds ?? [],
+        })),
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  if (list) return list;
+  return mockPlaylists.map((p) => ({
+    id: p.id,
+    slug: p.slug,
+    title: p.title,
+    description: p.description ?? "",
+    image: p.image,
+    trackIds: p.trackIds,
+  }));
 };
 
 /** Homepage "Trending tracks": admin-picked order, fallback = first N tracks. */

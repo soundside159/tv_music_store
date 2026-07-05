@@ -1,9 +1,11 @@
 import { Link } from "react-router-dom";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import { mockPlaylists } from "@/mocks";
+import { usePlaylists } from "@/hooks/useContent";
 
-const Playlists = () => (
+const Playlists = () => {
+  const mockPlaylists = usePlaylists();
+  return (
   <div className="min-h-screen bg-background">
     <Navigation />
     <main className="mx-auto w-full max-w-7xl px-4 pb-24 pt-24 sm:px-6 md:pt-28">
@@ -44,6 +46,7 @@ const Playlists = () => (
     </main>
     <Footer />
   </div>
-);
+  );
+};
 
 export default Playlists;
