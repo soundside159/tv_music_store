@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Copy, Download, Heart, Pause, Play, ShoppingCart } from "lucide-react";
-import { downloadTrackVersion } from "@/lib/downloadTrack";
+import { openDownloadOptions } from "@/lib/downloadTrack";
 import WaveformPreview from "@/components/WaveformPreview";
 import type { CatalogTrack, TrackAudioVersion, TrackVersion } from "@/data/catalogTracks";
 import { usePlayer } from "@/components/playerContext";
@@ -241,7 +241,7 @@ export const TrackRow = ({
         <ActionIcon
           label="Download"
           onClick={() =>
-            void downloadTrackVersion({
+            openDownloadOptions({
               slug: track.slug,
               versionId: selectedVersion.id,
               src: selectedVersion.src,
@@ -311,7 +311,7 @@ export const TrackRow = ({
                     <ActionIcon
                       label="Download"
                       onClick={() =>
-                        void downloadTrackVersion({
+                        openDownloadOptions({
                           slug: track.slug,
                           versionId: version.id,
                           src: version.src,

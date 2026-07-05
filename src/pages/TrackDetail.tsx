@@ -21,7 +21,7 @@ import { useTracks } from "@/hooks/useTracks";
 import { usePlayer } from "@/components/playerContext";
 import { licenseTiers, type LicenseTierId } from "@/lib/licenses";
 import { addToCart } from "@/hooks/useCart";
-import { downloadTrackVersion } from "@/lib/downloadTrack";
+import { openDownloadOptions } from "@/lib/downloadTrack";
 
 const GOLD = "#F4C430";
 
@@ -130,7 +130,7 @@ const TrackDetail = () => {
             <button
               type="button"
               onClick={() =>
-                void downloadTrackVersion({
+                openDownloadOptions({
                   slug: track.slug,
                   versionId: mainVersion.id,
                   src: mainVersion.src,

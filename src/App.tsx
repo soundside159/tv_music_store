@@ -22,6 +22,7 @@ import Admin from "./pages/Admin";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import DevPersonaSwitcher from "./components/DevPersonaSwitcher";
+import DownloadOptionsModal from "./components/DownloadOptionsModal";
 import { PlayerProvider } from "./components/PlayerProvider";
 
 const queryClient = new QueryClient();
@@ -55,6 +56,7 @@ const App = () => (
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
           </Routes>
+          <DownloadOptionsModal />
         </PlayerProvider>
       </BrowserRouter>
     </TooltipProvider>

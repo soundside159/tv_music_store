@@ -358,6 +358,19 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   Waveform tunetank look: BAR_STEP 4 (bar 3px + 1px gap), unplayed bars opacity 0.3 on idle
   rows / 0.62 on the active (playing) track, played part SOLID gold (opacity 1), per-bar CSS
   transition 0.35s so selecting a track brightens the whole wave smoothly.
+- **2026-07-05 (Download options modal):** every Download button (catalog rows main+alt,
+  mini-player, track page) now opens the tunetank-style dialog instead of downloading directly:
+  `src/components/DownloadOptionsModal.tsx` (mounted globally in App.tsx inside PlayerProvider,
+  listens for "tvms:download-options"); `openDownloadOptions(args)` in downloadTrack.ts
+  dispatches it. Options: MP3 128 (all), MP3 320 (PRO badge; maps to the same mp3 file until
+  320s exist), WAV 44.1 (MAX -> format wav), STEMS (MAX, disabled "SOON" — no stems in R2 yet,
+  and /api/download would treat unknown formats as mp3). Plan-locked selection turns the CTA
+  into "Upgrade to PRO/MAX" -> /pricing. Footer counter: free "N of 3 left", paid "Unlimited",
+  guest hint. Guests can press Download Now -> existing 401 -> auth-modal -> resume flow still
+  works (resume downloads directly, skipping the dialog — acceptable). "Include PDF License"
+  checkbox NOT added yet (PDF generation not built — add when licenses PDF task lands).
+  Remaining backlog: track covers + admin track editor, admin mailbox, licenses from sync_orders
+  in Account, license PDFs.
 - **2026-07-04 (layout align):** constrained the Navigation header to the same content container as
   <main> (mx-auto max-w-[92rem] px-4 sm:px-6) so logo/search/icons line up with page content;
   indented the catalog hero text (lg:pl-[16.75rem] xl:pl-[17.75rem]) to start at the track play

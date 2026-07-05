@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Download, Heart, Pause, Play, ShoppingCart, Volume2 } from "lucide-react";
-import { downloadTrackVersion } from "@/lib/downloadTrack";
+import { openDownloadOptions } from "@/lib/downloadTrack";
 import WaveformPreview from "@/components/WaveformPreview";
 import {
   ActionIcon,
@@ -91,7 +91,7 @@ export const PlayerProvider = ({ children }: { children: ReactNode }) => {
                 <ActionIcon
                   label="Download"
                   onClick={() =>
-                    void downloadTrackVersion({
+                    openDownloadOptions({
                       slug: currentTrack.slug,
                       versionId: currentVersion.id,
                       src: currentVersion.src,

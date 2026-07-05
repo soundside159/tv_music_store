@@ -13,6 +13,14 @@ export interface DownloadArgs {
   format?: "mp3" | "wav";
 }
 
+/**
+ * Opens the "Download options" dialog (format picker, plan gates, free
+ * counter). DownloadOptionsModal is mounted globally in App.tsx.
+ */
+export const openDownloadOptions = (args: DownloadArgs): void => {
+  window.dispatchEvent(new CustomEvent("tvms:download-options", { detail: args }));
+};
+
 export const downloadTrackVersion = async (args: DownloadArgs): Promise<void> => {
   const format = args.format ?? "mp3";
   try {
