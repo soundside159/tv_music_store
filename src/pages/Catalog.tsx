@@ -106,7 +106,7 @@ const Catalog = () => {
     <div className="min-h-screen bg-background pb-24 text-foreground">
       <Navigation />
 
-      <main className="mx-auto w-full max-w-[92rem] px-4 pt-20 sm:px-6">
+      <main className="mx-auto w-full max-w-[92rem] px-4 pt-20 sm:px-6 min-[1800px]:max-w-7xl">
         <div className="animate-rise-in" style={{ animationDelay: "0.05s" }}>
           <CatalogBreadcrumb activeCollection={activeCollection} />
         </div>
@@ -114,8 +114,16 @@ const Catalog = () => {
           <LibraryHero />
         </div>
 
-        <section className="mt-4 grid gap-5 lg:grid-cols-[14.5rem_minmax(0,1fr)] xl:grid-cols-[15.5rem_minmax(0,1fr)]">
-          <div className="animate-slide-in-left" style={{ animationDelay: "0.4s" }}>
+        {/* ≥1800px: the content column takes the full home-width tunnel (centered on
+            the screen) and the filter sidebar hangs to the LEFT of it, outside the
+            tunnel — so the header never jumps between pages and track rows get the
+            full tunnel width. Below 1800px there is no room for that, so the classic
+            sidebar+content grid stays. */}
+        <section className="relative mt-4 grid gap-5 lg:grid-cols-[14.5rem_minmax(0,1fr)] xl:grid-cols-[15.5rem_minmax(0,1fr)] min-[1800px]:grid-cols-1">
+          <div
+            className="animate-slide-in-left min-[1800px]:absolute min-[1800px]:bottom-0 min-[1800px]:right-full min-[1800px]:top-0 min-[1800px]:mr-6 min-[1800px]:w-[15.5rem]"
+            style={{ animationDelay: "0.4s" }}
+          >
             <FilterSidebar filters={filters} setFilter={setFilter} onClear={clearFilters} />
           </div>
 
@@ -246,7 +254,7 @@ const CatalogBreadcrumb = ({ activeCollection }: { activeCollection: MusicCollec
 );
 
 const LibraryHero = () => (
-  <section className="mt-4 lg:pl-[16.75rem] xl:pl-[17.75rem]">
+  <section className="mt-4 lg:pl-[16.75rem] xl:pl-[17.75rem] min-[1800px]:pl-0">
     <p className="font-body text-[0.7rem] font-semibold uppercase tracking-[0.32em] text-[#F4C430]/90">
       Discover
     </p>

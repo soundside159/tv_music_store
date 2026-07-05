@@ -190,6 +190,16 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   existing users get their name re-synced from Google on next login. New brand logo:
   `public/logo.svg` (gold soundwave→play, #F4C430) + regenerated `public/favicon.ico`, favicon
   links added to index.html, logo image added before the wordmark in Navigation.
+- **2026-07-05 (tunnel alignment):** owner's canon: the HOME content width (`max-w-7xl`) is the
+  "100% tunnel". Navigation header container and the bottom mini-player are now `max-w-7xl` so
+  header icons/logo line up with home content and never jump between pages. Catalog: at
+  `min-[1800px]` the main container becomes `max-w-7xl`, the content column (hero, search, tracks)
+  is centered on the SCREEN at tunnel width, and FilterSidebar is absolutely positioned to the
+  LEFT of the tunnel (outside it, not counted in centering); hero indent removed at that width.
+  Below 1800px there is no horizontal room for that, so the previous sidebar+content grid inside
+  `max-w-[92rem]` is kept as fallback. Logo: owner wants his exact PNG instead of the redrawn
+  logo.svg — waiting for him to drop `logo.png` into `public/`; then switch Navigation img,
+  favicon links (index.html) and regenerate favicon.ico from it.
 - **2026-07-04 (layout align):** constrained the Navigation header to the same content container as
   <main> (mx-auto max-w-[92rem] px-4 sm:px-6) so logo/search/icons line up with page content;
   indented the catalog hero text (lg:pl-[16.75rem] xl:pl-[17.75rem]) to start at the track play
