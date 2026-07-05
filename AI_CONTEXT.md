@@ -527,3 +527,15 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   from earlier rounds (`*__v.tsx`, `*__chk.tsx`) linger in the SANDBOX mirror (can't rm — overlay
   perms) but are NOT on host (Glob confirmed) so deploy.bat is unaffected; ignore them in sandbox
   lint output. Back to the main plan next.
+- **2026-07-05 (admin left-anchor, no jump + Tracks Edit fills right):** owner: switching to
+  Tracks Edit made the whole sidebar/list JUMP left (because `<main>` was `mx-auto` centered and
+  the tracksedit box was wider -> re-centered further left). Fix: dropped `mx-auto` from the admin
+  `<main>` entirely — the admin is now LEFT-ANCHORED, so the sidebar + track list never move
+  between sections. Normal sections keep `max-w-6xl` (now left-aligned instead of centered);
+  `section === "tracksedit"` uses `max-w-none` so it extends to the right screen edge, and the
+  AdminTracksEdit grid `[minmax(44rem,1fr)_minmax(32rem,1fr)]` splits that width into the track
+  table (left) + Edit panel (right), both roomy (checkboxes fit without inner scroll). Trade-off:
+  non-tracks admin sections are now left-aligned (empty space on the right on wide screens) — this
+  is intentional (standard fixed-sidebar admin layout) and the only way to keep the menu from
+  moving; re-add `mx-auto` to the non-tracksedit branch if the owner wants them centered again
+  (but that reintroduces the jump). tsc 0.
