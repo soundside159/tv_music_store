@@ -590,3 +590,19 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   subline. The "License PDF" button is STILL a placeholder — real PDF generation is main-plan #5
   (next); `hasPdf` is already surfaced by the API so #5 can switch the button on/off per row.
   Frontend tsc 0; functions/ (licenses.ts) verified by Read, mirrors downloads.ts.
+- **2026-07-05 (license PDFs + Include PDF License — main plan #5 done):** license certificates
+  are generated ON THE FLY (no storage, no R2 needed). New `functions/api/_pdf.ts` = a tiny
+  zero-dependency single-page PDF generator (Helvetica/Helvetica-Bold standard fonts, Latin1
+  bytes, ASCII-sanitized text, hand-built xref) — validated with qpdf (`--check` = no syntax
+  errors) and an offset self-check. New `functions/api/license-pdf.ts` (GET, session required):
+  `?order=<sync_order_id>` -> certificate for a purchased one-time license (tier name + usage
+  terms from a server TIER_INFO map, licensee = user name/email, track title, price, PayPal ref,
+  date); `?slug=<track_slug>` -> certificate for the user's current subscription plan (PLAN_INFO
+  free/pro/max terms, plan read from subscriptions like me.ts). Returns application/pdf as an
+  attachment. Frontend: Account -> Licenses "License PDF" button is now a real
+  `<a href="/api/license-pdf?order=ID" target=_blank>` (works for any real sync_order; generation
+  is on-demand so no hasPdf gating needed). DownloadOptionsModal gained an "Include PDF License"
+  checkbox (authed users only, hidden for the disabled STEMS option); when checked, after the
+  audio download it also fetches `/api/license-pdf?slug=...` (attachment header -> downloads the
+  cert without navigating). Frontend tsc 0; new server files typecheck clean in isolation + PDF
+  output validated by qpdf. Only #6 (Add Track upload flow) remains on the main plan.

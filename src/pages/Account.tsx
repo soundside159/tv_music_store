@@ -432,12 +432,14 @@ const Account = () => {
                               {o.price ? ` · $${o.price}` : ""}
                             </span>
                           </span>
-                          <button
-                            type="button"
+                          <a
+                            href={`/api/license-pdf?order=${encodeURIComponent(o.id)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
                             className="shrink-0 font-body text-xs font-semibold text-[#F4C430] hover:underline"
                           >
                             License PDF
-                          </button>
+                          </a>
                         </li>
                       ))}
                     </ul>

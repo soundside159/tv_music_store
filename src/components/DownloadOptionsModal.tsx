@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Download, X } from "lucide-react";
+import { Check, Download, X } from "lucide-react";
 import { useAuthSession } from "@/hooks/useAuth";
 import { downloadTrackVersion, type DownloadArgs } from "@/lib/downloadTrack";
 
@@ -44,12 +44,14 @@ const DownloadOptionsModal = () => {
   const { status, subscription, downloadsUsedThisMonth } = useAuthSession();
   const [args, setArgs] = useState<DownloadArgs | null>(null);
   const [selected, setSelected] = useState<OptionId>("mp3-128");
+  const [includePdf, setIncludePdf] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     const open = (event: Event) => {
       setArgs((event as CustomEvent<DownloadArgs>).detail);
       setSelected("mp3-128");
+      setIncludePdf(false);
     };
     window.addEventListener("tvms:download-options", open);
     return () => window.removeEventListener("tvms:download-options", open);
@@ -82,6 +84,14 @@ const DownloadOptionsModal = () => {
     setBusy(true);
     try {
       await downloadTrackVersion({ ...args, format: option.id === "wav" ? "wav" : "mp3" });
+      if (includePdf && status === "authed") {
+        // Attachment header makes this download the certificate without navigating.
+        const a = document.createElement("a");
+        a.href = `/api/license-pdf?slug=${encodeURIComponent(args.slug)}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
     } finally {
       setBusy(false);
       close();
@@ -159,6 +169,28 @@ const DownloadOptionsModal = () => {
             );
           })}
         </div>
+
+        {status === "authed" && !option.soon && (
+          <button
+            type="button"
+            onClick={() => setIncludePdf((v) => !v)}
+            className="mt-4 flex w-full items-center gap-2.5 rounded-xl border border-border bg-background/40 p-3 text-left transition-colors hover:border-[#F4C430]/50"
+          >
+            <span
+              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                includePdf ? "border-[#F4C430] bg-[#F4C430]" : "border-border"
+              }`}
+            >
+              {includePdf && <Check className="h-3 w-3 text-background" />}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-body text-xs font-semibold text-foreground">Include PDF License</span>
+              <span className="block font-body text-[11px] text-muted-foreground">
+                A license certificate for this track on your current plan.
+              </span>
+            </span>
+          </button>
+        )}
 
         <p className="mt-4 text-center font-body text-xs text-muted-foreground">
           {status === "authed" && plan === "free" && `${freeLeft} of 3 free downloads left this month`}
