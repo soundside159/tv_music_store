@@ -140,7 +140,11 @@ const Admin = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
-      <main className="mx-auto w-full max-w-6xl px-4 pb-24 pt-24 sm:px-6 md:pt-28">
+      <main
+        className={`mx-auto w-full px-4 pb-24 pt-24 sm:px-6 md:pt-28 ${
+          section === "playlists" ? "max-w-[100rem]" : "max-w-6xl"
+        }`}
+      >
         <div className="flex flex-col gap-8 md:flex-row">
           <aside className="shrink-0 md:w-56">
             <nav className="flex flex-col gap-1">

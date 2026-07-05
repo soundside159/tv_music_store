@@ -402,7 +402,7 @@ const AdminTracksEdit = ({
   const hasSelection = selTracks.length > 0;
 
   return (
-    <div className="mt-5 items-start gap-5 xl:grid xl:grid-cols-[minmax(0,1fr)_21rem]">
+    <div className="mt-5 items-start gap-6 xl:grid xl:grid-cols-[minmax(0,1fr)_25rem]">
       {/* ===== Left: toolbar + table + pagination ===== */}
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-3">
@@ -536,7 +536,7 @@ const AdminTracksEdit = ({
                           onSeek={(p) => player.playVersion(t, version, p)}
                           progress={versionProgress(t, version.id)}
                           src={version.src}
-                          className="mt-0.5 hidden h-5 max-w-[14rem] md:block"
+                          className="mt-0.5 hidden h-5 max-w-[14rem] md:block lg:max-w-[24rem]"
                         />
                       )}
                     </div>

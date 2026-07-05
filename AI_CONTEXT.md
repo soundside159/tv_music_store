@@ -452,3 +452,17 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   generation + "Include PDF License" checkbox in the download modal; (6) "Add Track" flow in
   admin (upload MP3 previews/WAV masters to R2, create tracks/versions rows); nice-to-haves:
   no-cover/no-tags filter, draft/published toggle, duplicate track, undo last Apply.
+- **2026-07-05 (admin width — TODO #1 done):** the /admin main container was `max-w-6xl` for
+  every section, squeezing the Content / Tracks Edit area (table got a horizontal scrollbar, the
+  edit panel a vertical one, big empty gutter on the right). Fix: `src/pages/Admin.tsx` main
+  container is now width-conditional — `max-w-[100rem]` when `section === "playlists"` (the
+  Content section), `max-w-6xl` for all other sections (dashboard/finance/etc. stay compact).
+  `src/components/AdminTracksEdit.tsx`: right edit-panel column widened `21rem -> 25rem` (grid
+  `xl:grid-cols-[minmax(0,1fr)_25rem]`, gap 5->6) so USAGE/MOOD/GENRE chips fit comfortably; the
+  in-row waveform max width grows on wide screens (`lg:max-w-[24rem]`). The freed width means the
+  track table no longer needs its horizontal scrollbar at normal desktop widths (the
+  `overflow-x-auto` + `min-w-[42rem]` wrapper stays as a small-screen safety net). AdminContent
+  wrapper has no max-w so the widening flows through. lint 0 errors, tsc clean. Edits made via
+  host file tools (no sandbox heredoc), host files verified. Remaining queue: (2) editable
+  Use Case/Genre/Mood vocabularies from admin; (3) admin mailbox; (4) Account -> Licenses from
+  real sync_orders; (5) license PDFs + "Include PDF License" checkbox; (6) "Add Track" upload flow.
