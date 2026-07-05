@@ -242,6 +242,25 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   background images from `/images/panels/{catalog,collections,playlists}.png` (800x168, graceful
   if missing) — owner will drop the PNG files into public/images/panels/ himself; lucide icon in
   those cards is hidden when backgrounds land (class "hidden").
+- **2026-07-05 (Stripe + R2 uploads):** STRIPE IS CODED. `functions/api/stripe/`: `_stripe.ts`
+  (REST client via fetch, webhook HMAC verify, upsertSubscription — lazily adds
+  subscriptions.stripe_customer_id), `checkout.ts` (POST {plan,interval} -> Checkout URL;
+  products/prices auto-created on first call and cached in plan_config.stripe_price_*),
+  `webhook.ts` (checkout.session.completed, subscription.updated/deleted, invoice.payment_failed
+  -> subscriptions table; deleted -> plan 'free'), `portal.ts` (billing portal URL).
+  Frontend: `src/lib/billing.ts` (startCheckout/openBillingPortal, 401 -> tvms:open-auth);
+  Pricing cards wired (Select plan -> checkout, current -> portal, free -> catalog/login);
+  Account: Manage billing button (Overview) + Billing section wired to portal (placeholder gone).
+  No publishable-key/Stripe.js needed (redirect via session.url). R2 UPLOADS: `POST
+  /api/admin/upload?filename=` (admin, raw image body, 8MB max -> covers/<name>-<uuid>.<ext>),
+  `GET /api/file/[[path]]` (serves ONLY covers/ + images/ prefixes — never audio masters),
+  Upload button next to cover URL field in AdminContent. health.ts now also reports
+  stripe_webhook + r2. Panel images renamed to public/images/panels/{catalog,collections,
+  playlists}.png (were "catalogue (final).png" etc). OWNER STEPS PENDING: (1) STRIPE_SECRET_KEY
+  secret in CF (live /api/health said stripe:missing before this deploy), (2) R2 binding var R2 ->
+  tvmusicstore-files, (3) after deploy create webhook in Stripe dashboard -> STRIPE_WEBHOOK_SECRET
+  secret, (4) test-mode card 4242... end-to-end test. NOTE: sandbox<->host file sync glitched this
+  session (5 edited files truncated sandbox-side); host files verified whole; lint 0 errors.
 - **2026-07-04 (layout align):** constrained the Navigation header to the same content container as
   <main> (mx-auto max-w-[92rem] px-4 sm:px-6) so logo/search/icons line up with page content;
   indented the catalog hero text (lg:pl-[16.75rem] xl:pl-[17.75rem]) to start at the track play

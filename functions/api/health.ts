@@ -15,6 +15,8 @@ export const onRequestGet = async (ctx: Ctx) => {
     db,
     resend: ctx.env.RESEND_API_KEY ? "configured" : "missing",
     stripe: ctx.env.STRIPE_SECRET_KEY ? "configured" : "missing",
+    stripe_webhook: ctx.env.STRIPE_WEBHOOK_SECRET ? "configured" : "missing",
     google: ctx.env.GOOGLE_CLIENT_ID ? "configured" : "missing",
+    r2: ctx.env.R2 ? "bound" : "not bound",
   });
 };

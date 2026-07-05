@@ -23,6 +23,7 @@ import {
 } from "@/hooks/useMockData";
 import { mockClaimRequests, mockSyncOrders, mockWhitelistChannels } from "@/mocks";
 import { logout, updateProfile } from "@/hooks/useAuth";
+import { openBillingPortal } from "@/lib/billing";
 
 const GOLD = "#F4C430";
 
@@ -318,14 +319,25 @@ const Account = () => {
                         {subscription && ` · renews ${fmtDate(subscription.currentPeriodEnd)}`}
                       </p>
                     </div>
-                    {plan?.id !== "max" && (
-                      <Link
-                        to="/pricing"
-                        className="rounded-lg bg-[#F4C430] px-5 py-2 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
-                      >
-                        Upgrade
-                      </Link>
-                    )}
+                    <div className="flex gap-2">
+                      {plan && plan.id !== "free" && (
+                        <button
+                          type="button"
+                          onClick={() => void openBillingPortal()}
+                          className="rounded-lg border border-border px-5 py-2 font-body text-sm font-semibold text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
+                        >
+                          Manage billing
+                        </button>
+                      )}
+                      {plan?.id !== "max" && (
+                        <Link
+                          to="/pricing"
+                          className="rounded-lg bg-[#F4C430] px-5 py-2 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
+                        >
+                          Upgrade
+                        </Link>
+                      )}
+                    </div>
                   </div>
                   {plan?.downloadLimit !== null && plan && (
                     <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-secondary">
@@ -532,21 +544,25 @@ const Account = () => {
                   {subscription && ` · ${isCanceled ? "ends" : "renews"} ${fmtDate(subscription.currentPeriodEnd)}`}
                 </p>
                 <div className="mt-4 flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    className="rounded-lg border border-border px-4 py-2 font-body text-sm text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
-                  >
-                    Manage subscription
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-lg border border-border px-4 py-2 font-body text-sm text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
-                  >
-                    Invoices
-                  </button>
+                  {plan && plan.id !== "free" ? (
+                    <button
+                      type="button"
+                      onClick={() => void openBillingPortal()}
+                      className="rounded-lg border border-border px-4 py-2 font-body text-sm text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
+                    >
+                      Manage subscription &amp; invoices
+                    </button>
+                  ) : (
+                    <Link
+                      to="/pricing"
+                      className="rounded-lg bg-[#F4C430] px-4 py-2 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
+                    >
+                      See plans
+                    </Link>
+                  )}
                 </div>
                 <p className="mt-3 font-body text-xs text-muted-foreground">
-                  Managed securely via Stripe. (Placeholder — connects to Stripe customer portal.)
+                  Payments, invoices and cancellation are managed securely via Stripe.
                 </p>
               </SectionCard>
             )}

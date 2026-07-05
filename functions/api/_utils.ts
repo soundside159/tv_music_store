@@ -20,7 +20,11 @@ export interface R2ObjectBody {
 
 export interface R2Bucket {
   get(key: string): Promise<R2ObjectBody | null>;
-  put(key: string, value: ReadableStream | ArrayBuffer | string): Promise<unknown>;
+  put(
+    key: string,
+    value: ReadableStream | ArrayBuffer | string,
+    options?: { httpMetadata?: { contentType?: string } },
+  ): Promise<unknown>;
 }
 
 export interface Env {

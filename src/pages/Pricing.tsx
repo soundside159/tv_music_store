@@ -10,6 +10,8 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { usePlans, useSubscription } from "@/hooks/useMockData";
+import { useAuthSession } from "@/hooks/useAuth";
+import { openBillingPortal, startCheckout } from "@/lib/billing";
 import type { BillingInterval, PlanConfig, PlanId } from "@/types/domain";
 
 const GOLD = "#F4C430";
@@ -71,14 +73,37 @@ const PlanCard = ({
   plan,
   interval,
   isCurrent,
+  isAuthed,
 }: {
   plan: PlanConfig;
   interval: BillingInterval;
   isCurrent: boolean;
+  isAuthed: boolean;
 }) => {
+  const [busy, setBusy] = useState(false);
   const isPro = plan.id === "pro";
   const price = interval === "annual" ? plan.priceAnnualPerMonth : plan.priceMonthly;
-  const cta = plan.id === "free" ? "Start free" : isCurrent ? "Current plan" : "Select plan";
+  const cta =
+    plan.id === "free"
+      ? isAuthed
+        ? "Browse catalog"
+        : "Start free"
+      : isCurrent
+        ? "Manage subscription"
+        : busy
+          ? "Redirecting..."
+          : "Select plan";
+
+  const onSelect = async () => {
+    if (plan.id === "free" || busy) return;
+    setBusy(true);
+    try {
+      if (isCurrent) await openBillingPortal();
+      else await startCheckout(plan.id, interval);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <div
@@ -114,16 +139,27 @@ const PlanCard = ({
           </li>
         ))}
       </ul>
-      <Link
-        to="/login"
-        className={`mt-8 rounded-lg py-2.5 text-center font-body text-sm font-semibold transition-colors duration-300 ${
-          isPro
-            ? "bg-[#F4C430] text-background hover:bg-[#F4C430]/85"
-            : "border border-border text-foreground hover:border-[#F4C430] hover:text-[#F4C430]"
-        } ${isCurrent ? "pointer-events-none opacity-60" : ""}`}
-      >
-        {cta}
-      </Link>
+      {plan.id === "free" ? (
+        <Link
+          to={isAuthed ? "/catalog" : "/login"}
+          className="mt-8 rounded-lg border border-border py-2.5 text-center font-body text-sm font-semibold text-foreground transition-colors duration-300 hover:border-[#F4C430] hover:text-[#F4C430]"
+        >
+          {cta}
+        </Link>
+      ) : (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void onSelect()}
+          className={`mt-8 rounded-lg py-2.5 text-center font-body text-sm font-semibold transition-colors duration-300 disabled:opacity-60 ${
+            isPro
+              ? "bg-[#F4C430] text-background hover:bg-[#F4C430]/85"
+              : "border border-border text-foreground hover:border-[#F4C430] hover:text-[#F4C430]"
+          }`}
+        >
+          {cta}
+        </button>
+      )}
     </div>
   );
 };
@@ -131,6 +167,7 @@ const PlanCard = ({
 const Pricing = () => {
   const plans = usePlans();
   const subscription = useSubscription();
+  const { status } = useAuthSession();
   const [interval, setInterval] = useState<BillingInterval>("annual");
 
   return (
@@ -167,7 +204,12 @@ const Pricing = () => {
               key={p.id}
               plan={p}
               interval={interval}
-              isCurrent={subscription?.plan === p.id && subscription?.status === "active"}
+              isCurrent={
+                status === "authed" &&
+                subscription?.plan === p.id &&
+                subscription?.status === "active"
+              }
+              isAuthed={status === "authed"}
             />
           ))}
         </section>

@@ -104,6 +104,28 @@ const AdminContent = () => {
   const [draft, setDraft] = useState<typeof emptyDraft | null>(null);
   const [trendingDraft, setTrendingDraft] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  const uploadCover = async (file: File) => {
+    setUploading(true);
+    try {
+      const base = file.name.replace(/\.[^.]+$/, "");
+      const res = await fetch(`/api/admin/upload?filename=${encodeURIComponent(base)}`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": file.type || "application/octet-stream" },
+        body: file,
+      });
+      const d = (await res.json().catch(() => ({}))) as { ok?: boolean; path?: string; error?: string };
+      if (!res.ok || !d.ok || !d.path) throw new Error(d.error ?? "Upload failed");
+      setDraft((prev) => (prev ? { ...prev, image: d.path as string } : prev));
+      toast.success("Cover uploaded");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const reload = useCallback(() => {
     fetch("/api/admin/content", { credentials: "include" })
@@ -273,12 +295,31 @@ const AdminContent = () => {
                   onChange={(e) => setDraft({ ...draft, title: e.target.value })}
                   className={inputCls}
                 />
-                <input
-                  placeholder="Cover image URL (e.g. /images/collections/orchestral.jpg)"
-                  value={draft.image}
-                  onChange={(e) => setDraft({ ...draft, image: e.target.value })}
-                  className={inputCls}
-                />
+                <div className="flex min-w-0 gap-2">
+                  <input
+                    placeholder="Cover image URL — or press Upload"
+                    value={draft.image}
+                    onChange={(e) => setDraft({ ...draft, image: e.target.value })}
+                    className={`${inputCls} min-w-0 flex-1`}
+                  />
+                  <label
+                    className={`${btnCls} flex shrink-0 cursor-pointer items-center whitespace-nowrap ${
+                      uploading ? "pointer-events-none opacity-60" : ""
+                    }`}
+                  >
+                    {uploading ? "Uploading..." : "Upload"}
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) void uploadCover(f);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
               </div>
               {kind === "collection" && (
                 <input
