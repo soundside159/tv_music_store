@@ -30,6 +30,19 @@ export const onRequestGet = async (ctx: Ctx) => {
     // site_config not created yet — no trending override
   }
 
+  // Categories (homepage chips / catalog?category=...). Tables are created by
+  // the admin editor; before that we return [] and the frontend keeps its
+  // built-in defaults.
+  let categories: { id: string; title: string }[] = [];
+  try {
+    const rows = await db
+      .prepare(`SELECT id, title FROM categories ORDER BY sort`)
+      .all<{ id: string; title: string }>();
+    categories = rows.results;
+  } catch {
+    // categories table not created yet
+  }
+
   const colMap: Record<string, string[]> = {};
   for (const r of colTracks.results) (colMap[r.collection_id] ??= []).push(r.track_id);
   const plMap: Record<string, string[]> = {};
@@ -37,6 +50,7 @@ export const onRequestGet = async (ctx: Ctx) => {
 
   return json({
     trending,
+    categories,
     collections: collections.results.map((c) => ({
       id: c.id,
       title: c.title,

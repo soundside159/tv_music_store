@@ -78,7 +78,12 @@ const Catalog = () => {
 
     const result = tracks.filter((track) => {
       const matchesCollection = !activeCollection || track.collectionIds.includes(activeCollection.id);
-      const matchesCategory = !categoryParam || track.category === categoryParam;
+      // Admin-curated membership when present; legacy single category otherwise.
+      const matchesCategory =
+        !categoryParam ||
+        (track.categoryIds && track.categoryIds.length > 0
+          ? track.categoryIds.includes(categoryParam)
+          : track.category === categoryParam);
       const matchesUseCase =
         filters.useCase === "All" || splitFilterValues(track.useCase).some((item) => matchesOption(item, filters.useCase));
       const matchesGenre = filters.genre === "All" || matchesOption(track.genre, filters.genre);

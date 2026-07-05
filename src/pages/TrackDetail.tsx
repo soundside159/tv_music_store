@@ -131,6 +131,14 @@ const TrackDetail = () => {
               <IconButton label="Share" onClick={() => void share()}>
                 <Share2 className="h-4 w-4" />
               </IconButton>
+              {track.hasStems && (
+                <span
+                  title="Stems included (Max plan)"
+                  className="rounded-md border border-[#F4C430]/60 bg-[#F4C430]/10 px-2 py-1 font-body text-[10px] font-semibold uppercase tracking-[0.14em] text-[#F4C430]"
+                >
+                  Stems
+                </span>
+              )}
             </div>
 
             <button

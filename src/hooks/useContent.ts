@@ -18,6 +18,7 @@ interface ApiContentItem {
 
 interface ApiContent {
   trending?: string[];
+  categories?: { id: string; title: string }[];
   collections?: ApiContentItem[];
   playlists?: ApiContentItem[];
 }
@@ -38,6 +39,34 @@ const fetchContent = (): Promise<ApiContent | null> => {
       inflight = null;
     });
   return inflight;
+};
+
+export interface LiveCategory {
+  id: string;
+  title: string;
+}
+
+const defaultCategories: LiveCategory[] = [
+  { id: "modern-score", title: "Modern Score" },
+  { id: "thriller", title: "Thriller" },
+  { id: "game-ost", title: "Game OST" },
+  { id: "production", title: "Production" },
+];
+
+/** Homepage category chips (admin-curated; falls back to the 4 built-ins). */
+export const useCategories = (): LiveCategory[] => {
+  const [list, setList] = useState<LiveCategory[]>(defaultCategories);
+  useEffect(() => {
+    let cancelled = false;
+    void fetchContent().then((data) => {
+      if (cancelled || !data?.categories?.length) return;
+      setList(data.categories);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return list;
 };
 
 /** Collections for the catalog strip / collections pages (live, mock fallback). */

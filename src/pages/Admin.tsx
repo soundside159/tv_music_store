@@ -1,14 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import {
-  BarChart3,
-  DollarSign,
-  Inbox,
-  LayoutDashboard,
-  ListMusic,
-  Music2,
-  Users,
-} from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { accountNavGroups, adminNavItems } from "@/lib/adminNav";
+import MenuGroupHeader from "@/components/MenuGroupHeader";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { useCurrentUser } from "@/hooks/useMockData";
@@ -29,14 +22,7 @@ const GOLD = "#F4C430";
 
 type SectionId = "dashboard" | "finance" | "tracks" | "playlists" | "customers" | "requests";
 
-const sections: { id: SectionId; label: string; icon: typeof LayoutDashboard }[] = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "finance", label: "Finance", icon: DollarSign },
-  { id: "tracks", label: "Tracks", icon: Music2 },
-  { id: "playlists", label: "Content", icon: ListMusic },
-  { id: "customers", label: "Customers", icon: Users },
-  { id: "requests", label: "Requests", icon: Inbox },
-];
+const SECTION_IDS: SectionId[] = ["dashboard", "finance", "tracks", "playlists", "customers", "requests"];
 
 const composerName = (id: string) =>
   mockComposers.find((c) => c.id === id)?.displayName ?? id;
@@ -80,7 +66,12 @@ const StatusPill = ({ text, active }: { text: string; active: boolean }) => (
 
 const Admin = () => {
   const user = useCurrentUser();
-  const [section, setSection] = useState<SectionId>("dashboard");
+  const [searchParams] = useSearchParams();
+  const sectionParam = searchParams.get("section");
+  const [section, setSection] = useState<SectionId>(
+    SECTION_IDS.includes(sectionParam as SectionId) ? (sectionParam as SectionId) : "dashboard",
+  );
+  const [menu, setMenu] = useState<"main" | "admin">("admin");
   const [openPeriod, setOpenPeriod] = useState<string | null>(null);
   const [liveUsers, setLiveUsers] = useState<LiveUser[] | null>(null);
   const [usersError, setUsersError] = useState<string | null>(null);
@@ -152,24 +143,48 @@ const Admin = () => {
       <main className="mx-auto w-full max-w-6xl px-4 pb-24 pt-24 sm:px-6 md:pt-28">
         <div className="flex flex-col gap-8 md:flex-row">
           <aside className="shrink-0 md:w-56">
-            <p className="flex items-center gap-2 px-3 font-body text-sm font-semibold text-foreground">
-              <BarChart3 className="h-4 w-4" style={{ color: GOLD }} />
-              Admin
-            </p>
-            <nav className="mt-4 flex gap-1 overflow-x-auto md:flex-col">
-              {sections.map((sec) => (
-                <button
-                  key={sec.id}
-                  type="button"
-                  onClick={() => setSection(sec.id)}
-                  className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors ${
-                    section === sec.id ? "bg-secondary text-[#F4C430]" : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <sec.icon className="h-4 w-4" />
-                  {sec.label}
-                </button>
-              ))}
+            <nav className="flex flex-col gap-1">
+              <MenuGroupHeader label="Main" open={menu === "main"} onClick={() => setMenu("main")} />
+              {menu === "main" && (
+                <div className="mb-3 flex flex-col gap-3">
+                  {accountNavGroups.map((group) => (
+                    <div key={group.label}>
+                      <p className="px-3 pb-1 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
+                        {group.label}
+                      </p>
+                      {group.items.map((item) => (
+                        <Link
+                          key={item.id}
+                          to={`/account?section=${item.id}`}
+                          className="flex items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          <item.icon className="h-4 w-4" />
+                          {item.label}
+                        </Link>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <MenuGroupHeader label="Admin" open={menu === "admin"} onClick={() => setMenu("admin")} />
+              {menu === "admin" && (
+                <div className="flex gap-1 overflow-x-auto md:flex-col">
+                  {adminNavItems.map((sec) => (
+                    <button
+                      key={sec.id}
+                      type="button"
+                      onClick={() => setSection(sec.id as SectionId)}
+                      className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors ${
+                        section === sec.id ? "bg-secondary text-[#F4C430]" : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <sec.icon className="h-4 w-4" />
+                      {sec.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </nav>
           </aside>
 

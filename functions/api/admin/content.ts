@@ -25,6 +25,58 @@ const ensureTrackCoverColumn = async (db: D1Database) => {
   }
 };
 
+// Homepage category chips ("Modern Score", "Thriller", ...) become editable
+// curated lists ("Best for Trailers", ...). Tables are created lazily; on
+// first run the 4 legacy categories are seeded and existing tracks.category
+// values are copied into category_tracks so /catalog?category=... keeps working.
+const DEFAULT_CATEGORIES: Array<[string, string]> = [
+  ["modern-score", "Modern Score"],
+  ["thriller", "Thriller"],
+  ["game-ost", "Game OST"],
+  ["production", "Production"],
+];
+
+const ensureCategoryTables = async (db: D1Database) => {
+  await db
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS categories (
+         id TEXT PRIMARY KEY,
+         title TEXT NOT NULL,
+         sort INTEGER NOT NULL DEFAULT 0
+       )`,
+    )
+    .run();
+  await db
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS category_tracks (
+         category_id TEXT NOT NULL,
+         track_id TEXT NOT NULL,
+         sort INTEGER NOT NULL DEFAULT 0,
+         PRIMARY KEY (category_id, track_id)
+       )`,
+    )
+    .run();
+  const count = await db.prepare(`SELECT COUNT(*) AS n FROM categories`).first<{ n: number }>();
+  if ((count?.n ?? 0) === 0) {
+    for (let i = 0; i < DEFAULT_CATEGORIES.length; i++) {
+      const [id, title] = DEFAULT_CATEGORIES[i];
+      await db
+        .prepare(`INSERT OR IGNORE INTO categories (id, title, sort) VALUES (?1, ?2, ?3)`)
+        .bind(id, title, i)
+        .run();
+    }
+  }
+  const links = await db.prepare(`SELECT COUNT(*) AS n FROM category_tracks`).first<{ n: number }>();
+  if ((links?.n ?? 0) === 0) {
+    await db
+      .prepare(
+        `INSERT OR IGNORE INTO category_tracks (category_id, track_id, sort)
+         SELECT category, id, 0 FROM tracks WHERE category IN (SELECT id FROM categories)`,
+      )
+      .run();
+  }
+};
+
 const ensureSiteConfig = async (db: D1Database) => {
   await db
     .prepare(`CREATE TABLE IF NOT EXISTS site_config (key TEXT PRIMARY KEY, value TEXT NOT NULL)`)
@@ -95,7 +147,14 @@ export const onRequestGet = async (ctx: Ctx) => {
   if (gate.error) return gate.error;
   const db = ctx.env.DB;
   await ensureSiteConfig(db);
+  await ensureCategoryTables(db);
 
+  const categories = await db
+    .prepare(`SELECT id, title, sort FROM categories ORDER BY sort`)
+    .all<{ id: string; title: string; sort: number }>();
+  const catTracks = await db
+    .prepare(`SELECT category_id, track_id FROM category_tracks ORDER BY sort`)
+    .all<{ category_id: string; track_id: string }>();
   const collections = await db
     .prepare(`SELECT id, title, short_title, description, image, sort FROM collections ORDER BY sort`)
     .all<{ id: string; title: string; short_title: string | null; description: string | null; image: string | null; sort: number }>();
@@ -120,10 +179,16 @@ export const onRequestGet = async (ctx: Ctx) => {
   };
   const colMap = group(colTracks.results, "collection_id");
   const plMap = group(plTracks.results, "playlist_id");
+  const catMap = group(catTracks.results, "category_id");
 
   return json({
     dbTrackCount: trackCount?.n ?? 0,
     trending: trendingRow ? (JSON.parse(trendingRow.value) as string[]) : [],
+    categories: categories.results.map((c) => ({
+      id: c.id,
+      title: c.title,
+      trackIds: catMap[c.id] ?? [],
+    })),
     collections: collections.results.map((c) => ({
       id: c.id,
       title: c.title,
@@ -169,8 +234,16 @@ export const onRequestPost = async (ctx: Ctx) => {
     facets?: Partial<Record<"useCase" | "genre" | "mood", { add?: string[]; remove?: string[] }>>;
     playlistChanges?: { add?: string[]; remove?: string[] };
     collectionChanges?: { add?: string[]; remove?: string[] };
+    categoryChanges?: { add?: string[]; remove?: string[] };
     trendingChange?: "add" | "remove";
-    fields?: { title?: string; bpm?: number; description?: string; cover?: string; tags?: string[] };
+    fields?: {
+      title?: string;
+      bpm?: number;
+      description?: string;
+      cover?: string;
+      tags?: string[];
+      hasStems?: boolean;
+    };
   }>(ctx.request);
   if (!body?.action) return json({ error: "action required" }, 400);
 
@@ -224,6 +297,33 @@ export const onRequestPost = async (ctx: Ctx) => {
       return upsertItem(db, "collections", body);
     case "upsert_playlist":
       return upsertItem(db, "playlists", body);
+
+    case "upsert_category": {
+      await ensureCategoryTables(db);
+      const title = body.title?.trim();
+      if (!title) return json({ error: "Title required" }, 400);
+      const id = body.id?.trim() || slugify(title);
+      const existing = await db.prepare(`SELECT id FROM categories WHERE id = ?1`).bind(id).first();
+      if (existing) {
+        await db.prepare(`UPDATE categories SET title = ?2 WHERE id = ?1`).bind(id, title).run();
+      } else {
+        const maxSort = await db
+          .prepare(`SELECT COALESCE(MAX(sort), -1) + 1 AS s FROM categories`)
+          .first<{ s: number }>();
+        await db
+          .prepare(`INSERT INTO categories (id, title, sort) VALUES (?1, ?2, ?3)`)
+          .bind(id, title, maxSort?.s ?? 0)
+          .run();
+      }
+      return json({ ok: true, id });
+    }
+    case "delete_category": {
+      if (!body.id) return json({ error: "id required" }, 400);
+      await ensureCategoryTables(db);
+      await db.prepare(`DELETE FROM category_tracks WHERE category_id = ?1`).bind(body.id).run();
+      await db.prepare(`DELETE FROM categories WHERE id = ?1`).bind(body.id).run();
+      return json({ ok: true });
+    }
 
     case "delete_collection": {
       if (!body.id) return json({ error: "id required" }, 400);
@@ -305,6 +405,7 @@ export const onRequestPost = async (ctx: Ctx) => {
         : [];
       if (ids.length === 0) return json({ error: "trackIds required" }, 400);
       await ensureTrackCoverColumn(db);
+      if (body.categoryChanges) await ensureCategoryTables(db);
 
       const splitVals = (v: string | null) =>
         (v ?? "").split("/").map((s) => s.trim()).filter(Boolean);
@@ -337,6 +438,7 @@ export const onRequestPost = async (ctx: Ctx) => {
           if (typeof f.description === "string") next.description = f.description;
           if (typeof f.cover === "string") next.cover = f.cover;
           if (Array.isArray(f.tags)) next.tags = JSON.stringify(f.tags.slice(0, 12));
+          if (typeof f.hasStems === "boolean") next.has_stems = f.hasStems ? 1 : 0;
         }
         const keys = Object.keys(next);
         if (keys.length > 0) {
@@ -349,8 +451,8 @@ export const onRequestPost = async (ctx: Ctx) => {
       }
 
       const applyMembership = async (
-        table: "collection_tracks" | "playlist_tracks",
-        col: "collection_id" | "playlist_id",
+        table: "collection_tracks" | "playlist_tracks" | "category_tracks",
+        col: "collection_id" | "playlist_id" | "category_id",
         changes?: { add?: string[]; remove?: string[] },
       ) => {
         if (!changes) return;
@@ -377,6 +479,7 @@ export const onRequestPost = async (ctx: Ctx) => {
       };
       await applyMembership("playlist_tracks", "playlist_id", body.playlistChanges);
       await applyMembership("collection_tracks", "collection_id", body.collectionChanges);
+      await applyMembership("category_tracks", "category_id", body.categoryChanges);
 
       if (body.trendingChange === "add" || body.trendingChange === "remove") {
         const trendingRow = await db

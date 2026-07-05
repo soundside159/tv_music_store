@@ -1,16 +1,8 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import {
-  CreditCard,
-  Download,
-  FileText,
-  LayoutDashboard,
-  LifeBuoy,
-  LogOut,
-  ShieldCheck,
-  UserRound,
-  Youtube,
-} from "lucide-react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { LogOut } from "lucide-react";
+import { accountNavGroups, adminNavItems } from "@/lib/adminNav";
+import MenuGroupHeader from "@/components/MenuGroupHeader";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { catalogTracks } from "@/data/catalogTracks";
@@ -37,37 +29,15 @@ type SectionId =
   | "billing"
   | "support";
 
-interface SectionItem {
-  id: SectionId;
-  label: string;
-  icon: typeof LayoutDashboard;
-}
-
-const sectionGroups: { label: string; items: SectionItem[] }[] = [
-  {
-    label: "Account",
-    items: [
-      { id: "profile", label: "Profile", icon: UserRound },
-      { id: "overview", label: "Overview", icon: LayoutDashboard },
-      { id: "downloads", label: "Downloads", icon: Download },
-    ],
-  },
-  {
-    label: "Plan",
-    items: [{ id: "billing", label: "Plan & Billing", icon: CreditCard }],
-  },
-  {
-    label: "Music",
-    items: [
-      { id: "whitelist", label: "Whitelisting", icon: Youtube },
-      { id: "license", label: "Licenses", icon: FileText },
-      { id: "claims", label: "Copyright Claims", icon: ShieldCheck },
-    ],
-  },
-  {
-    label: "Support",
-    items: [{ id: "support", label: "Support", icon: LifeBuoy }],
-  },
+const SECTION_IDS: SectionId[] = [
+  "profile",
+  "overview",
+  "downloads",
+  "license",
+  "whitelist",
+  "claims",
+  "billing",
+  "support",
 ];
 
 const trackTitle = (trackId: string) =>
@@ -99,7 +69,12 @@ const Account = () => {
   const plans = usePlans();
   const downloads = useMyDownloads();
   const remaining = useDownloadsRemaining();
-  const [section, setSection] = useState<SectionId>("profile");
+  const [searchParams] = useSearchParams();
+  const sectionParam = searchParams.get("section");
+  const [section, setSection] = useState<SectionId>(
+    SECTION_IDS.includes(sectionParam as SectionId) ? (sectionParam as SectionId) : "profile",
+  );
+  const [menu, setMenu] = useState<"main" | "admin">("main");
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [profileBusy, setProfileBusy] = useState(false);
@@ -141,42 +116,55 @@ const Account = () => {
           {/* Sidebar */}
           <aside className="shrink-0 md:w-56">
             <nav className="flex gap-4 overflow-x-auto md:flex-col md:gap-0">
-              {sectionGroups.map((group) => (
-                <div key={group.label} className="shrink-0 md:mb-5">
-                  <p className="px-3 pb-1.5 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
-                    {group.label}
-                  </p>
-                  <div className="flex gap-1 md:flex-col">
-                    {group.items.map((s) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => setSection(s.id)}
-                        className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors ${
-                          section === s.id
-                            ? "bg-secondary text-[#F4C430]"
-                            : "text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        <s.icon className="h-4 w-4" />
-                        {s.label}
-                      </button>
-                    ))}
+              {user.role === "admin" && (
+                <MenuGroupHeader label="Main" open={menu === "main"} onClick={() => setMenu("main")} />
+              )}
+              {(user.role !== "admin" || menu === "main") &&
+                accountNavGroups.map((group) => (
+                  <div key={group.label} className="shrink-0 md:mb-5">
+                    <p className="px-3 pb-1.5 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
+                      {group.label}
+                    </p>
+                    <div className="flex gap-1 md:flex-col">
+                      {group.items.map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => setSection(s.id as SectionId)}
+                          className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors ${
+                            section === s.id
+                              ? "bg-secondary text-[#F4C430]"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          <s.icon className="h-4 w-4" />
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
               {user.role === "admin" && (
                 <div className="shrink-0 md:mb-5">
-                  <p className="px-3 pb-1.5 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
-                    Admin
-                  </p>
-                  <Link
-                    to="/admin"
-                    className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-[#F4C430] transition-colors hover:bg-secondary"
-                  >
-                    <ShieldCheck className="h-4 w-4" />
-                    Admin panel
-                  </Link>
+                  <MenuGroupHeader
+                    label="Admin"
+                    open={menu === "admin"}
+                    onClick={() => setMenu("admin")}
+                  />
+                  {menu === "admin" && (
+                    <div className="flex gap-1 md:flex-col">
+                      {adminNavItems.map((item) => (
+                        <Link
+                          key={item.id}
+                          to={`/admin?section=${item.id}`}
+                          className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          <item.icon className="h-4 w-4" />
+                          {item.label}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
               <button

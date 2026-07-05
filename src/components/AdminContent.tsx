@@ -20,14 +20,21 @@ interface ContentItem {
   trackIds: string[];
 }
 
+interface CategoryItem {
+  id: string;
+  title: string;
+  trackIds: string[];
+}
+
 interface ContentData {
   dbTrackCount: number;
   trending: string[];
+  categories?: CategoryItem[];
   collections: ContentItem[];
   playlists: ContentItem[];
 }
 
-type Tab = "collections" | "playlists" | "trending" | "tracks";
+type Tab = "collections" | "playlists" | "categories" | "trending" | "tracks";
 type Kind = "collection" | "playlist";
 
 const inputCls =
@@ -101,6 +108,7 @@ const emptyDraft = { id: "", title: "", shortTitle: "", description: "", image: 
 const tabLabels: Record<Tab, string> = {
   collections: "Collections",
   playlists: "Playlists",
+  categories: "Categories",
   trending: "Trending",
   tracks: "Tracks Edit",
 };
@@ -112,6 +120,7 @@ const AdminContent = () => {
   const [tab, setTab] = useState<Tab>("collections");
   const [draft, setDraft] = useState<typeof emptyDraft | null>(null);
   const [trendingDraft, setTrendingDraft] = useState<string[] | null>(null);
+  const [newCategoryTitle, setNewCategoryTitle] = useState("");
   // Saved track edits, merged over the (once-fetched) useTracks list for display.
   const [trackOverrides, setTrackOverrides] = useState<Record<string, Partial<CatalogTrack>>>({});
   const [busy, setBusy] = useState(false);
@@ -180,7 +189,7 @@ const AdminContent = () => {
     <div className="rounded-xl border border-border bg-card p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-1">
-          {(["collections", "playlists", "trending", "tracks"] as Tab[]).map((t) => (
+          {(["collections", "playlists", "categories", "trending", "tracks"] as Tab[]).map((t) => (
             <button
               key={t}
               type="button"
@@ -373,6 +382,80 @@ const AdminContent = () => {
         </>
       )}
 
+      {tab === "categories" && (
+        <div className="mt-5 flex flex-col gap-4">
+          <p className="font-body text-sm text-muted-foreground">
+            Category chips on the homepage — each links to /catalog?category=…
+            ("Best for Trailers", "Epic Openers", "Music for Drone Footage", …).
+            Assign tracks to categories in the <span className="text-foreground">Tracks Edit</span> tab.
+          </p>
+          <ul className="divide-y divide-border/60">
+            {(data.categories ?? []).map((c) => (
+              <li key={c.id} className="flex items-center justify-between gap-4 py-2.5">
+                <span className="min-w-0">
+                  <span className="block truncate font-body text-sm font-semibold text-foreground">
+                    {c.title}
+                  </span>
+                  <span className="block truncate font-body text-xs text-muted-foreground">
+                    {c.trackIds.length} tracks · /catalog?category={c.id}
+                  </span>
+                </span>
+                <span className="flex shrink-0 gap-2">
+                  <button
+                    type="button"
+                    className={btnCls}
+                    disabled={busy}
+                    onClick={() => {
+                      const title = window.prompt(`Rename "${c.title}" to:`, c.title)?.trim();
+                      if (title && title !== c.title) {
+                        void run({ action: "upsert_category", id: c.id, title }, "Category renamed");
+                      }
+                    }}
+                  >
+                    Rename
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="rounded-lg border border-border px-3 py-1.5 font-body text-xs text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
+                    onClick={() => {
+                      if (window.confirm(`Delete category "${c.title}"? Tracks stay, only the chip and its list are removed.`)) {
+                        void run({ action: "delete_category", id: c.id }, "Category deleted");
+                      }
+                    }}
+                  >
+                    Delete
+                  </button>
+                </span>
+              </li>
+            ))}
+            {(data.categories ?? []).length === 0 && (
+              <li className="py-3 font-body text-sm text-muted-foreground">No categories yet.</li>
+            )}
+          </ul>
+          <form
+            className="flex flex-wrap gap-2"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const title = newCategoryTitle.trim();
+              if (!title) return;
+              const ok = await run({ action: "upsert_category", title }, "Category added");
+              if (ok) setNewCategoryTitle("");
+            }}
+          >
+            <input
+              placeholder='New category title (e.g. "Best for Trailers")'
+              value={newCategoryTitle}
+              onChange={(e) => setNewCategoryTitle(e.target.value)}
+              className={`${inputCls} w-72 max-w-full`}
+            />
+            <button type="submit" disabled={busy || !newCategoryTitle.trim()} className={goldBtnCls}>
+              Add category
+            </button>
+          </form>
+        </div>
+      )}
+
       {tab === "trending" && (
         <div className="mt-5 flex flex-col gap-3">
           <p className="font-body text-sm text-muted-foreground">
@@ -400,6 +483,7 @@ const AdminContent = () => {
       {tab === "tracks" && (
         <AdminTracksEdit
           tracks={mergedTracks}
+          categories={(data.categories ?? []).map((c) => ({ id: c.id, title: c.title, trackIds: c.trackIds }))}
           collections={data.collections}
           playlists={data.playlists}
           trending={data.trending}

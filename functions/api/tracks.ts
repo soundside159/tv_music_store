@@ -14,6 +14,7 @@ interface TrackRow {
   description: string | null;
   tags: string | null;
   cover: string | null;
+  has_stems: number;
 }
 
 interface VersionRow {
@@ -31,14 +32,14 @@ export const onRequestGet = async (ctx: Ctx) => {
   let tracks: { results: TrackRow[] };
   try {
     tracks = await ctx.env.DB.prepare(
-      `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, cover
+      `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, cover, has_stems
          FROM tracks
         WHERE status = 'published' AND moderation_status = 'approved'
         ORDER BY created_at DESC`,
     ).all<TrackRow>();
   } catch {
     const legacy = await ctx.env.DB.prepare(
-      `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags
+      `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, has_stems
          FROM tracks
         WHERE status = 'published' AND moderation_status = 'approved'
         ORDER BY created_at DESC`,
@@ -68,12 +69,30 @@ export const onRequestGet = async (ctx: Ctx) => {
     collectionsByTrack.set(c.track_id, list);
   }
 
+  // Category membership (admin-curated). Before the admin editor creates the
+  // table, fall back to the legacy tracks.category column per track.
+  const categoriesByTrack = new Map<string, string[]>();
+  let categoryTableExists = true;
+  try {
+    const catRows = await ctx.env.DB.prepare(
+      `SELECT category_id, track_id FROM category_tracks`,
+    ).all<{ category_id: string; track_id: string }>();
+    for (const c of catRows.results) {
+      const list = categoriesByTrack.get(c.track_id) ?? [];
+      list.push(c.category_id);
+      categoriesByTrack.set(c.track_id, list);
+    }
+  } catch {
+    categoryTableExists = false;
+  }
+
   return json({
     tracks: tracks.results.map((t) => ({
       ...t,
       tags: t.tags ? (JSON.parse(t.tags) as string[]) : [],
       versions: byTrack.get(t.id) ?? [],
       collection_ids: collectionsByTrack.get(t.id) ?? [],
+      category_ids: categoryTableExists ? categoriesByTrack.get(t.id) ?? [] : [t.category],
     })),
   });
 };

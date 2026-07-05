@@ -3,14 +3,10 @@ import { ArrowRight, Check, Layers, Library, ListMusic, Music2, ShieldCheck, Use
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { TrackRowList } from "@/components/TrackRowPlayer";
-import { categoryLabels } from "@/data/catalogTracks";
-import type { TrackCategory } from "@/data/catalogTracks";
-import { useTrendingTracks } from "@/hooks/useContent";
+import { useCategories, useTrendingTracks } from "@/hooks/useContent";
 import { usePlans } from "@/hooks/useMockData";
 
 const GOLD = "#F4C430";
-
-const categories: TrackCategory[] = ["modern-score", "thriller", "game-ost", "production"];
 
 const moods = ["Emotional", "Powerful", "Inspiring", "Suspenseful", "Aggressive", "Tense", "Heroic", "Uplifting"];
 
@@ -24,6 +20,7 @@ const trustPoints = [
 const Index = () => {
   const plans = usePlans();
   const trendingTracks = useTrendingTracks(8);
+  const categories = useCategories();
 
   return (
     <div className="min-h-screen bg-background">
@@ -41,11 +38,11 @@ const Index = () => {
           <div className="mt-6 flex flex-wrap items-center gap-2">
             {categories.map((c) => (
               <Link
-                key={c}
-                to={`/catalog?category=${c}`}
+                key={c.id}
+                to={`/catalog?category=${c.id}`}
                 className="rounded-full border border-border px-4 py-1.5 font-body text-xs text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
               >
-                {categoryLabels[c]}
+                {c.title}
               </Link>
             ))}
             <span className="ml-1 font-body text-xs text-muted-foreground">

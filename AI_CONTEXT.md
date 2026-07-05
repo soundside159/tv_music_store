@@ -414,3 +414,26 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   editable Use Case / Genre / Mood vocabularies (add/delete values from the admin; store lists
   in site_config, tagOptions.ts becomes the fallback). Rest of backlog unchanged (admin mailbox,
   Account -> Licenses from sync_orders, license PDFs).
+- **2026-07-05 (Tracks Edit v2 + categories + stems + admin nav):** owner feedback round.
+  (1) Tracks Edit panel is now a PERMANENT sticky right column inside the layout (xl:grid
+  1fr/21rem — no fixed overlay, no dead gap, no Edit Selected button; empty-state hint when no
+  selection; "N selected — clear" chip in the toolbar). Per-page options now 20/50/200; header
+  checkbox selects only the CURRENTLY VISIBLE page rows. (2) CATEGORIES are now real, admin-
+  editable curated lists (the 4 homepage chips can become "Best for Trailers" etc.): lazy D1
+  tables `categories` + `category_tracks` (created/seeded on first admin GET — 4 legacy
+  categories + membership copied from tracks.category), Admin -> Content -> new "Categories"
+  tab (add/rename/delete), Categories tri-state section in the Tracks Edit panel
+  (categoryChanges in bulk_update_tracks), public /api/content returns categories (homepage
+  chips via useCategories, fallback built-ins), /api/tracks returns category_ids (per-track
+  fallback [category] until the table exists), Catalog ?category= filters by membership with
+  legacy fallback. (3) STEMS: fields.hasStems in bulk_update_tracks (checkbox in single-track
+  panel), /api/tracks returns has_stems, CatalogTrack.hasStems, gold STEMS badge next to the
+  heart on TrackDetail. (4) ADMIN NAV: /account and /admin sidebars now share Main/Admin
+  top-level collapsible groups (admins only; MenuGroupHeader component + src/lib/adminNav.ts
+  metadata; cross-links use ?section=… which both pages honor). SYNC GLITCH ESCALATED this
+  session: host->sandbox sync kept file CONTENT fresh but LENGTH stale (files truncated at old
+  byte size or NUL-padded). Repair recipe that works: rstrip NULs; for truncated files cut at
+  last full line and append the missing tail read from the host copy (line numbers align), or
+  rewrite whole file sandbox-side. lint 0 errors, tsc clean after repair. NEXT candidates:
+  editable tag vocabularies in admin, admin mailbox, Account -> Licenses from sync_orders,
+  license PDFs, per-track "add track" upload flow (audio files to R2).
