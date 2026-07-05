@@ -207,6 +207,20 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   list now show real history. "Re-download" button is still a placeholder. NEXT BIG STEP: Stripe
   (waiting for the owner to register stripe.com and add STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET
   to Cloudflare), then admin Content editor per PAGES_SPEC 4.1.
+- **2026-07-05 (admin content editor, phase 1):** Admin -> "Content" section (replaces the mock
+  Playlists module) = `src/components/AdminContent.tsx` + `functions/api/admin/content.ts` +
+  auto-generated `functions/api/admin/_seed_data.ts`. Tabs: Collections / Playlists / Trending.
+  Live CRUD against D1 (upsert/delete collections & playlists, set_tracks membership with click
+  order, set_trending -> site_config key trending_track_ids; site_config table is created lazily).
+  Track picker has inline preview via the global player. "Load demo catalog into DB" button
+  (action seed_catalog, idempotent) copies the 16 mock tracks + versions + 7 collections into D1 —
+  after that /api/tracks serves real rows and the catalog switches off mock fallback by itself.
+  NOT DONE YET (next steps): (1) public pages still read mock collections/playlists/trending —
+  need public endpoint(s) (/api/content or extend /api/tracks) + wire Index (Trending block),
+  Catalog collections strip, Collections/CollectionDetail/Playlists/PlaylistDetail pages;
+  (2) cover image UPLOAD needs an R2 bucket binding (R2) + small /api/admin/upload — currently the
+  form takes an image URL/path only; (3) tags (use case / genre / mood) editing per track — spec
+  4.1. Stripe still waiting for owner registration.
 - **2026-07-04 (layout align):** constrained the Navigation header to the same content container as
   <main> (mx-auto max-w-[92rem] px-4 sm:px-6) so logo/search/icons line up with page content;
   indented the catalog hero text (lg:pl-[16.75rem] xl:pl-[17.75rem]) to start at the track play
