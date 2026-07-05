@@ -480,3 +480,18 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   SYNC GLITCH again: the sandbox mirror of AdminTracksEdit.tsx got NUL-padded (eslint "Invalid
   character" at EOF + mid-file) — HOST file verified clean via Read; validated real content by
   linting a NUL-stripped copy (0 errors). deploy.bat runs on the host, unaffected.
+- **2026-07-05 (admin width — owner round 3, final):** owner rejected the full-screen stretch.
+  Reverted `Admin.tsx` Content container `max-w-none -> max-w-[100rem]` (bounded, not full-bleed;
+  other sections stay max-w-6xl). Tracks Edit workspace is now an ADAPTIVE split instead of a
+  narrow side panel: `AdminTracksEdit.tsx` grid `xl:grid-cols-[minmax(44rem,1fr)_minmax(32rem,1fr)]`
+  — the track table takes the width it needs (min 44rem, no h-scroll) and ALL remaining space in
+  the content box goes to the Edit panel (min 32rem, ~half), so Usage/Mood/Genre + Playlist/
+  Collection/Category/Trending checkboxes fit without internal scroll (facets/memberships are
+  sm:grid-cols-3). Table columns tightened to fit the 44rem min
+  (`...8rem_5rem_6rem_6rem_6rem`, wrapper min-w-[44rem]). LOG OUT is now red: Account "Sign out"
+  recolored `text-red-400 hover:text-red-300`, and a matching red "Log Out" button ADDED to the
+  /admin sidebar (Admin.tsx now imports useNavigate + logout + LogOut; previously /admin had no
+  logout button at all). lint: real content 0 errors (tsc 0) — sandbox mirror NUL-glitch again
+  gave spurious eslint "Parsing error" lines; host files verified clean via Read, no temp files
+  leaked to host (Glob confirmed). Next: back to the main plan — (2) editable tag vocabularies,
+  (3) admin mailbox, (4) Account->Licenses from sync_orders, (5) license PDFs, (6) Add Track.
