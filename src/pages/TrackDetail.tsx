@@ -2,53 +2,30 @@ import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
-  ArrowLeft,
   Check,
   Download,
   Heart,
   Home,
+  Music,
   Pause,
   Play,
-  Plus,
-  ShoppingBag,
+  Share2,
+  ShoppingCart,
   Sparkles,
 } from "lucide-react";
+import { toast } from "sonner";
 import Navigation from "@/components/Navigation";
 import WaveformPreview from "@/components/WaveformPreview";
-import { Button } from "@/components/ui/button";
-import { categoryLabels } from "@/data/catalogTracks";
 import type { CatalogTrack, TrackAudioVersion, TrackVersion } from "@/data/catalogTracks";
 import { useTracks } from "@/hooks/useTracks";
 import { usePlayer } from "@/components/playerContext";
+import { licenseTiers, type LicenseTierId } from "@/lib/licenses";
+import { addToCart } from "@/hooks/useCart";
+import { downloadTrackVersion } from "@/lib/downloadTrack";
 
-type DetailTab = "versions" | "similar" | "license";
+const GOLD = "#F4C430";
 
-const licenseTiers = [
-  {
-    name: "Free download",
-    price: "$0",
-    summary: "Personal, non-commercial use. Credit required.",
-    note: "Good for testing the catalog and collecting emails later.",
-  },
-  {
-    name: "Online License",
-    price: "$39",
-    summary: "One online project: YouTube, social, podcasts, websites, and creator videos.",
-    note: "No broadcast, TV, cinema, apps, games, or paid ads.",
-  },
-  {
-    name: "Commercial License",
-    price: "$99",
-    summary: "Client work, brand videos, corporate content, and paid digital ads.",
-    note: "Includes Content ID claim help for purchased projects.",
-  },
-  {
-    name: "Broadcast License",
-    price: "$299",
-    summary: "TV, film, streaming, trailers, games, and broadcast campaigns.",
-    note: "Best for agencies, studios, and larger commercial usage.",
-  },
-];
+type DetailTab = "versions" | "similar";
 
 const TrackDetail = () => {
   const { slug } = useParams();
@@ -56,11 +33,12 @@ const TrackDetail = () => {
   const track = catalogTracks.find((item) => item.slug === slug);
   const [activeTab, setActiveTab] = useState<DetailTab>("versions");
   const [selectedVersions, setSelectedVersions] = useState<Record<string, TrackVersion>>({});
+  const [selectedTier, setSelectedTier] = useState<LicenseTierId>("personal");
+  const [liked, setLiked] = useState(false);
   const { activePlayer, isPlaying, progress, playVersion: playFromEngine } = usePlayer();
 
   const similarTracks = useMemo(() => {
     if (!track) return [];
-
     return catalogTracks.filter((item) => item.id !== track.id).slice(0, 4);
   }, [track, catalogTracks]);
 
@@ -93,58 +71,188 @@ const TrackDetail = () => {
 
   const mainVersion = getSelectedVersion(track);
   const mainIsPlaying = activePlayer?.trackId === track.id && activePlayer.versionId === mainVersion.id && isPlaying;
-  const mainProgress = activePlayer?.trackId === track.id && activePlayer.versionId === mainVersion.id ? progress : 0;
+  const tier = licenseTiers.find((t) => t.id === selectedTier) ?? licenseTiers[0];
+  const tags = [track.useCase, track.genre, track.mood, ...track.tags].filter(Boolean).slice(0, 6);
+
+  const share = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      toast.success("Link copied");
+    } catch {
+      toast("Copy the link from the address bar");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background pb-16">
       <Navigation />
-      <main className="px-4 pt-24 sm:px-6 lg:px-8">
+      <main className="mx-auto w-full max-w-7xl px-4 pt-24 sm:px-6">
         <TrackBreadcrumb trackTitle={track.title} />
 
-        <section className="mt-10 grid gap-10 xl:grid-cols-[minmax(0,54rem)_20rem] xl:justify-center">
-          <div className="min-w-0">
-            <Link
-              to="/catalog"
-              className="mb-7 inline-flex items-center gap-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Music library
-            </Link>
-
-            <p className="mb-4 font-body text-xs uppercase tracking-[0.24em] text-muted-foreground">
-              {categoryLabels[track.category]} / {track.artist}
-            </p>
-            <h1 className="font-body text-5xl font-semibold tracking-normal text-foreground md:text-7xl">
-              {track.title}
-            </h1>
-            <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 font-body text-sm font-semibold text-muted-foreground">
-              <span>{track.genre}</span>
-              <span>/</span>
-              <span>{track.mood}</span>
-              <span>/</span>
-              <span>{track.bpm} BPM</span>
+        <section className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
+          {/* Left: cover + info */}
+          <div className="h-fit rounded-xl border border-border bg-card p-6">
+            {/* Square cover — real artwork comes with track upload later. */}
+            <div className="relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-secondary via-background to-secondary">
+              <Music className="h-16 w-16 text-[#F4C430]/40" />
+              <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 font-body text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70">
+                <img src="/logo.svg" alt="" className="h-3.5 w-auto opacity-70" />
+                TV Music Store
+              </span>
             </div>
 
-            <div className="mt-8 border-y border-border/40 py-6">
-              <div className="grid gap-4 md:grid-cols-[4.5rem_minmax(0,1fr)_auto] md:items-center">
+            <h1 className="mt-5 font-body text-2xl font-semibold text-foreground">{track.title}</h1>
+            <p className="mt-1 font-body text-sm text-muted-foreground">by {track.artist}</p>
+            <p className="mt-2 font-body text-xs text-muted-foreground">
+              {mainVersion.duration} · {track.bpm} BPM
+            </p>
+
+            <div className="mt-4 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => playVersion(track, mainVersion)}
+                aria-label={mainIsPlaying ? "Pause preview" : "Play preview"}
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-foreground text-background transition-colors hover:bg-[#F4C430]"
+              >
+                {mainIsPlaying ? <Pause className="h-4 w-4" /> : <Play className="ml-0.5 h-4 w-4" />}
+              </button>
+              <IconButton
+                label={liked ? "Remove from favorites" : "Add to favorites"}
+                onClick={() => setLiked((v) => !v)}
+              >
+                <Heart className="h-4 w-4" style={liked ? { color: GOLD, fill: GOLD } : undefined} />
+              </IconButton>
+              <IconButton label="Share" onClick={() => void share()}>
+                <Share2 className="h-4 w-4" />
+              </IconButton>
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                void downloadTrackVersion({
+                  slug: track.slug,
+                  versionId: mainVersion.id,
+                  src: mainVersion.src,
+                  title: track.title,
+                  label: mainVersion.label,
+                })
+              }
+              className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#F4C430] py-2.5 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
+            >
+              <Download className="h-4 w-4" />
+              Download
+            </button>
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              {tags.map((t) => (
+                <span
+                  key={t}
+                  className="rounded-full border border-border px-3 py-1 font-body text-xs text-muted-foreground"
+                >
+                  {t}
+                </span>
+              ))}
+            </div>
+
+            <div className="mt-6 border-t border-border/60 pt-5">
+              <p className="font-body text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                About the track
+              </p>
+              <p className="mt-3 font-body text-sm leading-6 text-muted-foreground">{track.description}</p>
+            </div>
+          </div>
+
+          {/* Right: licenses */}
+          <div className="flex flex-col gap-6">
+            <div className="rounded-xl border border-border bg-card p-6">
+              <div className="grid gap-3 sm:grid-cols-3">
+                {licenseTiers.map((t) => {
+                  const active = t.id === selectedTier;
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setSelectedTier(t.id)}
+                      className={`rounded-xl border p-4 text-left transition-colors ${
+                        active
+                          ? "border-[#F4C430] bg-[#F4C430]/10"
+                          : "border-border bg-background/40 hover:border-[#F4C430]/50"
+                      }`}
+                    >
+                      <p className="font-body text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        {t.name}
+                      </p>
+                      <p className="mt-1.5 font-body text-2xl font-semibold text-foreground">${t.price}</p>
+                      <p className="mt-1 font-body text-[11px] uppercase tracking-wide text-muted-foreground">
+                        {t.formats}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-6 border-t border-border/60 pt-5">
+                <p className="font-body text-sm font-semibold text-foreground">Usage Terms</p>
+                <ul className="mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {tier.usageTerms.map((term) => (
+                    <li key={term} className="flex items-center gap-2.5 font-body text-sm text-muted-foreground">
+                      <Check className="h-4 w-4 shrink-0" style={{ color: GOLD }} />
+                      {term}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-border/60 pt-5">
+                <span className="font-body text-3xl font-semibold text-foreground">${tier.price}</span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    addToCart({
+                      trackId: track.id,
+                      slug: track.slug,
+                      title: track.title,
+                      artist: track.artist,
+                      tier: selectedTier,
+                    })
+                  }
+                  className="inline-flex items-center gap-2 rounded-lg bg-[#F4C430] px-6 py-2.5 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                  Add to Cart
+                </button>
+              </div>
+              <p className="mt-3 font-body text-xs text-muted-foreground">
+                Unlimited downloads for subscribers —{" "}
+                <Link to="/pricing" className="font-semibold text-[#F4C430] hover:underline">
+                  see plans
+                </Link>
+                .
+              </p>
+            </div>
+
+            {/* Main waveform */}
+            <div className="rounded-xl border border-border bg-card p-6">
+              <div className="grid gap-4 md:grid-cols-[3.5rem_minmax(0,1fr)_auto] md:items-center">
                 <button
                   type="button"
                   onClick={() => playVersion(track, mainVersion)}
-                  className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-border/70 text-foreground transition-colors hover:border-foreground"
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border/70 text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
                   aria-label={mainIsPlaying ? "Pause preview" : "Play preview"}
                 >
-                  {mainIsPlaying ? <Pause className="h-5 w-5" /> : <Play className="ml-1 h-5 w-5" />}
+                  {mainIsPlaying ? <Pause className="h-4 w-4" /> : <Play className="ml-0.5 h-4 w-4" />}
                 </button>
-
                 <WaveformPreview
                   active={mainIsPlaying}
                   bars={360}
                   onSeek={(nextProgress) => playVersion(track, mainVersion, nextProgress)}
-                  progress={mainProgress}
+                  progress={
+                    activePlayer?.trackId === track.id && activePlayer.versionId === mainVersion.id ? progress : 0
+                  }
                   src={mainVersion.src}
-                  className="h-20"
+                  className="h-16"
                 />
-
                 <div className="font-body text-sm text-muted-foreground md:text-right">
                   <div>{mainVersion.label}</div>
                   <div>
@@ -154,28 +262,21 @@ const TrackDetail = () => {
               </div>
             </div>
 
-            <p className="mt-7 max-w-3xl font-body text-base leading-8 text-muted-foreground">
-              {track.description}
-            </p>
-
-            <div className="mt-12">
+            {/* Versions / Similar */}
+            <div className="rounded-xl border border-border bg-card p-6">
               <div className="flex gap-8 border-b border-border/40">
                 <TabButton active={activeTab === "versions"} onClick={() => setActiveTab("versions")}>
                   Versions
                 </TabButton>
                 <TabButton active={activeTab === "similar"} onClick={() => setActiveTab("similar")}>
-                  Similar
-                </TabButton>
-                <TabButton active={activeTab === "license"} onClick={() => setActiveTab("license")}>
-                  License Info
+                  Similar tracks
                 </TabButton>
               </div>
 
               {activeTab === "versions" && (
-                <div className="border-b border-border/40">
+                <div>
                   {track.audioVersions.map((version, index) => {
                     const active = activePlayer?.trackId === track.id && activePlayer.versionId === version.id;
-
                     return (
                       <TrackVersionRow
                         key={version.id}
@@ -185,7 +286,6 @@ const TrackDetail = () => {
                         onPlay={() => playVersion(track, version)}
                         onSeek={(nextProgress) => playVersion(track, version, nextProgress)}
                         progress={active ? progress : 0}
-                        track={track}
                         version={version}
                       />
                     );
@@ -194,17 +294,16 @@ const TrackDetail = () => {
               )}
 
               {activeTab === "similar" && (
-                <div className="border-b border-border/40">
+                <div>
                   {similarTracks.map((item) => {
                     const version = getSelectedVersion(item);
                     const active = activePlayer?.trackId === item.id && activePlayer.versionId === version.id;
-
                     return (
                       <div key={item.id} className="border-b border-border/40 py-4 last:border-b-0">
                         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                           <Link
                             to={`/track/${item.slug}`}
-                            className="font-body text-sm font-semibold text-foreground transition-colors hover:text-primary"
+                            className="font-body text-sm font-semibold text-foreground transition-colors hover:text-[#F4C430]"
                           >
                             {item.title}
                           </Link>
@@ -236,128 +335,55 @@ const TrackDetail = () => {
                   })}
                 </div>
               )}
-
-              {activeTab === "license" && (
-                <div className="border-b border-border/40">
-                  {licenseTiers.map((tier) => (
-                    <article key={tier.name} className="border-b border-border/40 py-5 last:border-b-0">
-                      <div className="flex flex-wrap items-baseline gap-2">
-                        <h3 className="font-body text-lg font-semibold text-foreground">{tier.name}</h3>
-                        <span className="font-body text-sm text-muted-foreground">{tier.price}</span>
-                      </div>
-                      <p className="mt-2 font-body text-sm leading-6 text-muted-foreground">{tier.summary}</p>
-                      <p className="mt-3 font-body text-xs leading-5 text-muted-foreground">{tier.note}</p>
-                    </article>
-                  ))}
-                  <Link
-                    to="/"
-                    className="inline-flex py-5 font-body text-sm font-semibold text-primary transition-colors hover:text-foreground"
-                  >
-                    Read full license terms
-                  </Link>
-                </div>
-              )}
             </div>
           </div>
-
-          <aside className="h-fit border-t border-border/40 pt-7 xl:border-l xl:border-t-0 xl:pl-8 xl:pt-0">
-            <p className="font-body text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-              Get this track
-            </p>
-            <div className="mt-6 space-y-7">
-              <div>
-                <h2 className="font-body text-lg font-semibold text-foreground">Preview download</h2>
-                <p className="mt-2 font-body text-sm leading-6 text-muted-foreground">
-                  MP3 preview is available now. Full delivery flow comes with checkout.
-                </p>
-                <a
-                  href={mainVersion.src}
-                  download
-                  className="mt-4 inline-flex h-11 w-full items-center justify-center rounded-full bg-muted font-body text-sm font-semibold text-foreground transition-colors hover:bg-foreground hover:text-background"
-                >
-                  Download preview
-                </a>
-              </div>
-
-              <div className="border-t border-border/40 pt-6">
-                <h2 className="font-body text-lg font-semibold text-foreground">Commercial Online</h2>
-                <p className="mt-2 font-body text-sm leading-6 text-muted-foreground">
-                  One online project. No credit required.
-                </p>
-                <Button className="mt-4 h-11 w-full rounded-full">
-                  <Plus className="h-4 w-4" />
-                  Add license / ${track.priceFrom}
-                </Button>
-              </div>
-
-              <div className="border-t border-border/40 pt-6">
-                <h2 className="font-body text-sm font-semibold text-foreground">Need a custom edit?</h2>
-                <p className="mt-2 font-body text-sm leading-6 text-muted-foreground">
-                  Different length or version without specific instruments is available on request.
-                </p>
-                <Link to="/#contact" className="mt-3 inline-flex font-body text-sm font-semibold text-primary">
-                  Send a brief
-                </Link>
-              </div>
-
-              <div className="flex items-center gap-4 border-t border-border/40 pt-6 text-muted-foreground">
-                <button type="button" className="transition-colors hover:text-foreground" aria-label={`Save ${track.title}`}>
-                  <Heart className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  className="transition-colors hover:text-foreground"
-                  aria-label={`Add ${track.title} to cart`}
-                >
-                  <ShoppingBag className="h-4 w-4" />
-                </button>
-                <a
-                  href={mainVersion.src}
-                  download
-                  className="transition-colors hover:text-foreground"
-                  aria-label={`Download preview for ${track.title}`}
-                >
-                  <Download className="h-4 w-4" />
-                </a>
-              </div>
-            </div>
-          </aside>
         </section>
       </main>
     </div>
   );
 };
 
+const IconButton = ({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  children: ReactNode;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-label={label}
+    className="flex h-11 w-11 items-center justify-center rounded-full border border-border/70 text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
+  >
+    {children}
+  </button>
+);
+
 const TrackBreadcrumb = ({ trackTitle }: { trackTitle: string }) => (
-  <div className="flex items-center gap-4">
-    <Link
-      to="/"
-      className="flex h-11 w-11 items-center justify-center rounded-xl border border-border/70 bg-card/40 font-body text-sm font-semibold text-foreground"
-    >
-      TV
+  <nav className="flex flex-wrap items-center gap-2 font-body text-sm text-muted-foreground">
+    <Link to="/" className="inline-flex items-center gap-1 transition-colors hover:text-[#F4C430]">
+      <Home className="h-3.5 w-3.5" />
+      Home
     </Link>
-    <nav className="flex flex-wrap items-center gap-2 font-body text-sm text-muted-foreground">
-      <Link to="/" className="inline-flex items-center gap-1 transition-colors hover:text-foreground">
-        <Home className="h-3.5 w-3.5" />
-        Home
-      </Link>
-      <span>/</span>
-      <Link to="/catalog" className="transition-colors hover:text-foreground">
-        Music Library
-      </Link>
-      <span>/</span>
-      <span className="font-semibold text-foreground">{trackTitle}</span>
-    </nav>
-  </div>
+    <span>/</span>
+    <Link to="/catalog" className="transition-colors hover:text-[#F4C430]">
+      Music Library
+    </Link>
+    <span>/</span>
+    <span className="font-semibold text-foreground">{trackTitle}</span>
+  </nav>
 );
 
 const TabButton = ({ active, children, onClick }: { active: boolean; children: ReactNode; onClick: () => void }) => (
   <button
     type="button"
     onClick={onClick}
-    className={`border-b py-4 font-body text-sm font-semibold uppercase tracking-[0.14em] transition-colors ${
+    className={`border-b py-3.5 font-body text-sm font-semibold uppercase tracking-[0.14em] transition-colors ${
       active
-        ? "border-primary text-foreground"
+        ? "border-[#F4C430] text-foreground"
         : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
     }`}
   >
@@ -372,7 +398,6 @@ const TrackVersionRow = ({
   onPlay,
   onSeek,
   progress,
-  track,
   version,
 }: {
   active: boolean;
@@ -381,7 +406,6 @@ const TrackVersionRow = ({
   onPlay: () => void;
   onSeek: (progress: number) => void;
   progress: number;
-  track: CatalogTrack;
   version: TrackAudioVersion;
 }) => (
   <div className="grid gap-4 border-b border-border/40 py-4 last:border-b-0 md:grid-cols-[2rem_minmax(10rem,16rem)_minmax(0,1fr)_3.5rem] md:items-center">
@@ -396,14 +420,7 @@ const TrackVersionRow = ({
     <span className={`font-body text-sm ${active ? "text-foreground" : "text-muted-foreground"}`}>
       {index + 1}. {version.label}
     </span>
-    <WaveformPreview
-      active={isPlaying}
-      bars={360}
-      onSeek={onSeek}
-      progress={progress}
-      src={version.src}
-      className="h-9"
-    />
+    <WaveformPreview active={isPlaying} bars={360} onSeek={onSeek} progress={progress} src={version.src} className="h-9" />
     <span className="font-body text-xs text-muted-foreground">{version.duration}</span>
   </div>
 );

@@ -36,6 +36,9 @@ export interface Env {
   STRIPE_WEBHOOK_SECRET?: string;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
+  PAYPAL_CLIENT_ID?: string;
+  PAYPAL_SECRET?: string;
+  PAYPAL_ENV?: string; // "live" (default) | "sandbox"
 }
 
 export interface Ctx {

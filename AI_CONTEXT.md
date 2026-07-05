@@ -261,6 +261,30 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   tvmusicstore-files, (3) after deploy create webhook in Stripe dashboard -> STRIPE_WEBHOOK_SECRET
   secret, (4) test-mode card 4242... end-to-end test. NOTE: sandbox<->host file sync glitched this
   session (5 edited files truncated sandbox-side); host files verified whole; lint 0 errors.
+- **2026-07-05 (track page + cart + PayPal):** live /api/health confirmed stripe:configured,
+  r2:bound (webhook secret still pending on owner). NEW single-track licensing (owner-approved
+  prices): Personal $29 / Commercial $89 / Professional $249 — `src/lib/licenses.ts` (tiers,
+  formats, Usage Terms lists) + server copy in `functions/api/paypal/_paypal.ts` (NEVER trust
+  client prices). TrackDetail fully redesigned tunetank-style: left card = square cover
+  PLACEHOLDER (real artwork comes later with track upload; recommend 1000x1000 covers) + title/
+  author/duration/BPM + play/heart/share + gold Download + tag pills + About; right = 3 license
+  tier cards -> Usage Terms grid -> price + Add to Cart; below: main waveform card + Versions/
+  Similar tabs (License tab removed — old $39/$99/$299 tiers deleted). CART: `src/hooks/useCart.ts`
+  (localStorage tvms_cart_v1, one line per track, tier switch replaces), `/cart` page (tier
+  dropdowns, order summary, PayPal Buttons via JS SDK; graceful "checkout being set up" note when
+  PayPal env vars absent), Navigation cart icon -> /cart with count badge. PAYPAL backend:
+  /api/paypal/config|order|capture; order validates+prices items server-side, custom_id=user id;
+  capture re-reads the order, captures, writes rows to sync_orders (tier=personal|commercial|
+  professional, stripe_session_id column = PayPal order id, idempotent per order). Env (in
+  _utils.ts): PAYPAL_CLIENT_ID, PAYPAL_SECRET, PAYPAL_ENV (live default | sandbox). OWNER: has a
+  UK PayPal used for stock payouts — needs Business upgrade + REST app on developer.paypal.com,
+  then add the two secrets. TODO NEXT: (1) Download-options modal like tunetank (MP3 128/320,
+  WAV=Max, STEMS=Max, "Include PDF license", "N of 3 free downloads left") replacing direct
+  download on click; (2) square cover upload (1000x1000) when adding tracks + auto thumbnails,
+  show real art on TrackDetail/cart/rows; (3) Account -> Licenses should list real sync_orders
+  purchases (still mocks); (4) license PDF generation after purchase. WARNING for AI: cowork
+  sandbox<->host sync truncates EDITED files sandbox-side this machine; after editing, re-push
+  file content into the sandbox via heredoc before trusting lint.
 - **2026-07-04 (layout align):** constrained the Navigation header to the same content container as
   <main> (mx-auto max-w-[92rem] px-4 sm:px-6) so logo/search/icons line up with page content;
   indented the catalog hero text (lg:pl-[16.75rem] xl:pl-[17.75rem]) to start at the track play

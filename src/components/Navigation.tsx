@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Menu, Search, ShoppingCart, User, X } from "lucide-react";
 import AuthModal from "@/components/AuthModal";
 import { useCurrentUser } from "@/hooks/useMockData";
+import { useCart } from "@/hooks/useCart";
 import { resumePendingDownload } from "@/lib/downloadTrack";
 
 const Navigation = () => {
@@ -12,6 +13,7 @@ const Navigation = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const user = useCurrentUser();
+  const { count: cartCount } = useCart();
 
   const onAccountClick = () => {
     setIsOpen(false);
@@ -92,13 +94,18 @@ const Navigation = () => {
             >
               <User className="h-5 w-5" />
             </button>
-            <button
-              type="button"
+            <Link
+              to="/cart"
               aria-label="Cart"
-              className="text-muted-foreground transition-colors duration-300 hover:text-[#F4C430]"
+              className="relative text-muted-foreground transition-colors duration-300 hover:text-[#F4C430]"
             >
               <ShoppingCart className="h-5 w-5" />
-            </button>
+              {cartCount > 0 && (
+                <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#F4C430] px-1 font-body text-[10px] font-bold text-background">
+                  {cartCount}
+                </span>
+              )}
+            </Link>
           </div>
 
           {/* Mobile menu button */}
