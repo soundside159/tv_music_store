@@ -183,6 +183,13 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   `useRef` import in Catalog.tsx (runtime crash risk) and missing `styleOf`/`priceFrom` in
   useTracks mapTrack. Pending: Account → Downloads history for live users (useMyDownloads returns
   [] when authed — needs a /api/me/downloads endpoint), R2 bucket binding + master uploads, Stripe.
+- **2026-07-05 (auth UX + logo):** Google OAuth now returns to the page the user started from
+  (`?next=` → `tvms_oauth_next` cookie, validated, cleared on callback); download clicked as guest
+  is stored in sessionStorage and auto-resumed after any sign-in (resume hook lives in
+  Navigation). Fixed Cyrillic mojibake in Google names (id_token payload now decoded as UTF-8);
+  existing users get their name re-synced from Google on next login. New brand logo:
+  `public/logo.svg` (gold soundwave→play, #F4C430) + regenerated `public/favicon.ico`, favicon
+  links added to index.html, logo image added before the wordmark in Navigation.
 - **2026-07-04 (layout align):** constrained the Navigation header to the same content container as
   <main> (mx-auto max-w-[92rem] px-4 sm:px-6) so logo/search/icons line up with page content;
   indented the catalog hero text (lg:pl-[16.75rem] xl:pl-[17.75rem]) to start at the track play

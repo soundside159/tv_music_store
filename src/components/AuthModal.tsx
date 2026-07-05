@@ -121,7 +121,9 @@ const AuthModal = ({ open, onClose }: AuthModalProps) => {
             {googleReady && (
               <>
                 <a
-                  href="/api/auth/google"
+                  href={`/api/auth/google?next=${encodeURIComponent(
+                    window.location.pathname + window.location.search,
+                  )}`}
                   className="flex h-12 w-full items-center justify-center gap-3 rounded-lg border border-white/15 bg-background/40 font-body text-sm font-medium text-foreground transition-colors hover:border-white/30"
                 >
                   <GoogleIcon />

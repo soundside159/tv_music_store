@@ -11,12 +11,15 @@ import {
 // user's email from the id_token, creates/finds the user and opens a session.
 
 const STATE_COOKIE = "tvms_oauth_state";
+const NEXT_COOKIE = "tvms_oauth_next";
 
 const decodeJwtPayload = (jwt: string): Record<string, unknown> | null => {
   try {
     const payload = jwt.split(".")[1];
     const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
-    return JSON.parse(atob(base64)) as Record<string, unknown>;
+    // atob() alone mangles non-ASCII names (Cyrillic etc.) — decode as UTF-8.
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    return JSON.parse(new TextDecoder("utf-8").decode(bytes)) as Record<string, unknown>;
   } catch {
     return null;
   }
@@ -58,9 +61,9 @@ export const onRequestGet = async (ctx: Ctx) => {
 
   const role = email === OWNER_EMAIL ? "admin" : "customer";
 
-  let user = await ctx.env.DB.prepare(`SELECT id, role FROM users WHERE email = ?1`)
+  let user = await ctx.env.DB.prepare(`SELECT id, role, name FROM users WHERE email = ?1`)
     .bind(email)
-    .first<{ id: string; role: string }>();
+    .first<{ id: string; role: string; name: string | null }>();
 
   if (!user) {
     const id = newId("usr");
@@ -74,17 +77,26 @@ export const onRequestGet = async (ctx: Ctx) => {
     )
       .bind(newId("sub"), id)
       .run();
-    user = { id, role };
-  } else if (role === "admin" && user.role !== "admin") {
-    await ctx.env.DB.prepare(`UPDATE users SET role = 'admin' WHERE id = ?1`).bind(user.id).run();
+    user = { id, role, name };
+  } else {
+    if (role === "admin" && user.role !== "admin") {
+      await ctx.env.DB.prepare(`UPDATE users SET role = 'admin' WHERE id = ?1`).bind(user.id).run();
+    }
+    // Keep the name fresh from Google (also repairs older mojibake-encoded names).
+    if (name && name !== user.name) {
+      await ctx.env.DB.prepare(`UPDATE users SET name = ?1 WHERE id = ?2`).bind(name, user.id).run();
+    }
   }
 
+  const nextRaw = decodeURIComponent(getCookie(ctx.request, NEXT_COOKIE) ?? "");
+  const next = nextRaw.startsWith("/") && !nextRaw.startsWith("//") ? nextRaw : "/account";
+
   const cookie = await openSession(ctx.env.DB, user.id);
-  return new Response(null, {
-    status: 302,
-    headers: {
-      location: `${origin}/account`,
-      "set-cookie": cookie,
-    },
-  });
+  const headers = new Headers({ location: `${origin}${next}` });
+  headers.append("set-cookie", cookie);
+  headers.append(
+    "set-cookie",
+    `${NEXT_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
+  );
+  return new Response(null, { status: 302, headers });
 };

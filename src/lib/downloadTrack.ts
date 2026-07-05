@@ -39,6 +39,12 @@ export const downloadTrackVersion = async (args: DownloadArgs): Promise<void> =>
 
     const data = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
     if (res.status === 401 || data.code === "auth") {
+      // Remember what the user wanted; resumed automatically right after sign-in.
+      try {
+        sessionStorage.setItem("tvms.pendingDownload", JSON.stringify({ ...args, format }));
+      } catch {
+        // storage unavailable — user will just click Download again
+      }
       window.dispatchEvent(new Event("tvms:open-auth"));
       toast("Sign in to download tracks", {
         description: "Free account includes 3 downloads every month.",
@@ -62,5 +68,21 @@ export const downloadTrackVersion = async (args: DownloadArgs): Promise<void> =>
     toast.error(data.error ?? "Download failed. Try again.");
   } catch {
     toast.error("Network error. Try again.");
+  }
+};
+
+/** Runs the download the user asked for before being sent to sign in. */
+export const resumePendingDownload = (): void => {
+  let pending: DownloadArgs | null = null;
+  try {
+    const raw = sessionStorage.getItem("tvms.pendingDownload");
+    if (!raw) return;
+    sessionStorage.removeItem("tvms.pendingDownload");
+    pending = JSON.parse(raw) as DownloadArgs;
+  } catch {
+    return;
+  }
+  if (pending?.slug && pending.versionId && pending.src) {
+    void downloadTrackVersion(pending);
   }
 };

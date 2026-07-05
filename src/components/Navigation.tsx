@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Menu, Search, ShoppingCart, User, X } from "lucide-react";
 import AuthModal from "@/components/AuthModal";
 import { useCurrentUser } from "@/hooks/useMockData";
+import { resumePendingDownload } from "@/lib/downloadTrack";
 
 const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -25,6 +26,12 @@ const Navigation = () => {
     return () => window.removeEventListener("tvms:open-auth", open);
   }, []);
 
+  // After sign-in (code, password or Google redirect) finish the download
+  // the user originally clicked.
+  useEffect(() => {
+    if (user) resumePendingDownload();
+  }, [user]);
+
   const navItems = [
     { label: "Music Library", href: "/catalog" },
     { label: "Pricing", href: "/pricing" },
@@ -46,8 +53,9 @@ const Navigation = () => {
           <div className="flex min-w-0 items-center gap-8">
             <Link
               to="/"
-              className="shrink-0 font-body text-sm font-semibold uppercase tracking-[0.22em] text-foreground md:text-base"
+              className="flex shrink-0 items-center gap-2.5 font-body text-sm font-semibold uppercase tracking-[0.22em] text-foreground md:text-base"
             >
+              <img src="/logo.svg" alt="" className="h-6 w-auto md:h-7" />
               TV Music Store
             </Link>
             <div className="hidden items-center gap-7 md:flex">
