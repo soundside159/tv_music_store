@@ -401,7 +401,7 @@ const AdminTracksEdit = ({
   const hasSelection = selTracks.length > 0;
 
   return (
-    <div className="mt-5 items-start gap-6 xl:grid xl:grid-cols-[44rem_minmax(32rem,1fr)]">
+    <div className="mt-5 items-start gap-6 xl:grid xl:grid-cols-[minmax(44rem,1fr)_minmax(32rem,1fr)]">
       {/* ===== Left: toolbar + table + pagination ===== */}
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-3">

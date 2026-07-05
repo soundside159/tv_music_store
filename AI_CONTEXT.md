@@ -508,3 +508,22 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   leaked to host). The fixed 44rem table width is a one-number tweak if it feels off.
   Next: back to the main plan — (2) editable tag vocabularies,
   (3) admin mailbox, (4) Account->Licenses from sync_orders, (5) license PDFs, (6) Add Track.
+- **2026-07-05 (admin nav restructure + Tracks Edit width, owner round 5 — final):** owner: (a) the
+  single "Content" sidebar item and its INNER tab bar (Collections/Playlists/Categories/Trending/
+  Tracks Edit) are gone — those five are now TOP-LEVEL admin sidebar items; (b) only the Tracks
+  Edit view gets a wider but still CENTERED box (never full-screen); every other admin section
+  stays centered at the normal `max-w-6xl` like Finance/Tracks. Impl:
+  `adminNav.ts` — replaced `{playlists:"Content"}` with 5 items: collections (Library), playlists
+  (ListMusic), categories (Tags), trending (Flame), tracksedit "Tracks Edit" (SlidersHorizontal).
+  `Admin.tsx` — SectionId + SECTION_IDS extended with those 5 ids; `CONTENT_TAB` maps each section
+  to AdminContent's internal view (tracksedit->"tracks"); render is now
+  `{CONTENT_TAB[section] && <AdminContent tab={CONTENT_TAB[section]!} />}`; main container is
+  `max-w-6xl` for all sections EXCEPT `section === "tracksedit"` which is `max-w-[96rem]` (still
+  mx-auto centered — variant B). `AdminContent.tsx` — now takes a `tab` prop (controlled), internal
+  `tab` state + the tab-button bar REMOVED (replaced by an `<h2>{tabLabels[tab]}</h2>` header, seed
+  button kept); a `useEffect([tab])` resets any open draft on view switch. `AdminTracksEdit.tsx`
+  grid back to `[minmax(44rem,1fr)_minmax(32rem,1fr)]` — in the 96rem box both the table (~44rem,
+  no h-scroll) and the Edit panel (~32rem+) are roomy. tsc 0. NOTE: stale sandbox-only temp files
+  from earlier rounds (`*__v.tsx`, `*__chk.tsx`) linger in the SANDBOX mirror (can't rm — overlay
+  perms) but are NOT on host (Glob confirmed) so deploy.bat is unaffected; ignore them in sandbox
+  lint output. Back to the main plan next.

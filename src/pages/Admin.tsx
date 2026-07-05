@@ -22,9 +22,41 @@ import AdminContent from "@/components/AdminContent";
 
 const GOLD = "#F4C430";
 
-type SectionId = "dashboard" | "finance" | "tracks" | "playlists" | "customers" | "requests";
+type SectionId =
+  | "dashboard"
+  | "finance"
+  | "tracks"
+  | "collections"
+  | "playlists"
+  | "categories"
+  | "trending"
+  | "tracksedit"
+  | "customers"
+  | "requests";
 
-const SECTION_IDS: SectionId[] = ["dashboard", "finance", "tracks", "playlists", "customers", "requests"];
+const SECTION_IDS: SectionId[] = [
+  "dashboard",
+  "finance",
+  "tracks",
+  "collections",
+  "playlists",
+  "categories",
+  "trending",
+  "tracksedit",
+  "customers",
+  "requests",
+];
+
+// Which sidebar sections are handled by the AdminContent component, and the
+// internal view each maps to.
+type ContentTab = "collections" | "playlists" | "categories" | "trending" | "tracks";
+const CONTENT_TAB: Partial<Record<SectionId, ContentTab>> = {
+  collections: "collections",
+  playlists: "playlists",
+  categories: "categories",
+  trending: "trending",
+  tracksedit: "tracks",
+};
 
 const composerName = (id: string) =>
   mockComposers.find((c) => c.id === id)?.displayName ?? id;
@@ -145,7 +177,7 @@ const Admin = () => {
       <Navigation />
       <main
         className={`mx-auto w-full px-4 pb-24 pt-24 sm:px-6 md:pt-28 ${
-          section === "playlists" ? "max-w-none" : "max-w-6xl"
+          section === "tracksedit" ? "max-w-[96rem]" : "max-w-6xl"
         }`}
       >
         <div className="flex flex-col gap-8 md:flex-row">
@@ -414,7 +446,7 @@ const Admin = () => {
               </>
             )}
 
-            {section === "playlists" && <AdminContent />}
+            {CONTENT_TAB[section] && <AdminContent tab={CONTENT_TAB[section]!} />}
 
             {section === "customers" && (
               <Card title={`Customers${liveUsers ? ` (${liveUsers.length})` : ""}`}>

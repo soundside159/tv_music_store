@@ -113,11 +113,10 @@ const tabLabels: Record<Tab, string> = {
   tracks: "Tracks Edit",
 };
 
-const AdminContent = () => {
+const AdminContent = ({ tab }: { tab: Tab }) => {
   const { tracks, source: trackSource } = useTracks();
   const [data, setData] = useState<ContentData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("collections");
   const [draft, setDraft] = useState<typeof emptyDraft | null>(null);
   const [trendingDraft, setTrendingDraft] = useState<string[] | null>(null);
   const [newCategoryTitle, setNewCategoryTitle] = useState("");
@@ -125,6 +124,11 @@ const AdminContent = () => {
   const [trackOverrides, setTrackOverrides] = useState<Record<string, Partial<CatalogTrack>>>({});
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
+
+  // Reset any open draft when the sidebar switches the active view.
+  useEffect(() => {
+    setDraft(null);
+  }, [tab]);
 
   const uploadCover = async (file: File, apply: (path: string) => void) => {
     setUploading(true);
@@ -186,25 +190,9 @@ const AdminContent = () => {
   const mergedTracks = tracks.map((t) => ({ ...t, ...trackOverrides[t.id] }));
 
   return (
-    <div className={`rounded-xl border border-border bg-card p-6 ${tab === "tracks" ? "" : "max-w-5xl"}`}>
+    <div className="rounded-xl border border-border bg-card p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-1">
-          {(["collections", "playlists", "categories", "trending", "tracks"] as Tab[]).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => {
-                setTab(t);
-                setDraft(null);
-              }}
-              className={`rounded-lg px-3 py-1.5 font-body text-sm transition-colors ${
-                tab === t ? "bg-secondary text-[#F4C430]" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {tabLabels[t]}
-            </button>
-          ))}
-        </div>
+        <h2 className="font-body text-lg font-semibold text-foreground">{tabLabels[tab]}</h2>
         {data.dbTrackCount === 0 && (
           <button
             type="button"
