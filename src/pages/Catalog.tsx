@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { useTracks } from "@/hooks/useTracks";
 import type { MusicCollection } from "@/data/musicCollections";
 import { useCollections } from "@/hooks/useContent";
-import { TrackRow, useEntranceStagger } from "@/components/TrackRowPlayer";
+import { TrackRow } from "@/components/TrackRowPlayer";
 import { usePlayer } from "@/components/PlayerProvider";
 
 type FilterValue = {
@@ -32,6 +32,19 @@ const moodOptions = ["Emotional", "Powerful", "Inspiring", "Suspenseful", "Aggre
 const splitFilterValues = (value: string) => value.split("/").map((item) => item.trim()).filter(Boolean);
 
 const matchesOption = (value: string, option: string) => value.toLowerCase().includes(option.toLowerCase());
+
+const PAGE_SIZE = 15;
+
+/** 1 … around-current … last, with ellipses when there are many pages. */
+const pageNumbers = (current: number, total: number): (number | "...")[] => {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const pages: (number | "...")[] = [1];
+  if (current > 3) pages.push("...");
+  for (let p = Math.max(2, current - 1); p <= Math.min(total - 1, current + 1); p += 1) pages.push(p);
+  if (current < total - 2) pages.push("...");
+  pages.push(total);
+  return pages;
+};
 
 const Catalog = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -59,8 +72,9 @@ const Catalog = () => {
   const [expandedTrackId, setExpandedTrackId] = useState<string | null>(null);
   const [sort, setSort] = useState("Featured");
   const { activePlayer, isPlaying, progress, playedProgress, playVersion } = usePlayer();
-  const { tracks } = useTracks();
-  const staggerDone = useEntranceStagger();
+  const { tracks, isLoading } = useTracks();
+  const [page, setPage] = useState(1);
+  const listTopRef = useRef<HTMLDivElement | null>(null);
 
   const filteredTracks = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -86,6 +100,22 @@ const Catalog = () => {
     if (sort === "Popular") return [...result].sort((a, b) => b.bpm - a.bpm);
     return result;
   }, [tracks, activeCollection, categoryParam, filters, query, sort]);
+
+  // Pagination: filters/search/sort always run over the FULL catalog above,
+  // then we slice the current page — so a checkbox never "loses" tracks.
+  const totalPages = Math.max(1, Math.ceil(filteredTracks.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pagedTracks = filteredTracks.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  // Any change of filters/search/sort returns the user to page 1.
+  useEffect(() => {
+    setPage(1);
+  }, [filters, query, sort, activeCollectionId, categoryParam]);
+
+  const goToPage = (next: number) => {
+    setPage(Math.max(1, Math.min(totalPages, next)));
+    listTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   const selectCollection = (collectionId: string | null) => {
     const nextParams = new URLSearchParams(searchParams);
@@ -130,7 +160,11 @@ const Catalog = () => {
           </div>
 
           <section className="min-w-0">
-            <div className="animate-fade-in rounded-lg border border-border/30 bg-card/25" style={{ animationDelay: "0.5s" }}>
+            <div
+              ref={listTopRef}
+              className="animate-fade-in scroll-mt-24 rounded-lg border border-border/30 bg-card/25"
+              style={{ animationDelay: "0.5s" }}
+            >
               <div className="grid gap-3 border-b border-border/30 bg-background/20 px-4 py-3 md:grid-cols-[minmax(16rem,28rem)_1fr_auto] md:items-center">
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -152,15 +186,33 @@ const Catalog = () => {
                 </div>
               </div>
 
+              {isLoading && (
+                <div aria-hidden="true">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center gap-4 border-b border-border/30 px-4 py-3.5 last:border-b-0"
+                    >
+                      <div className="h-10 w-10 shrink-0 animate-pulse rounded-lg bg-foreground/[0.06]" />
+                      <div
+                        className="h-9 flex-1 animate-pulse rounded-lg bg-foreground/[0.04]"
+                        style={{ animationDelay: `${i * 120}ms` }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {!isLoading && (
               <AnimatePresence mode="wait">
                 <motion.div
-                  key={activeCollection?.id ?? "all-tracks"}
+                  key={`${activeCollection?.id ?? "all-tracks"}-${safePage}`}
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
                   transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
                 >
-                  {filteredTracks.map((track, index) => {
+                  {pagedTracks.map((track, index) => {
                     const mainVersion = track.audioVersions[0];
                     const expanded = expandedTrackId === track.id;
                     const mainIsPlaying =
@@ -170,7 +222,7 @@ const Catalog = () => {
                       <TrackRow
                         key={track.id}
                         activePlayer={activePlayer}
-                        entranceDelay={staggerDone.current ? 0 : 0.55 + index * 0.06}
+                        entranceDelay={0}
                         expanded={expanded}
                         globalIsPlaying={isPlaying}
                         globalProgress={progress}
@@ -186,13 +238,58 @@ const Catalog = () => {
                   })}
                 </motion.div>
               </AnimatePresence>
+              )}
 
-              {filteredTracks.length === 0 && (
+              {!isLoading && filteredTracks.length === 0 && (
                 <div className="px-4 py-12 text-center font-body text-sm text-muted-foreground">
                   No tracks found. Try another filter or search phrase.
                 </div>
               )}
             </div>
+
+            {!isLoading && totalPages > 1 && (
+              <nav className="mt-5 flex items-center justify-center gap-1.5" aria-label="Catalog pages">
+                <button
+                  type="button"
+                  disabled={safePage === 1}
+                  onClick={() => goToPage(safePage - 1)}
+                  aria-label="Previous page"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430] disabled:pointer-events-none disabled:opacity-40"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                {pageNumbers(safePage, totalPages).map((p, i) =>
+                  p === "..." ? (
+                    <span key={`gap-${i}`} className="px-1.5 font-body text-sm text-muted-foreground">
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => goToPage(p)}
+                      aria-current={p === safePage ? "page" : undefined}
+                      className={`h-9 min-w-9 rounded-lg px-2.5 font-body text-sm font-semibold transition-colors ${
+                        p === safePage
+                          ? "bg-[#F4C430] text-background"
+                          : "border border-border text-muted-foreground hover:border-[#F4C430] hover:text-[#F4C430]"
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ),
+                )}
+                <button
+                  type="button"
+                  disabled={safePage === totalPages}
+                  onClick={() => goToPage(safePage + 1)}
+                  aria-label="Next page"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430] disabled:pointer-events-none disabled:opacity-40"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </nav>
+            )}
           </section>
         </section>
       </main>

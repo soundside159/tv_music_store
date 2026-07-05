@@ -332,6 +332,17 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   immediately (0.25s, no delay). Header logo bumped to h-8/w-8 (md: h-9/w-9). BIMI explicitly
   skipped per owner. NOTE: waveform FIFO queue from previous entry stays — it handles the
   decode order; this entry handles the visibility holes.
+- **2026-07-05 (catalog pagination + skeletons):** owner confirmed the filter-toggle holes are
+  fixed; the remaining "weird load" on first open was the mock->API row swap. Catalog now:
+  (1) `useTracks` exposes `isLoading` (true until /api/tracks settles); (2) Catalog shows 8
+  tunetank-style skeleton rows (pulsing thumb + bar) while loading, no more mock flash;
+  (3) PAGINATION: PAGE_SIZE=15, filters/search/sort always run over the FULL track list first,
+  then slice; numbered pager (1 … n with ellipses, prev/next) below the list, page resets to 1
+  on any filter/search/sort/collection change, page switch smooth-scrolls to the list top
+  (`scroll-mt-24` for the fixed header); (4) catalog rows no longer use the staggered rise-in —
+  `entranceDelay={0}`, quick 0.25s fade (homepage/collections TrackRowList keeps its first-load
+  stagger via useEntranceStagger). AnimatePresence key includes the page number so page flips get
+  the same soft transition.
 - **2026-07-04 (layout align):** constrained the Navigation header to the same content container as
   <main> (mx-auto max-w-[92rem] px-4 sm:px-6) so logo/search/icons line up with page content;
   indented the catalog hero text (lg:pl-[16.75rem] xl:pl-[17.75rem]) to start at the track play

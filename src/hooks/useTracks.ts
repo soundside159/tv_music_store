@@ -50,6 +50,9 @@ const mapTrack = (t: ApiTrack): CatalogTrack => ({
 export const useTracks = () => {
   const [tracks, setTracks] = useState<CatalogTrack[]>(catalogTracks);
   const [source, setSource] = useState<"mock" | "api">("mock");
+  // True until the API answers (or fails) — lets pages show skeletons instead
+  // of flashing mock rows that then get replaced by live rows.
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,11 +68,14 @@ export const useTracks = () => {
       })
       .catch(() => {
         // API unavailable / DB empty -> keep mock fallback
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
       });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  return { tracks, source };
+  return { tracks, source, isLoading };
 };
