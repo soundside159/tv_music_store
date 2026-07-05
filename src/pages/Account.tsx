@@ -10,10 +10,11 @@ import {
   useCurrentUser,
   useDownloadsRemaining,
   useMyDownloads,
+  useMyLicenses,
   usePlans,
   useSubscription,
 } from "@/hooks/useMockData";
-import { mockClaimRequests, mockSyncOrders, mockWhitelistChannels } from "@/mocks";
+import { mockClaimRequests, mockWhitelistChannels } from "@/mocks";
 import { logout, updateProfile } from "@/hooks/useAuth";
 import { openBillingPortal } from "@/lib/billing";
 
@@ -68,6 +69,7 @@ const Account = () => {
   const subscription = useSubscription();
   const plans = usePlans();
   const downloads = useMyDownloads();
+  const syncOrders = useMyLicenses();
   const remaining = useDownloadsRemaining();
   const [searchParams] = useSearchParams();
   const sectionParam = searchParams.get("section");
@@ -83,7 +85,6 @@ const Account = () => {
   const plan = plans.find((p) => p.id === subscription?.plan);
   const whitelists = user ? mockWhitelistChannels.filter((w) => w.userId === user.id) : [];
   const claims = user ? mockClaimRequests.filter((c) => c.userId === user.id) : [];
-  const syncOrders = user ? mockSyncOrders.filter((o) => o.userId === user.id) : [];
 
   if (!user) {
     return (
@@ -419,11 +420,22 @@ const Account = () => {
                   ) : (
                     <ul className="divide-y divide-border/60">
                       {syncOrders.map((o) => (
-                        <li key={o.id} className="flex items-center justify-between py-2.5">
-                          <span className="font-body text-sm text-foreground">
-                            {trackTitle(o.trackId)} · <span className="capitalize">{o.tier}</span>
+                        <li key={o.id} className="flex items-center justify-between gap-4 py-2.5">
+                          <span className="min-w-0">
+                            <span className="block truncate font-body text-sm text-foreground">
+                              {o.trackTitle ?? trackTitle(o.trackId)}
+                              {" · "}
+                              <span className="capitalize text-muted-foreground">{o.tier}</span>
+                            </span>
+                            <span className="block font-body text-xs text-muted-foreground">
+                              {fmtDate(o.createdAt)}
+                              {o.price ? ` · $${o.price}` : ""}
+                            </span>
                           </span>
-                          <button type="button" className="font-body text-xs font-semibold text-[#F4C430] hover:underline">
+                          <button
+                            type="button"
+                            className="shrink-0 font-body text-xs font-semibold text-[#F4C430] hover:underline"
+                          >
                             License PDF
                           </button>
                         </li>

@@ -13,6 +13,7 @@ import {
   mockDownloadLog,
   mockPersonas,
   mockPlans,
+  mockSyncOrders,
 } from "@/mocks";
 import { useAuthSession } from "@/hooks/useAuth";
 
@@ -117,6 +118,55 @@ export const useMyDownloads = (): DownloadLogEntry[] => {
   return user
     ? mockDownloadLog
         .filter((d) => d.userId === user.id)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    : [];
+};
+
+/** One-time sync license purchase, as shown in Account -> Licenses. */
+export interface LicenseEntry {
+  id: string;
+  trackId: string;
+  trackTitle?: string;
+  tier: string;
+  price: number;
+  hasPdf?: boolean;
+  createdAt: string;
+}
+
+/** The current user's one-time sync licenses (live sync_orders, mock fallback). */
+export const useMyLicenses = (): LicenseEntry[] => {
+  const live = useAuthSession();
+  const user = useCurrentUser();
+  const [liveRows, setLiveRows] = useState<LicenseEntry[]>([]);
+
+  useEffect(() => {
+    if (live.status !== "authed" || !live.user) return;
+    let cancelled = false;
+    fetch("/api/licenses", { credentials: "include" })
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = (await res.json()) as { licenses?: LicenseEntry[] };
+        if (!cancelled && data.licenses) setLiveRows(data.licenses);
+      })
+      .catch(() => {
+        // API unreachable — list simply stays empty
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [live.status, live.user]);
+
+  if (live.status === "authed") return liveRows;
+  return user
+    ? mockSyncOrders
+        .filter((o) => o.userId === user.id)
+        .map((o) => ({
+          id: o.id,
+          trackId: o.trackId,
+          tier: o.tier,
+          price: o.price,
+          createdAt: o.createdAt,
+        }))
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     : [];
 };

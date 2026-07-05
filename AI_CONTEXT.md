@@ -575,3 +575,18 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   unreliable — host files verified correct via Read; they mirror existing action/handler patterns.
   Owner deploys via deploy.bat (host build). Add/delete only for now (no rename/reorder — matches
   the spec).
+  UPDATE same day: added reordering — Vocabulary view now lists each value on its own row
+  (Catalog order: Use Case, Genre, Mood) with up/down arrows; new admin action `set_vocab`
+  {facet, values[]} replaces the whole ordered list (dedup, case-insensitive) and the arrows
+  swap-and-save via run(). tagOptions order/labels in the editor match the catalog filters.
+- **2026-07-05 (Account -> Licenses from real sync_orders — main plan #4 done):** Account ->
+  Licenses now shows real purchases instead of mockSyncOrders. New `functions/api/licenses.ts`
+  (GET, session required) -> `{ licenses: [{ id, trackId, trackTitle, tier, price, hasPdf,
+  createdAt }] }` from sync_orders LEFT JOIN tracks, newest first (tier holds personal|commercial|
+  professional; hasPdf = license_r2_key present). `useMockData.ts` gained `LicenseEntry` +
+  `useMyLicenses()` (live /api/licenses for authed users, mockSyncOrders fallback for dev
+  personas — same pattern as useMyDownloads). Account.tsx: dropped the mockSyncOrders import,
+  `syncOrders = useMyLicenses()`, and the license rows now show title · tier and a date · $price
+  subline. The "License PDF" button is STILL a placeholder — real PDF generation is main-plan #5
+  (next); `hasPdf` is already surfaced by the API so #5 can switch the button on/off per row.
+  Frontend tsc 0; functions/ (licenses.ts) verified by Read, mirrors downloads.ts.
