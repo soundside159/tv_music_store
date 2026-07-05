@@ -3,8 +3,9 @@ import { ArrowRight, Check, Layers, Library, ListMusic, Music2, ShieldCheck, Use
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { TrackRowList } from "@/components/TrackRowPlayer";
-import { catalogTracks, categoryLabels } from "@/data/catalogTracks";
+import { categoryLabels } from "@/data/catalogTracks";
 import type { TrackCategory } from "@/data/catalogTracks";
+import { useTrendingTracks } from "@/hooks/useContent";
 import { usePlans } from "@/hooks/useMockData";
 
 const GOLD = "#F4C430";
@@ -22,6 +23,7 @@ const trustPoints = [
 
 const Index = () => {
   const plans = usePlans();
+  const trendingTracks = useTrendingTracks(8);
 
   return (
     <div className="min-h-screen bg-background">
@@ -92,7 +94,7 @@ const Index = () => {
             </Link>
           </div>
           <div className="mt-4">
-            <TrackRowList tracks={catalogTracks.slice(0, 8)} />
+            <TrackRowList tracks={trendingTracks} />
           </div>
         </section>
 

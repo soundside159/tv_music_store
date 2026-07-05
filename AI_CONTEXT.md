@@ -221,6 +221,14 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   (2) cover image UPLOAD needs an R2 bucket binding (R2) + small /api/admin/upload — currently the
   form takes an image URL/path only; (3) tags (use case / genre / mood) editing per track — spec
   4.1. Stripe still waiting for owner registration.
+- **2026-07-05 (storefront -> live content):** new public GET `/api/content` (collections,
+  playlists, trending — what Admin -> Content edits) + `src/hooks/useContent.ts`
+  (`useCollections`, `useTrendingTracks`; module-level fetch cache, mock fallback when API down
+  or DB empty). Wired: Index "Trending tracks" block (admin-picked order, fallback first 8),
+  Catalog (activeCollection lookup + collections strip), Collections page, CollectionDetail
+  (tracks now from useTracks too). STILL ON MOCKS: Playlists / PlaylistDetail pages (wire to
+  /api/content playlists next), TrackDetail (still imports catalogTracks directly). Also pending:
+  cover upload via R2, per-track tag editing (spec 4.1), Stripe (owner registration).
 - **2026-07-04 (layout align):** constrained the Navigation header to the same content container as
   <main> (mx-auto max-w-[92rem] px-4 sm:px-6) so logo/search/icons line up with page content;
   indented the catalog hero text (lg:pl-[16.75rem] xl:pl-[17.75rem]) to start at the track play

@@ -2,14 +2,16 @@ import { Link, useParams } from "react-router-dom";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { TrackRowList } from "@/components/TrackRowPlayer";
-import { catalogTracks } from "@/data/catalogTracks";
-import { musicCollections } from "@/data/musicCollections";
+import { useCollections } from "@/hooks/useContent";
+import { useTracks } from "@/hooks/useTracks";
 
 const CollectionDetail = () => {
   const { slug } = useParams();
+  const musicCollections = useCollections();
+  const { tracks: allTracks } = useTracks();
   const collection = musicCollections.find((c) => c.id === slug);
   const tracks = collection
-    ? catalogTracks.filter((t) => t.collectionIds.includes(collection.id))
+    ? allTracks.filter((t) => t.collectionIds.includes(collection.id))
     : [];
 
   if (!collection) {

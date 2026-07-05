@@ -14,8 +14,8 @@ import Navigation from "@/components/Navigation";
 import cinemaHero from "@/assets/cinema-hero-wide.png";
 import { Input } from "@/components/ui/input";
 import { useTracks } from "@/hooks/useTracks";
-import { musicCollections } from "@/data/musicCollections";
 import type { MusicCollection } from "@/data/musicCollections";
+import { useCollections } from "@/hooks/useContent";
 import { TrackRow } from "@/components/TrackRowPlayer";
 import { usePlayer } from "@/components/PlayerProvider";
 
@@ -36,6 +36,7 @@ const matchesOption = (value: string, option: string) => value.toLowerCase().inc
 const Catalog = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeCollectionId = searchParams.get("collection");
+  const musicCollections = useCollections();
   const activeCollection = musicCollections.find((collection) => collection.id === activeCollectionId) ?? null;
   const categoryParam = searchParams.get("category");
   const [query, setQuery] = useState(() => searchParams.get("search") ?? "");
@@ -274,6 +275,7 @@ const CollectionStrip = ({
   activeCollection: MusicCollection | null;
   onSelectCollection: (collectionId: string | null) => void;
 }) => {
+  const musicCollections = useCollections();
   const stripRef = useRef<HTMLDivElement | null>(null);
 
   const scrollCollections = (direction: -1 | 1) => {
