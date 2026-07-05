@@ -237,13 +237,20 @@ export const onRequestPost = async (ctx: Ctx) => {
     shortTitle?: string;
     description?: string;
     image?: string;
-    // update_track fields
+    // update_track / create_track fields
     genre?: string;
     mood?: string;
     useCase?: string;
     bpm?: number;
     tags?: string[];
     cover?: string;
+    // create_track extra fields
+    duration?: string;
+    category?: string;
+    hasStems?: boolean;
+    previewSrc?: string;
+    previewLabel?: string;
+    masterKey?: string;
     // bulk_update_tracks fields (trackIds shared with set_tracks above)
     facets?: Partial<Record<"useCase" | "genre" | "mood", { add?: string[]; remove?: string[] }>>;
     playlistChanges?: { add?: string[]; remove?: string[] };
@@ -519,6 +526,70 @@ export const onRequestPost = async (ctx: Ctx) => {
       }
 
       return json({ ok: true, count: ids.length });
+    }
+
+    case "create_track": {
+      const title = body.title?.trim();
+      if (!title) return json({ error: "Title required" }, 400);
+      const previewSrc = body.previewSrc?.trim();
+      if (!previewSrc || !/^\/(api\/file\/previews|audio\/previews)\//.test(previewSrc)) {
+        return json({ error: "Upload an MP3 preview first" }, 400);
+      }
+      await ensureTrackCoverColumn(db);
+
+      // Unique slug from the title.
+      const baseSlug = slugify(title);
+      let slug = baseSlug;
+      for (let n = 2; n <= 60; n++) {
+        const clash = await db.prepare(`SELECT id FROM tracks WHERE slug = ?1`).bind(slug).first();
+        if (!clash) break;
+        slug = `${baseSlug}-${n}`;
+      }
+
+      const trackId = newId("trk");
+      const bpm = Number.isFinite(body.bpm) ? Math.round(body.bpm as number) : null;
+      const tags = Array.isArray(body.tags) ? body.tags.slice(0, 12) : [];
+      await db
+        .prepare(
+          `INSERT INTO tracks
+             (id, slug, title, composer_id, category, genre, mood, use_case, style_of,
+              bpm, duration, description, tags, has_stems, cover)
+           VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7, '', ?8, ?9, ?10, ?11, ?12, ?13)`,
+        )
+        .bind(
+          trackId,
+          slug,
+          title,
+          body.category?.trim() || "production",
+          body.genre ?? "",
+          body.mood ?? "",
+          body.useCase ?? "",
+          bpm,
+          body.duration ?? "",
+          body.description ?? "",
+          JSON.stringify(tags),
+          body.hasStems ? 1 : 0,
+          body.cover ?? "",
+        )
+        .run();
+
+      await db
+        .prepare(
+          `INSERT INTO track_versions
+             (id, track_id, version_id, label, duration, preview_src, r2_key_wav, sort)
+           VALUES (?1, ?2, 'main', ?3, ?4, ?5, ?6, 0)`,
+        )
+        .bind(
+          `${trackId}:main`,
+          trackId,
+          body.previewLabel?.trim() || "Main",
+          body.duration ?? "",
+          previewSrc,
+          body.masterKey?.trim() || null,
+        )
+        .run();
+
+      return json({ ok: true, id: trackId, slug });
     }
 
     case "add_vocab":

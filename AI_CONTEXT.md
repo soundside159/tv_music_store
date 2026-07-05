@@ -606,3 +606,42 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   audio download it also fetches `/api/license-pdf?slug=...` (attachment header -> downloads the
   cert without navigating). Frontend tsc 0; new server files typecheck clean in isolation + PDF
   output validated by qpdf. Only #6 (Add Track upload flow) remains on the main plan.
+- **2026-07-05 (Add Track upload flow — main plan #6 done; PLAN COMPLETE):** admins can create a
+  track from the UI. Server: `functions/api/file/[[path]].ts` now also serves the `previews/`
+  prefix publicly (masters/ stays private — download.ts only). New
+  `functions/api/admin/upload-audio.ts` (admin, `?kind=preview|master&filename=`): preview MP3 ->
+  R2 `previews/<base>-<uuid>.mp3` (returns public `/api/file/...` path), master MP3/WAV -> R2
+  `masters/...` (returns key only, 95 MB cap under CF's ~100 MB body limit; preview cap 25 MB).
+  New `create_track` action in `admin/content.ts`: unique slug from title, INSERT tracks (composer
+  NULL, category default "production", tags JSON, has_stems, cover) + one `main` track_version
+  (preview_src = uploaded preview path, r2_key_wav = master key or null); validates title +
+  previewSrc (must be a /api/file/previews or /audio/previews path). Frontend: `useTracks` now
+  exposes `reload()`; `AdminContent` got an `uploadAudio()` helper; new
+  `src/components/AddTrackModal.tsx` (title/bpm/duration/description/tags, category select,
+  Use Case/Genre/Mood chips from live vocabularies, stems flag, cover + preview + master uploads)
+  opened by a gold "+ Add Track" button in the Tracks Edit header (only when the catalog is
+  DB-backed, source === "api"); on success it reloads content + /api/tracks so the new row appears.
+  Frontend tsc 0, lint clean (only NUL-mirror Parsing noise); upload-audio.ts typechecks clean,
+  create_track host block verified. OWNER: needs the R2 binding (already bound) — WAV masters up
+  to 95 MB; larger masters would need a different upload path (multipart/direct-to-R2) later.
+  MAIN PLAN (1-6) is now COMPLETE. Nice-to-haves left from PAGES_SPEC: draft/published toggle,
+  duplicate track, multi-version tracks (only a single "main" version is created here), admin
+  mailbox (still a future task), rename/reorder vocab already partly done.
+- **2026-07-05 (license polish: test prices, admin lookup, download-license button):** owner
+  round on licenses. (1) TEMPORARY TEST PRICES: sync tiers set to $1/$2/$3 in BOTH
+  `functions/api/paypal/_paypal.ts` (LICENSE_PRICES, authoritative) and `src/lib/licenses.ts`
+  (display) so the owner can buy each tier for a few dollars to test PayPal + PDF end-to-end —
+  clearly commented TODO to restore 29/89/249 before launch. (2) ADMIN LICENSE LOOKUP: new
+  `functions/api/admin/licenses.ts` (GET admin, all sync_orders JOIN users+tracks, newest 500,
+  optional `?q=`) + new **Licenses** admin sidebar item (adminNav, FileText icon, between Customers
+  and Requests) + `Admin.tsx` `licenses` section: search box (filters by License ID / PayPal
+  reference / buyer email/name / track title, client-side over the fetched list) and a table
+  (License ID as a link to its PDF, buyer, track, tier, $price, date). So a customer's certificate
+  number resolves to who bought what, when, for how much. (3) The License ID printed on every sync
+  certificate IS the sync_orders.id (unique) — already there; the admin table links each id to its
+  PDF. (4) DOWNLOAD-LICENSE for subscription downloads: `license-pdf.ts` now also accepts
+  `?track=<track_id>` (resolves the track by id, same plan-based certificate as `?slug=`), and
+  Account -> Downloads got a "Download License" link next to Re-download
+  (`/api/license-pdf?track=<trackId>`) so customers can grab a plan license PDF for any past
+  download (e.g. for a YouTube Content ID dispute). Frontend tsc 0, lint clean; new/edited server
+  files typecheck clean (host verified past NUL-mirror noise).

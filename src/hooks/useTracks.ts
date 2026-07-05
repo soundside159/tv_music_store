@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { catalogTracks } from "@/data/catalogTracks";
 import type { CatalogTrack, TrackCategory, TrackVersion } from "@/data/catalogTracks";
 
@@ -60,12 +60,11 @@ export const useTracks = () => {
   // of flashing mock rows that then get replaced by live rows.
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/tracks", { credentials: "include" })
+  const load = useCallback(() => {
+    setIsLoading(true);
+    return fetch("/api/tracks", { credentials: "include" })
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
       .then((data: { tracks?: ApiTrack[] }) => {
-        if (cancelled) return;
         const list = (data.tracks ?? []).map(mapTrack).filter((t) => t.audioVersions.length > 0);
         if (list.length > 0) {
           setTracks(list);
@@ -75,13 +74,12 @@ export const useTracks = () => {
       .catch(() => {
         // API unavailable / DB empty -> keep mock fallback
       })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+      .finally(() => setIsLoading(false));
   }, []);
 
-  return { tracks, source, isLoading };
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  return { tracks, source, isLoading, reload: load };
 };

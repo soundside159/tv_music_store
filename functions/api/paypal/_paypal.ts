@@ -5,10 +5,12 @@ import type { Env } from "../_utils";
 
 // SERVER-SIDE prices — the client never decides what to pay.
 // Keep in sync with src/lib/licenses.ts.
+// TODO(owner): TEMPORARY TEST PRICES ($1/$2/$3) so purchases can be tested
+// end-to-end for a few dollars. Restore 29 / 89 / 249 before going live.
 export const LICENSE_PRICES: Record<string, number> = {
-  personal: 29,
-  commercial: 89,
-  professional: 249,
+  personal: 1,
+  commercial: 2,
+  professional: 3,
 };
 
 export const paypalBase = (env: Env): string =>

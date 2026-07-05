@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { usePlayer } from "@/components/playerContext";
 import { useTracks } from "@/hooks/useTracks";
 import AdminTracksEdit from "@/components/AdminTracksEdit";
+import AddTrackModal from "@/components/AddTrackModal";
 import { defaultVocabularies, type Vocabularies } from "@/lib/tagOptions";
 import type { CatalogTrack } from "@/data/catalogTracks";
 
@@ -117,7 +118,7 @@ const tabLabels: Record<Tab, string> = {
 };
 
 const AdminContent = ({ tab }: { tab: Tab }) => {
-  const { tracks, source: trackSource } = useTracks();
+  const { tracks, source: trackSource, reload: reloadTracks } = useTracks();
   const [data, setData] = useState<ContentData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<typeof emptyDraft | null>(null);
@@ -128,6 +129,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [vocabInput, setVocabInput] = useState<Record<string, string>>({});
+  const [addOpen, setAddOpen] = useState(false);
 
   // Reset any open draft when the sidebar switches the active view.
   useEffect(() => {
@@ -152,6 +154,36 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
       toast.error(e instanceof Error ? e.message : "Upload failed");
     } finally {
       setUploading(false);
+    }
+  };
+
+  const uploadAudio = async (
+    file: File,
+    kind: "preview" | "master",
+  ): Promise<{ key: string; path: string | null } | null> => {
+    const base = file.name.replace(/\.[^.]+$/, "");
+    try {
+      const res = await fetch(
+        `/api/admin/upload-audio?kind=${kind}&filename=${encodeURIComponent(base)}`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "content-type": file.type || "application/octet-stream" },
+          body: file,
+        },
+      );
+      const d = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        key?: string;
+        path?: string | null;
+        error?: string;
+      };
+      if (!res.ok || !d.ok || !d.key) throw new Error(d.error ?? "Upload failed");
+      toast.success(`${kind === "master" ? "Master" : "Preview"} uploaded`);
+      return { key: d.key, path: d.path ?? null };
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Upload failed");
+      return null;
     }
   };
 
@@ -206,6 +238,11 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
             className={goldBtnCls}
           >
             Load demo catalog into DB
+          </button>
+        )}
+        {tab === "tracks" && trackSource === "api" && (
+          <button type="button" onClick={() => setAddOpen(true)} className={goldBtnCls}>
+            + Add Track
           </button>
         )}
       </div>
@@ -610,6 +647,21 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
               return next;
             })
           }
+        />
+      )}
+
+      {addOpen && (
+        <AddTrackModal
+          onClose={() => setAddOpen(false)}
+          run={run}
+          uploadCover={uploadCover}
+          uploadAudio={uploadAudio}
+          onCreated={() => {
+            reload();
+            void reloadTracks();
+          }}
+          vocabularies={vocab}
+          categories={(data.categories ?? []).map((c) => ({ id: c.id, title: c.title }))}
         />
       )}
     </div>

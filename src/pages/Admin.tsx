@@ -33,6 +33,7 @@ type SectionId =
   | "trending"
   | "tracksedit"
   | "customers"
+  | "licenses"
   | "requests";
 
 const SECTION_IDS: SectionId[] = [
@@ -46,6 +47,7 @@ const SECTION_IDS: SectionId[] = [
   "trending",
   "tracksedit",
   "customers",
+  "licenses",
   "requests",
 ];
 
@@ -72,6 +74,17 @@ interface LiveUser {
   created_at: string;
   plan: string | null;
   downloads: number;
+}
+
+interface AdminLicense {
+  id: string;
+  tier: string;
+  price: number;
+  reference: string;
+  createdAt: string;
+  userEmail: string;
+  userName: string;
+  trackTitle: string;
 }
 
 const ROLES = ["customer", "composer", "admin"] as const;
@@ -114,6 +127,9 @@ const Admin = () => {
   const [liveUsers, setLiveUsers] = useState<LiveUser[] | null>(null);
   const [usersError, setUsersError] = useState<string | null>(null);
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
+  const [licenses, setLicenses] = useState<AdminLicense[] | null>(null);
+  const [licensesError, setLicensesError] = useState<string | null>(null);
+  const [licenseQuery, setLicenseQuery] = useState("");
   const s = mockAdminStats;
 
   const isAdmin = !!user && user.role === "admin";
@@ -128,6 +144,18 @@ const Admin = () => {
       })
       .catch((e: Error) => setUsersError(e.message));
   }, [isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin || section !== "licenses") return;
+    setLicensesError(null);
+    fetch("/api/admin/licenses", { credentials: "include" })
+      .then(async (res) => {
+        const data = (await res.json()) as { licenses?: AdminLicense[]; error?: string };
+        if (!res.ok || !data.licenses) throw new Error(data.error ?? "Failed to load licenses");
+        setLicenses(data.licenses);
+      })
+      .catch((e: Error) => setLicensesError(e.message));
+  }, [isAdmin, section]);
 
   const changeRole = async (userId: string, role: string) => {
     if (!liveUsers) return;
@@ -506,6 +534,83 @@ const Admin = () => {
                     </table>
                   </div>
                 )}
+              </Card>
+            )}
+
+            {section === "licenses" && (
+              <Card title={`Sync licenses${licenses ? ` (${licenses.length})` : ""}`}>
+                <p className="mb-4 font-body text-xs text-muted-foreground">
+                  Every one-time license purchase. Search by the License ID printed on a customer's
+                  certificate, their email, or the track title.
+                </p>
+                <input
+                  placeholder="Search by License ID, email or track..."
+                  value={licenseQuery}
+                  onChange={(e) => setLicenseQuery(e.target.value)}
+                  className="mb-4 w-full max-w-md rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground focus:border-[#F4C430] focus:outline-none"
+                />
+                {licensesError && <p className="mb-3 font-body text-xs text-red-400">{licensesError}</p>}
+                {!licenses && !licensesError && (
+                  <p className="font-body text-sm text-muted-foreground">Loading licenses...</p>
+                )}
+                {licenses && (() => {
+                  const q = licenseQuery.trim().toLowerCase();
+                  const rows = q
+                    ? licenses.filter(
+                        (l) =>
+                          l.id.toLowerCase().includes(q) ||
+                          l.reference.toLowerCase().includes(q) ||
+                          l.userEmail.toLowerCase().includes(q) ||
+                          l.userName.toLowerCase().includes(q) ||
+                          l.trackTitle.toLowerCase().includes(q),
+                      )
+                    : licenses;
+                  if (rows.length === 0) {
+                    return <p className="font-body text-sm text-muted-foreground">No matching licenses.</p>;
+                  }
+                  return (
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[720px] font-body text-sm">
+                        <thead>
+                          <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                            <th className="py-2 pr-4">License ID</th>
+                            <th className="py-2 pr-4">Buyer</th>
+                            <th className="py-2 pr-4">Track</th>
+                            <th className="py-2 pr-4">Tier</th>
+                            <th className="py-2 pr-4">Price</th>
+                            <th className="py-2">Date</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((l) => (
+                            <tr key={l.id} className="border-b border-border/50 last:border-0">
+                              <td className="py-2.5 pr-4">
+                                <a
+                                  href={`/api/license-pdf?order=${encodeURIComponent(l.id)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="font-mono text-xs text-[#F4C430] hover:underline"
+                                >
+                                  {l.id}
+                                </a>
+                              </td>
+                              <td className="py-2.5 pr-4">
+                                <span className="block text-foreground">{l.userName || l.userEmail.split("@")[0]}</span>
+                                <span className="block text-xs text-muted-foreground">{l.userEmail}</span>
+                              </td>
+                              <td className="py-2.5 pr-4 text-foreground">{l.trackTitle}</td>
+                              <td className="py-2.5 pr-4 capitalize text-muted-foreground">{l.tier}</td>
+                              <td className="py-2.5 pr-4 font-semibold" style={{ color: GOLD }}>${l.price}</td>
+                              <td className="py-2.5 text-muted-foreground">
+                                {l.createdAt ? l.createdAt.slice(0, 10) : "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
               </Card>
             )}
 

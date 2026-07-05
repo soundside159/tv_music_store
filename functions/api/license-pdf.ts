@@ -111,6 +111,7 @@ export const onRequestGet = async (ctx: Ctx) => {
   const url = new URL(ctx.request.url);
   const orderId = url.searchParams.get("order");
   const slug = url.searchParams.get("slug");
+  const trackId = url.searchParams.get("track");
   const licenseeName = user.name?.trim() || user.email;
 
   if (orderId) {
@@ -150,31 +151,38 @@ export const onRequestGet = async (ctx: Ctx) => {
     return pdfResponse(bytes, `license-${row.id}.pdf`);
   }
 
-  if (slug) {
-    const track = await db
-      .prepare(`SELECT id, title FROM tracks WHERE slug = ?1`)
-      .bind(slug)
-      .first<{ id: string; title: string }>();
+  const trackRef = slug ?? trackId;
+  if (trackRef) {
+    const track = slug
+      ? await db
+          .prepare(`SELECT id, title, slug FROM tracks WHERE slug = ?1`)
+          .bind(slug)
+          .first<{ id: string; title: string; slug: string }>()
+      : await db
+          .prepare(`SELECT id, title, slug FROM tracks WHERE id = ?1`)
+          .bind(trackId)
+          .first<{ id: string; title: string; slug: string }>();
     const sub = await db
       .prepare(`SELECT plan FROM subscriptions WHERE user_id = ?1 ORDER BY rowid DESC LIMIT 1`)
       .bind(user.id)
       .first<{ plan: string }>();
     const plan = sub?.plan ?? "free";
     const info = PLAN_INFO[plan] ?? PLAN_INFO.free;
+    const fileRef = track?.slug ?? trackRef;
     const bytes = buildCertificate({
       licenseName: info.name,
       licenseeName,
       licenseeEmail: user.email,
-      trackTitle: track?.title ?? prettify(slug),
+      trackTitle: track?.title ?? prettify(trackRef),
       terms: info.terms,
       meta: [
         ["Plan", plan.toUpperCase()],
-        ["Track", slug],
+        ["Track", fileRef],
         ["Issued", fmtDate()],
       ],
     });
-    return pdfResponse(bytes, `license-${slug}.pdf`);
+    return pdfResponse(bytes, `license-${fileRef}.pdf`);
   }
 
-  return json({ error: "order or slug required" }, 400);
+  return json({ error: "order, slug or track required" }, 400);
 };

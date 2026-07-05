@@ -1,11 +1,12 @@
 import { json, type Ctx } from "../_utils";
 
-// GET /api/file/covers/... — public delivery of R2 images (covers, panels).
-// SECURITY: only the covers/ and images/ prefixes are public here. Audio
-// masters (masters/, wav keys) are served exclusively by /api/download with
-// plan checks — never add them to this allowlist.
+// GET /api/file/covers/... — public delivery of R2 images (covers, panels) and
+// low-quality audio PREVIEWS (previews/).
+// SECURITY: only covers/, images/ and previews/ are public here. Audio MASTERS
+// (masters/, r2_key_wav) are served exclusively by /api/download with plan
+// checks — never add masters/ to this allowlist.
 
-const PUBLIC_PREFIXES = ["covers/", "images/"];
+const PUBLIC_PREFIXES = ["covers/", "images/", "previews/"];
 
 interface CtxWithParams extends Ctx {
   params: { path?: string | string[] };

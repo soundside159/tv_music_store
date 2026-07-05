@@ -383,9 +383,19 @@ const Account = () => {
                             <td className="py-2.5 pr-4 capitalize text-muted-foreground">{d.planAtDownload}</td>
                             <td className="py-2.5 pr-4 text-muted-foreground">{fmtDate(d.createdAt)}</td>
                             <td className="py-2.5 text-right">
-                              <button type="button" className="font-body text-xs font-semibold text-[#F4C430] hover:underline">
-                                Re-download
-                              </button>
+                              <span className="flex items-center justify-end gap-3">
+                                <a
+                                  href={`/api/license-pdf?track=${encodeURIComponent(d.trackId)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="font-body text-xs font-semibold text-[#F4C430] hover:underline"
+                                >
+                                  Download License
+                                </a>
+                                <button type="button" className="font-body text-xs font-semibold text-muted-foreground hover:text-foreground hover:underline">
+                                  Re-download
+                                </button>
+                              </span>
                             </td>
                           </tr>
                         ))}

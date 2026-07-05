@@ -68,5 +68,6 @@ export const adminNavItems: NavItem[] = [
   { id: "trending", label: "Trending", icon: Flame },
   { id: "tracksedit", label: "Tracks Edit", icon: SlidersHorizontal },
   { id: "customers", label: "Customers", icon: Users },
+  { id: "licenses", label: "Licenses", icon: FileText },
   { id: "requests", label: "Requests", icon: Inbox },
 ];
