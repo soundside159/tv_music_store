@@ -57,7 +57,7 @@ const Navigation = () => {
               to="/"
               className="flex shrink-0 items-center gap-2.5 font-body text-sm font-semibold uppercase tracking-[0.22em] text-foreground md:text-base"
             >
-              <img src="/logo.svg" alt="" className="h-6 w-auto md:h-7" />
+              <img src="/images/icons/favicon-96x96.png" alt="" className="h-6 w-6 md:h-7 md:w-7" />
               TV Music Store
             </Link>
             <div className="hidden items-center gap-7 md:flex">

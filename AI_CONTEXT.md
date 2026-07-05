@@ -310,6 +310,19 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   same thread. Keep the gmail forward as backup copy (Email Routing can do worker+forward).
   (4) Still pending from earlier: Download-options modal (tunetank style), 1000x1000 cover upload
   + thumbnails, Account->Licenses from real sync_orders, license PDFs.
+- **2026-07-05 (icons + waveform queue):** PayPal checkout CONFIRMED WORKING live. Owner added
+  proper icon set to public/images/icons/ (favicon.ico, favicon-96x96.png, apple-touch-icon.png,
+  web-app-manifest-192/512.png). Wired: index.html favicon links -> /images/icons/* (svg icon
+  links removed), Navigation header logo -> favicon-96x96.png (was distorted logo.svg), root
+  public/favicon.ico replaced with the new one, login email header now shows the 192px logo image
+  (hosted URL) above the wordmark. CATALOG LOAD ORDER FIXED: WaveformPreview now runs all
+  fetch+decode through a FIFO queue (QUEUE_CONCURRENCY=4) — rows mount top-down, so waveforms
+  appear top-down regardless of sort; backlog item (1) done. Still open from backlog: waveform
+  bar width fix (2), admin mailbox (3), download-options modal / covers / licenses-from-D1 /
+  license PDFs (4). EMAIL REPLIES interim solution recommended to owner (no code): verify root
+  domain tvmusicstore.com in Resend -> Gmail "Send mail as" contact@tvmusicstore.com via
+  smtp.resend.com:465 (user "resend", password = Resend API key); inbound already forwards
+  contact@ -> gmail via Email Routing. In-site admin Inbox stays a future task.
 - **2026-07-04 (layout align):** constrained the Navigation header to the same content container as
   <main> (mx-auto max-w-[92rem] px-4 sm:px-6) so logo/search/icons line up with page content;
   indented the catalog hero text (lg:pl-[16.75rem] xl:pl-[17.75rem]) to start at the track play

@@ -34,7 +34,9 @@ export const onRequestPost = async (ctx: Ctx) => {
 
   const html = `
 <div style="margin:0 auto;max-width:480px;font-family:Arial,Helvetica,sans-serif">
-  <div style="background:#111;padding:20px;text-align:center;border-radius:12px 12px 0 0">
+  <div style="background:#111;padding:22px 20px;text-align:center;border-radius:12px 12px 0 0">
+    <img src="https://tvmusicstore.com/images/icons/web-app-manifest-192x192.png" width="44" height="44" alt="TV Music Store"
+      style="display:block;margin:0 auto 10px;border-radius:10px"/>
     <span style="color:#F4C430;font-size:16px;font-weight:bold;letter-spacing:3px">TV MUSIC STORE</span>
   </div>
   <div style="background:#fff;border:1px solid #eee;border-top:0;padding:36px 24px;text-align:center">

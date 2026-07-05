@@ -20,6 +20,34 @@ let sharedAudioContext: AudioContext | null = null;
 const audioBufferCache = new Map<string, Promise<AudioBuffer>>();
 const peaksCache = new Map<string, Promise<number[]>>();
 
+// FIFO queue with limited concurrency: rows mount top-to-bottom, so loading
+// them in mount order makes waveforms appear top-down instead of randomly.
+const QUEUE_CONCURRENCY = 4;
+let activeLoads = 0;
+const loadQueue: (() => void)[] = [];
+
+const pumpQueue = () => {
+  while (activeLoads < QUEUE_CONCURRENCY && loadQueue.length > 0) {
+    const next = loadQueue.shift();
+    if (!next) return;
+    activeLoads += 1;
+    next();
+  }
+};
+
+const enqueueLoad = <T,>(work: () => Promise<T>): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    loadQueue.push(() => {
+      work()
+        .then(resolve, reject)
+        .finally(() => {
+          activeLoads -= 1;
+          pumpQueue();
+        });
+    });
+    pumpQueue();
+  });
+
 const getAudioContext = () => {
   if (sharedAudioContext) return sharedAudioContext;
 
@@ -34,16 +62,18 @@ const getAudioBuffer = (src: string) => {
   const cached = audioBufferCache.get(src);
   if (cached) return cached;
 
-  const promise = fetch(src)
-    .then((response) => {
-      if (!response.ok) throw new Error(`Could not load waveform audio: ${src}`);
-      return response.arrayBuffer();
-    })
-    .then((buffer) => {
-      const context = getAudioContext();
-      if (!context) throw new Error("Web Audio API is not available");
-      return context.decodeAudioData(buffer.slice(0));
-    });
+  const promise = enqueueLoad(() =>
+    fetch(src)
+      .then((response) => {
+        if (!response.ok) throw new Error(`Could not load waveform audio: ${src}`);
+        return response.arrayBuffer();
+      })
+      .then((buffer) => {
+        const context = getAudioContext();
+        if (!context) throw new Error("Web Audio API is not available");
+        return context.decodeAudioData(buffer.slice(0));
+      }),
+  );
 
   audioBufferCache.set(src, promise);
   return promise;
