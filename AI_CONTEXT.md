@@ -437,3 +437,18 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   rewrite whole file sandbox-side. lint 0 errors, tsc clean after repair. NEXT candidates:
   editable tag vocabularies in admin, admin mailbox, Account -> Licenses from sync_orders,
   license PDFs, per-track "add track" upload flow (audio files to R2).
+- **2026-07-05 (handoff note — NEXT TASKS, owner-approved):** owner reviewed Tracks Edit v2
+  (screenshot): layout is good BUT it's squeezed — /admin main container is `max-w-6xl`, so with
+  the sidebar there's a huge empty area to the RIGHT of the edit panel, while the track table
+  gets a horizontal scrollbar and the panel gets a vertical one (dragging scrollbars is
+  annoying). TODO #1: WIDEN the admin Content/Tracks Edit area — e.g. make /admin container
+  max-w-none / w-full (or `max-w-[100rem]`) at least for the Content section, let the table
+  take the freed width (no horizontal scroll at normal desktop widths; waveform column can
+  grow), and widen the panel column (~24-26rem) so USAGE/MOOD/GENRE chips fit comfortably;
+  ideally panel fits without its own scrollbar on tall screens. Remaining queue after that:
+  (2) editable Use Case/Genre/Mood vocabularies from admin (site_config lists, tagOptions.ts
+  fallback); (3) admin mailbox (Email Worker -> D1 -> Inbox UI + Resend replies, needs root
+  domain verified in Resend); (4) Account -> Licenses from real sync_orders; (5) license PDF
+  generation + "Include PDF License" checkbox in the download modal; (6) "Add Track" flow in
+  admin (upload MP3 previews/WAV masters to R2, create tracks/versions rows); nice-to-haves:
+  no-cover/no-tags filter, draft/published toggle, duplicate track, undo last Apply.
