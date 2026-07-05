@@ -393,3 +393,24 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   rounded thumb when cover exists (grid unchanged — thumb lives inside the title Link, hidden
   <sm). lint 0 errors, tsc clean. Remaining backlog: admin mailbox (Inbox), Account -> Licenses
   from real sync_orders, license PDFs (+ "Include PDF License" checkbox in the download modal).
+- **2026-07-05 (Tracks Edit — bulk editor):** owner-approved redesign (tunetank-like screenshot).
+  Admin -> Content tab renamed "Tracks Edit"; single-track chip editor replaced by NEW
+  `src/components/AdminTracksEdit.tsx`: table (select-all + row checkboxes, play button wired to
+  global player, cover thumb, title + inline WaveformPreview, composer, duration, collection/
+  playlist counts, trending flame), toolbar (search, All Composers filter, Title A-Z/Z-A sort),
+  pagination (Show 10/20/50 per page + numbered pager). "Edit Selected" opens a FIXED RIGHT
+  side panel: Usage / Mood / Genre TRI-STATE checkboxes (gold check = on all selected, gold dash
+  = mixed; click cycles mixed->off(remove from all)->on(add to all)), Playlists + Collections
+  membership (same tri-state, with search inputs), Trending radio (Add/Remove/No Change),
+  Reset/Apply buttons; when exactly 1 track selected the panel also shows title/BPM/description/
+  extra-tags/cover+Upload fields. Server: new action `bulk_update_tracks` in
+  /api/admin/content (facets add/remove per track, playlist/collection membership add/remove
+  with INSERT OR IGNORE + max(sort), trendingChange add/remove on site_config, optional `fields`
+  for single-track edits; update_track kept for compat). After apply, facet/field changes are
+  mirrored locally via trackOverrides; memberships/trending refresh via reload(). NOTE: the
+  sandbox<->host sync glitch hit again this session (content.ts truncated + NUL-padded
+  sandbox-side) — fixed by re-pushing the whole file via heredoc; ALWAYS verify file tails
+  before trusting lint. lint 0 errors, tsc clean. FUTURE (owner asked, agreed to do later):
+  editable Use Case / Genre / Mood vocabularies (add/delete values from the admin; store lists
+  in site_config, tagOptions.ts becomes the fallback). Rest of backlog unchanged (admin mailbox,
+  Account -> Licenses from sync_orders, license PDFs).

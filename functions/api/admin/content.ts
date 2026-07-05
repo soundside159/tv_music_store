@@ -4,7 +4,8 @@ import { seedCollections, seedTracks } from "./_seed_data";
 // Admin content editor API (collections, playlists, trending, track editing).
 // GET  -> { collections, playlists, trending } with ordered track ids.
 // POST { action, ... } -> seed_catalog | upsert_collection | delete_collection |
-//        upsert_playlist | delete_playlist | set_tracks | set_trending | update_track
+//        upsert_playlist | delete_playlist | set_tracks | set_trending | update_track |
+//        bulk_update_tracks
 
 const requireAdmin = async (ctx: Ctx) => {
   const user = await getSessionUser(ctx);
@@ -164,6 +165,12 @@ export const onRequestPost = async (ctx: Ctx) => {
     bpm?: number;
     tags?: string[];
     cover?: string;
+    // bulk_update_tracks fields (trackIds shared with set_tracks above)
+    facets?: Partial<Record<"useCase" | "genre" | "mood", { add?: string[]; remove?: string[] }>>;
+    playlistChanges?: { add?: string[]; remove?: string[] };
+    collectionChanges?: { add?: string[]; remove?: string[] };
+    trendingChange?: "add" | "remove";
+    fields?: { title?: string; bpm?: number; description?: string; cover?: string; tags?: string[] };
   }>(ctx.request);
   if (!body?.action) return json({ error: "action required" }, 400);
 
@@ -286,6 +293,111 @@ export const onRequestPost = async (ctx: Ctx) => {
         )
         .run();
       return json({ ok: true, id: body.id });
+    }
+
+    case "bulk_update_tracks": {
+      // One action for the admin "Tracks Edit" panel: add/remove Use Case /
+      // Genre / Mood values, playlist & collection membership, trending flag —
+      // for many tracks at once. `fields` (title/bpm/description/cover/tags)
+      // is meant for single-track edits and is applied to every id given.
+      const ids = Array.isArray(body.trackIds)
+        ? [...new Set(body.trackIds.filter((x) => typeof x === "string" && x))].slice(0, 500)
+        : [];
+      if (ids.length === 0) return json({ error: "trackIds required" }, 400);
+      await ensureTrackCoverColumn(db);
+
+      const splitVals = (v: string | null) =>
+        (v ?? "").split("/").map((s) => s.trim()).filter(Boolean);
+      const facetCols: Array<["useCase" | "genre" | "mood", "use_case" | "genre" | "mood"]> = [
+        ["useCase", "use_case"],
+        ["genre", "genre"],
+        ["mood", "mood"],
+      ];
+
+      for (const id of ids) {
+        const row = await db
+          .prepare(`SELECT id, genre, mood, use_case FROM tracks WHERE id = ?1`)
+          .bind(id)
+          .first<{ id: string; genre: string | null; mood: string | null; use_case: string | null }>();
+        if (!row) continue;
+
+        const next: Record<string, string | number | null> = {};
+        for (const [key, col] of facetCols) {
+          const ch = body.facets?.[key];
+          if (!ch) continue;
+          const rm = new Set((ch.remove ?? []).map(String));
+          let vals = splitVals(row[col]).filter((v) => !rm.has(v));
+          for (const a of ch.add ?? []) if (!vals.includes(a)) vals = [...vals, a];
+          next[col] = vals.join(" / ");
+        }
+        const f = body.fields;
+        if (f) {
+          if (typeof f.title === "string" && f.title.trim()) next.title = f.title.trim();
+          if (Number.isFinite(f.bpm)) next.bpm = Math.round(f.bpm as number);
+          if (typeof f.description === "string") next.description = f.description;
+          if (typeof f.cover === "string") next.cover = f.cover;
+          if (Array.isArray(f.tags)) next.tags = JSON.stringify(f.tags.slice(0, 12));
+        }
+        const keys = Object.keys(next);
+        if (keys.length > 0) {
+          const setSql = keys.map((k, i) => `${k} = ?${i + 2}`).join(", ");
+          await db
+            .prepare(`UPDATE tracks SET ${setSql} WHERE id = ?1`)
+            .bind(id, ...keys.map((k) => next[k]))
+            .run();
+        }
+      }
+
+      const applyMembership = async (
+        table: "collection_tracks" | "playlist_tracks",
+        col: "collection_id" | "playlist_id",
+        changes?: { add?: string[]; remove?: string[] },
+      ) => {
+        if (!changes) return;
+        const marks = ids.map((_, i) => `?${i + 2}`).join(", ");
+        for (const target of changes.remove ?? []) {
+          await db
+            .prepare(`DELETE FROM ${table} WHERE ${col} = ?1 AND track_id IN (${marks})`)
+            .bind(target, ...ids)
+            .run();
+        }
+        for (const target of changes.add ?? []) {
+          const sortRow = await db
+            .prepare(`SELECT COALESCE(MAX(sort), -1) AS s FROM ${table} WHERE ${col} = ?1`)
+            .bind(target)
+            .first<{ s: number }>();
+          let sort = (sortRow?.s ?? -1) + 1;
+          for (const id of ids) {
+            await db
+              .prepare(`INSERT OR IGNORE INTO ${table} (${col}, track_id, sort) VALUES (?1, ?2, ?3)`)
+              .bind(target, id, sort++)
+              .run();
+          }
+        }
+      };
+      await applyMembership("playlist_tracks", "playlist_id", body.playlistChanges);
+      await applyMembership("collection_tracks", "collection_id", body.collectionChanges);
+
+      if (body.trendingChange === "add" || body.trendingChange === "remove") {
+        const trendingRow = await db
+          .prepare(`SELECT value FROM site_config WHERE key = 'trending_track_ids'`)
+          .first<{ value: string }>();
+        let list: string[] = trendingRow ? (JSON.parse(trendingRow.value) as string[]) : [];
+        if (body.trendingChange === "remove") {
+          list = list.filter((x) => !ids.includes(x));
+        } else {
+          for (const id of ids) if (!list.includes(id)) list.push(id);
+        }
+        await db
+          .prepare(
+            `INSERT INTO site_config (key, value) VALUES ('trending_track_ids', ?1)
+             ON CONFLICT(key) DO UPDATE SET value = ?1`,
+          )
+          .bind(JSON.stringify(list.slice(0, 24)))
+          .run();
+      }
+
+      return json({ ok: true, count: ids.length });
     }
 
     default:
