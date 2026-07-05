@@ -343,6 +343,14 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   `entranceDelay={0}`, quick 0.25s fade (homepage/collections TrackRowList keeps its first-load
   stagger via useEntranceStagger). AnimatePresence key includes the page number so page flips get
   the same soft transition.
+- **2026-07-05 (waveform fixed-width bars + bigger header logo):** WaveformPreview rewritten:
+  bar COUNT is now computed from the measured inner container width (ResizeObserver, width
+  quantized to 20px), bars have FIXED on-screen size — BAR_STEP=5px slot, BAR_WIDTH=3px,
+  viewBox width = count*STEP so resizing re-buckets instead of stretching (tunetank look).
+  The `bars` prop is deprecated/ignored (call sites still pass it — harmless, remove when
+  convenient). Peaks re-bucket per width from the cached decoded AudioBuffer (cache key
+  src:barCount). FIFO decode queue kept. Header logo icon: h-10 w-10 (md: h-11 w-11) — owner
+  wanted tunetank-sized. Backlog item (2) waveform bars — DONE.
 - **2026-07-04 (layout align):** constrained the Navigation header to the same content container as
   <main> (mx-auto max-w-[92rem] px-4 sm:px-6) so logo/search/icons line up with page content;
   indented the catalog hero text (lg:pl-[16.75rem] xl:pl-[17.75rem]) to start at the track play

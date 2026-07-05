@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 interface WaveformPreviewProps {
   active?: boolean;
+  /** @deprecated bar count is now computed from the container width. */
   bars?: number;
   className?: string;
   durationRatio?: number;
@@ -19,6 +20,12 @@ type WebkitAudioWindow = Window & {
 let sharedAudioContext: AudioContext | null = null;
 const audioBufferCache = new Map<string, Promise<AudioBuffer>>();
 const peaksCache = new Map<string, Promise<number[]>>();
+
+// Bars have a FIXED on-screen width; the bar COUNT adapts to the container,
+// so resizing the window re-buckets the waveform instead of stretching bars.
+const BAR_STEP = 5; // px per bar slot (bar + gap)
+const BAR_WIDTH = 3; // px bar thickness
+const MIN_BARS = 16;
 
 // FIFO queue with limited concurrency: rows mount top-to-bottom, so loading
 // them in mount order makes waveforms appear top-down instead of randomly.
@@ -118,7 +125,6 @@ const getPeaks = (src: string, bars: number) => {
 };
 
 const WaveformPreview = ({
-  bars = 96,
   className,
   durationRatio = 1,
   onSeek,
@@ -126,15 +132,41 @@ const WaveformPreview = ({
   seed = 0,
   src,
 }: WaveformPreviewProps) => {
+  const innerRef = useRef<HTMLDivElement | null>(null);
+  const [barCount, setBarCount] = useState(0);
+
+  // Measure the (duration-scaled) inner container and derive the bar count.
+  // Width is quantized to 20px so window dragging doesn't recompute per pixel.
+  useEffect(() => {
+    const element = innerRef.current;
+    if (!element) return;
+
+    const measure = () => {
+      const width = element.getBoundingClientRect().width;
+      if (width <= 0) return;
+      const quantized = Math.max(MIN_BARS * BAR_STEP, Math.round(width / 20) * 20);
+      setBarCount(Math.round(quantized / BAR_STEP));
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
   const fallbackPeaks = useMemo(
-    () => Array.from({ length: bars }, (_, index) => (18 + ((index * 17 + seed * 7) % 68)) / 100),
-    [bars, seed],
+    () =>
+      barCount > 0
+        ? Array.from({ length: barCount }, (_, index) => (18 + ((index * 17 + seed * 7) % 68)) / 100)
+        : null,
+    [barCount, seed],
   );
-  const [peaks, setPeaks] = useState<number[] | null>(src ? null : fallbackPeaks);
-  const [isLoading, setIsLoading] = useState(Boolean(src));
+  const [peaks, setPeaks] = useState<number[] | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    if (barCount <= 0) return;
 
     if (!src) {
       setPeaks(fallbackPeaks);
@@ -143,9 +175,8 @@ const WaveformPreview = ({
     }
 
     setIsLoading(true);
-    setPeaks(null);
 
-    getPeaks(src, bars)
+    getPeaks(src, barCount)
       .then((nextPeaks) => {
         if (!cancelled) {
           setPeaks(nextPeaks);
@@ -154,7 +185,7 @@ const WaveformPreview = ({
       })
       .catch(() => {
         if (!cancelled) {
-          setPeaks(Array.from({ length: bars }, () => 0.08));
+          setPeaks(Array.from({ length: barCount }, () => 0.08));
           setIsLoading(false);
         }
       });
@@ -162,7 +193,7 @@ const WaveformPreview = ({
     return () => {
       cancelled = true;
     };
-  }, [bars, fallbackPeaks, src]);
+  }, [barCount, fallbackPeaks, src]);
 
   const safeDurationRatio = Math.max(0.08, Math.min(1, durationRatio));
 
@@ -182,6 +213,7 @@ const WaveformPreview = ({
       )}
     >
       <div
+        ref={innerRef}
         className={cn("relative h-full overflow-hidden", onSeek && "cursor-pointer")}
         style={{ width: `${safeDurationRatio * 100}%` }}
         role={onSeek ? "slider" : undefined}
@@ -207,13 +239,13 @@ const WaveformPreview = ({
         ) : (
           <svg
             className="h-full w-full"
-            viewBox={`0 0 ${peaks.length} 100`}
+            viewBox={`0 0 ${peaks.length * BAR_STEP} 100`}
             preserveAspectRatio="none"
             aria-hidden="true"
           >
             <line
               x1="0"
-              x2={peaks.length}
+              x2={peaks.length * BAR_STEP}
               y1="50"
               y2="50"
               stroke="currentColor"
@@ -228,18 +260,19 @@ const WaveformPreview = ({
               const opacity = played ? 0.9 : 0.55;
               const height = Math.max(6, peak * 86);
               const center = 50;
+              const x = index * BAR_STEP + BAR_STEP / 2;
 
               return (
                 <line
                   key={index}
-                  x1={index + 0.5}
-                  x2={index + 0.5}
+                  x1={x}
+                  x2={x}
                   y1={center - height / 2}
                   y2={center + height / 2}
                   stroke={color}
                   strokeOpacity={opacity}
                   strokeLinecap="round"
-                  strokeWidth={0.55}
+                  strokeWidth={BAR_WIDTH}
                 />
               );
             })}
