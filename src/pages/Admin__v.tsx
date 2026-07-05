@@ -512,24 +512,4 @@ const Admin = () => {
                           <span className="font-body text-xs text-muted-foreground">{b.budget}</span>
                         </div>
                         <p className="mt-1 font-body text-xs text-muted-foreground">{b.description}</p>
-                        <p className="mt-1 font-body text-xs">
-                          <span className="text-muted-foreground">Assigned: </span>
-                          <span style={{ color: GOLD }}>
-                            {b.assignedComposerId ? composerName(b.assignedComposerId) : "unassigned"}
-                          </span>
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                </Card>
-              </>
-            )}
-          </div>
-        </div>
-      </main>
-      <Footer />
-    </div>
-  );
-};
-
-export default Admin;
+                        <p className="mt

@@ -501,8 +501,4 @@ const AdminContent = () => {
           }
         />
       )}
-    </div>
-  );
-};
-
-export default AdminContent;
+    </di

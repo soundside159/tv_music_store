@@ -493,5 +493,18 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   /admin sidebar (Admin.tsx now imports useNavigate + logout + LogOut; previously /admin had no
   logout button at all). lint: real content 0 errors (tsc 0) — sandbox mirror NUL-glitch again
   gave spurious eslint "Parsing error" lines; host files verified clean via Read, no temp files
-  leaked to host (Glob confirmed). Next: back to the main plan — (2) editable tag vocabularies,
+  leaked to host (Glob confirmed).
+- **2026-07-05 (admin width — owner round 4, Edit fills the leftover):** owner clarified with a
+  screenshot arrow: the Edit panel should GROW into the empty space to its right; the track table
+  stays compact. Implemented: `Admin.tsx` Content container `max-w-[100rem] -> max-w-none` (full
+  available width), BUT only the Tracks Edit tab uses it — `AdminContent.tsx` outer card is now
+  `max-w-5xl` for every tab EXCEPT tracks (`tab === "tracks" ? "" : "max-w-5xl"`), so Collections/
+  Playlists/Categories/Trending keep a normal reading width (honors "don't full-screen without
+  necessity"). `AdminTracksEdit.tsx` grid `[minmax(44rem,1fr)_minmax(32rem,1fr)] ->
+  [44rem_minmax(32rem,1fr)]`: track table is a FIXED 44rem column (no longer stretches) and the
+  Edit panel is the flexible `1fr` column that absorbs ALL remaining width, filling the formerly
+  empty right area. tsc 0; real content lints clean (sandbox NUL-mirror glitch still throws
+  spurious eslint "Parsing error" — host verified via Read/Grep, tsc parses fine, no temp files
+  leaked to host). The fixed 44rem table width is a one-number tweak if it feels off.
+  Next: back to the main plan — (2) editable tag vocabularies,
   (3) admin mailbox, (4) Account->Licenses from sync_orders, (5) license PDFs, (6) Add Track.
