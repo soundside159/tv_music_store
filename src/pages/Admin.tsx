@@ -142,7 +142,7 @@ const Admin = () => {
       <Navigation />
       <main
         className={`mx-auto w-full px-4 pb-24 pt-24 sm:px-6 md:pt-28 ${
-          section === "playlists" ? "max-w-[100rem]" : "max-w-6xl"
+          section === "playlists" ? "max-w-none" : "max-w-6xl"
         }`}
       >
         <div className="flex flex-col gap-8 md:flex-row">

@@ -466,3 +466,17 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   host file tools (no sandbox heredoc), host files verified. Remaining queue: (2) editable
   Use Case/Genre/Mood vocabularies from admin; (3) admin mailbox; (4) Account -> Licenses from
   real sync_orders; (5) license PDFs + "Include PDF License" checkbox; (6) "Add Track" upload flow.
+- **2026-07-05 (admin width — owner round 2):** owner wanted the Content area to truly use the
+  full screen. Changes: `Admin.tsx` Content container `max-w-[100rem] -> max-w-none` (full-bleed
+  to the padding edge). `AdminTracksEdit.tsx`: edit panel column doubled `25rem -> 40rem`
+  (`xl:grid-cols-[minmax(0,1fr)_40rem]`); Usage/Mood/Genre facet chips and Categories/Playlists/
+  Collections membership grids go `grid-cols-2 -> sm:grid-cols-3` (shorter panel, no vertical
+  scroll on normal screens); single-track Description textarea `rows 2 -> 5` (no need to expand it
+  each time). Removed the search box from the Collections membership section (few collections —
+  search was pointless); dropped the now-unused `collectionSearch` state. Table given more room:
+  column template widened `...7rem_4.5rem_4.5rem_4.5rem_4rem -> ...9rem_5.5rem_6.5rem_6.5rem_6.5rem`,
+  wrapper `min-w-[42rem] -> min-w-[48rem]`, and the cramped headers spelled out
+  (Coll./Playl./Trend -> Collections/Playlists/Trending). Real content lints 0 errors, tsc clean.
+  SYNC GLITCH again: the sandbox mirror of AdminTracksEdit.tsx got NUL-padded (eslint "Invalid
+  character" at EOF + mid-file) — HOST file verified clean via Read; validated real content by
+  linting a NUL-stripped copy (0 errors). deploy.bat runs on the host, unaffected.
