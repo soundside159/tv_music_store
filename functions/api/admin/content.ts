@@ -1,4 +1,16 @@
-import { getSessionUser, json, newId, OWNER_EMAIL, readJson, type Ctx, type D1Database } from "../_utils";
+import {
+  getSessionUser,
+  getVocabularies,
+  json,
+  newId,
+  OWNER_EMAIL,
+  readJson,
+  VOCAB_COL,
+  VOCAB_KEY,
+  type Ctx,
+  type D1Database,
+  type VocabFacet,
+} from "../_utils";
 import { seedCollections, seedTracks } from "./_seed_data";
 
 // Admin content editor API (collections, playlists, trending, track editing).
@@ -171,6 +183,7 @@ export const onRequestGet = async (ctx: Ctx) => {
     .prepare(`SELECT value FROM site_config WHERE key = 'trending_track_ids'`)
     .first<{ value: string }>();
   const trackCount = await db.prepare(`SELECT COUNT(*) AS n FROM tracks`).first<{ n: number }>();
+  const vocabularies = await getVocabularies(db);
 
   const group = (rows: { [k: string]: string }[], key: string) => {
     const map: Record<string, string[]> = {};
@@ -183,6 +196,7 @@ export const onRequestGet = async (ctx: Ctx) => {
 
   return json({
     dbTrackCount: trackCount?.n ?? 0,
+    vocabularies,
     trending: trendingRow ? (JSON.parse(trendingRow.value) as string[]) : [],
     categories: categories.results.map((c) => ({
       id: c.id,
@@ -236,6 +250,9 @@ export const onRequestPost = async (ctx: Ctx) => {
     collectionChanges?: { add?: string[]; remove?: string[] };
     categoryChanges?: { add?: string[]; remove?: string[] };
     trendingChange?: "add" | "remove";
+    // add_vocab / delete_vocab fields
+    facet?: string;
+    value?: string;
     fields?: {
       title?: string;
       bpm?: number;
@@ -501,6 +518,48 @@ export const onRequestPost = async (ctx: Ctx) => {
       }
 
       return json({ ok: true, count: ids.length });
+    }
+
+    case "add_vocab":
+    case "delete_vocab": {
+      const facet = body.facet as VocabFacet;
+      if (!VOCAB_KEY[facet]) return json({ error: "Unknown facet" }, 400);
+      const value = body.value?.trim();
+      if (!value) return json({ error: "value required" }, 400);
+
+      const vocab = await getVocabularies(db);
+      let list = vocab[facet];
+      if (body.action === "add_vocab") {
+        if (!list.some((v) => v.toLowerCase() === value.toLowerCase())) list = [...list, value];
+      } else {
+        list = list.filter((v) => v !== value);
+      }
+      await db
+        .prepare(
+          `INSERT INTO site_config (key, value) VALUES (?1, ?2)
+           ON CONFLICT(key) DO UPDATE SET value = ?2`,
+        )
+        .bind(VOCAB_KEY[facet], JSON.stringify(list))
+        .run();
+
+      // On delete, strip the value from any track that carries it (values are
+      // stored joined by " / " in the use_case / genre / mood column).
+      if (body.action === "delete_vocab") {
+        const col = VOCAB_COL[facet];
+        const rows = await db
+          .prepare(`SELECT id, ${col} AS v FROM tracks WHERE ${col} LIKE ?1`)
+          .bind(`%${value}%`)
+          .all<{ id: string; v: string | null }>();
+        for (const r of rows.results) {
+          const vals = (r.v ?? "")
+            .split("/")
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .filter((s) => s !== value);
+          await db.prepare(`UPDATE tracks SET ${col} = ?2 WHERE id = ?1`).bind(r.id, vals.join(" / ")).run();
+        }
+      }
+      return json({ ok: true, values: list });
     }
 
     default:

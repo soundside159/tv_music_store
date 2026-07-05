@@ -3,6 +3,7 @@ import { musicCollections, type MusicCollection } from "@/data/musicCollections"
 import { mockPlaylists } from "@/mocks";
 import type { CatalogTrack } from "@/data/catalogTracks";
 import { useTracks } from "@/hooks/useTracks";
+import { defaultVocabularies, type Vocabularies } from "@/lib/tagOptions";
 
 // Live storefront content from /api/content (what the owner edits in
 // Admin -> Content), with graceful fallback to the bundled mock data.
@@ -21,6 +22,7 @@ interface ApiContent {
   categories?: { id: string; title: string }[];
   collections?: ApiContentItem[];
   playlists?: ApiContentItem[];
+  vocabularies?: Partial<Vocabularies>;
 }
 
 let cache: ApiContent | null = null;
@@ -67,6 +69,31 @@ export const useCategories = (): LiveCategory[] => {
     };
   }, []);
   return list;
+};
+
+/**
+ * Live Use Case / Genre / Mood vocabularies (admin-editable via Admin ->
+ * Vocabulary). Falls back to the bundled defaults until the API responds or if
+ * a list is empty.
+ */
+export const useVocabularies = (): Vocabularies => {
+  const [v, setV] = useState<Vocabularies>(defaultVocabularies);
+  useEffect(() => {
+    let cancelled = false;
+    void fetchContent().then((data) => {
+      if (cancelled || !data?.vocabularies) return;
+      const dv = data.vocabularies;
+      setV({
+        useCase: dv.useCase?.length ? dv.useCase : defaultVocabularies.useCase,
+        genre: dv.genre?.length ? dv.genre : defaultVocabularies.genre,
+        mood: dv.mood?.length ? dv.mood : defaultVocabularies.mood,
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return v;
 };
 
 /** Collections for the catalog strip / collections pages (live, mock fallback). */

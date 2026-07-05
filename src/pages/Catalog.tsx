@@ -15,7 +15,7 @@ import cinemaHero from "@/assets/cinema-hero-wide.png";
 import { Input } from "@/components/ui/input";
 import { useTracks } from "@/hooks/useTracks";
 import type { MusicCollection } from "@/data/musicCollections";
-import { useCollections } from "@/hooks/useContent";
+import { useCollections, useVocabularies } from "@/hooks/useContent";
 import { TrackRow } from "@/components/TrackRowPlayer";
 import { usePlayer } from "@/components/PlayerProvider";
 import { genreOptions, moodOptions, useCaseOptions } from "@/lib/tagOptions";
@@ -514,6 +514,7 @@ const FilterSidebar = ({
   setFilter: (key: keyof FilterValue, value: string) => void;
   onClear: () => void;
 }) => {
+  const vocab = useVocabularies();
   const hasActive = filters.useCase !== "All" || filters.genre !== "All" || filters.mood !== "All";
 
   return (
@@ -537,20 +538,20 @@ const FilterSidebar = ({
       </div>
       <FilterGroup
         label="Use Case"
-        options={useCaseOptions}
+        options={vocab.useCase}
         value={filters.useCase}
         onChange={(value) => setFilter("useCase", value)}
         defaultOpen
       />
       <FilterGroup
         label="Genre"
-        options={genreOptions}
+        options={vocab.genre}
         value={filters.genre}
         onChange={(value) => setFilter("genre", value)}
       />
       <FilterGroup
         label="Mood"
-        options={moodOptions}
+        options={vocab.mood}
         value={filters.mood}
         onChange={(value) => setFilter("mood", value)}
       />

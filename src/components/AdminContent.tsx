@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { Pause, Play } from "lucide-react";
+import { Pause, Play, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { usePlayer } from "@/components/playerContext";
 import { useTracks } from "@/hooks/useTracks";
 import AdminTracksEdit from "@/components/AdminTracksEdit";
+import { defaultVocabularies, type Vocabularies } from "@/lib/tagOptions";
 import type { CatalogTrack } from "@/data/catalogTracks";
 
 // Admin -> Content: one place to manage collections, playlists, the homepage
@@ -32,9 +33,10 @@ interface ContentData {
   categories?: CategoryItem[];
   collections: ContentItem[];
   playlists: ContentItem[];
+  vocabularies?: Vocabularies;
 }
 
-type Tab = "collections" | "playlists" | "categories" | "trending" | "tracks";
+type Tab = "collections" | "playlists" | "categories" | "vocabulary" | "trending" | "tracks";
 type Kind = "collection" | "playlist";
 
 const inputCls =
@@ -109,6 +111,7 @@ const tabLabels: Record<Tab, string> = {
   collections: "Collections",
   playlists: "Playlists",
   categories: "Categories",
+  vocabulary: "Vocabulary",
   trending: "Trending",
   tracks: "Tracks Edit",
 };
@@ -124,6 +127,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
   const [trackOverrides, setTrackOverrides] = useState<Record<string, Partial<CatalogTrack>>>({});
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [vocabInput, setVocabInput] = useState<Record<string, string>>({});
 
   // Reset any open draft when the sidebar switches the active view.
   useEffect(() => {
@@ -188,6 +192,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
   const items = tab === "playlists" ? data.playlists : data.collections;
   const trending = trendingDraft ?? data.trending;
   const mergedTracks = tracks.map((t) => ({ ...t, ...trackOverrides[t.id] }));
+  const vocab = data.vocabularies ?? defaultVocabularies;
 
   return (
     <div className="rounded-xl border border-border bg-card p-6">
@@ -444,6 +449,83 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
         </div>
       )}
 
+      {tab === "vocabulary" && (
+        <div className="mt-5 flex flex-col gap-6">
+          <p className="font-body text-sm text-muted-foreground">
+            The Use Case / Genre / Mood values shown in the catalog filters and the Tracks Edit
+            panel. Deleting a value also removes it from any track that uses it.
+          </p>
+          {(
+            [
+              ["useCase", "Usage"],
+              ["mood", "Mood"],
+              ["genre", "Genre"],
+            ] as Array<[keyof Vocabularies, string]>
+          ).map(([key, label]) => (
+            <div key={key} className="rounded-lg border border-border/60 p-4">
+              <p className="mb-3 font-body text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {label} <span className="text-muted-foreground/60">({vocab[key].length})</span>
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {vocab[key].map((value) => (
+                  <span
+                    key={value}
+                    className="flex items-center gap-1.5 rounded-full border border-border bg-secondary/40 py-1 pl-3 pr-1.5 font-body text-xs text-foreground"
+                  >
+                    {value}
+                    <button
+                      type="button"
+                      aria-label={`Delete ${value}`}
+                      disabled={busy}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `Delete "${value}" from ${label}? It will be removed from any track using it.`,
+                          )
+                        ) {
+                          void run({ action: "delete_vocab", facet: key, value }, "Value deleted");
+                        }
+                      }}
+                      className="flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+                {vocab[key].length === 0 && (
+                  <span className="font-body text-xs text-muted-foreground">No values yet.</span>
+                )}
+              </div>
+              <form
+                className="mt-3 flex gap-2"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const value = (vocabInput[key] ?? "").trim();
+                  if (!value) return;
+                  const ok = await run({ action: "add_vocab", facet: key, value }, "Value added");
+                  if (ok) setVocabInput((prev) => ({ ...prev, [key]: "" }));
+                }}
+              >
+                <input
+                  placeholder={`Add a ${label.toLowerCase()} value...`}
+                  value={vocabInput[key] ?? ""}
+                  onChange={(e) => setVocabInput((prev) => ({ ...prev, [key]: e.target.value }))}
+                  className={`${inputCls} w-64 max-w-full`}
+                />
+                <button
+                  type="submit"
+                  disabled={busy || !(vocabInput[key] ?? "").trim()}
+                  className={btnCls}
+                >
+                  <Plus className="mr-1 inline h-3 w-3" />
+                  Add
+                </button>
+              </form>
+            </div>
+          ))}
+        </div>
+      )}
+
       {tab === "trending" && (
         <div className="mt-5 flex flex-col gap-3">
           <p className="font-body text-sm text-muted-foreground">
@@ -471,6 +553,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
       {tab === "tracks" && (
         <AdminTracksEdit
           tracks={mergedTracks}
+          vocabularies={vocab}
           categories={(data.categories ?? []).map((c) => ({ id: c.id, title: c.title, trackIds: c.trackIds }))}
           collections={data.collections}
           playlists={data.playlists}

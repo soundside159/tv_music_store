@@ -29,6 +29,7 @@ type SectionId =
   | "collections"
   | "playlists"
   | "categories"
+  | "vocabulary"
   | "trending"
   | "tracksedit"
   | "customers"
@@ -41,6 +42,7 @@ const SECTION_IDS: SectionId[] = [
   "collections",
   "playlists",
   "categories",
+  "vocabulary",
   "trending",
   "tracksedit",
   "customers",
@@ -49,11 +51,12 @@ const SECTION_IDS: SectionId[] = [
 
 // Which sidebar sections are handled by the AdminContent component, and the
 // internal view each maps to.
-type ContentTab = "collections" | "playlists" | "categories" | "trending" | "tracks";
+type ContentTab = "collections" | "playlists" | "categories" | "vocabulary" | "trending" | "tracks";
 const CONTENT_TAB: Partial<Record<SectionId, ContentTab>> = {
   collections: "collections",
   playlists: "playlists",
   categories: "categories",
+  vocabulary: "vocabulary",
   trending: "trending",
   tracksedit: "tracks",
 };

@@ -1,4 +1,4 @@
-import { json, type Ctx } from "./_utils";
+import { getVocabularies, json, type Ctx } from "./_utils";
 
 // Public storefront content: collections, playlists and the homepage trending
 // list — everything the owner edits in Admin -> Content.
@@ -48,9 +48,12 @@ export const onRequestGet = async (ctx: Ctx) => {
   const plMap: Record<string, string[]> = {};
   for (const r of plTracks.results) (plMap[r.playlist_id] ??= []).push(r.track_id);
 
+  const vocabularies = await getVocabularies(db);
+
   return json({
     trending,
     categories,
+    vocabularies,
     collections: collections.results.map((c) => ({
       id: c.id,
       title: c.title,

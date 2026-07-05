@@ -555,3 +555,23 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   Linux `@rollup/rollup-linux-x64-gnu` native binary is missing (env-only issue); deploy.bat
   builds on the host. If the right-bleed ever needs a bigger gap from the edge, add a positive rem
   to the calc (e.g. `+2rem`).
+- **2026-07-05 (editable tag vocabularies — main plan #2 done):** Use Case / Genre / Mood lists are
+  now admin-editable, stored in `site_config` (keys `vocab_use_case` / `vocab_genre` / `vocab_mood`
+  as JSON arrays), with `src/lib/tagOptions.ts` as the fallback. Server: `_utils.ts` gained
+  `DEFAULT_VOCAB`, `VOCAB_KEY`, `VOCAB_COL`, `VOCAB_FACETS`, `getVocabularies(db)` (reads the 3 rows,
+  falls back to defaults, tolerates missing table/bad JSON). `functions/api/admin/content.ts`: GET
+  returns `vocabularies`; new POST actions `add_vocab` / `delete_vocab` ({facet, value}) — delete
+  also STRIPS the value from every track's joined use_case/genre/mood column. `functions/api/
+  content.ts` (public) returns `vocabularies` too. Frontend: `tagOptions.ts` exports
+  `defaultVocabularies` + `Vocabularies` type; `useContent.ts` adds `useVocabularies()` (live
+  /api/content, fallback). Admin UI: new **Vocabulary** sidebar item (ListFilter icon, between
+  Categories and Trending) -> AdminContent `vocabulary` view = 3 sections (Usage/Mood/Genre) of
+  deletable chips + an add input each (add_vocab/delete_vocab via run()). AdminTracksEdit now takes
+  a `vocabularies` prop and builds its Usage/Mood/Genre checkbox lists from it (FACETS lost its
+  hardcoded options; tagOptions import dropped there). Catalog FilterSidebar uses `useVocabularies()`
+  for the filter options (the useState initializer still uses the static defaults for URL-param
+  normalization — harmless). Frontend tsc 0. NOTE: `functions/` is NOT in the project tsconfig
+  (only `src`), and the sandbox mirror NUL-corruption makes sandbox tsc/eslint on functions
+  unreliable — host files verified correct via Read; they mirror existing action/handler patterns.
+  Owner deploys via deploy.bat (host build). Add/delete only for now (no rename/reorder — matches
+  the spec).

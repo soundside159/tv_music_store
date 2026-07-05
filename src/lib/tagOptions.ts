@@ -39,3 +39,16 @@ export const moodOptions = [
   "Uplifting",
   "Beautiful",
 ];
+
+export interface Vocabularies {
+  useCase: string[];
+  genre: string[];
+  mood: string[];
+}
+
+/** Fallback used until the live lists load from /api/content (admin-editable). */
+export const defaultVocabularies: Vocabularies = {
+  useCase: useCaseOptions,
+  genre: genreOptions,
+  mood: moodOptions,
+};

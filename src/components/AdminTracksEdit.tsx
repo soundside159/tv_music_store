@@ -3,7 +3,7 @@ import { Check, ChevronLeft, ChevronRight, Flame, Minus, Music, Pause, Play, Sea
 import WaveformPreview from "@/components/WaveformPreview";
 import { usePlayer } from "@/components/playerContext";
 import { splitFilterValues } from "@/components/TrackRowPlayer";
-import { genreOptions, moodOptions, useCaseOptions } from "@/lib/tagOptions";
+import type { Vocabularies } from "@/lib/tagOptions";
 import type { CatalogTrack } from "@/data/catalogTracks";
 
 // Admin -> Content -> "Tracks Edit": bulk track editor (tunetank-style).
@@ -32,10 +32,12 @@ const btnCls =
 const goldBtnCls =
   "rounded-lg bg-[#F4C430] px-4 py-2 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85 disabled:opacity-50";
 
-const FACETS: Array<{ key: FacetKey; label: string; options: string[] }> = [
-  { key: "useCase", label: "Usage", options: useCaseOptions },
-  { key: "mood", label: "Mood", options: moodOptions },
-  { key: "genre", label: "Genre", options: genreOptions },
+// Facet key + label; the selectable options come from the live `vocabularies`
+// prop (admin-editable) so this list stays in sync with Admin -> Vocabulary.
+const FACETS: Array<{ key: FacetKey; label: string }> = [
+  { key: "useCase", label: "Usage" },
+  { key: "mood", label: "Mood" },
+  { key: "genre", label: "Genre" },
 ];
 
 const facetValue = (track: CatalogTrack, key: FacetKey) =>
@@ -103,6 +105,7 @@ const fieldsOf = (t: CatalogTrack): SingleFields => ({
 
 const AdminTracksEdit = ({
   tracks,
+  vocabularies,
   categories,
   collections,
   playlists,
@@ -115,6 +118,7 @@ const AdminTracksEdit = ({
   onApplyOverrides,
 }: {
   tracks: CatalogTrack[];
+  vocabularies: Vocabularies;
   categories: ContentItemLite[];
   collections: ContentItemLite[];
   playlists: ContentItemLite[];
@@ -732,13 +736,13 @@ const AdminTracksEdit = ({
                 </div>
               )}
 
-              {FACETS.map(({ key, label, options }) => (
+              {FACETS.map(({ key, label }) => (
                 <div key={key} className="mb-4 border-t border-border/60 pt-4 first:mt-0 first:border-t-0 first:pt-0">
                   <p className="mb-2 font-body text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     {label}
                   </p>
                   <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 sm:grid-cols-3">
-                    {options.map((opt) => (
+                    {vocabularies[key].map((opt) => (
                       <TriCheckbox
                         key={opt}
                         label={opt}

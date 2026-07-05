@@ -194,3 +194,92 @@ export const sendEmail = async (
   });
   return res.ok;
 };
+
+// ---------------------------------------------------------------------------
+// Tag vocabularies (Use Case / Genre / Mood) — admin-editable, stored in
+// site_config as JSON string arrays. Defaults below mirror src/lib/tagOptions.ts
+// (kept in sync manually) and are used until the owner edits a list.
+// ---------------------------------------------------------------------------
+
+export type VocabFacet = "useCase" | "genre" | "mood";
+export interface Vocabularies {
+  useCase: string[];
+  genre: string[];
+  mood: string[];
+}
+
+export const DEFAULT_VOCAB: Vocabularies = {
+  useCase: [
+    "Movie Trailer",
+    "Film & TV",
+    "Documentary",
+    "Advertising",
+    "Crime & Thriller",
+    "Business",
+    "Video Game",
+    "Sports",
+    "Technology",
+    "Travel",
+    "Nature",
+    "Luxury",
+  ],
+  genre: ["Neo-Classical", "Action", "Drama", "Dark Score", "Sci-Fi", "Fantasy", "Horror"],
+  mood: [
+    "Emotional",
+    "Powerful",
+    "Inspiring",
+    "Suspenseful",
+    "Aggressive",
+    "Tense",
+    "Heroic",
+    "Hopeful",
+    "Uplifting",
+    "Beautiful",
+  ],
+};
+
+export const VOCAB_KEY: Record<VocabFacet, string> = {
+  useCase: "vocab_use_case",
+  genre: "vocab_genre",
+  mood: "vocab_mood",
+};
+
+/** The tracks column each facet is stored in (values joined by " / "). */
+export const VOCAB_COL: Record<VocabFacet, "use_case" | "genre" | "mood"> = {
+  useCase: "use_case",
+  genre: "genre",
+  mood: "mood",
+};
+
+export const VOCAB_FACETS: VocabFacet[] = ["useCase", "genre", "mood"];
+
+/** Reads all three vocabularies from site_config, falling back to defaults. */
+export const getVocabularies = async (db: D1Database): Promise<Vocabularies> => {
+  const out: Vocabularies = {
+    useCase: [...DEFAULT_VOCAB.useCase],
+    genre: [...DEFAULT_VOCAB.genre],
+    mood: [...DEFAULT_VOCAB.mood],
+  };
+  try {
+    const rows = await db
+      .prepare(
+        `SELECT key, value FROM site_config WHERE key IN ('vocab_use_case','vocab_genre','vocab_mood')`,
+      )
+      .all<{ key: string; value: string }>();
+    for (const r of rows.results) {
+      const facet = VOCAB_FACETS.find((f) => VOCAB_KEY[f] === r.key);
+      if (!facet) continue;
+      try {
+        const arr = JSON.parse(r.value) as unknown;
+        if (Array.isArray(arr) && arr.every((x) => typeof x === "string")) {
+          out[facet] = arr as string[];
+        }
+      } catch {
+        // bad JSON in the row — keep the default for this facet
+      }
+    }
+  } catch {
+    // site_config table not created yet — return defaults
+  }
+  return out;
+};
