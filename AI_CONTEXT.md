@@ -351,6 +351,13 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   convenient). Peaks re-bucket per width from the cached decoded AudioBuffer (cache key
   src:barCount). FIFO decode queue kept. Header logo icon: h-10 w-10 (md: h-11 w-11) — owner
   wanted tunetank-sized. Backlog item (2) waveform bars — DONE.
+- **2026-07-05 (waveform tunetank styling + real header logo):** header icon was tiny because
+  the owner's icon PNGs have big transparent padding (96px file = 35x32px of actual mark!).
+  Generated `public/images/icons/logo-header.png` (mark cropped from the 512px icon + 6% pad,
+  128px tall) — Navigation now uses it at h-8/md:h-9. If the owner replaces icons, re-crop.
+  Waveform tunetank look: BAR_STEP 4 (bar 3px + 1px gap), unplayed bars opacity 0.3 on idle
+  rows / 0.62 on the active (playing) track, played part SOLID gold (opacity 1), per-bar CSS
+  transition 0.35s so selecting a track brightens the whole wave smoothly.
 - **2026-07-04 (layout align):** constrained the Navigation header to the same content container as
   <main> (mx-auto max-w-[92rem] px-4 sm:px-6) so logo/search/icons line up with page content;
   indented the catalog hero text (lg:pl-[16.75rem] xl:pl-[17.75rem]) to start at the track play

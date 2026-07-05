@@ -23,7 +23,7 @@ const peaksCache = new Map<string, Promise<number[]>>();
 
 // Bars have a FIXED on-screen width; the bar COUNT adapts to the container,
 // so resizing the window re-buckets the waveform instead of stretching bars.
-const BAR_STEP = 5; // px per bar slot (bar + gap)
+const BAR_STEP = 4; // px per bar slot (bar + gap)
 const BAR_WIDTH = 3; // px bar thickness
 const MIN_BARS = 16;
 
@@ -125,6 +125,7 @@ const getPeaks = (src: string, bars: number) => {
 };
 
 const WaveformPreview = ({
+  active = false,
   className,
   durationRatio = 1,
   onSeek,
@@ -256,8 +257,10 @@ const WaveformPreview = ({
             {peaks.map((peak, index) => {
               const position = index / Math.max(1, peaks.length - 1);
               const played = progress > 0 && position <= progress;
+              // Tunetank-style states: idle rows are dim grey, the selected
+              // (playing) track brightens smoothly, played part is solid gold.
               const color = played ? "#F4C430" : "currentColor";
-              const opacity = played ? 0.9 : 0.55;
+              const opacity = played ? 1 : active ? 0.62 : 0.3;
               const height = Math.max(6, peak * 86);
               const center = 50;
               const x = index * BAR_STEP + BAR_STEP / 2;
@@ -271,8 +274,8 @@ const WaveformPreview = ({
                   y2={center + height / 2}
                   stroke={color}
                   strokeOpacity={opacity}
-                  strokeLinecap="round"
                   strokeWidth={BAR_WIDTH}
+                  style={{ transition: "stroke-opacity 0.35s ease, stroke 0.35s ease" }}
                 />
               );
             })}
