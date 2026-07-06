@@ -23,7 +23,7 @@ export interface ContentItemLite {
 
 type TriState = "all" | "none" | "mixed";
 type FacetKey = "useCase" | "genre" | "mood";
-type SortMode = "default" | "az" | "za";
+type SortMode = "default" | "trending";
 
 const inputCls =
   "rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none";
@@ -135,7 +135,7 @@ const AdminTracksEdit = ({
   // --- toolbar / table state ---
   const [search, setSearch] = useState("");
   const [composer, setComposer] = useState("all");
-  const [sort, setSort] = useState<SortMode>("az");
+  const [sort, setSort] = useState<SortMode>("default");
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(20);
   const [selected, setSelected] = useState<string[]>([]);
@@ -165,10 +165,12 @@ const AdminTracksEdit = ({
         (composer === "all" || t.artist === composer) &&
         (!q || t.title.toLowerCase().includes(q)),
     );
-    if (sort === "az") list = [...list].sort((a, b) => a.title.localeCompare(b.title));
-    if (sort === "za") list = [...list].sort((a, b) => b.title.localeCompare(a.title));
+    if (sort === "trending") {
+      const set = new Set(trending);
+      list = [...list].sort((a, b) => (set.has(b.id) ? 1 : 0) - (set.has(a.id) ? 1 : 0));
+    }
     return list;
-  }, [tracks, search, composer, sort]);
+  }, [tracks, search, composer, sort, trending]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / perPage));
   const safePage = Math.min(page, pageCount);
@@ -330,6 +332,18 @@ const AdminTracksEdit = ({
   // --- selection ---
   const toggleTrack = (id: string) =>
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  // Per-row Trending toggle — persists immediately; the parent reload refreshes
+  // the `trending` list.
+  const trendingSet = new Set(trending);
+  const toggleTrending = (id: string) => {
+    if (disabled || busy) return;
+    const isOn = trendingSet.has(id);
+    void run(
+      { action: "bulk_update_tracks", trackIds: [id], trendingChange: isOn ? "remove" : "add" },
+      isOn ? "Removed from Trending" : "Added to Trending",
+    );
+  };
   // Header checkbox = only the rows visible on the CURRENT page.
   const pageState: TriState = (() => {
     const n = paged.filter((t) => selectedSet.has(t.id)).length;
@@ -371,7 +385,7 @@ const AdminTracksEdit = ({
           className={`${inputCls} mb-2 w-full py-1.5 text-xs`}
         />
       )}
-      <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 sm:grid-cols-3">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,max-content))] gap-x-5 gap-y-1">
         {items
           .filter((i) => !searchValue || i.title.toLowerCase().includes(searchValue.toLowerCase()))
           .map((item) => (
@@ -385,7 +399,7 @@ const AdminTracksEdit = ({
             />
           ))}
         {items.length === 0 && (
-          <p className="col-span-3 font-body text-xs text-muted-foreground">None yet.</p>
+          <p className="col-span-full font-body text-xs text-muted-foreground">None yet.</p>
         )}
       </div>
     </div>
@@ -426,26 +440,6 @@ const AdminTracksEdit = ({
               </option>
             ))}
           </select>
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as SortMode)}
-            className={inputCls}
-            aria-label="Sort tracks"
-          >
-            <option value="az">Sort by: Title A-Z</option>
-            <option value="za">Sort by: Title Z-A</option>
-            <option value="default">Sort by: Default</option>
-          </select>
-          {selected.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setSelected([])}
-              className="ml-auto flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 font-body text-xs text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
-            >
-              <X className="h-3 w-3" />
-              {selected.length} selected — clear
-            </button>
-          )}
         </div>
 
         {disabled && (
@@ -457,13 +451,23 @@ const AdminTracksEdit = ({
 
         <div className="mt-4 overflow-x-auto rounded-lg border border-border/60">
           <div className="min-w-[44rem]">
-            <div className="grid grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_8rem_5rem] items-center gap-2 border-b border-border/60 bg-secondary/40 px-3 py-2.5">
+            <div className="grid grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_8rem_4.5rem_5rem] items-center gap-2 border-b border-border/60 bg-secondary/40 px-3 py-2.5">
               <span className="flex justify-center">
                 <RowCheckbox state={pageState} onToggle={togglePage} label="Select all visible" />
               </span>
               <span />
               <span className="font-body text-xs uppercase tracking-wide text-muted-foreground">Track</span>
               <span className="font-body text-xs uppercase tracking-wide text-muted-foreground">Composer</span>
+              <button
+                type="button"
+                onClick={() => setSort((s) => (s === "trending" ? "default" : "trending"))}
+                title="Sort by trending"
+                className={`text-center font-body text-xs uppercase tracking-wide transition-colors hover:text-[#F4C430] ${
+                  sort === "trending" ? "text-[#F4C430]" : "text-muted-foreground"
+                }`}
+              >
+                Trending
+              </button>
               <span className="font-body text-xs uppercase tracking-wide text-muted-foreground">Duration</span>
             </div>
 
@@ -477,7 +481,7 @@ const AdminTracksEdit = ({
               return (
                 <div
                   key={t.id}
-                  className={`grid grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_8rem_5rem] items-center gap-2 border-b border-border/40 px-3 py-2 transition-colors last:border-b-0 ${
+                  className={`grid grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_8rem_4.5rem_5rem] items-center gap-2 border-b border-border/40 px-3 py-2 transition-colors last:border-b-0 ${
                     isSelected ? "bg-[#F4C430]/[0.06]" : "hover:bg-foreground/[0.03]"
                   }`}
                 >
@@ -532,6 +536,13 @@ const AdminTracksEdit = ({
                   </div>
 
                   <span className="truncate font-body text-xs text-muted-foreground">{t.artist}</span>
+                  <span className="flex justify-center">
+                    <RowCheckbox
+                      state={trendingSet.has(t.id) ? "all" : "none"}
+                      onToggle={() => toggleTrending(t.id)}
+                      label={`Toggle trending: ${t.title}`}
+                    />
+                  </span>
                   <span className="font-body text-xs tabular-nums text-muted-foreground">{t.duration}</span>
                 </div>
               );
@@ -714,7 +725,7 @@ const AdminTracksEdit = ({
                   <p className="mb-2 font-body text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     {label}
                   </p>
-                  <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 sm:grid-cols-3">
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,max-content))] gap-x-5 gap-y-1">
                     {vocabularies[key].map((opt) => (
                       <TriCheckbox
                         key={opt}
@@ -735,34 +746,6 @@ const AdminTracksEdit = ({
                 {membershipSection("Collections", collections, collectionDelta, setCollectionDelta)}
               </div>
 
-              <div className="mt-4 border-t border-border/60 pt-4">
-                <p className="mb-2 font-body text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Trending
-                </p>
-                {(
-                  [
-                    ["add", "Add to Trending"],
-                    ["remove", "Remove from Trending"],
-                    ["none", "No Change"],
-                  ] as const
-                ).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setTrendingChange(value)}
-                    className="flex items-center gap-2 py-0.5"
-                  >
-                    <span
-                      className={`flex h-4 w-4 items-center justify-center rounded-full border transition-colors ${
-                        trendingChange === value ? "border-[#F4C430]" : "border-border"
-                      }`}
-                    >
-                      {trendingChange === value && <span className="h-2 w-2 rounded-full bg-[#F4C430]" />}
-                    </span>
-                    <span className="font-body text-xs text-foreground/90">{label}</span>
-                  </button>
-                ))}
-              </div>
             </div>
 
             <div className="flex gap-2 border-t border-border/60 px-4 py-3.5">
