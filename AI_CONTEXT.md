@@ -796,3 +796,46 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   manually. Backend files node --check clean; frontend follows existing patterns (real lint/build on
   deploy.bat). Phase 2 (YouTube API monitoring of new post-subscription videos) still per
   WHITELIST_SYSTEM.md, not built.
+- **2026-07-06 (admin CRM — customer profiles, BUILT):** click a customer in /admin -> Customers or a
+  buyer in /admin -> Licenses to open a profile modal. NEW `functions/api/admin/customer.ts` (GET
+  ?id=, admin-only): identity + subscription history (subscriptions) + purchases (sync_orders) +
+  recent downloads (download_log, 100) + total + whitelisted channels + **taste** = top genres/moods/
+  use-cases tallied from tracks the customer downloaded or bought (splits the " / "-joined tag columns,
+  counts, top 6 each). `admin/licenses.ts` now also returns `userId` (added to both queries + the
+  AdminLicenseRow type) so the Licenses buyer is clickable. Frontend: NEW `AdminCustomerProfile.tsx`
+  modal (identity, copy-email, taste chips, purchases w/ PDF links, sub history, channels, recent
+  downloads); Admin.tsx gained `profileUserId` state, made the Customers name + Licenses buyer
+  clickable (buttons), added `userId` to its AdminLicense type, renders the modal. No new schema — all
+  from existing tables. Backend node --check clean. Powers the taste-segmented marketing idea from
+  BACKLOG/GROWTH_FUNNEL. Not yet: actually sending campaigns (needs an email-campaign flow).
+- **2026-07-06 (funnel: welcome email, BUILT):** first funnel code piece per FUNNEL_LAUNCH_PLAN.md.
+  NEW `functions/api/_email.ts` — shared branded email shell (matches the login-code email: dark
+  header + 192px logo, white body, dark footer) + `sendWelcomeEmail(env, to, name)` (greeting, how-it-
+  works 1-2-3, upgrade unlocks incl. whitelisting, "Browse the music library" CTA; never throws).
+  Wired into all three signup paths so it fires ONCE on new-account creation: `auth/verify.ts`
+  (email-code), `auth/register.ts` (email+password), `auth/google/callback.ts` (Google) — skips
+  admins. Resend already configured; degrades gracefully without a key. Backend node --check clean.
+  Also wrote `docs/FUNNEL_LAUNCH_PLAN.md` (step-by-step launch sequence: Phase 0 foundations ->
+  acquisition (YouTube/SEO/tools) -> capture+activate -> convert -> retain via taste emails; build-vs-
+  content-vs-ops split; first-30-days). Next funnel code: newsletter capture + unsubscribe, then the
+  taste-segmented campaign sender (uses the CRM).
+- **2026-07-06 (funnel: newsletter capture + unsubscribe, BUILT):** NEW `newsletter_subscribers` D1
+  table (id, email UNIQUE, token, source, subscribed_at, unsubscribed_at) in 0001_init.sql + lazy
+  `ensureNewsletterTable`. NEW `functions/api/newsletter.ts` (POST subscribe — validates email,
+  idempotent, re-subscribes a previously-unsubscribed email, mints an unsubscribe token, never reveals
+  prior existence). NEW `functions/api/newsletter/unsubscribe.ts` (GET ?token= -> marks unsubscribed +
+  returns a branded HTML confirmation page; note file + folder share the `newsletter` base name — both
+  route fine in Pages Functions). Frontend: NEW `src/components/NewsletterSignup.tsx` (email + Subscribe,
+  success/err states) added to the Footer brand block ("New tracks in your inbox"). GDPR: explicit
+  opt-in + unsubscribe link for every future campaign. Backend node --check clean. Campaign sender
+  (next) will read this list + tokens to email taste segments from the CRM.
+- **2026-07-06 (whitelist Phase 2 — video monitoring, BUILT on-demand):** Pages has no cron, so instead
+  of a background poller: NEW `functions/api/admin/whitelist-videos.ts` (admin, GET ?id=<channel>) —
+  resolves the whitelisted channel via YouTube Data API v3 (@handle / channel/UC / user / best-effort
+  /c/), pulls the uploads playlist, returns videos published AFTER the channel's added_at, only while
+  the owning customer's subscription is active (else {inactive:true}). `_utils.ts` Env gained
+  `YOUTUBE_API_KEY`. `AdminWhitelist.tsx`: each row got a "New videos" expander that lazy-loads and
+  lists videos (title + date + link) so the owner opens each and clears the claim. OWNER STEP: set
+  YOUTUBE_API_KEY in CF Pages env. Backend node --check clean. Campaign sender deferred to BACKLOG.md.
+  A true background poller would need a separate Worker (Pages can't cron) — noted in
+  WHITELIST_SYSTEM.md.

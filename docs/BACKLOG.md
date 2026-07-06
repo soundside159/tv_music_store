@@ -24,6 +24,17 @@ support and targeted marketing.
 - Marketing send itself is a later, separate feature (needs an email campaign
   flow + unsubscribe; keep GDPR consent from the Privacy Policy in mind).
 
+## Campaign sender (funnel — deferred, 2026-07-06)
+
+Admin tool to email a taste segment from the CRM. Pick a segment (e.g. customers
+whose taste includes "Epic", or the whole newsletter list), write subject + body
+(or "new release"), send via Resend with an unsubscribe link in every email.
+Needs: a send log (don't email the same person twice for the same campaign),
+segment builder over the CRM taste data + `newsletter_subscribers`, and respect
+`unsubscribed_at`. Foundations already built: welcome email (`_email.ts`),
+newsletter list + unsubscribe, CRM taste profiles. This is the monetization step
+of the funnel — build after Phase 2 whitelist / when ready.
+
 ## Owner to-dos (not code)
 
 - [ ] **Rent a correspondence address** (virtual office / mailing address, ~£5–15/mo)

@@ -216,6 +216,17 @@ CREATE TABLE IF NOT EXISTS whitelist_channels (
 );
 CREATE INDEX IF NOT EXISTS idx_whitelist_user ON whitelist_channels(user_id);
 
+-- Newsletter/marketing opt-in list (may include non-account visitors).
+-- Each row has an unsubscribe token used in campaign emails. Lazy-created too.
+CREATE TABLE IF NOT EXISTS newsletter_subscribers (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  token TEXT NOT NULL,
+  source TEXT,
+  subscribed_at TEXT NOT NULL DEFAULT (datetime('now')),
+  unsubscribed_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS briefs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,

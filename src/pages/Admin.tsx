@@ -20,6 +20,7 @@ import {
 } from "@/mocks";
 import AdminContent from "@/components/AdminContent";
 import AdminWhitelist from "@/components/AdminWhitelist";
+import AdminCustomerProfile from "@/components/AdminCustomerProfile";
 
 const GOLD = "#F4C430";
 
@@ -87,6 +88,7 @@ interface AdminLicense {
   reference: string;
   createdAt: string;
   validUntil: string | null;
+  userId: string;
   userEmail: string;
   userName: string;
   trackTitle: string;
@@ -132,6 +134,7 @@ const Admin = () => {
   const [liveUsers, setLiveUsers] = useState<LiveUser[] | null>(null);
   const [usersError, setUsersError] = useState<string | null>(null);
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
+  const [profileUserId, setProfileUserId] = useState<string | null>(null);
   const [licenses, setLicenses] = useState<AdminLicense[] | null>(null);
   const [licensesError, setLicensesError] = useState<string | null>(null);
   const [licenseQuery, setLicenseQuery] = useState("");
@@ -511,7 +514,13 @@ const Admin = () => {
                         {liveUsers.map((u) => (
                           <tr key={u.id} className="border-b border-border/50 last:border-0">
                             <td className="py-2.5 pr-4">
-                              <span className="block text-foreground">{u.name ?? u.email.split("@")[0]}</span>
+                              <button
+                                type="button"
+                                onClick={() => setProfileUserId(u.id)}
+                                className="block text-left text-foreground hover:text-[#F4C430]"
+                              >
+                                {u.name ?? u.email.split("@")[0]}
+                              </button>
                               <span className="block text-xs text-muted-foreground">{u.email}</span>
                             </td>
                             <td className="py-2.5 pr-4">
@@ -616,7 +625,17 @@ const Admin = () => {
                                 </span>
                               </td>
                               <td className="py-2.5 pr-4">
-                                <span className="block text-foreground">{l.userName || l.userEmail.split("@")[0]}</span>
+                                {l.userId ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setProfileUserId(l.userId)}
+                                    className="block text-left text-foreground hover:text-[#F4C430]"
+                                  >
+                                    {l.userName || l.userEmail.split("@")[0]}
+                                  </button>
+                                ) : (
+                                  <span className="block text-foreground">{l.userName || l.userEmail.split("@")[0]}</span>
+                                )}
                                 <span className="block text-xs text-muted-foreground">{l.userEmail}</span>
                               </td>
                               <td className="py-2.5 pr-4 text-foreground">{l.trackTitle}</td>
@@ -693,6 +712,9 @@ const Admin = () => {
           </div>
         </div>
       </main>
+      {profileUserId && (
+        <AdminCustomerProfile userId={profileUserId} onClose={() => setProfileUserId(null)} />
+      )}
       <Footer />
     </div>
   );

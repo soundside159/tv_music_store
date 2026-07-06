@@ -45,7 +45,19 @@ CREATE TABLE IF NOT EXISTS whitelist_channels (
   channel and clears claims in YouTube.
 - Only channels of **active** subscribers appear as "to service".
 
-## Phase 2 — monitoring (nice-to-have, later)
+## Phase 2 — monitoring (BUILT, on-demand)
+
+Cloudflare **Pages has no cron**, so instead of a background poller this is
+on-demand: in /admin -> Whitelisting, each Active channel has a "New videos"
+button that calls `GET /api/admin/whitelist-videos?id=<channel>`, which resolves
+the channel via the YouTube Data API and returns uploads published **after** the
+channel's `added_at`, only while the customer's subscription is active. The owner
+opens each and clears the claim. **OWNER STEP:** set `YOUTUBE_API_KEY` (YouTube
+Data API v3 key) in Cloudflare Pages env vars. Handles @handle / channel/UC... /
+user/... URLs; /c/ custom URLs are best-effort. A true background poller + stored
+cursor would need a separate Worker (Pages can't cron) — original plan below.
+
+### Original background-worker plan (if ever moved to a Worker)
 
 Automate the "which videos to clear" part:
 - A scheduled worker polls each whitelisted channel's uploads (YouTube Data API,

@@ -7,6 +7,7 @@ import {
   SESSION_DAYS,
   type Ctx,
 } from "../_utils";
+import { sendWelcomeEmail } from "../_email";
 
 // POST { email, code } -> verifies the code, creates user (if new) with a
 // free subscription, opens a session (httpOnly cookie).
@@ -48,6 +49,7 @@ export const onRequestPost = async (ctx: Ctx) => {
       .bind(newId("sub"), id)
       .run();
     user = { id, email, name: null, role: ownerRole };
+    if (ownerRole !== "admin") await sendWelcomeEmail(ctx.env, email, null);
   } else if (ownerRole === "admin" && user.role !== "admin") {
     await ctx.env.DB.prepare(`UPDATE users SET role = 'admin' WHERE id = ?1`).bind(user.id).run();
     user = { ...user, role: "admin" };

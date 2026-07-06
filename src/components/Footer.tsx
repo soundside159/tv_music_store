@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { Youtube, Instagram, Facebook } from "lucide-react";
+import NewsletterSignup from "@/components/NewsletterSignup";
 
 // lucide has no X (formerly Twitter) brand glyph — inline the official X mark.
 const XIcon = ({ className }: { className?: string }) => (
@@ -70,6 +71,12 @@ const Footer = () => {
             <p className="mt-4 max-w-[15rem] font-body text-sm text-muted-foreground">
               Cinematic and production music for film, TV, and creators.
             </p>
+            <div className="mt-5">
+              <p className="mb-2 font-body text-xs font-semibold uppercase tracking-wider text-foreground/70">
+                New tracks in your inbox
+              </p>
+              <NewsletterSignup source="footer" />
+            </div>
           </div>
 
           {/* Link columns */}

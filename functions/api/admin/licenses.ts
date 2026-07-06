@@ -20,6 +20,7 @@ export interface AdminLicenseRow {
   reference: string;
   createdAt: string;
   validUntil: string | null; // subscription period end, if known
+  userId: string;
   userEmail: string;
   userName: string;
   trackTitle: string;
@@ -40,7 +41,7 @@ export const onRequestGet = async (ctx: Ctx) => {
   // --- one-time (sync_orders) ---------------------------------------------
   const syncRows = await db
     .prepare(
-      `SELECT o.id, o.tier, o.price, o.stripe_session_id, o.created_at, o.track_id,
+      `SELECT o.id, o.tier, o.price, o.stripe_session_id, o.created_at, o.track_id, o.user_id,
               u.email AS user_email, u.name AS user_name, t.title AS track_title
          FROM sync_orders o
          LEFT JOIN users u ON u.id = o.user_id
@@ -55,6 +56,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       stripe_session_id: string | null;
       created_at: string;
       track_id: string;
+      user_id: string;
       user_email: string | null;
       user_name: string | null;
       track_title: string | null;
@@ -68,6 +70,7 @@ export const onRequestGet = async (ctx: Ctx) => {
     reference: r.stripe_session_id ?? "",
     createdAt: r.created_at,
     validUntil: null,
+    userId: r.user_id ?? "",
     userEmail: r.user_email ?? "",
     userName: r.user_name ?? "",
     trackTitle: r.track_title ?? prettify(r.track_id),
@@ -79,7 +82,7 @@ export const onRequestGet = async (ctx: Ctx) => {
   try {
     const planRows = await db
       .prepare(
-        `SELECT p.id, p.plan, p.plan_period_end, p.created_at, p.track_id,
+        `SELECT p.id, p.plan, p.plan_period_end, p.created_at, p.track_id, p.user_id,
                 u.email AS user_email, u.name AS user_name, t.title AS track_title
            FROM plan_licenses p
            LEFT JOIN users u ON u.id = p.user_id
@@ -93,6 +96,7 @@ export const onRequestGet = async (ctx: Ctx) => {
         plan_period_end: string | null;
         created_at: string;
         track_id: string;
+        user_id: string;
         user_email: string | null;
         user_name: string | null;
         track_title: string | null;
@@ -105,6 +109,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       reference: "",
       createdAt: r.created_at,
       validUntil: r.plan_period_end,
+      userId: r.user_id ?? "",
       userEmail: r.user_email ?? "",
       userName: r.user_name ?? "",
       trackTitle: r.track_title ?? prettify(r.track_id),

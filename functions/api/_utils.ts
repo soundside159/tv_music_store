@@ -40,6 +40,7 @@ export interface Env {
   PAYPAL_SECRET?: string;
   PAYPAL_ENV?: string; // "live" (default) | "sandbox"
   LICENSE_SIGNING_SECRET?: string; // HMAC secret for subscription license codes
+  YOUTUBE_API_KEY?: string; // YouTube Data API v3 key for whitelist video monitoring
 }
 
 export interface Ctx {
