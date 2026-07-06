@@ -28,9 +28,19 @@ const FONT_RES: Record<PdfFont, string> = { helv: "F1", helvB: "F2", cour: "F3",
 
 // Keep to printable ASCII so 1 char === 1 byte (we emit Latin1) and every glyph
 // exists in the standard font encoding.
+// Map common Unicode punctuation to ASCII so it renders in the standard fonts;
+// anything else outside printable ASCII becomes "?".
+const UNI: Record<string, string> = {
+  "–": "-", "—": "-", "‒": "-", "―": "-",
+  "‘": "'", "’": "'", "‚": "'",
+  "“": '"', "”": '"', "„": '"',
+  "…": "...", "·": "-", "•": "-", " ": " ",
+  "×": "x", "→": "->", "≤": "<=", "≥": ">=",
+};
 const sanitize = (s: string) =>
   Array.from(s)
     .map((c) => {
+      if (UNI[c]) return UNI[c];
       const code = c.charCodeAt(0);
       return code >= 32 && code <= 126 ? c : "?";
     })

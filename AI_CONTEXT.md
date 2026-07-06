@@ -727,3 +727,29 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   (valid ok, tampered/wrong-track rejected). NOTE: sandbox-mirror truncation again — host files whole
   via Read; assets written straight to the mount (intact). tsc/lint run on the host via deploy.bat.
   Owner deploys as usual; no new owner step beyond the earlier LICENSE_SIGNING_SECRET.
+- **2026-07-06 (license PDF v4 — content redesign + owner's seal + legal docs):** owner supplied a
+  reference (tunetank/vicate-style) and his own seal PNG. Certificate rebuilt from an icon-grid into a
+  content-rich document. `functions/api/_assets.ts`: owner's seal added as key "sign" (background
+  keyed to transparent + downscaled from public/images/pdf sign/pdf sign.png). `_pdf.ts`: sanitizer
+  now maps common Unicode punctuation (– — ' ' " " … · • x) to ASCII so it renders in the standard
+  fonts (was showing "?"). `license-pdf.ts` `buildCertificate` fully rewritten (new `CertData`
+  interface): dark header (logo + "Music License Certificate" + ISSUED), LICENSE NUMBER box, two-col
+  LICENSE DETAILS (Purchase Code / Issued / Order / Type) + LICENSED TO (Licensee / Email), LICENSED
+  TRACK (Track / Composer / Track Page link), LICENSE SCOPE & RESTRICTIONS with a scope line +
+  PERMITTED USES (green checks) / NOT PERMITTED (red crosses) drawn as vector marks, a YouTube
+  Content ID callout (per-claim release, NO channel whitelisting), and a footer referencing License
+  Terms v1.0. The owner's seal sits top-right. Removed the misleading "ACTIVE" status pill (a PDF
+  can't know live status). TIER_INFO/PLAN_INFO gained scope + permitted[]/notPermitted[] (original
+  wording). Two identifiers: License Number (big, = our code / sync id) + Purchase Code (payment ref
+  = PayPal order id). Call sites now also fetch track slug + composer (JOIN composers) and build via
+  `orderCert`/`planCert` helpers. `paypal/order.ts`: every order tagged `invoice_id: TVM-XXXXXXXX`
+  for CSV filtering in the shared PayPal. VERIFIED: both variants render, qpdf clean, punctuation
+  fixed, seal keyed clean. Owner deploys via deploy.bat.
+  DOCS DRAFTED (all in docs/, owner review — NOT legal advice): `LICENSE_TERMS_DRAFT.md`,
+  `COMPOSER_AGREEMENT_DRAFT.md`, `PRIVACY_POLICY_DRAFT.md`, `VAT_READINESS.md` (planned). Decisions
+  locked: UK general partnership (Stanislav Barantsov & Maryna Huz, trading as TV Music Store),
+  governing law England & Wales, perpetual licenses (no expiry shown), refunds final + defect window
+  + UK download-waiver, Free-plan attribution required, Content ID per-claim only, composer licensing
+  non-exclusive. Open: correspondence address (virtual office), live prices (still on test $1/$2/$3),
+  composer revenue %. Payments staying on Stripe+PayPal for now; Paddle (MoR) noted as a future
+  option to offload global VAT/OSS.

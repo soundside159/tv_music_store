@@ -33,6 +33,9 @@ export const onRequestPost = async (ctx: Ctx) => {
       purchase_units: [
         {
           custom_id: user.id,
+          // Prefix every order with TVM- so TV Music Store payments are easy to
+          // filter in the shared PayPal account's CSV export (owner request).
+          invoice_id: `TVM-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
           amount: {
             currency_code: "USD",
             value: total.toFixed(2),
