@@ -190,6 +190,20 @@ CREATE TABLE IF NOT EXISTS sync_orders (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Persistent, signed license codes for subscription (plan) certificates.
+-- One code per (user, track, plan); minted by functions/api/_licenses.ts.
+-- Also created lazily at runtime, so this is only needed for fresh DBs.
+CREATE TABLE IF NOT EXISTS plan_licenses (
+  id TEXT PRIMARY KEY,              -- the printed code, e.g. TVMS-MAX-7QF3-9AB2-K4
+  user_id TEXT NOT NULL REFERENCES users(id),
+  track_id TEXT NOT NULL,
+  plan TEXT NOT NULL,               -- free | pro | max (plan at issue time)
+  plan_period_end TEXT,             -- subscription period end, snapshotted
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_plan_licenses_user ON plan_licenses(user_id);
+CREATE INDEX IF NOT EXISTS idx_plan_licenses_track ON plan_licenses(track_id);
+
 CREATE TABLE IF NOT EXISTS briefs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,

@@ -680,3 +680,50 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   `docs/TODO_PLAN_LICENSE_CODES.md` (new `plan_licenses` table, get-or-create per user/track/plan,
   extend admin/licenses.ts + /admin Licenses to cover both one-time and subscription codes). The PDF
   template itself needs no further redesign for that task — it already renders the code panel.
+- **2026-07-06 (subscription license codes + admin lookup — DONE):** subscription (plan) certificates
+  now carry a real, persistent, tamper-evident code instead of the static "MAX PLAN" label. New
+  `functions/api/_licenses.ts`: Crockford base32, WebCrypto HMAC-SHA256 signing, lazy
+  `plan_licenses` table, `getOrCreatePlanLicense` (ONE stable code per user+track+plan — re-downloads
+  reuse it, a plan upgrade mints a new one), `verifyCode`. Code format `TVMS-<PLAN>-XXXX-XXXX-YY`
+  (YY = 2-char HMAC check, e.g. TVMS-MAX-CYCR-54TT-DH). `license-pdf.ts`: the `?slug=`/`?track=`
+  subscription branch mints/reuses the code, prints it under a LICENSE CODE label, and shows meta
+  Type / Plan / Valid until (from subscriptions.current_period_end); issue date is the code's stored
+  created_at so re-downloads stay consistent. Added an admin-only `?code=` branch (opens any
+  customer's subscription cert by its code) and relaxed `?order=` so admins can open any buyer's
+  one-time cert (customers still restricted to their own via user_id). `functions/api/admin/
+  licenses.ts` rewritten to UNION one-time (sync_orders) + subscription (plan_licenses) licenses with
+  a `kind` field, newest first, still `?q=` searchable. `src/pages/Admin.tsx`: Licenses table gained
+  Kind / Plan / Issued / Valid-until columns and per-kind PDF links (?order= / ?code=), heading now
+  "Licenses". `migrations/0001_init.sql`: plan_licenses table + indexes. `_utils.ts` Env gained
+  LICENSE_SIGNING_SECRET. VERIFIED in the sandbox: code-gen + signature round-trip unit test (valid
+  true, tampered false, wrong-secret false), subscription PDF re-rendered with a real code (qpdf
+  clean, no layout overlap). NOTE: usual sandbox-mirror truncation hit license-pdf.ts + admin/
+  licenses.ts (host files whole via Read; _licenses.ts synced whole so its logic was testable). tsc/
+  lint not runnable in the Linux sandbox (Windows node_modules) — reviewed types manually; authoritative
+  lint+build runs on the host via deploy.bat. OWNER STEP: set LICENSE_SIGNING_SECRET (any long random
+  string) in Cloudflare Pages env vars + redeploy so the HMAC is owner-specific; codes still work
+  without it (admin lookup is authoritative), the signature just isn't secret-bound until then.
+- **2026-07-06 (license PDF v3 — premium redesign to owner's mockup):** owner supplied a richer
+  certificate mockup (certified seal, usage-rights icon grid, details table with a status pill,
+  dual footer with Certificate ID). Rebuilt to match. NEW `functions/api/_assets.ts` (auto-generated,
+  ~99KB): a circular "TV MUSIC STORE / LICENSED & CERTIFIED" seal + 16 line icons + header deco,
+  each stored as zlib RGB+alpha base64 (generated with cairosvg in the sandbox; regen script pattern
+  in the session, not committed). `_pdf.ts` upgraded: dynamic object numbering, MANY embedded images
+  (was 1), rounded-rectangle fills (`rrect`), polygons (`poly`, for the gold notches), and text
+  `align` — still zero-dependency/latin1 for the Workers runtime. `license-pdf.ts` `buildCertificate`
+  fully rewritten to the mockup layout: dark header band + faint gold deco arcs + logo + ISSUED,
+  gold divider with a downward notch, big two-tone title ("MAX PLAN" bold + "LICENSE" light), licensee
+  block, certified seal on the right, USAGE RIGHTS as a 3-5 column icon grid (icons auto-picked from
+  each term via `iconForTerm`, labels word-wrapped), a light details panel (gold left bar) with rows
+  Plan/Type/Track/[Valid until]/License Code/Status, the Status row rendered as a gold pill with a
+  cart icon ("ACTIVE" for subscriptions, "PURCHASED" for one-time), footer note + dark footer bar with
+  globe/mail icons and a right-aligned CERTIFICATE ID. `buildCertificate`'s fields changed
+  (title/licenseeName/licenseeEmail/terms/rows/issued/certificateId/statusText + new CertRow type);
+  all three call sites (admin ?code=, ?order=, subscription ?slug=/?track=) updated, with a shared
+  `planRows()` helper. CODE FORMAT changed to match the mockup: `TVMS-YYYY-MMDD-XXXX` (issue date +
+  4-char tail = 2 random + 2 HMAC-check chars) in `_licenses.ts` mintCode/verifyCode (still bound to
+  user+track+plan+date; one-time certs keep their sync_orders id as the code). VERIFIED in sandbox:
+  both variants render, qpdf clean, previews match the mockup; code-format round-trip test passes
+  (valid ok, tampered/wrong-track rejected). NOTE: sandbox-mirror truncation again — host files whole
+  via Read; assets written straight to the mount (intact). tsc/lint run on the host via deploy.bat.
+  Owner deploys as usual; no new owner step beyond the earlier LICENSE_SIGNING_SECRET.

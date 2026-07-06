@@ -78,10 +78,12 @@ interface LiveUser {
 
 interface AdminLicense {
   id: string;
+  kind: "one-time" | "subscription";
   tier: string;
-  price: number;
+  price: number | null;
   reference: string;
   createdAt: string;
+  validUntil: string | null;
   userEmail: string;
   userName: string;
   trackTitle: string;
@@ -538,10 +540,11 @@ const Admin = () => {
             )}
 
             {section === "licenses" && (
-              <Card title={`Sync licenses${licenses ? ` (${licenses.length})` : ""}`}>
+              <Card title={`Licenses${licenses ? ` (${licenses.length})` : ""}`}>
                 <p className="mb-4 font-body text-xs text-muted-foreground">
-                  Every one-time license purchase. Search by the License ID printed on a customer's
-                  certificate, their email, or the track title.
+                  Every license issued — one-time purchases and subscription (plan) certificates.
+                  Search by the License Code printed on a customer's certificate, their email, or the
+                  track title, to see who received it, for which track/plan, and when.
                 </p>
                 <input
                   placeholder="Search by License ID, email or track..."
@@ -570,23 +573,25 @@ const Admin = () => {
                   }
                   return (
                     <div className="overflow-x-auto">
-                      <table className="w-full min-w-[720px] font-body text-sm">
+                      <table className="w-full min-w-[880px] font-body text-sm">
                         <thead>
                           <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                            <th className="py-2 pr-4">License ID</th>
+                            <th className="py-2 pr-4">License Code</th>
+                            <th className="py-2 pr-4">Kind</th>
                             <th className="py-2 pr-4">Buyer</th>
                             <th className="py-2 pr-4">Track</th>
-                            <th className="py-2 pr-4">Tier</th>
+                            <th className="py-2 pr-4">Tier / Plan</th>
                             <th className="py-2 pr-4">Price</th>
-                            <th className="py-2">Date</th>
+                            <th className="py-2 pr-4">Issued</th>
+                            <th className="py-2">Valid until</th>
                           </tr>
                         </thead>
                         <tbody>
                           {rows.map((l) => (
-                            <tr key={l.id} className="border-b border-border/50 last:border-0">
+                            <tr key={`${l.kind}-${l.id}`} className="border-b border-border/50 last:border-0">
                               <td className="py-2.5 pr-4">
                                 <a
-                                  href={`/api/license-pdf?order=${encodeURIComponent(l.id)}`}
+                                  href={`/api/license-pdf?${l.kind === "subscription" ? "code" : "order"}=${encodeURIComponent(l.id)}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="font-mono text-xs text-[#F4C430] hover:underline"
@@ -595,14 +600,30 @@ const Admin = () => {
                                 </a>
                               </td>
                               <td className="py-2.5 pr-4">
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-xs ${
+                                    l.kind === "subscription"
+                                      ? "bg-[#F4C430]/15 text-[#F4C430]"
+                                      : "bg-secondary text-muted-foreground"
+                                  }`}
+                                >
+                                  {l.kind === "subscription" ? "Subscription" : "One-time"}
+                                </span>
+                              </td>
+                              <td className="py-2.5 pr-4">
                                 <span className="block text-foreground">{l.userName || l.userEmail.split("@")[0]}</span>
                                 <span className="block text-xs text-muted-foreground">{l.userEmail}</span>
                               </td>
                               <td className="py-2.5 pr-4 text-foreground">{l.trackTitle}</td>
                               <td className="py-2.5 pr-4 capitalize text-muted-foreground">{l.tier}</td>
-                              <td className="py-2.5 pr-4 font-semibold" style={{ color: GOLD }}>${l.price}</td>
-                              <td className="py-2.5 text-muted-foreground">
+                              <td className="py-2.5 pr-4 font-semibold" style={{ color: GOLD }}>
+                                {l.price === null ? "—" : `$${l.price}`}
+                              </td>
+                              <td className="py-2.5 pr-4 text-muted-foreground">
                                 {l.createdAt ? l.createdAt.slice(0, 10) : "—"}
+                              </td>
+                              <td className="py-2.5 text-muted-foreground">
+                                {l.validUntil ? l.validUntil.slice(0, 10) : "—"}
                               </td>
                             </tr>
                           ))}

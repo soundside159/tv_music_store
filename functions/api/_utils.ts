@@ -39,6 +39,7 @@ export interface Env {
   PAYPAL_CLIENT_ID?: string;
   PAYPAL_SECRET?: string;
   PAYPAL_ENV?: string; // "live" (default) | "sandbox"
+  LICENSE_SIGNING_SECRET?: string; // HMAC secret for subscription license codes
 }
 
 export interface Ctx {

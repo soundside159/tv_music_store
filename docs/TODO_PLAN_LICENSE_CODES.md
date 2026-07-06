@@ -1,7 +1,7 @@
 # TODO — Persistent license codes for subscription licenses + admin lookup
 
-> **Status:** NOT STARTED (deferred by the owner after the license-PDF redesign).
-> Referenced from `functions/api/license-pdf.ts` (top-of-file TODO comment).
+> **Status:** ✅ IMPLEMENTED 2026-07-06 (see the "Implemented" note at the bottom).
+> Kept for reference / acceptance criteria.
 > This is the "next task" the owner asked to write down: give subscription
 > (plan-based) license certificates a **real, unique, verifiable code** that is
 > **stored** and can be **looked up in the admin panel** (who issued it, which
@@ -145,3 +145,32 @@ No new sidebar entry needed — this extends the existing Licenses view.
 - The redesigned certificate template (dark header band, gold soundwave logo,
   usage-rights list, code panel) is DONE and validated with qpdf — this task is
   purely the code+storage+admin layer, no template redesign required.
+
+---
+
+## 7. Implemented (2026-07-06)
+
+- **`functions/api/_licenses.ts`** (new): Crockford base32, WebCrypto HMAC-SHA256
+  signing, `ensurePlanLicensesTable`, `getOrCreatePlanLicense` (stable per
+  user/track/plan), `verifyCode`. Code format
+  `TVMS-<PLAN>-XXXX-XXXX-YY` (YY = 2-char HMAC check).
+- **`functions/api/license-pdf.ts`**: subscription branch now mints/reuses the
+  code and prints it (label `LICENSE CODE`); meta shows Type / Plan / Valid
+  until (from `subscriptions.current_period_end`). New admin-only `?code=`
+  branch opens any customer's subscription certificate; `?order=` relaxed so
+  admins can open any buyer's one-time certificate (customers still only their
+  own).
+- **`functions/api/admin/licenses.ts`**: returns one-time AND subscription
+  licenses unified with a `kind` field, newest first, still `?q=` searchable.
+- **`src/pages/Admin.tsx`**: Licenses table gained Kind / Plan / Issued / Valid
+  until columns; each code links to its PDF (`?order=` or `?code=`).
+- **`migrations/0001_init.sql`**: `plan_licenses` table + indexes (also created
+  lazily at runtime).
+- **`functions/api/_utils.ts`**: `LICENSE_SIGNING_SECRET` added to `Env`.
+- **Verified**: code gen + signature round-trip (valid ✓, tampered ✗, wrong
+  secret ✗) unit-tested; subscription PDF re-rendered with a real code, qpdf
+  clean, no layout overlap.
+- **OWNER STEP:** set `LICENSE_SIGNING_SECRET` in Cloudflare Pages →
+  Settings → Environment variables (any long random string) so the HMAC check
+  is meaningful, then redeploy. Without it codes still generate and store
+  (admin lookup works), the signature is just not owner-specific.
