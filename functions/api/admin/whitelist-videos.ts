@@ -73,7 +73,7 @@ export const onRequestGet = async (ctx: Ctx) => {
   const row = await ctx.env.DB.prepare(
     `SELECT w.channel_url, w.added_at, w.user_id,
             s.plan AS plan, s.status AS status
-       FROM whitelist_channels w
+       FROM wl_channels w
        LEFT JOIN subscriptions s ON s.rowid = (
          SELECT rowid FROM subscriptions WHERE user_id = w.user_id ORDER BY rowid DESC LIMIT 1
        )

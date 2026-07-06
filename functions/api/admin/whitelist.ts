@@ -22,7 +22,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       `SELECT w.id, w.channel_url, w.channel_ref, w.added_at, w.user_id,
               u.email AS user_email, u.name AS user_name,
               s.plan AS plan, s.status AS status
-         FROM whitelist_channels w
+         FROM wl_channels w
          LEFT JOIN users u ON u.id = w.user_id
          LEFT JOIN subscriptions s ON s.rowid = (
            SELECT rowid FROM subscriptions WHERE user_id = w.user_id ORDER BY rowid DESC LIMIT 1

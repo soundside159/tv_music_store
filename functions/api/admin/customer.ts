@@ -81,7 +81,7 @@ export const onRequestGet = async (ctx: Ctx) => {
   let channels: { channel_url: string }[] = [];
   try {
     const wl = await db
-      .prepare(`SELECT channel_url FROM whitelist_channels WHERE user_id = ?1 ORDER BY added_at DESC`)
+      .prepare(`SELECT channel_url FROM wl_channels WHERE user_id = ?1 ORDER BY added_at DESC`)
       .bind(id)
       .all<{ channel_url: string }>();
     channels = wl.results;

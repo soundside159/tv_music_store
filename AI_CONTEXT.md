@@ -871,3 +871,12 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   pattern as ensureTrackCoverColumn). Diagnostic lesson: a 500 from a Pages Function returns an HTML
   error page → "Unexpected token '<' ... <!DOCTYPE" on the client; check Real-time Logs for the real
   exception, and use `git show origin/main:<file>` + Routing config to rule out deploy/routing.
+  DEEPER ROOT CAUSE: the ORIGINAL 0001_init.sql already had a legacy `whitelist_channels` table
+  (id INTEGER AUTOINCREMENT, user_id, channel_url, status, created_at) — my Phase-1 whitelisting reused
+  that name, so on prod `CREATE TABLE IF NOT EXISTS` kept the legacy schema (missing channel_ref +
+  added_at) -> 500s. FINAL FIX: renamed my table to **`wl_channels`** everywhere (whitelist.ts,
+  admin/whitelist.ts, admin/whitelist-videos.ts, admin/customer.ts, migration + index
+  idx_wl_channels_user); the legacy whitelist_channels row in the migration is left untouched (unused
+  by my code). Lesson: check the ORIGINAL migration for existing table names before adding a lazily-
+  created table. Verified no other new table (plan_licenses/newsletter_subscribers/email_campaigns)
+  collides with legacy. Owner: redeploy — wl_channels is created fresh, whitelisting works.

@@ -207,14 +207,14 @@ CREATE INDEX IF NOT EXISTS idx_plan_licenses_track ON plan_licenses(track_id);
 -- YouTube channels a subscriber whitelists for Content ID claim clearing.
 -- Serviceable only while the owning user's subscription is active (checked at
 -- query time by joining subscriptions). Also created lazily at runtime.
-CREATE TABLE IF NOT EXISTS whitelist_channels (
+CREATE TABLE IF NOT EXISTS wl_channels (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id),
   channel_url TEXT NOT NULL,
   channel_ref TEXT,                 -- parsed @handle or channel id, if detectable
   added_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX IF NOT EXISTS idx_whitelist_user ON whitelist_channels(user_id);
+CREATE INDEX IF NOT EXISTS idx_wl_channels_user ON wl_channels(user_id);
 
 -- Newsletter/marketing opt-in list (may include non-account visitors).
 -- Each row has an unsubscribe token used in campaign emails. Lazy-created too.

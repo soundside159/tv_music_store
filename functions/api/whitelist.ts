@@ -12,7 +12,7 @@ export const ensureWhitelistTable = async (db: D1Database): Promise<void> => {
   try {
     await db
       .prepare(
-        `CREATE TABLE IF NOT EXISTS whitelist_channels (
+        `CREATE TABLE IF NOT EXISTS wl_channels (
            id TEXT PRIMARY KEY,
            user_id TEXT NOT NULL,
            channel_url TEXT NOT NULL,
@@ -27,13 +27,13 @@ export const ensureWhitelistTable = async (db: D1Database): Promise<void> => {
   // Self-heal: if the table pre-existed without channel_ref, add it. CREATE TABLE
   // IF NOT EXISTS won't alter an existing table, so add the column explicitly.
   try {
-    await db.prepare(`ALTER TABLE whitelist_channels ADD COLUMN channel_ref TEXT`).run();
+    await db.prepare(`ALTER TABLE wl_channels ADD COLUMN channel_ref TEXT`).run();
   } catch {
     // column already exists
   }
   try {
     await db
-      .prepare(`CREATE INDEX IF NOT EXISTS idx_whitelist_user ON whitelist_channels(user_id)`)
+      .prepare(`CREATE INDEX IF NOT EXISTS idx_wl_channels_user ON wl_channels(user_id)`)
       .run();
   } catch {
     // index already exists
@@ -62,7 +62,7 @@ const listResponse = async (db: D1Database, userId: string) => {
   const plan = await effectivePlan(db, userId);
   const rows = await db
     .prepare(
-      `SELECT id, channel_url, channel_ref, added_at FROM whitelist_channels
+      `SELECT id, channel_url, channel_ref, added_at FROM wl_channels
         WHERE user_id = ?1 ORDER BY added_at DESC`,
     )
     .bind(userId)
@@ -103,7 +103,7 @@ export const onRequestPost = async (ctx: Ctx) => {
   }
 
   const countRow = await db
-    .prepare(`SELECT COUNT(*) AS n FROM whitelist_channels WHERE user_id = ?1`)
+    .prepare(`SELECT COUNT(*) AS n FROM wl_channels WHERE user_id = ?1`)
     .bind(user.id)
     .first<{ n: number }>();
   if ((countRow?.n ?? 0) >= limit) {
@@ -112,14 +112,14 @@ export const onRequestPost = async (ctx: Ctx) => {
 
   // avoid duplicates for this user
   const dup = await db
-    .prepare(`SELECT id FROM whitelist_channels WHERE user_id = ?1 AND channel_url = ?2`)
+    .prepare(`SELECT id FROM wl_channels WHERE user_id = ?1 AND channel_url = ?2`)
     .bind(user.id, url)
     .first<{ id: string }>();
   if (dup) return json({ error: "That channel is already added." }, 409);
 
   await db
     .prepare(
-      `INSERT INTO whitelist_channels (id, user_id, channel_url, channel_ref)
+      `INSERT INTO wl_channels (id, user_id, channel_url, channel_ref)
        VALUES (?1, ?2, ?3, ?4)`,
     )
     .bind(newId("wch"), user.id, url, parseRef(url))
@@ -137,7 +137,7 @@ export const onRequestDelete = async (ctx: Ctx) => {
   const id = new URL(ctx.request.url).searchParams.get("id");
   if (!id) return json({ error: "id required" }, 400);
   await db
-    .prepare(`DELETE FROM whitelist_channels WHERE id = ?1 AND user_id = ?2`)
+    .prepare(`DELETE FROM wl_channels WHERE id = ?1 AND user_id = ?2`)
     .bind(id, user.id)
     .run();
   return listResponse(db, user.id);
