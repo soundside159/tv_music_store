@@ -15,6 +15,32 @@ const btnCls =
 
 type Facet = keyof Vocabularies;
 
+// Read a media file's duration locally (no upload needed) and format as m:ss.
+// Returns "" if the browser can't decode the metadata.
+const readAudioDuration = (file: File): Promise<string> =>
+  new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const audio = new Audio();
+    audio.preload = "metadata";
+    const finish = (value: string) => {
+      URL.revokeObjectURL(url);
+      resolve(value);
+    };
+    audio.onloadedmetadata = () => {
+      const secs = audio.duration;
+      if (!Number.isFinite(secs) || secs <= 0) return finish("");
+      let m = Math.floor(secs / 60);
+      let s = Math.round(secs % 60);
+      if (s === 60) {
+        m += 1;
+        s = 0;
+      }
+      finish(`${m}:${String(s).padStart(2, "0")}`);
+    };
+    audio.onerror = () => finish("");
+    audio.src = url;
+  });
+
 const AddTrackModal = ({
   onClose,
   run,
@@ -61,6 +87,11 @@ const AddTrackModal = ({
   };
   const onAudio = async (file: File, kind: "preview" | "master") => {
     setUploading(kind);
+    // Auto-fill duration from the preview audio itself (local, before upload).
+    if (kind === "preview") {
+      const detected = await readAudioDuration(file);
+      if (detected) setDuration(detected);
+    }
     const r = await uploadAudio(file, kind);
     setUploading("");
     if (!r) return;
@@ -170,10 +201,11 @@ const AddTrackModal = ({
               className={`${inputCls} w-24`}
             />
             <input
-              placeholder="Duration (e.g. 2:14)"
+              placeholder="Duration (auto from audio)"
               value={duration}
               onChange={(e) => setDuration(e.target.value)}
-              className={`${inputCls} w-40`}
+              title="Filled automatically from the preview MP3 — editable if needed"
+              className={`${inputCls} w-44`}
             />
             <select
               value={category}

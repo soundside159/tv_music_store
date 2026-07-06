@@ -891,3 +891,26 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   journey, what customers can do, plans & licenses, certificate, Content ID model, emails, admin
   capabilities, composer side, business/legal, built-vs-pending. Owner will review SITE_OVERVIEW and
   drive the NEXT_STEPS build with the next AI.
+- **2026-07-07 (live PayPal prices + Stripe paused + upload polish):** owner is about to sell a
+  one-time license to a real customer. (1) LICENSE PRICES set to LIVE: Personal $15 / Commercial
+  $79 / Professional $249 in BOTH `functions/api/paypal/_paypal.ts` (LICENSE_PRICES, authoritative)
+  and `src/lib/licenses.ts` (display) — removed the temporary $1/$2/$3 test-price TODOs.
+  (2) STRIPE SUBSCRIPTIONS PAUSED (migrating to Paddle later): new `BILLING_ENABLED = false` flag in
+  `src/lib/billing.ts`; `startCheckout`/`openBillingPortal` now short-circuit with a "coming soon"
+  toast instead of hitting /api/stripe/*. Pricing paid-plan buttons show "Coming soon" (disabled);
+  Account hides "Manage billing"/"Manage subscription" and shows a "billing moving to a new provider"
+  note. Stripe backend functions are untouched — flip the flag (or swap in Paddle) to re-enable.
+  One-time PayPal track licenses (/cart) are unaffected. (3) ADD-TRACK: duration now auto-fills from
+  the uploaded preview MP3 (client-side `readAudioDuration` via HTMLAudioElement metadata, m:ss;
+  field still editable as a fallback) in `src/components/AddTrackModal.tsx`. Edits verified whole via
+  host Read; the usual sandbox-mirror truncation hit the edited TSX again (spurious tsc "unclosed
+  tag" noise) — authoritative lint+build runs on the host via deploy.bat.
+  CLEANUP TODO: stray temp files linger in src on the HOST this time (not just the sandbox):
+  `src/components/AdminContent__v.tsx`, `AdminTracksEdit__chk.tsx`, `AdminTracksEdit__v.tsx`,
+  `_lintcheck.tsx`, `src/pages/Account__chk.tsx`, `Admin__chk.tsx`, `Admin__v.tsx` — old
+  NUL-truncated snapshots, unused (not imported), safe to delete; remove before they confuse lint.
+  DOWNLOAD FORMATS NOTE for the pending track upload: the backend only distinguishes mp3 vs wav —
+  "MP3 128" and "MP3 320" both stream the SAME uploaded preview file (whatever bitrate it is; no
+  separate 320 render exists yet), and WAV is served from the uploaded master (r2_key_wav, Max only).
+  So upload a 320 kbps preview if you want the "320" option to truly be 320, and upload a WAV master
+  for the WAV option to work.

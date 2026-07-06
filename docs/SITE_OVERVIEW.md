@@ -1,196 +1,196 @@
-# TV Music Store — Site Overview (read this end to end)
+# TV Music Store — How the business works (read this end to end)
 
-A plain-language "mini book" of the whole product, so you can check every part and
-decide what to adjust. Written for the owner. Reflects what's built as of July 2026.
-
----
-
-## 1. What this is
-
-TV Music Store is a boutique **royalty-free / production-music** store. Creators
-come, find a track, download it, and get a **License Certificate (PDF)** proving
-they're allowed to use it. Money comes from **subscriptions** (recurring) and
-**one-time licenses** (per track). Music is supplied by a small set of **composers**
-(3 to start). The whole thing runs on Cloudflare (Pages + D1 database + R2 storage),
-with Stripe for subscriptions and PayPal for one-time sales.
-
-Who it's for: YouTubers, filmmakers, editors, agencies, podcasters, game/app makers
-— anyone who needs music they can legally use in their content.
+A plain-language explainer of the whole product: what every promise, page and plan
+row actually means, and the logic behind them. Written for the owner, as if someone
+were walking you through the business. (Full legal text isn't here — see
+`/license-terms` and `/privacy`.)
 
 ---
 
-## 2. The user's journey (start to finish)
+## 1. What TV Music Store is (the model in one page)
 
-1. **Discover** — lands on the homepage or a track page (often from YouTube/Google).
-   Browses the **Music Library** (`/catalog`), **Collections**, **Playlists**,
-   filters by genre / mood / use-case, previews tracks in the player.
-2. **Sign up** — to download, they need a free account (email code, email+password,
-   or Google). Signing up = the first step into the funnel.
-3. **Welcome email** — one branded email explains how it works and what upgrading
-   unlocks.
-4. **Download** — they download a track. Every download comes with a **License
-   Certificate (PDF)** — their proof of the right to use it.
-5. **Use it** — within their plan's scope (see Plans). On the Free plan they must
-   credit TV Music Store.
-6. **Hit a wall → upgrade** — free has limits (e.g. 3 downloads/month, no WAV/stems,
-   no channel whitelisting). Wanting more nudges them to a paid plan, or to buy a
-   one-time license for a single project.
-7. **Content ID peace of mind** — if a YouTube Content ID claim lands on a licensed
-   use, they resolve it (via their certificate, or channel whitelisting on paid
-   plans — see §6).
-8. **Come back** — we email them about new releases that match their taste, they
-   upgrade/renew, and reuse the library.
+It's a **curated library of cinematic / production music** for video creators,
+editors, agencies and game developers. Every track is written by a **real composer**
+(modern score, thriller, game OST, production music), comes with **alternate
+versions**, a **clear license**, a **PDF certificate**, and **YouTube Content ID
+protection**.
+
+The money model has three doors:
+- **Free plan** — a few downloads a month. This is the hook: it costs us almost
+  nothing, captures the customer's email, and turns strangers into a pool we can
+  upsell and market to.
+- **Subscription (Pro / Max)** — recurring monthly/annual money for unlimited
+  access + the good stuff (WAV/stems, commercial rights, channel whitelisting).
+- **One-time license** — for someone who needs one track for one project and won't
+  subscribe. Bought per track (Personal / Commercial / Professional).
+
+Everything else on the site exists to move a visitor along that path: discover →
+sign up → download → hit a limit → upgrade → come back.
 
 ---
 
-## 3. What a customer can do on the site
+## 2. The four promises on the homepage — what each really means
 
-- **Browse & preview**: Music Library, Collections, Playlists, search, filters,
-  a persistent audio player that keeps playing across pages.
-- **Track page**: details, license options, add to cart, download.
-- **Account area** (`/account`):
-  - **Profile** — name, email.
-  - **Notifications** — choose which emails they get (marketing vs. other).
-  - **Plan & Billing** — current plan, upgrade, manage billing.
-  - **Whitelisting** — add YouTube channels (paid plans) for Content ID clearing.
-  - **Licenses** — every track they've licensed, with PDF certificate + receipt.
-  - **Downloads** — download history, re-download, get a plan license PDF.
-  - **Copyright Claims** — track the status of claim removals they've asked for.
-- **Cart & checkout**: one-time license purchases via PayPal.
-- **Sync / Custom** pages: request sync licensing or custom/adapted music.
+**"Content ID protected — every track is registered, claims removed within 24h."**
+YouTube's Content ID automatically scans videos and flags ones using our music (a
+"claim"). Because our catalog is registered in that system, unlicensed users get
+claimed — which protects the music from theft. For **legitimate** customers we
+*remove* the claim so their video is clean. "Within 24h" is the service promise: how
+fast we clear it. Two mechanisms (see §5): channel whitelisting (subscribers) and
+per-video removal via the certificate (one-time buyers).
 
----
+**"Real composers — three composers, one curated catalog, no AI-generated filler."**
+The music is human-made by a small, hand-picked group (3 to start). This is a
+trust/quality signal: buyers know it's original, properly owned (the composers
+warrant that in the Composer Agreement), and safe to license — not scraped or
+AI slop. "Curated" = we choose quality over a giant messy catalog.
 
-## 4. Plans & licenses (what they get)
+**"Versions included — cut-downs and alternate mixes with every track."**
+A "cut-down" is a shorter edit (e.g. 15s / 30s / 60s) so a creator can fit the music
+to their video length without editing it themselves. "Alternate mixes" = different
+intensity versions (e.g. no-drums, underscore, full). This saves creators huge time
+and is a big reason to pick a store over random free music. *(Build note: the track
+data model supports multiple versions; the upload flow currently creates one "main"
+version — multi-version upload is a to-do before real catalog loading.)*
 
-### Subscriptions (recurring, Stripe)
-- **Free** — personal, non-commercial use; YouTube & social; must credit us;
-  limited downloads; no WAV/stems; no whitelisting.
-- **Pro** — monetized content on all platforms, one channel/brand, WAV/stems,
-  channel whitelisting (a few channels), no attribution required.
-- **Max** — commercial & client work, paid ads & broadcast, multiple channels/brands,
-  more whitelist channels.
-
-### One-time licenses (per track, PayPal)
-- **Personal** — personal, non-commercial projects.
-- **Commercial** — client & commercial use in one online project.
-- **Professional** — adds TV/radio/film broadcast and games/software, one project.
-
-### Key promises
-- **Perpetual**: a license never expires for the project it was used in. Cancelling
-  a subscription doesn't invalidate videos you already published while subscribed —
-  it only stops you licensing new tracks.
-- **Certificate**: every license has a PDF with a unique License Number, the track,
-  licensee, scope (permitted / not permitted), and a YouTube Content ID note.
-- **Non-exclusive**: the same track can be licensed to others; you can't resell or
-  redistribute the music itself.
-
-(Full legal wording lives on `/license-terms`, drafts in `docs/`.)
+**"License instantly — clear license, PDF certificate right after download."**
+The moment they download, they get a **License Certificate (PDF)** — a branded
+document proving exactly what they're allowed to do, with a unique License Number.
+No lawyers, no waiting. This is their proof if anyone (YouTube, a client, a platform)
+questions their right to use the track.
 
 ---
 
-## 5. The License Certificate (PDF)
+## 3. The site map — what each area is for
 
-Generated on demand, branded: dark header with logo + your gold seal, a big
-**License Number**, license details (payment reference, issued date, order, type),
-licensed-to (name/email), licensed track (title, composer, track-page link), a
-**scope** line, **PERMITTED / NOT PERMITTED** lists, a **YouTube Content ID** box,
-and a footer referencing License Terms v1.0. Two identifiers: the License Number
-(what the customer quotes) and a payment reference (ties to the PayPal/Stripe
-transaction). Subscription certificates carry a signed, verifiable code
-(`TVMS-YYYY-MMDD-XXXX`).
+**Discover / browse**
+- **Music Library** (`/catalog`) — the full searchable catalog with a player, filters
+  by genre / mood / use-case. The main place people find tracks.
+- **Collections** — themed groupings of tracks (curated bundles).
+- **Playlists** — ready-made sequences for a vibe/use.
 
----
+**Licensing (understand + buy)**
+- **Pricing & Plans** (`/pricing`) — the Free / Pro / Max comparison + one-time
+  license prices. The conversion page.
+- **How Licensing Works** (`/licensing`) — a plain table of what each plan/use is
+  allowed, plus FAQ. Removes confusion (a common reason people don't buy music).
+- **Sync Licensing** (`/sync`) — for one track in one production (film, series,
+  trailer, campaign) — the pro/one-off route.
+- **Custom Music** (`/custom`) — request a bespoke or adapted track from a composer.
 
-## 6. YouTube Content ID (the big differentiator)
-
-Our catalog is protected in YouTube's Content ID system, so unlicensed use gets
-claimed. For legitimate customers we clear claims two ways:
-- **Subscription plans → channel whitelisting**: the customer adds their channel(s)
-  in their account (up to a per-plan limit). While their subscription is active, we
-  clear Content ID claims on those channels' videos that use our music. Videos
-  published after they cancel aren't covered.
-- **One-time / single claim**: they send us their License Number + video link and we
-  release that specific claim.
-
-In the **admin**, you see whitelisted channels and (with a YouTube API key) can pull
-each channel's new videos to clear claims. (Improvements to this workflow are
-planned — see `NEXT_STEPS.md`.)
+**Company**
+- **Contact** (email), **License Terms**, **Privacy Policy** — trust + legal.
 
 ---
 
-## 7. Emails the customer receives
+## 4. The plans, row by row (the core of the business)
 
-- **Login code** — to sign in (this is also the registration confirmation).
-- **Welcome** — once, on sign-up.
-- **Campaign** — marketing about new releases, only if they opted into the
-  newsletter, always with an unsubscribe link. Can be targeted by taste (genre/mood).
-(Full detail: `EMAIL_LIFECYCLE.md`.)
+Reference table (from the site):
 
----
+| Feature | Free | Pro | Max |
+|---|---|---|---|
+| Music downloads | 3 / month | Unlimited | Unlimited |
+| WAV format + stems | — | ✓ | ✓ |
+| Personal projects & social media | ✓ | ✓ | ✓ |
+| Small teams (up to 5 people) | — | ✓ | ✓ |
+| Paid ads & sponsored content | — | — | ✓ |
+| Client & commercial work | — | — | ✓ |
+| Whitelisted YouTube channels | — | 3 | 10 |
+| Claim removal within 24h | ✓ | ✓ | ✓ |
+| Priority support | — | ✓ | ✓ |
 
-## 8. What you (owner/admin) can do
+What each row **means** and the logic:
 
-Admin (`/admin`):
-- **Dashboard / Finance** — overview + money.
-- **Catalog**: Tracks, Tracks Edit (bulk), Collections, Playlists, Categories,
-  Vocabulary (editable genre/mood/use-case lists), Trending — manage everything the
-  storefront shows. "Add Track" uploads audio to R2 and creates the track.
-- **Customers** — every registered user; click one to open a **profile**:
-  subscriptions, purchases, download **taste** (top genres/moods), whitelisted
-  channels, recent downloads.
-- **Licenses** — every license issued (one-time + subscription), searchable by code /
-  buyer / track; open any certificate PDF.
-- **Whitelisting** — customers' whitelisted channels + pull their new videos.
-- **Campaigns** — email the newsletter list (optionally by taste) with unsubscribe.
-- **Requests** — whitelist/claim/brief requests (some still mock; see NEXT_STEPS).
+- **Music downloads (3/mo → unlimited).** The Free limit is the main upgrade lever:
+  a hobbyist can taste the catalog; a working creator hits 3 fast and upgrades for
+  unlimited. Simple, honest friction — not a nag.
+- **WAV format + stems (paid only).** Free gives MP3 (fine for YouTube). **WAV** is
+  uncompressed, higher quality (for pro editing/mastering). **Stems** are the track
+  split into layers (drums, strings, etc.) so an editor can remix/duck parts. Serious
+  users need these, so they're a paid unlock. *(Stems delivery is a to-do — see §7.)*
+- **Personal projects & social media (all plans).** Even Free can use tracks in
+  personal, non-commercial videos and post them on social/YouTube. This is what makes
+  Free useful enough to attract people. (On Free they must credit us — that's the
+  trade for free music.)
+- **Small teams (up to 5).** Paid plans cover a small org/team using one account —
+  not just a single solo user. Positions Pro/Max for small studios/agencies.
+- **Paid ads & sponsored content (Max).** Using a track in a *paid advertising*
+  campaign or sponsored post is a higher-value commercial use → reserved for Max.
+- **Client & commercial work (Max).** Making videos *for clients* (agency work,
+  paid deliverables) is the top commercial tier → Max. This is where the real B2B
+  money is.
+- **Whitelisted YouTube channels (— / 3 / 10).** Paid users register their channel(s)
+  so we clear Content ID claims on them automatically while subscribed. Pro = up to 3
+  channels, Max = up to 10. It's a concrete, sticky benefit that also reduces churn.
+- **Claim removal within 24h (all).** Even Free users, if they get a claim on a
+  legitimate use, can have it removed — we just do it per-video (they send the link +
+  their certificate) rather than via channel whitelisting.
+- **Priority support (paid).** Paying customers get faster help. Standard SaaS lever.
 
-Deploy = `deploy.bat`. Secrets/bindings in Cloudflare (see `DEPLOY_CHECKLIST.md`).
-
----
-
-## 9. Composers' side
-
-Music is supplied by composers under a **Composer Agreement** (draft): they warrant
-they own their tracks and indemnify us, so the IP risk sits with them. Revenue is
-shared (%, TBD). Licensing to us is non-exclusive. There's a composer dashboard and
-payout tracking in the backend.
-
----
-
-## 10. Business & legal framework
-
-- **Entity**: UK general partnership of Stanislav Barantsov & Maryna Huz, trading as
-  TV Music Store. Governing law: England & Wales.
-- **Payments**: Stripe (subscriptions) + PayPal (one-time). Cards never touch our
-  servers.
-- **Refunds**: final + a technical-defect window + UK download-waiver at checkout.
-- **VAT**: not registered yet (under UK £90k). EU sales will need OSS or a
-  Merchant-of-Record (Paddle) later — see `VAT_READINESS.md`.
-- **Docs to finalise (drafts in `docs/`)**: License Terms, Privacy Policy, Composer
-  Agreement. Fill placeholders (address, effective date), restore live prices, and
-  have a lawyer review before public launch.
+**One-time licenses** (not in the table, sold per track) are the alternative for a
+single project without a subscription:
+- **Personal** — personal, non-commercial.
+- **Commercial** — client/commercial use in **one** online project.
+- **Professional** — adds TV/radio/film broadcast + games/software, one project.
 
 ---
 
-## 11. What's built vs. pending (quick status)
+## 5. Content ID & claim removal — the mechanics
 
-**Built**: catalog/player/collections/playlists, accounts + 3 sign-in methods,
-Free/Pro/Max subscriptions (Stripe), one-time licenses (PayPal), certificates (new
-design + your seal), subscription license codes + admin lookup, downloads + limits,
-channel whitelisting (Phase 1 + on-demand video monitoring), admin CRM customer
-profiles, funnel (newsletter capture + welcome email + taste-targeted campaigns),
-legal pages (`/license-terms`, `/privacy`), footer redesign.
+This is the store's biggest differentiator, so it's worth understanding fully:
 
-**Pending / next** (see `NEXT_STEPS.md`, `BACKLOG.md`): whitelist claim workflow
-polish (copy/copy-all/handled), header user menu + admin nav cleanup, campaign
-batching, purchase/receipt email, filling legal placeholders + live prices, and the
-owner setup steps in `DEPLOY_CHECKLIST.md`.
+- Our tracks are registered in **YouTube Content ID** (via composers / a rights
+  administrator like Identifyy). Any video using them gets an automatic **claim**
+  (usually just a monetization/notice flag, not a strike).
+- **Subscribers → channel whitelisting.** They add their channel(s) in their account
+  (up to the plan limit). While subscribed, we clear claims on those channels' videos
+  that use our music. Videos published *after* they cancel aren't covered — but
+  anything published while active stays cleared (licenses are perpetual, see §6).
+- **One-time / single claim.** They send us the **License Number** from their
+  certificate + the video link, and we release that specific claim.
+- In your **admin** you see whitelisted channels and (with a YouTube API key) can pull
+  each channel's new videos, copy the links, send them to the Content ID provider for
+  removal, and mark them done.
 
 ---
 
-## 12. How to review this
+## 6. The rules that make it fair (and defensible)
 
-Walk each section above against the live site. Where the site doesn't match what you
-want, note it — then we (or the next AI) adjust the product and, if the rules change,
-update the License Terms + certificate to match.
+- **Perpetual.** A license never expires for the project it was used in. Cancelling a
+  subscription doesn't make old videos infringing — it only stops you licensing new
+  tracks. (Reduces cancel-anxiety and churn.)
+- **Non-exclusive.** The same track can be licensed to many people; you can't resell
+  or redistribute the music itself.
+- **Attribution.** Required on **Free** (credit us in the description) — that's the
+  price of free. Optional on paid plans.
+- **The certificate** is the proof of all of the above, per track, per customer.
+- **IP stays ours** (and the composers'). Buyers get a limited right of use only.
+
+Full wording is on `/license-terms` — don't rely on this summary for legal.
+
+---
+
+## 7. Honest status — what's real vs. what's still a promise
+
+So you don't over-promise on the site before it's wired:
+- **Built:** catalog/player/collections/playlists, accounts (email code, password,
+  Google), Free/Pro/Max (Stripe), one-time licenses (PayPal), certificates (new
+  design + your seal) with License Numbers, download limits, channel whitelisting +
+  admin claim workflow, admin CRM customer profiles, funnel (newsletter + welcome
+  email + taste-targeted campaigns), legal pages.
+- **Still to build before a real catalog load:** **stems (ZIP) upload + delivery**
+  (the "stems" promise), **multiple versions per track** (the "versions included"
+  promise — only a single "main" version uploads today), and a **purchase/receipt
+  email**. See `NEXT_STEPS.md` / `BACKLOG.md`.
+- **Owner setup before public launch:** correspondence address, effective dates,
+  restore live prices, social URLs, `YOUTUBE_API_KEY` + `LICENSE_SIGNING_SECRET` in
+  Cloudflare, lawyer review of the legal drafts. See `DEPLOY_CHECKLIST.md`.
+
+---
+
+## 8. How to use this doc
+
+Read each section against the live site and your intentions. Where the site claims
+something we haven't built (stems, multi-version), either build it (see §7) or soften
+the claim until it's true. Where the rules don't match what you want, change the
+product first, then update `/license-terms` + the certificate to match.

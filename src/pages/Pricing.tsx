@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/accordion";
 import { usePlans, useSubscription } from "@/hooks/useMockData";
 import { useAuthSession } from "@/hooks/useAuth";
-import { openBillingPortal, startCheckout } from "@/lib/billing";
+import { BILLING_ENABLED, openBillingPortal, startCheckout } from "@/lib/billing";
 import type { BillingInterval, PlanConfig, PlanId } from "@/types/domain";
 
 const GOLD = "#F4C430";
@@ -88,14 +88,16 @@ const PlanCard = ({
       ? isAuthed
         ? "Browse catalog"
         : "Start free"
-      : isCurrent
-        ? "Manage subscription"
-        : busy
-          ? "Redirecting..."
-          : "Select plan";
+      : !BILLING_ENABLED
+        ? "Coming soon"
+        : isCurrent
+          ? "Manage subscription"
+          : busy
+            ? "Redirecting..."
+            : "Select plan";
 
   const onSelect = async () => {
-    if (plan.id === "free" || busy) return;
+    if (plan.id === "free" || busy || !BILLING_ENABLED) return;
     setBusy(true);
     try {
       if (isCurrent) await openBillingPortal();
@@ -149,9 +151,9 @@ const PlanCard = ({
       ) : (
         <button
           type="button"
-          disabled={busy}
+          disabled={busy || !BILLING_ENABLED}
           onClick={() => void onSelect()}
-          className={`mt-8 rounded-lg py-2.5 text-center font-body text-sm font-semibold transition-colors duration-300 disabled:opacity-60 ${
+          className={`mt-8 rounded-lg py-2.5 text-center font-body text-sm font-semibold transition-colors duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${
             isPro
               ? "bg-[#F4C430] text-background hover:bg-[#F4C430]/85"
               : "border border-border text-foreground hover:border-[#F4C430] hover:text-[#F4C430]"

@@ -17,7 +17,7 @@ import {
 import { mockClaimRequests } from "@/mocks";
 import MyChannels from "@/components/MyChannels";
 import { logout, updateProfile } from "@/hooks/useAuth";
-import { openBillingPortal } from "@/lib/billing";
+import { BILLING_ENABLED, openBillingPortal } from "@/lib/billing";
 
 const GOLD = "#F4C430";
 
@@ -309,7 +309,7 @@ const Account = () => {
                       </p>
                     </div>
                     <div className="flex gap-2">
-                      {plan && plan.id !== "free" && (
+                      {BILLING_ENABLED && plan && plan.id !== "free" && (
                         <button
                           type="button"
                           onClick={() => void openBillingPortal()}
@@ -511,7 +511,7 @@ const Account = () => {
                   {subscription && ` · ${isCanceled ? "ends" : "renews"} ${fmtDate(subscription.currentPeriodEnd)}`}
                 </p>
                 <div className="mt-4 flex flex-wrap gap-3">
-                  {plan && plan.id !== "free" ? (
+                  {BILLING_ENABLED && plan && plan.id !== "free" ? (
                     <button
                       type="button"
                       onClick={() => void openBillingPortal()}
@@ -529,7 +529,9 @@ const Account = () => {
                   )}
                 </div>
                 <p className="mt-3 font-body text-xs text-muted-foreground">
-                  Payments, invoices and cancellation are managed securely via Stripe.
+                  {BILLING_ENABLED
+                    ? "Payments, invoices and cancellation are managed securely via Stripe."
+                    : "Subscription billing is being moved to a new provider and will be available again soon. One-time track licenses are available now."}
                 </p>
               </SectionCard>
             )}

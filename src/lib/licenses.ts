@@ -1,7 +1,6 @@
 // Single-track license tiers (one-time purchases, paid via PayPal in /cart).
 // Server-side prices live in functions/api/paypal/_paypal.ts — keep in sync.
-// NOTE: prices below are TEMPORARY TEST PRICES ($1/$2/$3) for end-to-end
-// checkout testing. Restore 29 / 89 / 249 here AND in _paypal.ts before launch.
+// LIVE PRICES (USD): Personal 15 / Commercial 79 / Professional 249.
 
 export type LicenseTierId = "personal" | "commercial" | "professional";
 
@@ -17,7 +16,7 @@ export const licenseTiers: LicenseTier[] = [
   {
     id: "personal",
     name: "Personal",
-    price: 1,
+    price: 15,
     formats: "MP3, WAV",
     usageTerms: [
       "Personal use only",
@@ -31,7 +30,7 @@ export const licenseTiers: LicenseTier[] = [
   {
     id: "commercial",
     name: "Commercial",
-    price: 2,
+    price: 79,
     formats: "MP3, WAV, STEMS",
     usageTerms: [
       "Commercial usage",
@@ -45,7 +44,7 @@ export const licenseTiers: LicenseTier[] = [
   {
     id: "professional",
     name: "Professional",
-    price: 3,
+    price: 249,
     formats: "MP3, WAV, STEMS",
     usageTerms: [
       "Commercial usage",

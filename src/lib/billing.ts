@@ -3,6 +3,12 @@ import type { BillingInterval, PlanId } from "@/types/domain";
 
 // Frontend helpers for Stripe subscription billing.
 // Both endpoints return { url } and we redirect the whole page to Stripe.
+//
+// Subscriptions are TEMPORARILY DISABLED while we migrate off Stripe onto
+// Paddle. Flip BILLING_ENABLED back to true (and restore the Paddle/Stripe
+// backend) to re-enable plan checkout + the billing portal. One-time PayPal
+// track licenses (/cart) are unaffected by this flag.
+export const BILLING_ENABLED: boolean = false;
 
 const post = async (path: string, body?: unknown): Promise<{ url?: string; error?: string; status: number }> => {
   try {
@@ -24,6 +30,12 @@ export const startCheckout = async (
   plan: Exclude<PlanId, "free">,
   interval: BillingInterval,
 ): Promise<void> => {
+  if (!BILLING_ENABLED) {
+    toast("Subscriptions are coming soon", {
+      description: "We're setting up a new payment provider. One-time track licenses are available now.",
+    });
+    return;
+  }
   const res = await post("/api/stripe/checkout", { plan, interval });
   if (res.status === 401) {
     window.dispatchEvent(new CustomEvent("tvms:open-auth"));
@@ -39,6 +51,12 @@ export const startCheckout = async (
 
 /** Open the Stripe Billing Portal (manage / cancel / payment method). */
 export const openBillingPortal = async (): Promise<void> => {
+  if (!BILLING_ENABLED) {
+    toast("Billing management is coming soon", {
+      description: "We're switching payment providers — subscription management will be back shortly.",
+    });
+    return;
+  }
   const res = await post("/api/stripe/portal");
   if (res.status === 401) {
     window.dispatchEvent(new CustomEvent("tvms:open-auth"));
