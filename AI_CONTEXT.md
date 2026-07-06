@@ -863,3 +863,11 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   `{"error":"Not signed in"}` JSON. If it STILL returns HTML, check the Cloudflare Pages deployment
   build log for a Functions error (possible other causes: functions bundle size from _assets.ts, or a
   CF build/config issue) and report it.
+  RESOLVED: real cause was NOT the newsletter conflict (that build succeeded) — it was a runtime 500.
+  Real-time Logs showed `D1_ERROR: no such column: channel_ref` in whitelist.ts listResponse: the prod
+  `whitelist_channels` table pre-existed WITHOUT `channel_ref`, and `CREATE TABLE IF NOT EXISTS` never
+  alters an existing table. Fix: `ensureWhitelistTable` now also runs a guarded `ALTER TABLE
+  whitelist_channels ADD COLUMN channel_ref TEXT` (try/catch), self-healing on next request (same
+  pattern as ensureTrackCoverColumn). Diagnostic lesson: a 500 from a Pages Function returns an HTML
+  error page → "Unexpected token '<' ... <!DOCTYPE" on the client; check Real-time Logs for the real
+  exception, and use `git show origin/main:<file>` + Routing config to rule out deploy/routing.

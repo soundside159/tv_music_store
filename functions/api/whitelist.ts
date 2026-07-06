@@ -21,11 +21,22 @@ export const ensureWhitelistTable = async (db: D1Database): Promise<void> => {
          )`,
       )
       .run();
+  } catch {
+    // table already exists
+  }
+  // Self-heal: if the table pre-existed without channel_ref, add it. CREATE TABLE
+  // IF NOT EXISTS won't alter an existing table, so add the column explicitly.
+  try {
+    await db.prepare(`ALTER TABLE whitelist_channels ADD COLUMN channel_ref TEXT`).run();
+  } catch {
+    // column already exists
+  }
+  try {
     await db
       .prepare(`CREATE INDEX IF NOT EXISTS idx_whitelist_user ON whitelist_channels(user_id)`)
       .run();
   } catch {
-    // already exists
+    // index already exists
   }
 };
 
