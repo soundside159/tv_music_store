@@ -1,160 +1,115 @@
-import { useState } from "react";
-import { motion } from "framer-motion";
-import { Send } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
+import { Link } from "react-router-dom";
+import { Youtube, Instagram, Twitter } from "lucide-react";
+
+// Multi-column site footer (tunetank-style, built from TV Music Store content).
+// Internal links use react-router; external/contact use <a>.
+
+type FooterLink = { label: string; to: string; external?: boolean };
+
+const COLUMNS: { title: string; links: FooterLink[] }[] = [
+  {
+    title: "Music",
+    links: [
+      { label: "Music Library", to: "/catalog" },
+      { label: "Collections", to: "/collections" },
+      { label: "Playlists", to: "/playlists" },
+    ],
+  },
+  {
+    title: "Licensing",
+    links: [
+      { label: "Pricing & Plans", to: "/pricing" },
+      { label: "How Licensing Works", to: "/licensing" },
+      { label: "Sync Licensing", to: "/sync" },
+      { label: "Custom Music", to: "/custom" },
+    ],
+  },
+  {
+    title: "Company",
+    links: [
+      { label: "Contact Us", to: "mailto:contact@tvmusicstore.com", external: true },
+      { label: "License Terms", to: "/license-terms" },
+      { label: "Privacy Policy", to: "/privacy" },
+    ],
+  },
+];
+
+// TODO(owner): set real social URLs (or remove any you don't use).
+const SOCIALS = [
+  { label: "YouTube", href: "#", Icon: Youtube },
+  { label: "Instagram", href: "#", Icon: Instagram },
+  { label: "X", href: "#", Icon: Twitter },
+];
+
+const linkClass =
+  "font-body text-sm text-muted-foreground hover:text-[#F4C430] transition-colors duration-200";
 
 const Footer = () => {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [message, setMessage] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const { toast } = useToast();
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    
-    // Simulate form submission
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    toast({
-      title: "Message sent!",
-      description: "We'll get back to you soon.",
-    });
-    
-    setName("");
-    setEmail("");
-    setMessage("");
-    setIsSubmitting(false);
-  };
-
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1,
-        delayChildren: 0.2,
-      },
-    },
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: {
-        duration: 0.5,
-      },
-    },
-  };
-
   return (
-    <footer id="contact" className="py-20 bg-card border-t border-border/50">
-      <div className="container mx-auto px-6">
-        <motion.div 
-          className="max-w-2xl mx-auto"
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          variants={containerVariants}
-        >
-          {/* Header */}
-          <motion.div className="text-center mb-10" variants={itemVariants}>
-            <h2 className="font-display text-3xl md:text-4xl text-gradient-gold mb-4 tracking-wide">
-              Let's Create Together
-            </h2>
-            <p className="font-body text-base md:text-lg text-muted-foreground">
-              Need a custom composition or track adaptation for your project?
-            </p>
-          </motion.div>
-
-          {/* Contact Form */}
-          <motion.form 
-            onSubmit={handleSubmit} 
-            className="space-y-6"
-            variants={itemVariants}
-          >
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label htmlFor="name" className="block font-body text-sm text-foreground mb-2">
-                  Name
-                </label>
-                <Input
-                  id="name"
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Your name"
-                  required
-                  className="bg-background/50 border border-border/50 focus:border-primary focus:ring-0 focus:outline-none transition-colors duration-300"
-                />
-              </div>
-              <div>
-                <label htmlFor="email" className="block font-body text-sm text-foreground mb-2">
-                  Email
-                </label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="your@email.com"
-                  required
-                  className="bg-background/50 border border-border/50 focus:border-primary focus:ring-0 focus:outline-none transition-colors duration-300"
-                />
-              </div>
-            </div>
-            
-            <div>
-              <label htmlFor="message" className="block font-body text-sm text-foreground mb-2">
-                Message
-              </label>
-              <Textarea
-                id="message"
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder="Tell us about your project..."
-                required
-                rows={5}
-                className="bg-background/50 border border-border/50 focus:border-primary focus:ring-0 focus:outline-none transition-colors duration-300 resize-none"
+    <footer id="contact" className="bg-card border-t border-border/50">
+      <div className="container mx-auto px-6 py-14">
+        <div className="grid grid-cols-2 gap-10 md:grid-cols-4 lg:gap-8">
+          {/* Brand */}
+          <div className="col-span-2 md:col-span-1">
+            <Link to="/" className="flex items-center gap-2">
+              <img
+                src="/images/icons/logo-header.png"
+                alt="TV Music Store"
+                className="h-8 w-8"
               />
+              <span className="font-display text-lg text-foreground">TV Music Store</span>
+            </Link>
+            <p className="mt-4 max-w-[15rem] font-body text-sm text-muted-foreground">
+              Cinematic and production music for film, TV, and creators.
+            </p>
+          </div>
+
+          {/* Link columns */}
+          {COLUMNS.map((col) => (
+            <div key={col.title}>
+              <h3 className="mb-4 font-body text-xs font-semibold uppercase tracking-wider text-foreground/70">
+                {col.title}
+              </h3>
+              <ul className="space-y-2.5">
+                {col.links.map((l) => (
+                  <li key={l.label}>
+                    {l.external ? (
+                      <a href={l.to} className={linkClass}>
+                        {l.label}
+                      </a>
+                    ) : (
+                      <Link to={l.to} className={linkClass}>
+                        {l.label}
+                      </Link>
+                    )}
+                  </li>
+                ))}
+              </ul>
             </div>
+          ))}
+        </div>
 
-            <Button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full md:w-auto px-8 py-3 bg-primary text-primary-foreground 
-                       hover:bg-primary/90 transition-all duration-300 font-body"
-            >
-              {isSubmitting ? (
-                "Sending..."
-              ) : (
-                <>
-                  Send Message
-                  <Send className="ml-2 w-4 h-4" />
-                </>
-              )}
-            </Button>
-          </motion.form>
-        </motion.div>
-
-        {/* Copyright */}
-        <motion.div 
-          className="border-t border-border/50 mt-16 pt-8"
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-          transition={{ delay: 0.5 }}
-        >
-          <p className="font-body text-xs text-muted-foreground text-center">
-            © 2026 TVMUSICSTORE. All rights reserved.
+        {/* Bottom bar */}
+        <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-border/50 pt-6 sm:flex-row">
+          <p className="font-body text-xs text-muted-foreground">
+            © {new Date().getFullYear()} TV Music Store. All rights reserved. A trading name of
+            Stanislav Barantsov &amp; Maryna Huz.
           </p>
-        </motion.div>
+          <div className="flex items-center gap-4">
+            {SOCIALS.map(({ label, href, Icon }) => (
+              <a
+                key={label}
+                href={href}
+                aria-label={label}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-muted-foreground transition-colors duration-200 hover:text-[#F4C430]"
+              >
+                <Icon className="h-[18px] w-[18px]" />
+              </a>
+            ))}
+          </div>
+        </div>
       </div>
     </footer>
   );
