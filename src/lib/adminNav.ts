@@ -69,5 +69,6 @@ export const adminNavItems: NavItem[] = [
   { id: "tracksedit", label: "Tracks Edit", icon: SlidersHorizontal },
   { id: "customers", label: "Customers", icon: Users },
   { id: "licenses", label: "Licenses", icon: FileText },
+  { id: "whitelist", label: "Whitelisting", icon: Youtube },
   { id: "requests", label: "Requests", icon: Inbox },
 ];

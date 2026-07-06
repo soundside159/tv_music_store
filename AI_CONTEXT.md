@@ -781,3 +781,18 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   limits/WAV/whitelisting; retention via taste-segmented new-release emails = the admin CRM idea;
   metrics). Owner flagged "no funnel = no point" — this doc is the starting plan. Whitelist per-plan
   limits still reference the /licensing table (Pro 3 / Max 10) — owner to confirm final numbers.
+- **2026-07-06 (channel whitelisting — Phase 1 manual, BUILT):** owner-approved limits Free 0 / Pro 3
+  / Max 10. NEW `whitelist_channels` D1 table (id, user_id, channel_url, channel_ref, added_at) in
+  0001_init.sql + lazy `ensureWhitelistTable`. NEW `functions/api/whitelist.ts` (customer): GET list
+  (+plan/limit/used), POST add (validates a YouTube channel URL, enforces active-paid plan + per-plan
+  limit + dedupe), DELETE remove; `effectivePlan` = latest subscription only if status active, else
+  free. NEW `functions/api/admin/whitelist.ts` (admin): all channels JOIN users + latest subscription,
+  with an `active` flag (paid + status active), active-first, `?q=` search. Frontend: NEW
+  `src/components/MyChannels.tsx` (account "Whitelisting" section — live add/remove, shows N of limit,
+  upgrade CTA when limit 0) replaced the old mock whitelist UI in Account.tsx (dropped
+  mockWhitelistChannels + the `whitelists` var). NEW `src/components/AdminWhitelist.tsx` + admin nav
+  item "whitelist" (Youtube icon) + Admin.tsx section — table of channels with Active/Inactive status,
+  clickable channel link, customer, plan, added date; owner opens Active channels and clears claims
+  manually. Backend files node --check clean; frontend follows existing patterns (real lint/build on
+  deploy.bat). Phase 2 (YouTube API monitoring of new post-subscription videos) still per
+  WHITELIST_SYSTEM.md, not built.

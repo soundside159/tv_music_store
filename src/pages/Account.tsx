@@ -14,7 +14,8 @@ import {
   usePlans,
   useSubscription,
 } from "@/hooks/useMockData";
-import { mockClaimRequests, mockWhitelistChannels } from "@/mocks";
+import { mockClaimRequests } from "@/mocks";
+import MyChannels from "@/components/MyChannels";
 import { logout, updateProfile } from "@/hooks/useAuth";
 import { openBillingPortal } from "@/lib/billing";
 
@@ -83,7 +84,6 @@ const Account = () => {
   const [profileError, setProfileError] = useState<string | null>(null);
 
   const plan = plans.find((p) => p.id === subscription?.plan);
-  const whitelists = user ? mockWhitelistChannels.filter((w) => w.userId === user.id) : [];
   const claims = user ? mockClaimRequests.filter((c) => c.userId === user.id) : [];
 
   if (!user) {
@@ -459,53 +459,8 @@ const Account = () => {
             )}
 
             {section === "whitelist" && (
-              <SectionCard title={`Whitelisted channels ${plan ? `(${whitelists.length} of ${plan.whitelistSlots})` : ""}`}>
-                {plan && plan.whitelistSlots === 0 ? (
-                  <div>
-                    <EmptyNote text="Channel whitelisting protects your YouTube channel from Content ID claims automatically. Available on Pro and Max." />
-                    <Link
-                      to="/pricing"
-                      className="mt-4 inline-block rounded-lg bg-[#F4C430] px-5 py-2 font-body text-sm font-semibold text-background hover:bg-[#F4C430]/85"
-                    >
-                      Upgrade to Pro
-                    </Link>
-                  </div>
-                ) : (
-                  <>
-                    {whitelists.length === 0 ? (
-                      <EmptyNote text="No channels yet. Add your channel URL — protection activates within 24 hours." />
-                    ) : (
-                      <ul className="divide-y divide-border/60">
-                        {whitelists.map((w) => (
-                          <li key={w.id} className="flex items-center justify-between py-2.5">
-                            <span className="truncate font-body text-sm text-foreground">{w.channelUrl}</span>
-                            <span
-                              className={`ml-4 shrink-0 rounded-full px-2.5 py-0.5 font-body text-xs ${
-                                w.status === "active"
-                                  ? "bg-[#F4C430]/15 text-[#F4C430]"
-                                  : "bg-secondary text-muted-foreground"
-                              }`}
-                            >
-                              {w.status}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    <form className="mt-4 flex gap-2" onSubmit={(e) => e.preventDefault()}>
-                      <input
-                        placeholder="https://youtube.com/@yourchannel"
-                        className="flex-1 rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
-                      />
-                      <button
-                        type="submit"
-                        className="rounded-lg border border-[#F4C430]/70 px-4 py-2 font-body text-sm font-semibold text-[#F4C430] transition-colors hover:bg-[#F4C430] hover:text-background"
-                      >
-                        Add channel
-                      </button>
-                    </form>
-                  </>
-                )}
+              <SectionCard title="Whitelisted channels">
+                <MyChannels />
               </SectionCard>
             )}
 

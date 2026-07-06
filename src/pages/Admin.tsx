@@ -19,6 +19,7 @@ import {
   PLATFORM_SHARE,
 } from "@/mocks";
 import AdminContent from "@/components/AdminContent";
+import AdminWhitelist from "@/components/AdminWhitelist";
 
 const GOLD = "#F4C430";
 
@@ -34,6 +35,7 @@ type SectionId =
   | "tracksedit"
   | "customers"
   | "licenses"
+  | "whitelist"
   | "requests";
 
 const SECTION_IDS: SectionId[] = [
@@ -48,6 +50,7 @@ const SECTION_IDS: SectionId[] = [
   "tracksedit",
   "customers",
   "licenses",
+  "whitelist",
   "requests",
 ];
 
@@ -538,6 +541,8 @@ const Admin = () => {
                 )}
               </Card>
             )}
+
+            {section === "whitelist" && <AdminWhitelist />}
 
             {section === "licenses" && (
               <Card title={`Licenses${licenses ? ` (${licenses.length})` : ""}`}>
