@@ -880,3 +880,14 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   by my code). Lesson: check the ORIGINAL migration for existing table names before adding a lazily-
   created table. Verified no other new table (plan_licenses/newsletter_subscribers/email_campaigns)
   collides with legacy. Owner: redeploy — wl_channels is created fresh, whitelisting works.
+  CONFIRMED WORKING: owner added a channel, admin "New videos" showed it. Owner then asked for docs
+  only (next work with a fresh AI). NEW `docs/NEXT_STEPS.md` — detailed hand-off spec: (1) whitelist
+  claim workflow (All-new-across-channels endpoint, Copy / Copy All, checkboxes + wl_handled table +
+  "mark as sent" + Show-handled strikethrough), (2) tunetank-style header account dropdown (plan
+  badge + Upgrade + quick links + download counter) + slimmer dashboard nav, (3) admin audit /
+  consolidation proposal (group 14 flat admin items into Overview / Catalog / Customers / Briefs;
+  drop the redundant mock "Whitelist requests"; turn "Claim removals" into a real Copyright Claims
+  admin view). NEW `docs/SITE_OVERVIEW.md` — owner-facing "mini book": what the product is, full user
+  journey, what customers can do, plans & licenses, certificate, Content ID model, emails, admin
+  capabilities, composer side, business/legal, built-vs-pending. Owner will review SITE_OVERVIEW and
+  drive the NEXT_STEPS build with the next AI.
