@@ -279,9 +279,11 @@ const Admin = () => {
 
           <div
             className={`flex min-w-0 flex-col gap-6 ${
-              section === "tracksedit" || section === "licenses"
+              section === "licenses"
                 ? "w-fit max-w-full xl:mr-[calc((72rem_-_100vw)/2)]"
-                : "flex-1"
+                : section === "tracksedit"
+                  ? "flex-1 xl:mr-[calc((72rem_-_100vw)/2)]"
+                  : "flex-1"
             }`}
           >
             {section === "dashboard" && (
