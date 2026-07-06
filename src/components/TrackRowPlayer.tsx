@@ -180,9 +180,9 @@ export const TrackRow = ({
           mainIsPlaying ? "text-[#F4C430]" : "text-foreground hover:text-[#F4C430]"
         }`}
       >
-        {track.cover && (
+        {(track.coverThumb || track.cover) && (
           <img
-            src={track.cover}
+            src={track.coverThumb || track.cover}
             alt=""
             loading="lazy"
             className="hidden h-9 w-9 shrink-0 rounded-md border border-border/50 object-cover sm:block"

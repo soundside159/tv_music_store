@@ -53,6 +53,9 @@ CREATE TABLE IF NOT EXISTS tracks (
   description TEXT,
   tags TEXT, -- JSON array
   has_stems INTEGER NOT NULL DEFAULT 0,
+  cover TEXT,            -- 1000x1000 cover art path
+  cover_thumb TEXT,      -- small square thumbnail path (track rows)
+  r2_key_wav_zip TEXT,   -- private zip of all WAV versions (WAV/licensed download)
   moderation_status TEXT NOT NULL DEFAULT 'approved', -- pending | approved | rejected
   status TEXT NOT NULL DEFAULT 'published', -- draft | scheduled | published
   publish_at TEXT,
@@ -65,8 +68,9 @@ CREATE TABLE IF NOT EXISTS track_versions (
   version_id TEXT NOT NULL, -- full | short | 60s | ...
   label TEXT NOT NULL,
   duration TEXT,
-  preview_src TEXT NOT NULL, -- public MP3 preview path
-  r2_key_wav TEXT,           -- private master (later)
+  preview_src TEXT NOT NULL, -- public MP3 320 preview path (playback + 320 download)
+  preview_128 TEXT,          -- public MP3 128 path (128 download)
+  r2_key_wav TEXT,           -- legacy per-version WAV master (superseded by tracks.r2_key_wav_zip)
   sort INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_versions_track ON track_versions(track_id);

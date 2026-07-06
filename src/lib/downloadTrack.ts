@@ -11,6 +11,7 @@ export interface DownloadArgs {
   title: string;
   label: string;
   format?: "mp3" | "wav";
+  quality?: 128 | 320;
 }
 
 /**
@@ -36,7 +37,11 @@ export const downloadTrackVersion = async (args: DownloadArgs): Promise<void> =>
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${args.title} (${args.label}).${format}`;
+      // WAV downloads arrive as a zip of every version.
+      a.download =
+        format === "wav"
+          ? `${args.title} (WAV 44.1-16).zip`
+          : `${args.title} (${args.label}).${format}`;
       document.body.appendChild(a);
       a.click();
       a.remove();

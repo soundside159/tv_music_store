@@ -28,12 +28,20 @@ const requireAdmin = async (ctx: Ctx) => {
   return { user };
 };
 
-/** Adds tracks.cover on first use — saves the owner a wrangler migration. */
+/** Adds newer track columns on first use — saves the owner wrangler migrations. */
 const ensureTrackCoverColumn = async (db: D1Database) => {
-  try {
-    await db.prepare(`ALTER TABLE tracks ADD COLUMN cover TEXT`).run();
-  } catch {
-    // column already exists — fine
+  const alters = [
+    `ALTER TABLE tracks ADD COLUMN cover TEXT`,
+    `ALTER TABLE tracks ADD COLUMN cover_thumb TEXT`,
+    `ALTER TABLE tracks ADD COLUMN r2_key_wav_zip TEXT`,
+    `ALTER TABLE track_versions ADD COLUMN preview_128 TEXT`,
+  ];
+  for (const sql of alters) {
+    try {
+      await db.prepare(sql).run();
+    } catch {
+      // column already exists — fine
+    }
   }
 };
 
@@ -251,6 +259,14 @@ export const onRequestPost = async (ctx: Ctx) => {
     previewSrc?: string;
     previewLabel?: string;
     masterKey?: string;
+    coverThumb?: string;
+    wavZipKey?: string;
+    versions?: {
+      label?: string;
+      previewSrc?: string;
+      preview128?: string;
+      duration?: string;
+    }[];
     // bulk_update_tracks fields (trackIds shared with set_tracks above)
     facets?: Partial<Record<"useCase" | "genre" | "mood", { add?: string[]; remove?: string[] }>>;
     playlistChanges?: { add?: string[]; remove?: string[] };
@@ -531,9 +547,20 @@ export const onRequestPost = async (ctx: Ctx) => {
     case "create_track": {
       const title = body.title?.trim();
       if (!title) return json({ error: "Title required" }, 400);
-      const previewSrc = body.previewSrc?.trim();
-      if (!previewSrc || !/^\/(api\/file\/previews|audio\/previews)\//.test(previewSrc)) {
-        return json({ error: "Upload an MP3 preview first" }, 400);
+
+      const isPreviewPath = (p: string | undefined): p is string =>
+        !!p && /^\/(api\/file\/previews|audio\/previews)\//.test(p);
+
+      // New multi-version payload; falls back to the old single-preview shape.
+      const rawVersions =
+        Array.isArray(body.versions) && body.versions.length > 0
+          ? body.versions
+          : [{ label: body.previewLabel, previewSrc: body.previewSrc, duration: body.duration }];
+      const versions = rawVersions
+        .filter((v) => isPreviewPath(v.previewSrc))
+        .slice(0, 12);
+      if (versions.length === 0) {
+        return json({ error: "Upload at least one WAV (its 320 kbps preview is required)" }, 400);
       }
       await ensureTrackCoverColumn(db);
 
@@ -549,12 +576,17 @@ export const onRequestPost = async (ctx: Ctx) => {
       const trackId = newId("trk");
       const bpm = Number.isFinite(body.bpm) ? Math.round(body.bpm as number) : null;
       const tags = Array.isArray(body.tags) ? body.tags.slice(0, 12) : [];
+      const wavZipKey =
+        typeof body.wavZipKey === "string" && /^masters\//.test(body.wavZipKey)
+          ? body.wavZipKey
+          : null;
+      const mainDuration = versions[0].duration ?? body.duration ?? "";
       await db
         .prepare(
           `INSERT INTO tracks
              (id, slug, title, composer_id, category, genre, mood, use_case, style_of,
-              bpm, duration, description, tags, has_stems, cover)
-           VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7, '', ?8, ?9, ?10, ?11, ?12, ?13)`,
+              bpm, duration, description, tags, has_stems, cover, cover_thumb, r2_key_wav_zip)
+           VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7, '', ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)`,
         )
         .bind(
           trackId,
@@ -565,29 +597,38 @@ export const onRequestPost = async (ctx: Ctx) => {
           body.mood ?? "",
           body.useCase ?? "",
           bpm,
-          body.duration ?? "",
+          mainDuration,
           body.description ?? "",
           JSON.stringify(tags),
           body.hasStems ? 1 : 0,
           body.cover ?? "",
+          body.coverThumb ?? "",
+          wavZipKey,
         )
         .run();
 
-      await db
-        .prepare(
-          `INSERT INTO track_versions
-             (id, track_id, version_id, label, duration, preview_src, r2_key_wav, sort)
-           VALUES (?1, ?2, 'main', ?3, ?4, ?5, ?6, 0)`,
-        )
-        .bind(
-          `${trackId}:main`,
-          trackId,
-          body.previewLabel?.trim() || "Main",
-          body.duration ?? "",
-          previewSrc,
-          body.masterKey?.trim() || null,
-        )
-        .run();
+      for (let i = 0; i < versions.length; i++) {
+        const v = versions[i];
+        const versionId = i === 0 ? "main" : `v${i + 1}`;
+        const preview128 = isPreviewPath(v.preview128) ? v.preview128 : null;
+        await db
+          .prepare(
+            `INSERT INTO track_versions
+               (id, track_id, version_id, label, duration, preview_src, preview_128, r2_key_wav, sort)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL, ?8)`,
+          )
+          .bind(
+            `${trackId}:${versionId}`,
+            trackId,
+            versionId,
+            v.label?.trim() || (i === 0 ? "Main" : `Version ${i + 1}`),
+            v.duration ?? "",
+            v.previewSrc,
+            preview128,
+            i,
+          )
+          .run();
+      }
 
       return json({ ok: true, id: trackId, slug });
     }

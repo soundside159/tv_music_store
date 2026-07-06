@@ -1,11 +1,12 @@
 import { getSessionUser, json, OWNER_EMAIL, type Ctx } from "../_utils";
 
-// POST /api/admin/upload-audio?kind=preview|master&filename=<base> — admin only.
-// Body = raw audio bytes; content-type header decides the extension.
-//   preview -> previews/<base>-<uuid>.mp3  (public, served by /api/file, used as
-//              track_versions.preview_src for playback + mp3 download)
-//   master  -> masters/<base>-<uuid>.wav   (PRIVATE, stored as r2_key_wav; only
-//              /api/download serves it, Max plan gated)
+// POST /api/admin/upload-audio?kind=<kind>&filename=<base> — admin only.
+// Body = raw file bytes; content-type header decides the extension.
+//   preview     -> previews/<base>-<uuid>.mp3   (public: 320 kbps site preview + 320 download)
+//   preview128  -> previews/<base>-<uuid>.mp3   (public: 128 kbps download)
+//   master      -> masters/<base>-<uuid>.<ext>  (PRIVATE single WAV/MP3 master — legacy)
+//   wavzip      -> masters/<base>-<uuid>.zip    (PRIVATE zip of all WAV versions, Max/licensed
+//                  download only; only /api/download serves the masters/ prefix)
 
 const PREVIEW_MAX = 25 * 1024 * 1024; // 25 MB
 const MASTER_MAX = 95 * 1024 * 1024; // 95 MB (stay under Cloudflare's ~100 MB body limit)
@@ -16,7 +17,12 @@ const EXT_BY_TYPE: Record<string, string> = {
   "audio/wav": "wav",
   "audio/x-wav": "wav",
   "audio/wave": "wav",
+  "application/zip": "zip",
+  "application/x-zip-compressed": "zip",
 };
+
+type Kind = "preview" | "preview128" | "master" | "wavzip";
+const PUBLIC_KINDS: Kind[] = ["preview", "preview128"];
 
 export const onRequestPost = async (ctx: Ctx) => {
   if (!ctx.env.DB) return json({ error: "DB not bound" }, 503);
@@ -34,17 +40,25 @@ export const onRequestPost = async (ctx: Ctx) => {
   }
 
   const url = new URL(ctx.request.url);
-  const kind = url.searchParams.get("kind") === "master" ? "master" : "preview";
+  const kindParam = url.searchParams.get("kind");
+  const kind: Kind =
+    kindParam === "master" || kindParam === "wavzip" || kindParam === "preview128"
+      ? kindParam
+      : "preview";
+  const isPublic = PUBLIC_KINDS.includes(kind);
 
   const contentType = (ctx.request.headers.get("content-type") ?? "").split(";")[0].trim();
   const ext = EXT_BY_TYPE[contentType];
-  if (!ext) return json({ error: "Upload an MP3 or WAV audio file" }, 415);
-  if (kind === "preview" && ext !== "mp3") {
-    return json({ error: "The preview must be an MP3" }, 415);
+  if (!ext) return json({ error: "Unsupported file type" }, 415);
+  if (isPublic && ext !== "mp3") {
+    return json({ error: "Previews must be MP3" }, 415);
+  }
+  if (kind === "wavzip" && ext !== "zip") {
+    return json({ error: "The WAV bundle must be a .zip" }, 415);
   }
 
   const bytes = await ctx.request.arrayBuffer();
-  const max = kind === "master" ? MASTER_MAX : PREVIEW_MAX;
+  const max = isPublic ? PREVIEW_MAX : MASTER_MAX;
   if (bytes.byteLength === 0) return json({ error: "Empty file" }, 400);
   if (bytes.byteLength > max) {
     return json({ error: `File too large (max ${Math.round(max / 1024 / 1024)} MB)` }, 413);
@@ -59,14 +73,14 @@ export const onRequestPost = async (ctx: Ctx) => {
       .replace(/^-+|-+$/g, "")
       .slice(0, 40) || kind;
 
-  const prefix = kind === "master" ? "masters" : "previews";
+  const prefix = isPublic ? "previews" : "masters";
   const key = `${prefix}/${base}-${crypto.randomUUID().slice(0, 8)}.${ext}`;
   await ctx.env.R2.put(key, bytes, { httpMetadata: { contentType } });
 
-  // Masters are private — no public path is returned, only the key.
+  // Public kinds return a servable path; private kinds return the key only.
   return json({
     ok: true,
     key,
-    path: kind === "preview" ? `/api/file/${key}` : null,
+    path: isPublic ? `/api/file/${key}` : null,
   });
 };

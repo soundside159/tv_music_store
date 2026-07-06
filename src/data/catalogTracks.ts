@@ -44,6 +44,8 @@ export interface CatalogTrack {
   audioVersions: TrackAudioVersion[];
   /** Square cover art URL (1000x1000 recommended). Optional — placeholder shown when absent. */
   cover?: string;
+  /** Small square thumbnail (track rows). Falls back to `cover` when absent. */
+  coverThumb?: string;
   /** Admin-curated category membership; when absent, [category] is the fallback. */
   categoryIds?: string[];
   /** True when the track ships stems (shown as a STEMS badge; Max-plan download). */

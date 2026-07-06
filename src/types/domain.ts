@@ -71,6 +71,8 @@ export interface DownloadLogEntry {
   createdAt: string; // ISO datetime
   /** Present on live API entries; mock entries resolve titles via catalogTracks. */
   trackTitle?: string;
+  /** Track slug (live API entries) — used to re-download from the dashboard. */
+  trackSlug?: string;
 }
 
 export interface WhitelistChannel {

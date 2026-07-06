@@ -14,6 +14,7 @@ interface TrackRow {
   description: string | null;
   tags: string | null;
   cover: string | null;
+  cover_thumb: string | null;
   has_stems: number;
 }
 
@@ -28,23 +29,29 @@ interface VersionRow {
 export const onRequestGet = async (ctx: Ctx) => {
   if (!ctx.env.DB) return json({ error: "DB not bound. See docs/SETUP_BACKEND.md" }, 503);
 
-  // `cover` is added lazily by the admin editor; older DBs may not have it yet.
+  // `cover` / `cover_thumb` are added lazily by the admin editor; older DBs may
+  // not have them yet, so degrade gracefully in two steps.
+  const WHERE = `WHERE status = 'published' AND moderation_status = 'approved' ORDER BY created_at DESC`;
   let tracks: { results: TrackRow[] };
   try {
     tracks = await ctx.env.DB.prepare(
-      `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, cover, has_stems
-         FROM tracks
-        WHERE status = 'published' AND moderation_status = 'approved'
-        ORDER BY created_at DESC`,
+      `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, cover, cover_thumb, has_stems
+         FROM tracks ${WHERE}`,
     ).all<TrackRow>();
   } catch {
-    const legacy = await ctx.env.DB.prepare(
-      `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, has_stems
-         FROM tracks
-        WHERE status = 'published' AND moderation_status = 'approved'
-        ORDER BY created_at DESC`,
-    ).all<Omit<TrackRow, "cover">>();
-    tracks = { results: legacy.results.map((t) => ({ ...t, cover: null })) };
+    try {
+      const withCover = await ctx.env.DB.prepare(
+        `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, cover, has_stems
+           FROM tracks ${WHERE}`,
+      ).all<Omit<TrackRow, "cover_thumb">>();
+      tracks = { results: withCover.results.map((t) => ({ ...t, cover_thumb: null })) };
+    } catch {
+      const legacy = await ctx.env.DB.prepare(
+        `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, has_stems
+           FROM tracks ${WHERE}`,
+      ).all<Omit<TrackRow, "cover" | "cover_thumb">>();
+      tracks = { results: legacy.results.map((t) => ({ ...t, cover: null, cover_thumb: null })) };
+    }
   }
 
   const versions = await ctx.env.DB.prepare(

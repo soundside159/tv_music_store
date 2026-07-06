@@ -83,7 +83,11 @@ const DownloadOptionsModal = () => {
     }
     setBusy(true);
     try {
-      await downloadTrackVersion({ ...args, format: option.id === "wav" ? "wav" : "mp3" });
+      await downloadTrackVersion({
+        ...args,
+        format: option.id === "wav" ? "wav" : "mp3",
+        quality: option.id === "mp3-128" ? 128 : 320,
+      });
       if (includePdf && status === "authed") {
         // Attachment header makes this download the certificate without navigating.
         const a = document.createElement("a");

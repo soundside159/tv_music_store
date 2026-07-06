@@ -29,6 +29,7 @@ export const onRequestPost = async (ctx: Ctx) => {
         slug?: string;
         versionId?: string;
         format?: string;
+        quality?: number | string;
         src?: string;
         title?: string;
         label?: string;
@@ -40,6 +41,7 @@ export const onRequestPost = async (ctx: Ctx) => {
   const slug = body?.slug?.trim();
   const versionId = body?.versionId?.trim();
   const format = body?.format === "wav" ? "wav" : "mp3";
+  const quality = String(body?.quality) === "128" ? 128 : 320;
   if (!slug || !versionId) return json({ error: "slug and versionId required" }, 400);
 
   // Current plan
@@ -70,31 +72,59 @@ export const onRequestPost = async (ctx: Ctx) => {
     }
   }
 
-  // Resolve the file
-  const track = await ctx.env.DB.prepare(
-    `SELECT id, title, composer_id FROM tracks WHERE slug = ?1`,
-  )
-    .bind(slug)
-    .first<{ id: string; title: string; composer_id: string | null }>();
+  // Resolve the file. Select the newer columns defensively — older DBs may not
+  // have r2_key_wav_zip yet (added lazily by the admin content API).
+  const track = await (async () => {
+    try {
+      return await ctx.env.DB.prepare(
+        `SELECT id, title, composer_id, r2_key_wav_zip FROM tracks WHERE slug = ?1`,
+      )
+        .bind(slug)
+        .first<{ id: string; title: string; composer_id: string | null; r2_key_wav_zip: string | null }>();
+    } catch {
+      const legacy = await ctx.env.DB.prepare(
+        `SELECT id, title, composer_id FROM tracks WHERE slug = ?1`,
+      )
+        .bind(slug)
+        .first<{ id: string; title: string; composer_id: string | null }>();
+      return legacy ? { ...legacy, r2_key_wav_zip: null } : null;
+    }
+  })();
 
   let fileSrc: string | null = null;
   let r2Key: string | null = null;
+  let isZip = false;
 
   if (track) {
-    const version = await ctx.env.DB.prepare(
-      `SELECT preview_src, r2_key_wav, label FROM track_versions
-        WHERE track_id = ?1 AND version_id = ?2 LIMIT 1`,
-    )
-      .bind(track.id, versionId)
-      .first<{ preview_src: string; r2_key_wav: string | null; label: string }>();
+    const version = await (async () => {
+      try {
+        return await ctx.env.DB.prepare(
+          `SELECT preview_src, preview_128, r2_key_wav, label FROM track_versions
+            WHERE track_id = ?1 AND version_id = ?2 LIMIT 1`,
+        )
+          .bind(track.id, versionId)
+          .first<{ preview_src: string; preview_128: string | null; r2_key_wav: string | null; label: string }>();
+      } catch {
+        const legacy = await ctx.env.DB.prepare(
+          `SELECT preview_src, r2_key_wav, label FROM track_versions
+            WHERE track_id = ?1 AND version_id = ?2 LIMIT 1`,
+        )
+          .bind(track.id, versionId)
+          .first<{ preview_src: string; r2_key_wav: string | null; label: string }>();
+        return legacy ? { ...legacy, preview_128: null } : null;
+      }
+    })();
     if (!version) return json({ error: "Version not found", code: "nofile" }, 404);
     if (format === "wav") {
-      if (!version.r2_key_wav || !ctx.env.R2) {
-        return json({ error: "WAV master is not uploaded yet for this track", code: "nofile" }, 404);
+      // Preferred: one zip of all WAV versions (track-level). Legacy: single WAV.
+      const wavKey = track.r2_key_wav_zip ?? version.r2_key_wav;
+      if (!wavKey || !ctx.env.R2) {
+        return json({ error: "WAV files are not uploaded yet for this track", code: "nofile" }, 404);
       }
-      r2Key = version.r2_key_wav;
+      r2Key = wavKey;
+      isZip = /\.zip$/i.test(wavKey) || Boolean(track.r2_key_wav_zip);
     } else {
-      fileSrc = version.preview_src;
+      fileSrc = quality === 128 && version.preview_128 ? version.preview_128 : version.preview_src;
     }
   } else {
     // Mock-catalog fallback: public previews only, mp3 only.
@@ -132,7 +162,9 @@ export const onRequestPost = async (ctx: Ctx) => {
 
   const title = sanitizeFilename(body?.title ?? track?.title ?? slug);
   const label = sanitizeFilename(body?.label ?? versionId);
-  const filename = `${title} (${label}).${format}`;
+  const ext = isZip ? "zip" : format;
+  // The WAV zip bundles every version, so name it by the track, not one version.
+  const filename = isZip ? `${title} (WAV 44.1-16).zip` : `${title} (${label}).${ext}`;
 
   return new Response(audioBody, {
     status: 200,

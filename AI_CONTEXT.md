@@ -914,3 +914,35 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   separate 320 render exists yet), and WAV is served from the uploaded master (r2_key_wav, Max only).
   So upload a 320 kbps preview if you want the "320" option to truly be 320, and upload a WAV master
   for the WAV option to work.
+- **2026-07-07 (WAV-first upload pipeline: browser transcode + WAV zip + real 128/320):** reworked
+  the whole track-upload/delivery model per owner. Owner now uploads WAV files only and picks the
+  main version; the BROWSER does everything (Cloudflare Workers can't run ffmpeg): decode WAV via
+  WebAudio, encode MP3 320 (site preview + 320 download) and MP3 128 (128 download) with **lamejs**
+  (`@breezystack/lamejs`, pure JS — NO ffmpeg.wasm, NO COOP/COEP headers, so PayPal/YouTube embeds
+  are unaffected), pack all WAVs into one `.zip` with **fflate**, and make a cover thumbnail via
+  `<canvas>`. Non-main WAVs become additional versions (each gets its own 320/128 for the existing
+  on-site version previews — the multi-version UI is kept, NOT simplified). NEW deps in package.json:
+  `@breezystack/lamejs` + `fflate` (verified their ESM named exports: `Mp3Encoder`, `zip`). NEW
+  `src/lib/audioEncoding.ts` (decodeAudio/encodeMp3/wavToMp3Pair/zipWavs/makeThumbnail/formatDuration).
+  `AddTrackModal.tsx` fully rewritten: multi-WAV list + main star + per-version labels, per-version
+  encode+upload with a progress line, WAV zip upload, cover+thumbnail. Backend: `admin/upload-audio.ts`
+  now accepts kinds preview|preview128 (public mp3) + wavzip (private .zip in masters/) + master;
+  `admin/content.ts` `create_track` takes `versions[]` (previewSrc 320 + preview128) + `wavZipKey` +
+  `coverThumb`, inserts N track_versions (version_id main, v2, v3…); `ensureTrackCoverColumn` now also
+  lazily adds `tracks.cover_thumb`, `tracks.r2_key_wav_zip`, `track_versions.preview_128`; migration
+  0001_init.sql updated (+ the previously-missing `cover` column). `download.ts` now takes `quality`
+  (128→preview_128 else preview_src) and serves `tracks.r2_key_wav_zip` for WAV as a `.zip`
+  (`Track (WAV 44.1-16).zip`), with defensive column fallbacks so existing tracks/DBs keep working
+  (legacy per-version r2_key_wav still honored). `/api/tracks` returns cover_thumb (two-tier fallback);
+  `/api/downloads` returns track slug. Frontend: DownloadOptionsModal passes quality; downloadTrack
+  DownloadArgs gains quality + names WAV downloads `.zip`; CatalogTrack/useTracks gain coverThumb;
+  TrackRowPlayer row thumb uses coverThumb||cover; Account → Downloads replaces "Re-download" with
+  "MP3 320" + "WAV 44/16 zip" buttons (need trackSlug, main version). Deleted 7 stray NUL-truncated
+  snapshot files from src (host).
+  OWNER STEPS: (1) run `npm install` once (adds lamejs + fflate) BEFORE deploy.bat, or the local
+  vite build fails on the new imports; (2) deploy.bat as usual (R2 already bound). CAVEATS: encoding
+  a long WAV can freeze the admin tab ~10-30s (client-side, admin-only); WAV-zip download is still
+  Max-plan gated in download.ts — wiring one-time PayPal license buyers to the WAV zip is a separate
+  TODO the owner deferred. Couldn't run vite build in the sandbox (Windows node_modules + the usual
+  mirror truncation of edited files) — logic reviewed by hand + dep exports verified in an isolated
+  install; authoritative lint+build runs on the host via deploy.bat.

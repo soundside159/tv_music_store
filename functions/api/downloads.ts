@@ -16,7 +16,7 @@ export const onRequestGet = async (ctx: Ctx) => {
 
   const rows = await ctx.env.DB.prepare(
     `SELECT d.id, d.track_id, d.composer_id, d.plan_at_download, d.format, d.created_at,
-            t.title AS track_title
+            t.title AS track_title, t.slug AS track_slug
        FROM download_log d
        LEFT JOIN tracks t ON t.id = d.track_id
       WHERE d.user_id = ?1
@@ -32,6 +32,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       format: string;
       created_at: string;
       track_title: string | null;
+      track_slug: string | null;
     }>();
 
   return json({
@@ -43,6 +44,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       format: r.format,
       createdAt: r.created_at,
       trackTitle: r.track_title ?? prettify(r.track_id),
+      trackSlug: r.track_slug ?? "",
     })),
   });
 };

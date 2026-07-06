@@ -18,6 +18,7 @@ import { mockClaimRequests } from "@/mocks";
 import MyChannels from "@/components/MyChannels";
 import { logout, updateProfile } from "@/hooks/useAuth";
 import { BILLING_ENABLED, openBillingPortal } from "@/lib/billing";
+import { downloadTrackVersion } from "@/lib/downloadTrack";
 
 const GOLD = "#F4C430";
 
@@ -392,9 +393,43 @@ const Account = () => {
                                 >
                                   Download License
                                 </a>
-                                <button type="button" className="font-body text-xs font-semibold text-muted-foreground hover:text-foreground hover:underline">
-                                  Re-download
-                                </button>
+                                {d.trackSlug && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        void downloadTrackVersion({
+                                          slug: d.trackSlug!,
+                                          versionId: "main",
+                                          src: "",
+                                          title: d.trackTitle ?? trackTitle(d.trackId),
+                                          label: "Main",
+                                          format: "mp3",
+                                          quality: 320,
+                                        })
+                                      }
+                                      className="font-body text-xs font-semibold text-muted-foreground hover:text-foreground hover:underline"
+                                    >
+                                      MP3 320
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        void downloadTrackVersion({
+                                          slug: d.trackSlug!,
+                                          versionId: "main",
+                                          src: "",
+                                          title: d.trackTitle ?? trackTitle(d.trackId),
+                                          label: "Main",
+                                          format: "wav",
+                                        })
+                                      }
+                                      className="font-body text-xs font-semibold text-muted-foreground hover:text-foreground hover:underline"
+                                    >
+                                      WAV 44/16 zip
+                                    </button>
+                                  </>
+                                )}
                               </span>
                             </td>
                           </tr>

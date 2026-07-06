@@ -136,10 +136,15 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
     setDraft(null);
   }, [tab]);
 
-  const uploadCover = async (file: File, apply: (path: string) => void) => {
+  const uploadCover = async (
+    file: File | Blob,
+    apply: (path: string) => void,
+    filename?: string,
+  ) => {
     setUploading(true);
     try {
-      const base = file.name.replace(/\.[^.]+$/, "");
+      const raw = filename ?? (file instanceof File ? file.name : "cover");
+      const base = raw.replace(/\.[^.]+$/, "");
       const res = await fetch(`/api/admin/upload?filename=${encodeURIComponent(base)}`, {
         method: "POST",
         credentials: "include",
@@ -149,7 +154,6 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
       const d = (await res.json().catch(() => ({}))) as { ok?: boolean; path?: string; error?: string };
       if (!res.ok || !d.ok || !d.path) throw new Error(d.error ?? "Upload failed");
       apply(d.path);
-      toast.success("Cover uploaded");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Upload failed");
     } finally {
@@ -158,10 +162,12 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
   };
 
   const uploadAudio = async (
-    file: File,
-    kind: "preview" | "master",
+    file: File | Blob,
+    kind: "preview" | "preview128" | "master" | "wavzip",
+    filename?: string,
   ): Promise<{ key: string; path: string | null } | null> => {
-    const base = file.name.replace(/\.[^.]+$/, "");
+    const raw = filename ?? (file instanceof File ? file.name : kind);
+    const base = raw.replace(/\.[^.]+$/, "");
     try {
       const res = await fetch(
         `/api/admin/upload-audio?kind=${kind}&filename=${encodeURIComponent(base)}`,
@@ -179,7 +185,6 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
         error?: string;
       };
       if (!res.ok || !d.ok || !d.key) throw new Error(d.error ?? "Upload failed");
-      toast.success(`${kind === "master" ? "Master" : "Preview"} uploaded`);
       return { key: d.key, path: d.path ?? null };
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Upload failed");
