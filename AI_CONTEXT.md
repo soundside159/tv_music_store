@@ -658,3 +658,25 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   AND use sandbox app credentials AND pay with a sandbox buyer account; for live, use live-app
   credentials with PAYPAL_ENV unset. (capture.ts left un-wrapped for now — the failing step is
   order/createOrder.) Note test prices $1/$2/$3 are unrelated (valid amounts).
+- **2026-07-06 (license PDF redesign — DONE + next task documented):** the plain black-and-white
+  certificate was restyled into a branded one. `functions/api/_pdf.ts` extended: RGB fill colors,
+  filled rectangles, lines, Courier/Courier-Bold fonts, and ONE embedded RGBA image (FlateDecode
+  RGB XObject + grayscale SMask for transparency) — object numbering kept stable (fonts F3/F4 at
+  obj 9/10, image at 7, SMask at 8). New `functions/api/_logo.ts` (auto-generated from
+  `public/images/icons/logo-header.png`, 137x128) holds the gold soundwave logo as zlib-compressed
+  RGB + alpha base64. `functions/api/license-pdf.ts` fully redesigned: dark graphite header band
+  (#121317) with the logo + "TV MUSIC STORE" wordmark + letterspaced "LICENSE CERTIFICATE" + ISSUED
+  date, gold 4px rule under the header, big license-name title with a gold underline, licensee /
+  track blocks, a gold-bulleted USAGE RIGHTS list, a warm-panel LICENSE CODE box (gold left bar,
+  courier code, + a 3-row meta panel: Type/Price/Reference for one-time, Type/Track/Status for
+  subscription), and a footer rule + contact line. Brand gold #F4C430 throughout. VERIFIED: both
+  variants (one-time Commercial + subscription Max Plan) render as valid PDFs (qpdf --check: no
+  syntax/stream errors) with the logo embedded; rasterized previews looked correct. deploy via
+  deploy.bat (host build). NOTE the usual sandbox-mirror truncation hit `_pdf.ts` + `license-pdf.ts`
+  again — host files are whole (verified via Read); to render in the sandbox I copied host content
+  into /tmp (the `_logo.ts` mirror synced whole, the other two did not). NEXT TASK (owner deferred,
+  written up): subscription certificates still print a static "MAX PLAN" instead of a real unique
+  code — spec to mint/store/show a persistent plan license code + admin lookup is in
+  `docs/TODO_PLAN_LICENSE_CODES.md` (new `plan_licenses` table, get-or-create per user/track/plan,
+  extend admin/licenses.ts + /admin Licenses to cover both one-time and subscription codes). The PDF
+  template itself needs no further redesign for that task — it already renders the code panel.
