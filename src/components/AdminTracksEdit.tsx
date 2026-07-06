@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, Flame, Minus, Music, Pause, Play, Search, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Minus, Music, Pause, Play, Search, X } from "lucide-react";
 import WaveformPreview from "@/components/WaveformPreview";
 import { usePlayer } from "@/components/playerContext";
 import { splitFilterValues } from "@/components/TrackRowPlayer";
@@ -176,17 +176,6 @@ const AdminTracksEdit = ({
 
   const selectedSet = useMemo(() => new Set(selected), [selected]);
   const selTracks = useMemo(() => tracks.filter((t) => selectedSet.has(t.id)), [tracks, selectedSet]);
-
-  const collectionCount = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const c of collections) for (const id of c.trackIds) m.set(id, (m.get(id) ?? 0) + 1);
-    return m;
-  }, [collections]);
-  const playlistCount = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const p of playlists) for (const id of p.trackIds) m.set(id, (m.get(id) ?? 0) + 1);
-    return m;
-  }, [playlists]);
 
   // Reset pending changes whenever the selection itself changes.
   const selectionKey = selected.join("|");
@@ -468,7 +457,7 @@ const AdminTracksEdit = ({
 
         <div className="mt-4 overflow-x-auto rounded-lg border border-border/60">
           <div className="min-w-[44rem]">
-            <div className="grid grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_8rem_5rem_6rem_6rem_6rem] items-center gap-2 border-b border-border/60 bg-secondary/40 px-3 py-2.5">
+            <div className="grid grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_8rem_5rem] items-center gap-2 border-b border-border/60 bg-secondary/40 px-3 py-2.5">
               <span className="flex justify-center">
                 <RowCheckbox state={pageState} onToggle={togglePage} label="Select all visible" />
               </span>
@@ -476,9 +465,6 @@ const AdminTracksEdit = ({
               <span className="font-body text-xs uppercase tracking-wide text-muted-foreground">Track</span>
               <span className="font-body text-xs uppercase tracking-wide text-muted-foreground">Composer</span>
               <span className="font-body text-xs uppercase tracking-wide text-muted-foreground">Duration</span>
-              <span className="text-center font-body text-xs uppercase tracking-wide text-muted-foreground">Collections</span>
-              <span className="text-center font-body text-xs uppercase tracking-wide text-muted-foreground">Playlists</span>
-              <span className="text-center font-body text-xs uppercase tracking-wide text-muted-foreground">Trending</span>
             </div>
 
             {paged.map((t) => {
@@ -491,7 +477,7 @@ const AdminTracksEdit = ({
               return (
                 <div
                   key={t.id}
-                  className={`grid grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_8rem_5rem_6rem_6rem_6rem] items-center gap-2 border-b border-border/40 px-3 py-2 transition-colors last:border-b-0 ${
+                  className={`grid grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_8rem_5rem] items-center gap-2 border-b border-border/40 px-3 py-2 transition-colors last:border-b-0 ${
                     isSelected ? "bg-[#F4C430]/[0.06]" : "hover:bg-foreground/[0.03]"
                   }`}
                 >
@@ -547,19 +533,6 @@ const AdminTracksEdit = ({
 
                   <span className="truncate font-body text-xs text-muted-foreground">{t.artist}</span>
                   <span className="font-body text-xs tabular-nums text-muted-foreground">{t.duration}</span>
-                  <span className="text-center font-body text-xs tabular-nums text-muted-foreground">
-                    {collectionCount.get(t.id) ?? 0}
-                  </span>
-                  <span className="text-center font-body text-xs tabular-nums text-muted-foreground">
-                    {playlistCount.get(t.id) ?? 0}
-                  </span>
-                  <span className="flex justify-center">
-                    {trending.includes(t.id) ? (
-                      <Flame className="h-4 w-4 text-[#F4C430]" />
-                    ) : (
-                      <span className="font-body text-xs text-muted-foreground/50">—</span>
-                    )}
-                  </span>
                 </div>
               );
             })}
