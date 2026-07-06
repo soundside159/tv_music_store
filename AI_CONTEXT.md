@@ -765,3 +765,19 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   composer %, lawyer review). KNOWN CONFLICT: `src/pages/Licensing.tsx` still advertises "channel
   whitelisting" (Pro 3 / Max 10) + FAQ saying whitelisting auto-clears claims — contradicts the new
   per-claim-only Content ID policy in Terms/certificate/privacy. Needs reconciling.
+- **2026-07-06 (Content ID model reconciled + whitelist spec + funnel doc):** owner clarified the
+  intended Content ID model: subscriptions DO offer **channel whitelisting**, but manual +
+  subscription-bound (customer adds channel URLs up to a plan limit; owner clears claims on those
+  channels while the sub is active; videos published after cancellation aren't covered). One-time
+  licenses use per-claim release by License Number. Reconciled: LicenseTerms.tsx §6 + LICENSE_TERMS_
+  DRAFT.md §6 rewritten to this two-path model; Licensing.tsx Content ID FAQ updated (was "whitelist
+  auto-clears in 24h" -> "on a paid plan we clear claims on your whitelisted channels while active,
+  or send a link+License Number for a one-off"). NEW `docs/WHITELIST_SYSTEM.md` — full spec (Phase 1
+  manual: whitelist_channels D1 table + account "My Channels" + admin Whitelist view; Phase 2:
+  scheduled worker polls channels via YouTube Data API and surfaces new post-subscription videos in
+  admin; caveat that true auto-whitelisting needs the Content ID provider's allowlist API). NEW
+  `docs/GROWTH_FUNNEL.md` — acquisition/funnel plan (Free plan as lead magnet; YouTube + track-page
+  SEO + free tools for traffic; activation via easy first download + certificate trust; Free->paid via
+  limits/WAV/whitelisting; retention via taste-segmented new-release emails = the admin CRM idea;
+  metrics). Owner flagged "no funnel = no point" — this doc is the starting plan. Whitelist per-plan
+  limits still reference the /licensing table (Pro 3 / Max 10) — owner to confirm final numbers.

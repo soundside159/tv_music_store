@@ -108,12 +108,18 @@ const LicenseTerms = () => (
 
       <H2>6. YouTube Content ID</H2>
       <P>
-        Our catalog is protected through YouTube's Content ID system. A Content ID claim on a video
-        is normally just a notice, not a copyright strike. If you receive a claim on a licensed use,
-        send us your License Number (and the video link) at contact@tvmusicstore.com and we will
-        release that specific claim on that specific video. We resolve claims per video — we do not
-        whitelist entire channels. Releasing a claim transfers no ownership; the music remains the
-        property of TV Music Store and its composers.
+        Our catalog is protected through YouTube's Content ID system. A claim on a video is normally
+        just a notice, not a copyright strike, and we release it for licensed uses:
+      </P>
+      <UL
+        items={[
+          "Subscription plans — channel whitelisting: add your YouTube channel(s), up to your plan's limit, in your account. While your subscription is active, we clear Content ID claims on videos on those channels that use our music. Anything you publish while active stays cleared; videos published after your subscription ends are not covered.",
+          "One-time licenses (or any single claim): send us your License Number and the video link at contact@tvmusicstore.com and we'll release that specific claim.",
+        ]}
+      />
+      <P>
+        Releasing a claim transfers no ownership; the music remains the property of TV Music Store
+        and its composers.
       </P>
 
       <H2>7. Payment, chargebacks &amp; refunds</H2>

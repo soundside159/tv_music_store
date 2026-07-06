@@ -35,7 +35,7 @@ const faq = [
   },
   {
     q: "What happens if I get a Content ID claim?",
-    a: "All tracks are registered in Content ID by their composers. Whitelist your channel (Pro/Max) and claims clear automatically within 24 hours, or submit the video link from your account on any plan.",
+    a: "All tracks are registered in Content ID by their composers. On a paid plan, whitelist your channel(s) and we clear Content ID claims on them while your subscription is active (usually within 24 hours). For a one-off, send the video link and your License Number and we'll release that specific claim.",
   },
   {
     q: "Can I use one subscription for multiple clients?",

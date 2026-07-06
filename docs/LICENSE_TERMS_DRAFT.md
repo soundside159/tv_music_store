@@ -131,17 +131,17 @@ behalf by third-party rights-management services). When a track is used, YouTube
 may automatically place a **Content ID claim** on the video. A claim is normally
 just a notice/monetization flag — it is not a copyright strike.
 
-If you receive a Content ID claim on a **licensed** use of our music:
+We release claims for licensed uses in two ways:
 
-- Your **License Certificate** is your proof. Send us the **License Number** (and
-  the video link) at contact@tvmusicstore.com and we will **release that specific
-  claim** on that specific video.
-- We resolve claims **per video / per claim** — we do **not** whitelist entire
-  channels. This keeps licensing fair: a claim is released because a valid license
-  exists for that use.
-- For subscription customers this fits the perpetual model: videos you licensed
-  while subscribed stay released for good; videos you publish **after** cancelling,
-  using tracks you never licensed, are not covered.
+- **Subscription plans — channel whitelisting.** Add your YouTube channel(s), up
+  to your plan's limit, in your account. While your subscription is **active** we
+  clear Content ID claims on videos on those channels that use our music. Anything
+  published while active stays cleared; videos published **after** the subscription
+  ends are not covered. (Operationally this is managed by us per the whitelist —
+  see `WHITELIST_SYSTEM.md`.)
+- **One-time licenses / single claims.** Your **License Certificate** is your
+  proof — send us the **License Number** and the video link at
+  contact@tvmusicstore.com and we release that specific claim.
 
 Releasing a claim does **not** transfer any ownership — the music always remains
 the intellectual property of TV Music Store and its composers.
