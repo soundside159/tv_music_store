@@ -27,6 +27,45 @@ const firstName = (name?: string | null) => {
   return n || "there";
 };
 
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** Marketing campaign email — admin-authored body + a required unsubscribe link. */
+export const sendCampaignEmail = async (
+  env: Env,
+  to: string,
+  subject: string,
+  bodyText: string,
+  unsubscribeUrl: string,
+): Promise<boolean> => {
+  const paragraphs = bodyText
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map(
+      (p) =>
+        `<p style="margin:0 0 14px;color:#333;font-size:14px;line-height:1.7">${escapeHtml(p).replace(/\n/g, "<br/>")}</p>`,
+    )
+    .join("");
+  const inner = `
+    ${paragraphs}
+    <p style="margin:26px 0 0;text-align:center">
+      <a href="https://tvmusicstore.com/catalog"
+        style="display:inline-block;background:#F4C430;color:#111;font-size:14px;font-weight:bold;text-decoration:none;padding:12px 26px;border-radius:8px">
+        Listen now
+      </a>
+    </p>
+    <p style="margin:22px 0 0;color:#999;font-size:11px;line-height:1.6;text-align:center">
+      You're receiving this because you subscribed to TV Music Store updates.
+      <a href="${unsubscribeUrl}" style="color:#999;text-decoration:underline">Unsubscribe</a>.
+    </p>`;
+  try {
+    return await sendEmail(env, to, subject, shell(inner));
+  } catch {
+    return false;
+  }
+};
+
 /** Welcome email sent once when a new account is created. Never throws. */
 export const sendWelcomeEmail = async (env: Env, to: string, name?: string | null): Promise<void> => {
   const inner = `

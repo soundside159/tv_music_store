@@ -11,6 +11,7 @@ import {
   ListFilter,
   ListMusic,
   Music2,
+  Send,
   ShieldCheck,
   SlidersHorizontal,
   Tags,
@@ -70,5 +71,6 @@ export const adminNavItems: NavItem[] = [
   { id: "customers", label: "Customers", icon: Users },
   { id: "licenses", label: "Licenses", icon: FileText },
   { id: "whitelist", label: "Whitelisting", icon: Youtube },
+  { id: "campaigns", label: "Campaigns", icon: Send },
   { id: "requests", label: "Requests", icon: Inbox },
 ];

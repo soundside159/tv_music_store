@@ -839,3 +839,14 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   YOUTUBE_API_KEY in CF Pages env. Backend node --check clean. Campaign sender deferred to BACKLOG.md.
   A true background poller would need a separate Worker (Pages can't cron) — noted in
   WHITELIST_SYSTEM.md.
+- **2026-07-06 (funnel: campaign sender, BUILT — funnel loop closed):** admin can email the newsletter
+  list, optionally narrowed to a CRM taste tag. NEW `functions/api/admin/campaign.ts` (POST, admin):
+  `{preview:true}` -> {count}; else sends. Audience = active `newsletter_subscribers`, and with a
+  `tag` = only those whose matched account taste (download_log/sync_orders JOIN tracks, genre/mood/
+  use_case LIKE %tag%) includes it. Sends via Resend in batches of 10, cap 300/campaign, each email
+  gets an unsubscribe link (newsletter token); logs to NEW `email_campaigns` table (migration + lazy).
+  `_email.ts` gained `sendCampaignEmail` (admin body -> paragraphs, "Listen now" CTA, unsubscribe
+  footer, HTML-escaped). Frontend: NEW `AdminCampaign.tsx` (audience toggle + taste tag, subject,
+  body, "Preview count" -> then "Send campaign" with confirm) + admin nav item "campaigns" (Send icon)
+  + Admin.tsx section. Backend node --check clean. Funnel now end-to-end: newsletter capture -> welcome
+  email -> CRM taste -> targeted campaign (all built). Larger lists need batching/queue later (cap 300).

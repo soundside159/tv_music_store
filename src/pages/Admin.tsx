@@ -20,6 +20,7 @@ import {
 } from "@/mocks";
 import AdminContent from "@/components/AdminContent";
 import AdminWhitelist from "@/components/AdminWhitelist";
+import AdminCampaign from "@/components/AdminCampaign";
 import AdminCustomerProfile from "@/components/AdminCustomerProfile";
 
 const GOLD = "#F4C430";
@@ -37,6 +38,7 @@ type SectionId =
   | "customers"
   | "licenses"
   | "whitelist"
+  | "campaigns"
   | "requests";
 
 const SECTION_IDS: SectionId[] = [
@@ -52,6 +54,7 @@ const SECTION_IDS: SectionId[] = [
   "customers",
   "licenses",
   "whitelist",
+  "campaigns",
   "requests",
 ];
 
@@ -552,6 +555,8 @@ const Admin = () => {
             )}
 
             {section === "whitelist" && <AdminWhitelist />}
+
+            {section === "campaigns" && <AdminCampaign />}
 
             {section === "licenses" && (
               <Card title={`Licenses${licenses ? ` (${licenses.length})` : ""}`}>
