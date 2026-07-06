@@ -1,5 +1,12 @@
 import { Link } from "react-router-dom";
-import { Youtube, Instagram, Twitter } from "lucide-react";
+import { Youtube, Instagram, Facebook } from "lucide-react";
+
+// lucide has no X (formerly Twitter) brand glyph — inline the official X mark.
+const XIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.66l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.451-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z" />
+  </svg>
+);
 
 // Multi-column site footer (tunetank-style, built from TV Music Store content).
 // Internal links use react-router; external/contact use <a>.
@@ -38,7 +45,8 @@ const COLUMNS: { title: string; links: FooterLink[] }[] = [
 const SOCIALS = [
   { label: "YouTube", href: "#", Icon: Youtube },
   { label: "Instagram", href: "#", Icon: Instagram },
-  { label: "X", href: "#", Icon: Twitter },
+  { label: "X", href: "#", Icon: XIcon },
+  { label: "Facebook", href: "#", Icon: Facebook },
 ];
 
 const linkClass =
@@ -92,8 +100,11 @@ const Footer = () => {
         {/* Bottom bar */}
         <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-border/50 pt-6 sm:flex-row">
           <p className="font-body text-xs text-muted-foreground">
-            © {new Date().getFullYear()} TV Music Store. All rights reserved. A trading name of
-            Stanislav Barantsov &amp; Maryna Huz.
+            © {new Date().getFullYear()} TV Music Store. All rights reserved. See our{" "}
+            <Link to="/license-terms" className="hover:text-[#F4C430]">
+              License Terms
+            </Link>
+            .
           </p>
           <div className="flex items-center gap-4">
             {SOCIALS.map(({ label, href, Icon }) => (

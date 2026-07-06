@@ -753,3 +753,15 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   non-exclusive. Open: correspondence address (virtual office), live prices (still on test $1/$2/$3),
   composer revenue %. Payments staying on Stripe+PayPal for now; Paddle (MoR) noted as a future
   option to offload global VAT/OSS.
+- **2026-07-06 (footer redesign + legal pages):** replaced the old "Let's Create Together" contact-form
+  footer (`src/components/Footer.tsx`) with a tunetank-style multi-column footer built from our content:
+  brand block + Music / Licensing / Company columns + bottom bar with socials (YouTube, Instagram, X
+  [inline SVG — lucide has no X brand], Facebook; hrefs are `#` placeholders). Owner's names moved OFF
+  the footer into the Terms/Privacy pages (disclosure required somewhere consumer-facing, not
+  specifically the footer). NEW public pages `src/pages/LicenseTerms.tsx` (/license-terms) and
+  `src/pages/Privacy.tsx` (/privacy), routed in App.tsx, rendering finalized draft content (EFFECTIVE +
+  ADDRESS constants at top of each to edit later). `docs/VAT_READINESS.md` + `docs/BACKLOG.md` created
+  (admin CRM customer-profile idea; owner to-dos: rent address, social URLs, restore live prices,
+  composer %, lawyer review). KNOWN CONFLICT: `src/pages/Licensing.tsx` still advertises "channel
+  whitelisting" (Pro 3 / Max 10) + FAQ saying whitelisting auto-clears claims — contradicts the new
+  per-claim-only Content ID policy in Terms/certificate/privacy. Needs reconciling.

@@ -20,6 +20,8 @@ import Cart from "./pages/Cart";
 import Composer from "./pages/Composer";
 import Admin from "./pages/Admin";
 import Login from "./pages/Login";
+import LicenseTerms from "./pages/LicenseTerms";
+import Privacy from "./pages/Privacy";
 import NotFound from "./pages/NotFound";
 import DevPersonaSwitcher from "./components/DevPersonaSwitcher";
 import DownloadOptionsModal from "./components/DownloadOptionsModal";
@@ -53,6 +55,8 @@ const App = () => (
           <Route path="/composer" element={<Composer />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/license-terms" element={<LicenseTerms />} />
+          <Route path="/privacy" element={<Privacy />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
           </Routes>
