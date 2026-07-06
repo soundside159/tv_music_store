@@ -850,3 +850,16 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   body, "Preview count" -> then "Send campaign" with confirm) + admin nav item "campaigns" (Send icon)
   + Admin.tsx section. Backend node --check clean. Funnel now end-to-end: newsletter capture -> welcome
   email -> CRM taste -> targeted campaign (all built). Larger lists need batching/queue later (cap 300).
+- **2026-07-06 (FIX: /api returned HTML "<!DOCTYPE" — newsletter file/folder conflict):** live site
+  showed `Unexpected token '<' ... is not valid JSON` on /api/whitelist (and likely all /api) — the
+  Functions layer wasn't routing, so /api/* fell back to the SPA index.html. Root cause suspected: a
+  file `functions/api/newsletter.ts` AND a folder `functions/api/newsletter/` with the same base name
+  (a Pages Functions build hazard). Fixed by consolidating into the folder: NEW
+  `functions/api/_newsletter.ts` (shared `ensureNewsletterTable` + email regex), NEW
+  `functions/api/newsletter/index.ts` (the POST subscribe handler), deleted `functions/api/
+  newsletter.ts` (used the cowork file-delete permission — sandbox `rm` was blocked). Updated imports
+  in `newsletter/unsubscribe.ts` and `admin/campaign.ts` to `../_newsletter`. All parse clean.
+  OWNER: redeploy (deploy.bat), then verify by opening /api/whitelist logged-out — expect
+  `{"error":"Not signed in"}` JSON. If it STILL returns HTML, check the Cloudflare Pages deployment
+  build log for a Functions error (possible other causes: functions bundle size from _assets.ts, or a
+  CF build/config issue) and report it.

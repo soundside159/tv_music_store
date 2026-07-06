@@ -1,5 +1,5 @@
 import { getSessionUser, json, newId, OWNER_EMAIL, readJson, type Ctx, type D1Database } from "../_utils";
-import { ensureNewsletterTable } from "../newsletter";
+import { ensureNewsletterTable } from "../_newsletter";
 import { sendCampaignEmail } from "../_email";
 
 // POST /api/admin/campaign — admin only.

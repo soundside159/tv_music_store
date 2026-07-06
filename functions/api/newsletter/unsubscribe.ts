@@ -1,5 +1,5 @@
 import type { Ctx } from "../_utils";
-import { ensureNewsletterTable } from "../newsletter";
+import { ensureNewsletterTable } from "../_newsletter";
 
 // GET /api/newsletter/unsubscribe?token=... — one-click unsubscribe from a
 // campaign email. Returns a small branded HTML confirmation page.
