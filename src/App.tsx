@@ -26,6 +26,8 @@ import NotFound from "./pages/NotFound";
 import DevPersonaSwitcher from "./components/DevPersonaSwitcher";
 import DownloadOptionsModal from "./components/DownloadOptionsModal";
 import LicenseModal from "./components/LicenseModal";
+import PlanModal from "./components/PlanModal";
+import AttributionModal from "./components/AttributionModal";
 import { PlayerProvider } from "./components/PlayerProvider";
 
 const queryClient = new QueryClient();
@@ -63,6 +65,8 @@ const App = () => (
           </Routes>
           <DownloadOptionsModal />
           <LicenseModal />
+          <PlanModal />
+          <AttributionModal />
         </PlayerProvider>
       </BrowserRouter>
     </TooltipProvider>

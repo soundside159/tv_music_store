@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Check, Download, X } from "lucide-react";
 import { useAuthSession } from "@/hooks/useAuth";
-import { downloadTrackVersion, type DownloadArgs } from "@/lib/downloadTrack";
+import { downloadTrackVersion, openAttribution, type DownloadArgs } from "@/lib/downloadTrack";
 
 // Tunetank-style download dialog. Any Download button dispatches
 // "tvms:download-options" (see openDownloadOptions) and this modal takes over:
@@ -83,11 +83,16 @@ const DownloadOptionsModal = () => {
     }
     setBusy(true);
     try {
-      await downloadTrackVersion({
+      const dl: DownloadArgs = {
         ...args,
         format: option.id === "wav" ? "wav" : "mp3",
         quality: option.id === "mp3-128" ? 128 : 320,
-      });
+      };
+      const ok = await downloadTrackVersion(dl);
+      // Free-plan MP3 downloads require attribution — show the "Say thanks!" popup.
+      if (ok && status === "authed" && plan === "free" && option.id === "mp3-128") {
+        openAttribution({ title: args.title, slug: args.slug, download: dl });
+      }
       if (includePdf && status === "authed") {
         // Attachment header makes this download the certificate without navigating.
         const a = document.createElement("a");

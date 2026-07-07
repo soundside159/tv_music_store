@@ -17,6 +17,18 @@ const FREE_MONTHLY_LIMIT = 3;
 const sanitizeFilename = (s: string) =>
   s.replace(/[^\w\s\-().]/g, "").replace(/\s+/g, " ").trim().slice(0, 80) || "track";
 
+// The part of a version label that isn't the track title (so it isn't duplicated
+// in the filename). "Opening Up Space (short version)" + "Opening Up Space" ->
+// "short version"; the main version returns "".
+const cleanVersionSuffix = (label: string, title: string): string => {
+  let s = (label ?? "").trim();
+  const t = (title ?? "").trim();
+  if (t && s.toLowerCase().startsWith(t.toLowerCase())) s = s.slice(t.length);
+  s = s.replace(/^[\s\-–—()[\]]+|[\s\-–—()[\]]+$/g, "").trim();
+  if (/^(main|full|original|full version)$/i.test(s)) s = "";
+  return s;
+};
+
 export const onRequestPost = async (ctx: Ctx) => {
   if (!ctx.env.DB) return json({ error: "DB not bound. See docs/SETUP_BACKEND.md" }, 503);
 
@@ -160,11 +172,14 @@ export const onRequestPost = async (ctx: Ctx) => {
     .bind(user.id, track?.id ?? slug, track?.composer_id ?? null, plan, format)
     .run();
 
-  const title = sanitizeFilename(body?.title ?? track?.title ?? slug);
-  const label = sanitizeFilename(body?.label ?? versionId);
+  const rawTitle = body?.title ?? track?.title ?? slug;
+  const title = sanitizeFilename(rawTitle);
   const ext = isZip ? "zip" : format;
-  // The WAV zip bundles every version, so name it by the track, not one version.
-  const filename = isZip ? `${title} (WAV 44.1-16).zip` : `${title} (${label}).${ext}`;
+  // Strip the track title out of the version label so it isn't duplicated, then
+  // prefix the site (tunetank-style): "tvmusicstore.com_Title (short version).mp3".
+  const suffix = isZip ? "" : cleanVersionSuffix(body?.label ?? versionId, rawTitle);
+  const base = suffix ? `${title} (${sanitizeFilename(suffix)})` : title;
+  const filename = `tvmusicstore.com_${base}.${ext}`;
 
   return new Response(audioBody, {
     status: 200,

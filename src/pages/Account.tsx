@@ -17,7 +17,7 @@ import {
 import { mockClaimRequests } from "@/mocks";
 import MyChannels from "@/components/MyChannels";
 import { logout, updateProfile } from "@/hooks/useAuth";
-import { BILLING_ENABLED, openBillingPortal } from "@/lib/billing";
+import { BILLING_ENABLED, openBillingPortal, openPlanModal } from "@/lib/billing";
 import { downloadTrackVersion } from "@/lib/downloadTrack";
 
 const GOLD = "#F4C430";
@@ -320,12 +320,13 @@ const Account = () => {
                         </button>
                       )}
                       {plan?.id !== "max" && (
-                        <Link
-                          to="/pricing"
+                        <button
+                          type="button"
+                          onClick={() => openPlanModal()}
                           className="rounded-lg bg-[#F4C430] px-5 py-2 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
                         >
                           Upgrade
-                        </Link>
+                        </button>
                       )}
                     </div>
                   </div>

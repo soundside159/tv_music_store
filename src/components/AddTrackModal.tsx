@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { Check, GripVertical, Music, Star, Trash2, X } from "lucide-react";
 import type { Vocabularies } from "@/lib/tagOptions";
 import { formatDuration, makeThumbnail, wavToMp3Pair, zipWavs } from "@/lib/audioEncoding";
+import { cleanVersionLabel } from "@/lib/downloadTrack";
 
 // Admin "Add Track" flow. The owner uploads WAV files and picks the main one;
 // the browser (lamejs) makes an MP3 320 (site preview + 320 download) and MP3
@@ -22,7 +23,10 @@ interface VersionRow {
   id: string;
   file: File;
   label: string;
+  edited: boolean;
 }
+
+const baseName = (file: File) => file.name.replace(/\.[^.]+$/, "");
 
 const yieldToUi = () => new Promise((r) => setTimeout(r, 0));
 
@@ -73,10 +77,15 @@ const AddTrackModal = ({
     const incoming: VersionRow[] = Array.from(files).map((file) => ({
       id: `${file.name}-${file.size}-${Math.random().toString(36).slice(2, 7)}`,
       file,
-      label: file.name.replace(/\.[^.]+$/, "").slice(0, 60),
+      label: baseName(file).slice(0, 60),
+      edited: false,
     }));
     setVersions((prev) => [...prev, ...incoming].slice(0, 12));
   };
+
+  // Shown label: auto-strip the track title from the filename (so "Opening Up
+  // Space (short version)" shows as "short version") until the owner edits it.
+  const labelOf = (v: VersionRow) => (v.edited ? v.label : cleanVersionLabel(baseName(v.file), title));
 
   const removeVersion = (id: string) =>
     setVersions((prev) => {
@@ -88,7 +97,7 @@ const AddTrackModal = ({
     });
 
   const setLabel = (id: string, label: string) =>
-    setVersions((prev) => prev.map((v) => (v.id === id ? { ...v, label } : v)));
+    setVersions((prev) => prev.map((v) => (v.id === id ? { ...v, label, edited: true } : v)));
 
   const onCover = async (file: File) => {
     setUploadingCover(true);
@@ -120,16 +129,18 @@ const AddTrackModal = ({
 
       for (let i = 0; i < ordered.length; i++) {
         const v = ordered[i];
-        setProgress(`Encoding "${v.label}" (${i + 1}/${ordered.length})…`);
+        // Clean label with the track title stripped; main -> "Main".
+        const cleaned = labelOf(v) || (i === 0 ? "Main" : `Version ${i + 1}`);
+        setProgress(`Encoding "${cleaned}" (${i + 1}/${ordered.length})…`);
         await yieldToUi();
         const { mp3_320, mp3_128, duration } = await wavToMp3Pair(v.file);
-        const base = v.label || `version-${i + 1}`;
+        const base = `${title.trim()}-${cleaned}`;
         const up320 = await uploadAudio(mp3_320, "preview", `${base}-320.mp3`);
-        if (!up320?.path) throw new Error(`Upload failed for "${v.label}" (320)`);
+        if (!up320?.path) throw new Error(`Upload failed for "${cleaned}" (320)`);
         const up128 = await uploadAudio(mp3_128, "preview128", `${base}-128.mp3`);
-        if (!up128?.path) throw new Error(`Upload failed for "${v.label}" (128)`);
+        if (!up128?.path) throw new Error(`Upload failed for "${cleaned}" (128)`);
         outVersions.push({
-          label: v.label || (i === 0 ? "Main" : `Version ${i + 1}`),
+          label: cleaned,
           previewSrc: up320.path,
           preview128: up128.path,
           duration: formatDuration(duration),
@@ -321,9 +332,9 @@ const AddTrackModal = ({
                       {i === mainIdx ? "Main" : "Set main"}
                     </button>
                     <input
-                      value={v.label}
+                      value={labelOf(v)}
                       onChange={(e) => setLabel(v.id, e.target.value)}
-                      placeholder="Version label"
+                      placeholder={i === mainIdx ? "Main" : "Version label"}
                       className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 font-body text-xs text-foreground focus:border-[#F4C430] focus:outline-none"
                     />
                     <span className="hidden max-w-[9rem] shrink-0 truncate font-body text-[11px] text-muted-foreground sm:block">

@@ -981,3 +981,34 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   Download → 401 → auth → back to the same popup to finish. (4) Removed `autoFocus` from the EMAIL
   input in `AuthModal.tsx` + `Login.tsx` (kept it on the 6-digit CODE input) so opening auth doesn't
   grab the email field — most users click Continue-with-Google.
+- **2026-07-07 (Pick-a-plan popup + free-download attribution popup):** two tunetank-style popups,
+  both global + event-driven like the other modals (mounted in App.tsx). (1) NEW
+  `src/components/PlanModal.tsx` — "Pick a plan" popup with a Monthly/Annual toggle and the paid
+  cards (Pro / Max, Max = Most Popular), reuses `usePlans`/`useSubscription`; CTA mirrors the Pricing
+  page (`startCheckout`, or "Coming soon" disabled while `BILLING_ENABLED` is false), "Full pricing
+  details →" links to /pricing. Opened via NEW `openPlanModal()` in `lib/billing.ts` (event
+  `tvms:pick-plan`). Account → Overview "Upgrade" button now opens this popup instead of navigating
+  to /pricing. (2) NEW `src/components/AttributionModal.tsx` — "Say thanks!" popup with ready-to-copy
+  credit text ("Royalty Free Music from tvmusicstore.com / Track: <title> by <artist> / <origin>/track/
+  <slug>"), Copy button, a "download the audio file" fallback link (re-runs the download), and a "Want
+  studio WAV, 320 Kbps and no attribution? See plans" link that opens PlanModal. Opened via NEW
+  `openAttribution()` in `lib/downloadTrack.ts` (event `tvms:attribution`). Trigger: `downloadTrackVersion`
+  now RETURNS a boolean (success), and `DownloadOptionsModal` opens the attribution popup only when an
+  authed FREE-plan MP3-128 download actually succeeded (not on 401/limit). Free-plan attribution matches
+  the license terms. NOTE: while Stripe is paused the plan popup's Get-plan buttons show "Coming soon";
+  flip BILLING_ENABLED (Paddle) to activate.
+- **2026-07-07 (download filenames + clean version labels):** owner downloaded MP3s named
+  "Opening Up Space (Opening Up Space (short version)).mp3" — the title was duplicated because version
+  labels defaulted to the full WAV filename (which contains the title). Fixes: (1) NEW helpers in
+  `lib/downloadTrack.ts`: `cleanVersionLabel(label,title)` strips the track title out of a version
+  label ("Opening Up Space (short version)" -> "short version"; main/full/original/"==title" -> ""),
+  `downloadFileName(title,label,fmt)` = `tvmusicstore.com_<Title> (<suffix>).mp3` (no suffix for main),
+  `wavZipFileName(title)` = `tvmusicstore.com_<Title>.zip`. Site-prefixed, tunetank-style. Used in the
+  blob `a.download`. (2) Server `functions/api/download.ts` builds the same site-prefixed
+  content-disposition (own `cleanVersionSuffix`), so even already-uploaded tracks download cleanly.
+  (3) `AddTrackModal`: version labels now auto-strip the track title for DISPLAY + storage (VersionRow
+  gained `edited`; `labelOf()` shows `cleanVersionLabel(filename,title)` until the owner edits it; main
+  shows placeholder "Main"), and `create_track` stores the cleaned labels ("Main"/"short version"/…).
+  NOTE for the owner: his ALREADY-uploaded test track keeps its ugly stored version labels on-site
+  (download names are fixed regardless) — delete + re-upload that track to get clean on-site labels too.
+  (WAV→MP3 is expected: the site serves MP3 made from the WAVs; the WAVs themselves live in the zip.)
