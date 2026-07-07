@@ -37,7 +37,6 @@ export const accountNavGroups: { label: string; items: NavItem[] }[] = [
     label: "Account",
     items: [
       { id: "profile", label: "Profile", icon: UserRound },
-      { id: "overview", label: "Overview", icon: LayoutDashboard },
       { id: "downloads", label: "Downloads", icon: Download },
     ],
   },
@@ -48,7 +47,7 @@ export const accountNavGroups: { label: string; items: NavItem[] }[] = [
   {
     label: "Music",
     items: [
-      { id: "whitelist", label: "Whitelisting", icon: Youtube },
+      { id: "whitelist", label: "YouTube Whitelisting", icon: Youtube },
       { id: "license", label: "Licenses", icon: FileText },
       { id: "claims", label: "Copyright Claims", icon: ShieldCheck },
     ],

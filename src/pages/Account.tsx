@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { LogOut } from "lucide-react";
+import { ArrowUpRight, LogOut } from "lucide-react";
 import { accountNavGroups, adminNavItems } from "@/lib/adminNav";
 import MenuGroupHeader from "@/components/MenuGroupHeader";
 import Navigation from "@/components/Navigation";
@@ -8,7 +8,6 @@ import Footer from "@/components/Footer";
 import { catalogTracks } from "@/data/catalogTracks";
 import {
   useCurrentUser,
-  useDownloadsRemaining,
   useMyDownloads,
   useMyLicenses,
   usePlans,
@@ -24,7 +23,6 @@ const GOLD = "#F4C430";
 
 type SectionId =
   | "profile"
-  | "overview"
   | "downloads"
   | "license"
   | "whitelist"
@@ -34,7 +32,6 @@ type SectionId =
 
 const SECTION_IDS: SectionId[] = [
   "profile",
-  "overview",
   "downloads",
   "license",
   "whitelist",
@@ -72,7 +69,6 @@ const Account = () => {
   const plans = usePlans();
   const downloads = useMyDownloads();
   const syncOrders = useMyLicenses();
-  const remaining = useDownloadsRemaining();
   const [searchParams] = useSearchParams();
   const sectionParam = searchParams.get("section");
   const [section, setSection] = useState<SectionId>(
@@ -86,6 +82,12 @@ const Account = () => {
 
   const plan = plans.find((p) => p.id === subscription?.plan);
   const claims = user ? mockClaimRequests.filter((c) => c.userId === user.id) : [];
+  const planSubtitle =
+    plan?.id === "max"
+      ? "Full access — unlimited downloads, WAV, stems & commercial license"
+      : plan?.id === "pro"
+        ? "Unlimited downloads — upgrade to Max for WAV, stems & commercial license"
+        : "Upgrade to unlock unlimited downloads & WAV";
 
   if (!user) {
     return (
@@ -294,73 +296,6 @@ const Account = () => {
               </SectionCard>
             )}
 
-            {section === "overview" && (
-              <>
-                <SectionCard title="Your plan">
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div>
-                      <p className="font-body text-2xl font-semibold" style={{ color: GOLD }}>
-                        {plan?.name ?? "—"}
-                      </p>
-                      <p className="mt-1 font-body text-xs text-muted-foreground">
-                        {plan?.downloadLimit === null
-                          ? "Unlimited downloads"
-                          : `${remaining ?? 0} of ${plan?.downloadLimit ?? 0} downloads left this month`}
-                        {subscription && ` · renews ${fmtDate(subscription.currentPeriodEnd)}`}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      {BILLING_ENABLED && plan && plan.id !== "free" && (
-                        <button
-                          type="button"
-                          onClick={() => void openBillingPortal()}
-                          className="rounded-lg border border-border px-5 py-2 font-body text-sm font-semibold text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
-                        >
-                          Manage billing
-                        </button>
-                      )}
-                      {plan?.id !== "max" && (
-                        <button
-                          type="button"
-                          onClick={() => openPlanModal()}
-                          className="rounded-lg bg-[#F4C430] px-5 py-2 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
-                        >
-                          Upgrade
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  {plan?.downloadLimit !== null && plan && (
-                    <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-secondary">
-                      <div
-                        className="h-full rounded-full"
-                        style={{
-                          width: `${(((plan.downloadLimit ?? 0) - (remaining ?? 0)) / (plan.downloadLimit ?? 1)) * 100}%`,
-                          backgroundColor: GOLD,
-                        }}
-                      />
-                    </div>
-                  )}
-                </SectionCard>
-                <SectionCard title="Recent downloads">
-                  {downloads.length === 0 ? (
-                    <EmptyNote text="No downloads yet. Find your first track in the catalog." />
-                  ) : (
-                    <ul className="divide-y divide-border/60">
-                      {downloads.slice(0, 5).map((d) => (
-                        <li key={d.id} className="flex items-center justify-between py-2.5">
-                          <span className="truncate font-body text-sm text-foreground">{d.trackTitle ?? trackTitle(d.trackId)}</span>
-                          <span className="ml-4 shrink-0 font-body text-xs uppercase text-muted-foreground">
-                            {d.format} · {fmtDate(d.createdAt)}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </SectionCard>
-              </>
-            )}
-
             {section === "downloads" && (
               <SectionCard title="Download history">
                 {downloads.length === 0 ? (
@@ -494,11 +429,7 @@ const Account = () => {
               </>
             )}
 
-            {section === "whitelist" && (
-              <SectionCard title="Whitelisted channels">
-                <MyChannels />
-              </SectionCard>
-            )}
+            {section === "whitelist" && <MyChannels />}
 
             {section === "claims" && (
               <SectionCard title="Content ID claims">
@@ -540,36 +471,61 @@ const Account = () => {
             )}
 
             {section === "billing" && (
-              <SectionCard title="Billing">
-                <p className="font-body text-sm text-muted-foreground">
-                  Plan: <span className="capitalize text-foreground">{plan?.name}</span>
-                  {subscription?.interval && ` · billed ${subscription.interval}ly`}
-                  {subscription && ` · ${isCanceled ? "ends" : "renews"} ${fmtDate(subscription.currentPeriodEnd)}`}
-                </p>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  {BILLING_ENABLED && plan && plan.id !== "free" ? (
-                    <button
-                      type="button"
-                      onClick={() => void openBillingPortal()}
-                      className="rounded-lg border border-border px-4 py-2 font-body text-sm text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
-                    >
-                      Manage subscription &amp; invoices
-                    </button>
-                  ) : (
-                    <Link
-                      to="/pricing"
-                      className="rounded-lg bg-[#F4C430] px-4 py-2 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
-                    >
-                      See plans
-                    </Link>
-                  )}
+              <div className="flex flex-col gap-4">
+                <div>
+                  <h1 className="text-2xl font-semibold text-foreground md:text-3xl">Plan &amp; Billing</h1>
+                  <p className="mt-1 font-body text-sm text-muted-foreground">Manage your subscription</p>
                 </div>
-                <p className="mt-3 font-body text-xs text-muted-foreground">
-                  {BILLING_ENABLED
-                    ? "Payments, invoices and cancellation are managed securely via Stripe."
-                    : "Subscription billing is being moved to a new provider and will be available again soon. One-time track licenses are available now."}
-                </p>
-              </SectionCard>
+
+                <div className="rounded-xl border border-border bg-card p-6">
+                  <p className="flex items-center gap-2 font-body text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <span className="h-2 w-2 rounded-full bg-emerald-400" /> Subscription
+                  </p>
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      <p className="font-body text-xl font-semibold text-foreground">
+                        {plan?.name ?? "Free"} Plan
+                      </p>
+                      <p className="mt-1 font-body text-sm text-muted-foreground">{planSubtitle}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      {BILLING_ENABLED && plan && plan.id !== "free" && (
+                        <button
+                          type="button"
+                          onClick={() => void openBillingPortal()}
+                          className="rounded-lg border border-border px-4 py-2 font-body text-sm font-semibold text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
+                        >
+                          Manage billing
+                        </button>
+                      )}
+                      {plan?.id !== "max" && (
+                        <button
+                          type="button"
+                          onClick={() => openPlanModal()}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-[#F4C430] px-5 py-2.5 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
+                        >
+                          <ArrowUpRight className="h-4 w-4" /> Upgrade plan
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-border bg-card p-6">
+                  <p className="flex items-center gap-2 font-body text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <span className="h-2 w-2 rounded-full bg-fuchsia-400" /> Billing Information
+                  </p>
+                  <p className="mt-4 font-body text-base font-semibold text-foreground">{user.name || "—"}</p>
+                  <p className="font-body text-sm text-muted-foreground">{user.email}</p>
+                </div>
+
+                {!BILLING_ENABLED && (
+                  <p className="font-body text-xs text-muted-foreground">
+                    Subscription billing is moving to a new provider and will be available again soon.
+                    One-time track licenses are available now.
+                  </p>
+                )}
+              </div>
             )}
 
             {section === "support" && (

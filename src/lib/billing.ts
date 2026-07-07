@@ -10,9 +10,16 @@ import type { BillingInterval, PlanId } from "@/types/domain";
 // track licenses (/cart) are unaffected by this flag.
 export const BILLING_ENABLED: boolean = false;
 
+export interface PlanModalContext {
+  /** Custom heading (default "Pick a plan"). */
+  title?: string;
+  /** Custom subheading under the title. */
+  subtitle?: string;
+}
+
 /** Opens the global "Pick a plan" popup (PlanModal is mounted in App.tsx). */
-export const openPlanModal = (): void => {
-  window.dispatchEvent(new Event("tvms:pick-plan"));
+export const openPlanModal = (context?: PlanModalContext): void => {
+  window.dispatchEvent(new CustomEvent("tvms:pick-plan", { detail: context ?? {} }));
 };
 
 const post = async (path: string, body?: unknown): Promise<{ url?: string; error?: string; status: number }> => {

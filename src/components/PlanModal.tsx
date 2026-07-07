@@ -106,9 +106,18 @@ const PlanModal = () => {
   const { status } = useAuthSession();
   const [open, setOpen] = useState(false);
   const [interval, setInterval] = useState<BillingInterval>("annual");
+  const [heading, setHeading] = useState<{ title: string; subtitle: string }>({
+    title: "Pick a plan",
+    subtitle: "Higher plans give you unlimited downloads, WAV & stems, and commercial licensing.",
+  });
 
   useEffect(() => {
-    const show = () => {
+    const show = (event: Event) => {
+      const ctx = (event as CustomEvent<{ title?: string; subtitle?: string }>).detail ?? {};
+      setHeading({
+        title: ctx.title || "Pick a plan",
+        subtitle: ctx.subtitle || "Higher plans give you unlimited downloads, WAV & stems, and commercial licensing.",
+      });
       setInterval("annual");
       setOpen(true);
     };
@@ -152,9 +161,9 @@ const PlanModal = () => {
         </button>
 
         <div className="text-center">
-          <h2 className="text-2xl text-foreground md:text-3xl">Pick a plan</h2>
+          <h2 className="text-2xl text-foreground md:text-3xl">{heading.title}</h2>
           <p className="mx-auto mt-2 max-w-md font-body text-sm text-muted-foreground">
-            Higher plans give you unlimited downloads, WAV &amp; stems, and commercial licensing.
+            {heading.subtitle}
           </p>
           <div className="mt-6 inline-flex items-center gap-3 font-body text-sm">
             <button

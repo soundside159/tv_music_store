@@ -1053,3 +1053,19 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   diverse mix with a daily seed; New by date; Popular by real download_log later; (b) after the big
   import, a 1-10 star "newness" rating per track with same-tier cross-composer round-robin to seed New.
   Owner: build codes now (done) → sorting next → staging after the bulk import.
+- **2026-07-07 (account dashboard declutter: Plan & Billing + YouTube Whitelisting redesign):** trimmed
+  the customer dashboard. (1) Removed the **Overview** section entirely (nav item + section + the
+  "Your plan"/"Recent downloads" cards) — plan now lives in Plan & Billing, downloads in Downloads
+  (removed the now-unused `useDownloadsRemaining`). (2) **Plan & Billing** rebuilt tunetank-style
+  (`section === "billing"`): page header "Plan & Billing / Manage your subscription", a SUBSCRIPTION
+  card (green dot, "<Plan> Plan" + a plan-specific subtitle + "↗ Upgrade plan" opening the plan popup,
+  hidden on Max; Manage-billing shown only when BILLING_ENABLED), and a BILLING INFORMATION card
+  (purple dot, name + email). (3) **YouTube Whitelisting**: nav renamed "Whitelisting" → "YouTube
+  Whitelisting"; `MyChannels.tsx` fully rebuilt to the mockup — header + subtitle + a `used/limit
+  channels` shield badge, existing-channels list, an Add-channel card (add form when the plan has free
+  slots; otherwise a dashed "Upgrade your plan to whitelist channels" card that opens the plan popup),
+  a "Channels per plan" block (Pro 3 / Max 10, current plan marked, others open the popup), and a
+  "Need more channels?" banner — the per-plan block + banner hide on Max. (4) The plan popup now takes
+  an optional context: `openPlanModal({title, subtitle})` (billing.ts) → PlanModal shows a custom
+  heading; whitelisting passes "Upgrade to protect channels / YouTube channel protection is included
+  with Pro and Max". (Get-plan buttons still show "Coming soon" while Stripe is paused.)

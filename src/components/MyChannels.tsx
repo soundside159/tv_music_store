@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { Trash2 } from "lucide-react";
+import { Crown, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { openPlanModal } from "@/lib/billing";
 
-// Customer "My Channels" — live channel whitelist backed by /api/whitelist.
+// Customer "YouTube Whitelisting" — live channel whitelist backed by /api/whitelist.
+// Upgrade prompts open the shared plan popup with a whitelisting-specific heading.
+
 interface Channel {
   id: string;
   channel_url: string;
@@ -15,6 +17,39 @@ interface WlData {
   limit: number;
   used: number;
 }
+
+const GOLD = "#F4C430";
+
+const upgrade = () =>
+  openPlanModal({
+    title: "Upgrade to protect channels",
+    subtitle: "YouTube channel protection is included with Pro and Max.",
+  });
+
+const PlanBox = ({
+  name,
+  channels,
+  current,
+}: {
+  name: string;
+  channels: number;
+  current: boolean;
+}) => (
+  <button
+    type="button"
+    onClick={current ? undefined : upgrade}
+    className={`flex flex-col items-center gap-0.5 rounded-xl border p-4 text-center transition-colors ${
+      current ? "border-[#F4C430]/60 bg-[#F4C430]/5 cursor-default" : "border-border bg-background/40 hover:border-[#F4C430]/50"
+    }`}
+  >
+    <span className="font-body text-sm font-semibold text-foreground">{name}</span>
+    <span className="font-body text-2xl font-semibold text-foreground">{channels}</span>
+    <span className="font-body text-[11px] text-muted-foreground">channels covered</span>
+    <span className="mt-1 font-body text-xs font-semibold text-[#F4C430]">
+      {current ? "Current plan" : "Upgrade →"}
+    </span>
+  </button>
+);
 
 const MyChannels = () => {
   const [data, setData] = useState<WlData | null>(null);
@@ -47,8 +82,8 @@ const MyChannels = () => {
       if (!r.ok) throw new Error(d.error ?? "Failed to add channel");
       setData(d);
       setUrl("");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to add channel");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add channel");
     } finally {
       setBusy(false);
     }
@@ -65,45 +100,40 @@ const MyChannels = () => {
     else setError(d.error ?? "Failed to remove channel");
   };
 
-  if (!data && !error) {
-    return <p className="font-body text-sm text-muted-foreground">Loading channels...</p>;
-  }
-
-  if (data && data.limit === 0) {
-    return (
-      <div>
-        <p className="font-body text-sm text-muted-foreground">
-          Channel whitelisting lets us clear Content ID claims on your YouTube channel while your
-          subscription is active. Available on the Pro and Max plans.
-        </p>
-        <Link
-          to="/pricing"
-          className="mt-4 inline-block rounded-lg bg-[#F4C430] px-5 py-2 font-body text-sm font-semibold text-background hover:bg-[#F4C430]/85"
-        >
-          Upgrade to Pro
-        </Link>
-      </div>
-    );
-  }
+  const limit = data?.limit ?? 0;
+  const used = data?.used ?? 0;
+  const isMax = data?.plan === "max";
+  const canAdd = !!data && used < limit;
 
   return (
-    <div>
-      {error && <p className="mb-3 font-body text-xs text-red-400">{error}</p>}
-      {data && (
-        <p className="mb-3 font-body text-xs text-muted-foreground">
-          {data.used} of {data.limit} channels used. We clear Content ID claims on these channels
-          while your subscription is active.
-        </p>
+    <div className="flex flex-col gap-5">
+      {/* Header */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground md:text-3xl">YouTube Whitelisting</h1>
+          <p className="mt-1 font-body text-sm text-muted-foreground">
+            Add your YouTube channels to prevent copyright claims on our music
+          </p>
+        </div>
+        <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-1.5 font-body text-sm text-muted-foreground">
+          <ShieldCheck className="h-4 w-4" style={{ color: GOLD }} />
+          <span className="font-semibold text-foreground">
+            {used}/{limit}
+          </span>{" "}
+          channels
+        </span>
+      </div>
+
+      {error && <p className="font-body text-xs text-red-400">{error}</p>}
+      {!data && !error && (
+        <p className="font-body text-sm text-muted-foreground">Loading channels…</p>
       )}
 
-      {data && data.channels.length === 0 ? (
-        <p className="font-body text-sm text-muted-foreground">
-          No channels yet. Add your YouTube channel URL below.
-        </p>
-      ) : (
-        <ul className="divide-y divide-border/60">
-          {data?.channels.map((c) => (
-            <li key={c.id} className="flex items-center justify-between gap-3 py-2.5">
+      {/* Existing channels */}
+      {data && data.channels.length > 0 && (
+        <ul className="divide-y divide-border/60 rounded-xl border border-border bg-card">
+          {data.channels.map((c) => (
+            <li key={c.id} className="flex items-center justify-between gap-3 px-4 py-3">
               <span className="truncate font-body text-sm text-foreground">{c.channel_url}</span>
               <button
                 type="button"
@@ -118,22 +148,75 @@ const MyChannels = () => {
         </ul>
       )}
 
-      {data && data.used < data.limit && (
-        <form className="mt-4 flex gap-2" onSubmit={add}>
+      {/* Add a channel */}
+      {canAdd ? (
+        <form onSubmit={add} className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 sm:flex-row">
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://youtube.com/@yourchannel"
-            className="flex-1 rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
+            className="flex-1 rounded-lg border border-border bg-background px-3 py-2.5 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
           />
           <button
             type="submit"
             disabled={busy || !url.trim()}
-            className="rounded-lg border border-[#F4C430]/70 px-4 py-2 font-body text-sm font-semibold text-[#F4C430] transition-colors hover:bg-[#F4C430] hover:text-background disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#F4C430] px-5 py-2.5 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85 disabled:opacity-50"
           >
-            {busy ? "Adding..." : "Add channel"}
+            <Plus className="h-4 w-4" /> {busy ? "Adding…" : "Add channel"}
           </button>
         </form>
+      ) : (
+        data && (
+          <button
+            type="button"
+            onClick={upgrade}
+            className="flex items-center gap-3 rounded-xl border border-dashed border-border p-5 text-left transition-colors hover:border-[#F4C430]/50"
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground">
+              <Plus className="h-5 w-5" />
+            </span>
+            <span>
+              <span className="block font-body text-sm font-semibold text-foreground">Add a channel</span>
+              <span className="block font-body text-xs text-muted-foreground">
+                {limit === 0
+                  ? "Upgrade your plan to whitelist channels"
+                  : "You've used all your channel slots — upgrade for more"}
+              </span>
+            </span>
+          </button>
+        )
+      )}
+
+      {/* Channels per plan (hidden on Max) */}
+      {data && !isMax && (
+        <div className="rounded-xl border border-border bg-card p-5">
+          <p className="mb-3 flex items-center gap-2 font-body text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <Crown className="h-4 w-4" style={{ color: GOLD }} /> Channels per plan
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <PlanBox name="Pro" channels={3} current={data.plan === "pro"} />
+            <PlanBox name="Max" channels={10} current={false} />
+          </div>
+        </div>
+      )}
+
+      {/* Bottom banner (hidden on Max) */}
+      {data && !isMax && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#F4C430]/40 bg-[#F4C430]/5 p-5">
+          <div>
+            <p className="font-body text-sm font-semibold text-foreground">Need more channels?</p>
+            <p className="font-body text-xs text-muted-foreground">
+              Upgrade your plan to protect more YouTube channels from copyright claims.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={upgrade}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[#F4C430] px-5 py-2.5 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
+          >
+            <Crown className="h-4 w-4" /> Upgrade plan
+          </button>
+        </div>
       )}
     </div>
   );
