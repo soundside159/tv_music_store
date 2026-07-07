@@ -1,0 +1,20 @@
+# Cloudflare Email Worker for TV Music Store (inbound contact@ mail -> D1).
+# Deploy from this folder: `npm install` then `npx wrangler deploy`.
+# It must bind the SAME D1 database the Pages site uses.
+
+name = "tvms-mail-worker"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+# Same database as the site. Find the id with `npx wrangler d1 list`
+# (or Cloudflare dashboard -> Workers & Pages -> D1). Fill it in below.
+[[d1_databases]]
+binding = "DB"
+database_name = "tvmusicstore-db"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+[vars]
+# Optional: keep a backup copy in Gmail. Must be a VERIFIED destination address
+# in Cloudflare Email Routing, otherwise forwarding is skipped. Leave blank to
+# disable forwarding.
+FORWARD_TO = "tvmusicstore@gmail.com"

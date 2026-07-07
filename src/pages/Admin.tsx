@@ -21,6 +21,7 @@ import {
 import AdminContent from "@/components/AdminContent";
 import AdminWhitelist from "@/components/AdminWhitelist";
 import AdminCampaign from "@/components/AdminCampaign";
+import AdminInbox from "@/components/AdminInbox";
 import AdminCustomerProfile from "@/components/AdminCustomerProfile";
 
 const GOLD = "#F4C430";
@@ -39,6 +40,7 @@ type SectionId =
   | "licenses"
   | "whitelist"
   | "campaigns"
+  | "mail"
   | "requests";
 
 const SECTION_IDS: SectionId[] = [
@@ -55,6 +57,7 @@ const SECTION_IDS: SectionId[] = [
   "licenses",
   "whitelist",
   "campaigns",
+  "mail",
   "requests",
 ];
 
@@ -561,6 +564,8 @@ const Admin = () => {
             {section === "whitelist" && <AdminWhitelist />}
 
             {section === "campaigns" && <AdminCampaign />}
+
+            {section === "mail" && <AdminInbox />}
 
             {section === "licenses" && (
               <Card title={`Licenses${licenses ? ` (${licenses.length})` : ""}`}>

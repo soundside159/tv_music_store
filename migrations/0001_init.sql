@@ -297,6 +297,35 @@ CREATE TABLE IF NOT EXISTS contact_messages (
 );
 
 -- ---------------------------------------------------------------------------
+-- Admin mailbox (contact@ inbound via a separate Email Worker; replies via Resend)
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS mail_threads (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,           -- the external correspondent (one thread per person)
+  name TEXT,
+  last_message_at TEXT,
+  last_snippet TEXT,
+  last_direction TEXT,                  -- in | out
+  unread INTEGER NOT NULL DEFAULT 0,    -- count of unread inbound messages
+  archived INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_mail_threads_last ON mail_threads(last_message_at);
+
+CREATE TABLE IF NOT EXISTS mail_messages (
+  id TEXT PRIMARY KEY,
+  thread_id TEXT NOT NULL,
+  direction TEXT NOT NULL,              -- in (from customer) | out (our reply)
+  from_email TEXT,
+  to_email TEXT,
+  subject TEXT,
+  body TEXT,
+  provider_id TEXT,                     -- Resend id for outbound / message-id for inbound
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_mail_messages_thread ON mail_messages(thread_id, created_at);
+
+-- ---------------------------------------------------------------------------
 -- Seed data
 -- ---------------------------------------------------------------------------
 

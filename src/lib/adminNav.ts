@@ -10,6 +10,7 @@ import {
   LifeBuoy,
   ListFilter,
   ListMusic,
+  Mail,
   Music2,
   Send,
   ShieldCheck,
@@ -72,5 +73,6 @@ export const adminNavItems: NavItem[] = [
   { id: "licenses", label: "Licenses", icon: FileText },
   { id: "whitelist", label: "Whitelisting", icon: Youtube },
   { id: "campaigns", label: "Campaigns", icon: Send },
+  { id: "mail", label: "Inbox", icon: Mail },
   { id: "requests", label: "Requests", icon: Inbox },
 ];

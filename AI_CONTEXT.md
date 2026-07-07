@@ -1012,3 +1012,19 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   NOTE for the owner: his ALREADY-uploaded test track keeps its ugly stored version labels on-site
   (download names are fixed regardless) — delete + re-upload that track to get clean on-site labels too.
   (WAV→MP3 is expected: the site serves MP3 made from the WAVs; the WAVs themselves live in the zip.)
+- **2026-07-07 (admin mailbox / Inbox — BUILT):** the long-pending admin Inbox is done. Read + reply
+  to contact@tvmusicstore.com from `/admin → Inbox`. Since Pages Functions can't receive email, inbound
+  goes through a SEPARATE Cloudflare **Email Worker** (`mail-worker/` — `src/index.ts` parses mail with
+  postal-mime, `wrangler.toml` binds the same D1, `package.json`) that writes into new D1 tables
+  `mail_threads` + `mail_messages` (in 0001_init.sql + lazy `ensureMailTables`). Pages side:
+  `functions/api/_mail.ts` (shared `ensureMailTables` + `recordMessage` upsert-thread-per-person),
+  `functions/api/admin/mail.ts` (GET threads / GET ?id detail+customer & mark-read / POST reply|
+  mark_read|archive|delete; reply sends via Resend from contact@tvmusicstore.com with reply_to). UI:
+  `src/components/AdminInbox.tsx` (thread list + conversation + reply box + customer plan/purchases/
+  downloads chip) + nav item "Inbox" (Mail icon) + Admin.tsx `mail` section. One thread per
+  correspondent; sender matched to users for the CRM chip. Verified postal-mime's `PostalMime.parse`
+  API in isolation. OWNER SETUP (docs/ADMIN_MAILBOX.md): (1) `cd mail-worker`, put the D1 id in
+  wrangler.toml, `npm install`, `npx wrangler deploy`; (2) Email Routing: route contact@ → Worker
+  `tvms-mail-worker` (keeps optional Gmail forward via FORWARD_TO); (3) verify ROOT domain
+  tvmusicstore.com in Resend so replies from contact@ send (reading works without it; replying fails
+  with a toast until then). The mail worker is a separate deploy — NOT part of deploy.bat.
