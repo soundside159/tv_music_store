@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Check, Download, X } from "lucide-react";
-import { useAuthSession } from "@/hooks/useAuth";
+import { refreshSession, useAuthSession } from "@/hooks/useAuth";
 import { downloadTrackVersion, openAttribution, type DownloadArgs } from "@/lib/downloadTrack";
 
 // Tunetank-style download dialog. Any Download button dispatches
@@ -89,6 +89,8 @@ const DownloadOptionsModal = () => {
         quality: option.id === "mp3-128" ? 128 : 320,
       };
       const ok = await downloadTrackVersion(dl);
+      // Refresh the session so the free-downloads counter reflects this download.
+      if (ok) void refreshSession();
       // Free-plan MP3 downloads require attribution — show the "Say thanks!" popup.
       if (ok && status === "authed" && plan === "free" && option.id === "mp3-128") {
         openAttribution({ title: args.title, slug: args.slug, download: dl });
@@ -201,11 +203,13 @@ const DownloadOptionsModal = () => {
           </button>
         )}
 
-        <p className="mt-4 text-center font-body text-xs text-muted-foreground">
-          {status === "authed" && plan === "free" && `${freeLeft} of 3 free downloads left this month`}
-          {status === "authed" && plan !== "free" && "Unlimited downloads on your plan"}
-          {status !== "authed" && "Free account includes 3 downloads every month"}
-        </p>
+        {(status !== "authed" || plan === "free") && (
+          <p className="mt-4 text-center font-body text-xs text-muted-foreground">
+            {status === "authed"
+              ? `${freeLeft} of 3 free downloads left this month`
+              : "Free account includes 3 downloads every month"}
+          </p>
+        )}
 
         <button
           type="button"

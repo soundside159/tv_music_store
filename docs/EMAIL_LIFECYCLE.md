@@ -32,8 +32,16 @@ the service) and **marketing** (opt-in + unsubscribe).
   Idempotent; re-subscribes a previously-unsubscribed email.
 - **Single opt-in** today (no confirmation email). If you ever want double
   opt-in (a "confirm your subscription" click), that's a small addition.
-- Account signup does **not** auto-subscribe — marketing is separate, by design
-  (GDPR opt-in).
+- **Account signup NOW auto-subscribes** (owner's choice): all three signup paths
+  (email-code `verify.ts`, email+password `register.ts`, Google `callback.ts`)
+  call `subscribeEmail(..., "signup")` on new-account creation (admins skipped).
+  Users can opt out anytime in **Account → Notifications** (toggle backed by
+  `/api/my-newsletter`) or via the unsubscribe link in any campaign.
+  ⚠️ COMPLIANCE NOTE (not legal advice): auto-opt-in to marketing for free signups
+  is riskier under UK GDPR/PECR than the "soft opt-in" that applies to actual
+  customers. Recommend adding a short consent line at signup ("By creating an
+  account you agree to receive occasional emails — unsubscribe anytime") so the
+  consent is explicit; confirm with a lawyer before launch.
 
 ## 4. Campaign email — marketing (opt-in + unsubscribe)
 

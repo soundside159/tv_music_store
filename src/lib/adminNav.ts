@@ -1,4 +1,5 @@
 import {
+  Bell,
   CreditCard,
   Download,
   FileText,
@@ -35,6 +36,7 @@ export const accountNavGroups: { label: string; items: NavItem[] }[] = [
     items: [
       { id: "profile", label: "Profile", icon: UserRound },
       { id: "downloads", label: "Downloads", icon: Download },
+      { id: "notifications", label: "Notifications", icon: Bell },
     ],
   },
   {

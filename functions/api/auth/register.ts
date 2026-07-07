@@ -9,6 +9,7 @@ import {
   type Ctx,
 } from "../_utils";
 import { sendWelcomeEmail } from "../_email";
+import { subscribeEmail } from "../_newsletter";
 
 // POST { email, password, name? } -> creates the account with a free plan and
 // signs in. The owner email automatically becomes admin.
@@ -69,7 +70,10 @@ export const onRequestPost = async (ctx: Ctx) => {
       .bind(newId("sub"), id)
       .run();
     user = { id, email, name, role };
-    if (role !== "admin") await sendWelcomeEmail(ctx.env, email, name);
+    if (role !== "admin") {
+      await sendWelcomeEmail(ctx.env, email, name);
+      await subscribeEmail(ctx.env.DB, email, "signup");
+    }
   }
 
   const cookie = await openSession(ctx.env.DB, user.id);

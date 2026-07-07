@@ -15,6 +15,7 @@ import {
 } from "@/hooks/useMockData";
 import { mockClaimRequests } from "@/mocks";
 import MyChannels from "@/components/MyChannels";
+import NotificationsSettings from "@/components/NotificationsSettings";
 import { logout, updateProfile } from "@/hooks/useAuth";
 import { BILLING_ENABLED, openBillingPortal, openPlanModal } from "@/lib/billing";
 import { downloadTrackVersion } from "@/lib/downloadTrack";
@@ -23,6 +24,7 @@ const GOLD = "#F4C430";
 
 type SectionId =
   | "profile"
+  | "notifications"
   | "downloads"
   | "license"
   | "whitelist"
@@ -32,6 +34,7 @@ type SectionId =
 
 const SECTION_IDS: SectionId[] = [
   "profile",
+  "notifications",
   "downloads",
   "license",
   "whitelist",
@@ -295,6 +298,8 @@ const Account = () => {
                 </p>
               </SectionCard>
             )}
+
+            {section === "notifications" && <NotificationsSettings />}
 
             {section === "downloads" && (
               <SectionCard title="Download history">

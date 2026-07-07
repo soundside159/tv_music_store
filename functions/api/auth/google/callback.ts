@@ -7,6 +7,7 @@ import {
   type Ctx,
 } from "../../_utils";
 import { sendWelcomeEmail } from "../../_email";
+import { subscribeEmail } from "../../_newsletter";
 
 // GET ?code=...&state=... -> exchanges the code for Google tokens, reads the
 // user's email from the id_token, creates/finds the user and opens a session.
@@ -79,7 +80,10 @@ export const onRequestGet = async (ctx: Ctx) => {
       .bind(newId("sub"), id)
       .run();
     user = { id, role, name };
-    if (role !== "admin") await sendWelcomeEmail(ctx.env, email, name);
+    if (role !== "admin") {
+      await sendWelcomeEmail(ctx.env, email, name);
+      await subscribeEmail(ctx.env.DB, email, "signup");
+    }
   } else {
     if (role === "admin" && user.role !== "admin") {
       await ctx.env.DB.prepare(`UPDATE users SET role = 'admin' WHERE id = ?1`).bind(user.id).run();

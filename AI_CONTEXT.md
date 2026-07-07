@@ -1089,3 +1089,20 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   can be re-enabled easily; a few now-unused mock imports remain (harmless — deploy.bat runs vite build
   only, no lint/tsc). DEFERRED (owner to decide later): a real "Copyright Claims" admin view (replacing
   the removed mock Claim-removals), and wiring Dashboard revenue once Paddle/billing is live.
+- **2026-07-07 (admin nav spacing fix + auto-subscribe + Notifications page + live download counter):**
+  (1) MENU SPACING BUG: switching the Admin/Main menus left the item spacing wrong until a click — the
+  `nav` was `flex flex-col gap-1` and its Main/Admin blocks toggle in/out, hitting the Chromium
+  "`gap` not recalculated until reflow" bug. Fixed by `gap-1` → `space-y-1` (margin-based) on the Admin
+  page nav. (2) AUTO-SUBSCRIBE: new-account signups now auto-join the newsletter — extracted
+  `subscribeEmail`/`unsubscribeEmail`/`isSubscribed` into `functions/api/_newsletter.ts`, called from
+  all three signup paths (verify/register/google callback, admins skipped); `newsletter/index.ts`
+  simplified to use it. Opt-out lives in the new **Account → Notifications** page
+  (`NotificationsSettings.tsx`, nav item Bell): a real Marketing toggle ("Promotions & offers") backed
+  by NEW `GET/POST /api/my-newsletter` (per-account subscribe/unsubscribe; named my-newsletter to avoid
+  a me/ route clash), plus an "Other" group (Downloads/Recommendations/Notifications) stored in
+  localStorage as placeholder prefs (not yet wired to real emails). ⚠️ COMPLIANCE: auto-opt-in to
+  marketing for free signups is riskier than soft opt-in under UK GDPR/PECR — recommended adding a
+  consent line at signup + a lawyer check (noted in docs/EMAIL_LIFECYCLE.md). (3) FREE-DOWNLOADS
+  COUNTER: the "N of 3 free downloads left" in DownloadOptionsModal was static (session not refetched)
+  — now calls `refreshSession()` after a successful download so the number updates; and the counter is
+  hidden entirely for paid plans (was "Unlimited downloads on your plan").
