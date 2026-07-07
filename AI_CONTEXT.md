@@ -1106,3 +1106,17 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   COUNTER: the "N of 3 free downloads left" in DownloadOptionsModal was static (session not refetched)
   — now calls `refreshSession()` after a successful download so the number updates; and the counter is
   hidden entirely for paid plans (was "Unlimited downloads on your plan").
+- **2026-07-07 (signup consent line + SEO pass):** (1) CONSENT: added a signup consent line ("By
+  creating an account you agree to receive occasional emails … unsubscribe anytime") under the email
+  form in `AuthModal.tsx` and `Login.tsx`, to make the auto-subscribe defensible. (2) SEO: the site is
+  a Vite React SPA (near-empty static HTML) — Google/Bing render JS so they see content, but JS-less
+  bots (GPTBot/ChatGPT, social/link crawlers) only saw the shell, and every route shared the homepage
+  title. Fixes: enriched `index.html` (title/description/canonical/OG/Twitter + **JSON-LD**:
+  Organization, WebSite+SearchAction, Product with Pro/Max Offers, and a FAQPage covering usage/
+  plan-diff/formats/whitelisting/one-time licenses — readable by all bots); updated `public/robots.txt`
+  (blocks /account /admin /cart /login, points to sitemap); new `public/sitemap.xml` (main routes); new
+  zero-dep `src/hooks/useSeo.ts` (per-route title/description/canonical/OG + route JSON-LD) wired on
+  **Pricing** and **TrackDetail** (per-track title/desc + MusicRecording JSON-LD). Documented state +
+  next steps in `docs/SEO.md`. NEXT (owner sign-off): wire useSeo on the remaining pages; a Function-
+  generated `/sitemap-tracks.xml` from D1; and prerendering/dynamic-rendering for full JS-less coverage
+  (the real fix for ChatGPT/social bots on every page — bigger, needs build changes + testing).

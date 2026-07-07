@@ -155,6 +155,10 @@ const AuthModal = ({ open, onClose }: AuthModalProps) => {
                 </button>
               )}
             </form>
+            <p className="mt-4 text-center font-body text-[11px] leading-relaxed text-muted-foreground/70">
+              By creating an account you agree to receive occasional emails from TV Music Store. You
+              can unsubscribe anytime.
+            </p>
           </div>
         ) : (
           <form onSubmit={submitCode} className="mt-8 space-y-3">

@@ -12,6 +12,7 @@ import {
 import { usePlans, useSubscription } from "@/hooks/useMockData";
 import { useAuthSession } from "@/hooks/useAuth";
 import { BILLING_ENABLED, openBillingPortal, startCheckout } from "@/lib/billing";
+import { useSeo } from "@/hooks/useSeo";
 import type { BillingInterval, PlanConfig, PlanId } from "@/types/domain";
 
 const GOLD = "#F4C430";
@@ -171,6 +172,13 @@ const Pricing = () => {
   const subscription = useSubscription();
   const { status } = useAuthSession();
   const [interval, setInterval] = useState<BillingInterval>("annual");
+
+  useSeo({
+    title: "Plans & Pricing — Royalty-Free Music Subscription | TV Music Store",
+    description:
+      "Simple royalty-free music pricing: Pro $7/mo and Max $15/mo (billed annually) with unlimited downloads, WAV + stems, commercial licensing and YouTube channel whitelisting. Plus one-time track licenses from $15.",
+    path: "/pricing",
+  });
 
   return (
     <div className="min-h-screen bg-background">

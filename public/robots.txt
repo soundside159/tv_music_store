@@ -1,14 +1,10 @@
-User-agent: Googlebot
-Allow: /
-
-User-agent: Bingbot
-Allow: /
-
-User-agent: Twitterbot
-Allow: /
-
-User-agent: facebookexternalhit
-Allow: /
-
 User-agent: *
 Allow: /
+
+# Private areas — not useful to crawlers
+Disallow: /account
+Disallow: /admin
+Disallow: /cart
+Disallow: /login
+
+Sitemap: https://tvmusicstore.com/sitemap.xml

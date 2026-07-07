@@ -18,6 +18,7 @@ import Navigation from "@/components/Navigation";
 import WaveformPreview from "@/components/WaveformPreview";
 import type { CatalogTrack, TrackAudioVersion, TrackVersion } from "@/data/catalogTracks";
 import { useTracks } from "@/hooks/useTracks";
+import { useSeo } from "@/hooks/useSeo";
 import { usePlayer } from "@/components/playerContext";
 import { licenseTiers, type LicenseTierId } from "@/lib/licenses";
 import { addToCart } from "@/hooks/useCart";
@@ -46,6 +47,27 @@ const TrackDetail = () => {
     if (!track) return [];
     return catalogTracks.filter((item) => item.id !== track.id).slice(0, 4);
   }, [track, catalogTracks]);
+
+  useSeo(
+    track
+      ? {
+          title: `${track.title}${track.artist ? ` by ${track.artist}` : ""} — Royalty-Free Music | TV Music Store`,
+          description: `License "${track.title}" — royalty-free ${[track.useCase, track.genre, track.mood]
+            .filter(Boolean)
+            .join(", ")} music for YouTube, ads, film and games. MP3, WAV and stems, one-time or subscription licenses.`,
+          path: `/track/${track.slug}`,
+          image: track.cover,
+          jsonLd: {
+            "@context": "https://schema.org",
+            "@type": "MusicRecording",
+            name: track.title,
+            url: `https://tvmusicstore.com/track/${track.slug}`,
+            ...(track.artist ? { byArtist: { "@type": "MusicGroup", name: track.artist } } : {}),
+            ...(track.genre ? { genre: track.genre } : {}),
+          },
+        }
+      : { title: "Track not found | TV Music Store" },
+  );
 
   if (!track) {
     return (

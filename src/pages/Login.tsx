@@ -85,6 +85,10 @@ const Login = () => {
               <button type="submit" disabled={busy} className={buttonClass}>
                 {busy ? "Sending..." : "Continue with email"}
               </button>
+              <p className="mt-3 text-center font-body text-[11px] leading-relaxed text-muted-foreground/70">
+                By creating an account you agree to receive occasional emails from TV Music Store. You
+                can unsubscribe anytime.
+              </p>
             </form>
           )}
 

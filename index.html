@@ -3,27 +3,139 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TV Music Store | Cinematic Music Licensing</title>
+    <title>TV Music Store — Royalty-Free Cinematic Music Licensing for YouTube, Ads & Film</title>
     <meta
       name="description"
-      content="Premium cinematic music licensing for trailers, games, films, and creator projects."
+      content="Royalty-free cinematic and production music for YouTube, ads, films, trailers and games. Subscriptions from $7/mo (Pro) and $15/mo (Max) with WAV, stems, commercial licensing and YouTube channel whitelisting, plus one-time track licenses."
     />
     <meta name="author" content="TV Music Store" />
+    <meta name="robots" content="index, follow" />
+    <meta name="theme-color" content="#0e0e10" />
+    <meta
+      name="keywords"
+      content="royalty free music, royalty free music subscription, cinematic music licensing, music for youtube, production music, trailer music, background music for videos, commercial music license, WAV stems, youtube content id whitelist"
+    />
+    <link rel="canonical" href="https://tvmusicstore.com/" />
 
     <link rel="icon" type="image/x-icon" href="/images/icons/favicon.ico" />
     <link rel="icon" type="image/png" sizes="96x96" href="/images/icons/favicon-96x96.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/images/icons/apple-touch-icon.png" />
 
-    <meta property="og:title" content="TV Music Store | Cinematic Music Licensing" />
+    <meta property="og:site_name" content="TV Music Store" />
+    <meta property="og:title" content="TV Music Store — Royalty-Free Cinematic Music Licensing" />
     <meta
       property="og:description"
-      content="Premium cinematic music licensing for trailers, games, films, and creator projects."
+      content="Royalty-free cinematic and production music for YouTube, ads, films, trailers and games. Subscriptions from $7/mo with WAV, stems, commercial licensing and YouTube whitelisting."
     />
     <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://tvmusicstore.com/" />
     <meta property="og:image" content="https://tvmusicstore.com/images/collections/epic-adventure.jpg" />
 
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="TV Music Store — Royalty-Free Cinematic Music Licensing" />
+    <meta
+      name="twitter:description"
+      content="Royalty-free cinematic and production music for YouTube, ads, films, trailers and games. Subscriptions with WAV, stems and commercial licensing."
+    />
     <meta name="twitter:image" content="https://tvmusicstore.com/images/collections/epic-adventure.jpg" />
+
+    <!-- Structured data: readable by search engines AND JS-less bots (ChatGPT, social) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://tvmusicstore.com/#organization",
+            "name": "TV Music Store",
+            "url": "https://tvmusicstore.com/",
+            "logo": "https://tvmusicstore.com/images/icons/web-app-manifest-512x512.png",
+            "description": "Boutique royalty-free cinematic and production music licensing for creators, brands and studios."
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://tvmusicstore.com/#website",
+            "url": "https://tvmusicstore.com/",
+            "name": "TV Music Store",
+            "publisher": { "@id": "https://tvmusicstore.com/#organization" },
+            "potentialAction": {
+              "@type": "SearchAction",
+              "target": "https://tvmusicstore.com/catalog?search={search_term_string}",
+              "query-input": "required name=search_term_string"
+            }
+          },
+          {
+            "@type": "Product",
+            "name": "TV Music Store — Royalty-Free Music Subscription",
+            "description": "Unlimited royalty-free music downloads with commercial licensing, WAV + stems and YouTube channel whitelisting.",
+            "brand": { "@id": "https://tvmusicstore.com/#organization" },
+            "offers": [
+              {
+                "@type": "Offer",
+                "name": "Pro plan",
+                "price": "7.00",
+                "priceCurrency": "USD",
+                "description": "Unlimited MP3 downloads, personal & small-team license, whitelist 3 YouTube channels. $7/mo billed annually.",
+                "url": "https://tvmusicstore.com/pricing"
+              },
+              {
+                "@type": "Offer",
+                "name": "Max plan",
+                "price": "15.00",
+                "priceCurrency": "USD",
+                "description": "Commercial license for ads & client work, WAV + stems, whitelist 10 YouTube channels, priority support. $15/mo billed annually.",
+                "url": "https://tvmusicstore.com/pricing"
+              }
+            ]
+          },
+          {
+            "@type": "FAQPage",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "Can I use the music on YouTube, in ads and for client work?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes. Free and Pro cover personal and small-team use including YouTube, podcasts and websites. Max adds commercial use: paid ads, sponsored content, client work and brands of any size. One-time Sync licenses cover TV, film, trailers and games."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "What is the difference between the Pro and Max plans?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Pro gives unlimited MP3 downloads, a personal & small-team license and whitelisting for 3 YouTube channels. Max adds WAV + stems, a full commercial license (ads and client work) and whitelisting for 10 channels."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "What audio formats do I get?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "MP3 on every plan. Lossless WAV and isolated stems are included with the Max plan and with one-time Professional and Commercial track licenses."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "How does YouTube channel whitelisting work?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Add your YouTube channels in your account and we clear Content ID claims on our music for those channels while your subscription is active. Pro covers 3 channels, Max covers 10."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Can I buy a license for a single track?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes. One-time track licenses are available: Personal $15, Commercial $79 and Professional $249. Each purchase includes a PDF license certificate. Pay once, licensed forever."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    </script>
   </head>
 
   <body>
