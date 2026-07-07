@@ -2,6 +2,7 @@ import { type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Download, Heart, Pause, Play, ShoppingCart, Volume2 } from "lucide-react";
 import { openDownloadOptions } from "@/lib/downloadTrack";
+import { openLicenseModal } from "@/hooks/useCart";
 import WaveformPreview from "@/components/WaveformPreview";
 import {
   ActionIcon,
@@ -85,7 +86,18 @@ export const PlayerProvider = ({ children }: { children: ReactNode }) => {
                 <ActionIcon label="Favorite">
                   <Heart className="h-5 w-5 stroke-[1.6]" />
                 </ActionIcon>
-                <ActionIcon label="Buy License">
+                <ActionIcon
+                  label="Buy License"
+                  onClick={() =>
+                    openLicenseModal({
+                      trackId: currentTrack.id,
+                      slug: currentTrack.slug,
+                      title: currentTrack.title,
+                      artist: currentTrack.artist,
+                      cover: currentTrack.cover,
+                    })
+                  }
+                >
                   <ShoppingCart className="h-5 w-5 stroke-[1.6]" />
                 </ActionIcon>
                 <ActionIcon

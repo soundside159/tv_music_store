@@ -84,7 +84,11 @@ export const downloadTrackVersion = async (args: DownloadArgs): Promise<void> =>
   }
 };
 
-/** Runs the download the user asked for before being sent to sign in. */
+/**
+ * After sign-in, bring the user back to the Download options popup for the track
+ * they were on (instead of auto-downloading), so they pick the format and press
+ * Download themselves.
+ */
 export const resumePendingDownload = (): void => {
   let pending: DownloadArgs | null = null;
   try {
@@ -95,7 +99,7 @@ export const resumePendingDownload = (): void => {
   } catch {
     return;
   }
-  if (pending?.slug && pending.versionId && pending.src) {
-    void downloadTrackVersion(pending);
+  if (pending?.slug && pending.versionId) {
+    openDownloadOptions(pending);
   }
 };

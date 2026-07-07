@@ -47,6 +47,20 @@ const subscribe = (cb: () => void) => {
   };
 };
 
+/** Track info the global "Buy a license" popup needs. */
+export interface BuyLicenseArgs {
+  trackId: string;
+  slug: string;
+  title: string;
+  artist: string;
+  cover?: string;
+}
+
+/** Opens the global license picker (LicenseModal is mounted in App.tsx). */
+export const openLicenseModal = (args: BuyLicenseArgs): void => {
+  window.dispatchEvent(new CustomEvent("tvms:buy-license", { detail: args }));
+};
+
 export const addToCart = (item: CartItem): void => {
   const existing = items.find((i) => i.slug === item.slug);
   if (existing && existing.tier === item.tier) {

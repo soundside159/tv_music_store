@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Copy, Download, Heart, Pause, Play, ShoppingCart } from "lucide-react";
 import { openDownloadOptions } from "@/lib/downloadTrack";
+import { openLicenseModal } from "@/hooks/useCart";
 import WaveformPreview from "@/components/WaveformPreview";
 import type { CatalogTrack, TrackAudioVersion, TrackVersion } from "@/data/catalogTracks";
 import { usePlayer } from "@/components/playerContext";
@@ -98,7 +99,7 @@ export const ActionIcon = ({ children, label, onClick }: { children: ReactNode; 
     aria-label={label}
     className="group/act relative flex items-center justify-center text-muted-foreground transition-colors duration-200 hover:text-[#F4C430]"
   >
-    <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-white/10 bg-card px-2 py-1 font-body text-[11px] text-foreground opacity-0 shadow-lg transition-opacity duration-150 group-hover/act:opacity-100">
+    <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-white/10 bg-card px-2 py-1 font-body text-[11px] text-foreground opacity-0 shadow-lg transition-opacity duration-150 group-hover/act:opacity-100">
       {label}
     </span>
     {children}
@@ -138,6 +139,14 @@ export const TrackRow = ({
     if (isActive) return globalProgress;
     return played;
   };
+
+  // The expanded versions block needs overflow-hidden WHILE the height animates,
+  // but overflow-visible once open — otherwise the first version row's "Download"
+  // tooltip (which points upward) gets clipped by the container's top edge.
+  const [versionsOverflowVisible, setVersionsOverflowVisible] = useState(false);
+  useEffect(() => {
+    if (!expanded) setVersionsOverflowVisible(false);
+  }, [expanded]);
 
   // Fixed tag order: 1 = Use Case, 2 = Genre, 3 = Mood. Each links to the
   // catalog with only that filter active.
@@ -243,7 +252,18 @@ export const TrackRow = ({
             <Copy className="h-5 w-5 stroke-[1.6]" />
           </ActionIcon>
         </span>
-        <ActionIcon label="Buy License">
+        <ActionIcon
+          label="Buy License"
+          onClick={() =>
+            openLicenseModal({
+              trackId: track.id,
+              slug: track.slug,
+              title: track.title,
+              artist: track.artist,
+              cover: track.cover,
+            })
+          }
+        >
           <ShoppingCart className="h-5 w-5 stroke-[1.6]" />
         </ActionIcon>
         <ActionIcon
@@ -270,7 +290,10 @@ export const TrackRow = ({
           animate={{ height: "auto", opacity: 1 }}
           exit={{ height: 0, opacity: 0 }}
           transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-          className="overflow-hidden"
+          onAnimationComplete={() => {
+            if (expanded) setVersionsOverflowVisible(true);
+          }}
+          className={versionsOverflowVisible ? "overflow-visible" : "overflow-hidden"}
         >
           <div className="pb-3">
             {track.audioVersions.slice(1).map((version) => {
@@ -313,9 +336,6 @@ export const TrackRow = ({
                   </span>
                   <div className="hidden xl:block" />
                   <div className="flex items-center justify-end gap-4 text-muted-foreground">
-                    <ActionIcon label="Buy License">
-                      <ShoppingCart className="h-5 w-5 stroke-[1.6]" />
-                    </ActionIcon>
                     <ActionIcon
                       label="Download"
                       onClick={() =>

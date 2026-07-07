@@ -958,3 +958,26 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   reload() + reloadTracks() + clear selection. NOTE: when the DB has zero tracks, the catalog falls
   back to the 16 bundled mock tracks (by design) until the first real track is added. Reminder for the
   owner: run `npm install` before deploy.bat (lamejs + fflate from the previous entry still need it).
+- **2026-07-07 (Buy License popup wired to the cart icon):** the ShoppingCart "Buy License" action
+  icon (track rows main + alt versions, and the bottom mini-player) had no onClick — now it opens a
+  global license picker. NEW `src/components/LicenseModal.tsx` (mounted in App.tsx next to
+  DownloadOptionsModal, inside PlayerProvider/BrowserRouter): listens for `tvms:buy-license`, shows
+  the SAME one-time license tiers as the solo track page (reuses `licenseTiers` from `lib/licenses.ts`
+  — currently $15/$79/$249, so it stays in sync automatically), the Usage Terms grid, price, and
+  "Add to Cart" (uses existing `addToCart`), then closes. NEW `openLicenseModal(args)` +
+  `BuyLicenseArgs` in `hooks/useCart.ts`; wired the three cart icons (`TrackRowPlayer` ×2,
+  `PlayerProvider` mini-player) to call it with the track's {trackId, slug, title, artist, cover}.
+  Mirrors the DownloadOptionsModal event pattern. (Owner's reference screenshot showed $29/$89/$289 —
+  that's tunetank; ours shows the licenses.ts prices.)
+- **2026-07-07 (track-row polish: cart on versions, tooltip clip, resume-to-popup, no email autofocus):**
+  four small UX fixes in `TrackRowPlayer.tsx` + auth. (1) Removed the "Buy License" cart icon from
+  ALTERNATE version rows — the license is track-level (main + versions are one purchase), so it only
+  lives on the main row + mini-player now. (2) The expanded-versions `motion.div` was `overflow-hidden`
+  (needed while the height animates) which CLIPPED the first version row's upward "Download" tooltip;
+  now it flips to `overflow-visible` after the open animation (`onAnimationComplete` + a
+  `versionsOverflowVisible` state, reset to hidden on collapse via effect), and the ActionIcon tooltip
+  got `z-20`. (3) `resumePendingDownload` (downloadTrack.ts) now RE-OPENS the Download options popup for
+  the pending track after sign-in (`openDownloadOptions`) instead of auto-downloading — guest clicks
+  Download → 401 → auth → back to the same popup to finish. (4) Removed `autoFocus` from the EMAIL
+  input in `AuthModal.tsx` + `Login.tsx` (kept it on the 6-digit CODE input) so opening auth doesn't
+  grab the email field — most users click Continue-with-Google.
