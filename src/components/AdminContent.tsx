@@ -130,6 +130,23 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
   const [uploading, setUploading] = useState(false);
   const [vocabInput, setVocabInput] = useState<Record<string, string>>({});
   const [addOpen, setAddOpen] = useState(false);
+  const [selectedTrackIds, setSelectedTrackIds] = useState<string[]>([]);
+  const [selResetKey, setSelResetKey] = useState(0);
+
+  const deleteSelectedTracks = async () => {
+    if (selectedTrackIds.length === 0) return;
+    const n = selectedTrackIds.length;
+    if (!window.confirm(`Delete ${n} track${n > 1 ? "s" : ""}? This removes ${n > 1 ? "them" : "it"} from the catalog, collections and playlists. This cannot be undone.`)) {
+      return;
+    }
+    const ok = await run({ action: "delete_track", trackIds: selectedTrackIds }, `${n} track${n > 1 ? "s" : ""} deleted`);
+    if (ok) {
+      setSelectedTrackIds([]);
+      setSelResetKey((k) => k + 1);
+      reload();
+      void reloadTracks();
+    }
+  };
 
   // Reset any open draft when the sidebar switches the active view.
   useEffect(() => {
@@ -243,6 +260,16 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
             className={goldBtnCls}
           >
             Load demo catalog into DB
+          </button>
+        )}
+        {tab === "tracks" && trackSource === "api" && selectedTrackIds.length > 0 && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void deleteSelectedTracks()}
+            className="rounded-lg bg-red-600 px-4 py-2 font-body text-sm font-semibold text-white transition-colors hover:bg-red-500 disabled:opacity-50"
+          >
+            Delete ({selectedTrackIds.length})
           </button>
         )}
         {tab === "tracks" && trackSource === "api" && (
@@ -652,6 +679,8 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
               return next;
             })
           }
+          onSelectionChange={setSelectedTrackIds}
+          selectionResetKey={selResetKey}
         />
       )}
 

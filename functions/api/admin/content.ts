@@ -633,6 +633,47 @@ export const onRequestPost = async (ctx: Ctx) => {
       return json({ ok: true, id: trackId, slug });
     }
 
+    case "delete_track": {
+      const ids = Array.isArray(body.trackIds)
+        ? [...new Set(body.trackIds.filter((x) => typeof x === "string" && x))].slice(0, 200)
+        : body.id
+          ? [body.id]
+          : [];
+      if (ids.length === 0) return json({ error: "trackIds required" }, 400);
+      const marks = ids.map((_, i) => `?${i + 1}`).join(", ");
+
+      await db.prepare(`DELETE FROM track_versions WHERE track_id IN (${marks})`).bind(...ids).run();
+      await db.prepare(`DELETE FROM collection_tracks WHERE track_id IN (${marks})`).bind(...ids).run();
+      await db.prepare(`DELETE FROM playlist_tracks WHERE track_id IN (${marks})`).bind(...ids).run();
+      try {
+        await db.prepare(`DELETE FROM category_tracks WHERE track_id IN (${marks})`).bind(...ids).run();
+      } catch {
+        // category_tracks not created yet — fine
+      }
+      // Strip the deleted ids out of the trending list.
+      try {
+        await ensureSiteConfig(db);
+        const row = await db
+          .prepare(`SELECT value FROM site_config WHERE key = 'trending_track_ids'`)
+          .first<{ value: string }>();
+        if (row) {
+          const list = (JSON.parse(row.value) as string[]).filter((x) => !ids.includes(x));
+          await db
+            .prepare(
+              `INSERT INTO site_config (key, value) VALUES ('trending_track_ids', ?1)
+               ON CONFLICT(key) DO UPDATE SET value = ?1`,
+            )
+            .bind(JSON.stringify(list))
+            .run();
+        }
+      } catch {
+        // no trending config — fine
+      }
+
+      await db.prepare(`DELETE FROM tracks WHERE id IN (${marks})`).bind(...ids).run();
+      return json({ ok: true, deleted: ids.length });
+    }
+
     case "add_vocab":
     case "delete_vocab": {
       const facet = body.facet as VocabFacet;

@@ -116,6 +116,8 @@ const AdminTracksEdit = ({
   run,
   uploadCover,
   onApplyOverrides,
+  onSelectionChange,
+  selectionResetKey,
 }: {
   tracks: CatalogTrack[];
   vocabularies: Vocabularies;
@@ -129,6 +131,8 @@ const AdminTracksEdit = ({
   run: (payload: Record<string, unknown>, okMsg: string) => Promise<boolean>;
   uploadCover: (file: File, apply: (path: string) => void) => Promise<void> | void;
   onApplyOverrides: (overrides: Record<string, Partial<CatalogTrack>>) => void;
+  onSelectionChange?: (ids: string[]) => void;
+  selectionResetKey?: number;
 }) => {
   const player = usePlayer();
 
@@ -139,6 +143,15 @@ const AdminTracksEdit = ({
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(20);
   const [selected, setSelected] = useState<string[]>([]);
+
+  // Report the current selection up so the parent can show a Delete button, and
+  // clear it when the parent bumps the reset key (e.g. after a delete).
+  useEffect(() => {
+    onSelectionChange?.(selected);
+  }, [selected, onSelectionChange]);
+  useEffect(() => {
+    setSelected([]);
+  }, [selectionResetKey]);
 
   // --- panel pending changes ---
   const [facetChanges, setFacetChanges] = useState<Record<FacetKey, Record<string, "all" | "none">>>({

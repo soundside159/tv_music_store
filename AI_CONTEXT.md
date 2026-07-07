@@ -946,3 +946,15 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   TODO the owner deferred. Couldn't run vite build in the sandbox (Windows node_modules + the usual
   mirror truncation of edited files) — logic reviewed by hand + dep exports verified in an isolated
   install; authoritative lint+build runs on the host via deploy.bat.
+- **2026-07-07 (delete tracks from admin):** there was no way to delete a track — added it so the
+  owner can clear test/demo tracks and manage the catalog. NEW `delete_track` action in
+  `functions/api/admin/content.ts` (accepts `trackIds[]` or single `id`, up to 200): deletes the
+  track's `track_versions`, `collection_tracks`, `playlist_tracks`, `category_tracks` (guarded),
+  strips the ids from the trending `site_config` list, then deletes the `tracks` rows (download_log /
+  sync_orders history left intact — LEFT JOINs tolerate the missing track). Frontend: `AdminTracksEdit`
+  lifts its selection up via new props `onSelectionChange` + `selectionResetKey` (clears selection when
+  the parent bumps the key); `AdminContent` shows a RED **Delete (N)** button next to "+ Add Track" in
+  the Tracks Edit header, visible only when ≥1 track is selected — confirm dialog, then delete +
+  reload() + reloadTracks() + clear selection. NOTE: when the DB has zero tracks, the catalog falls
+  back to the 16 bundled mock tracks (by design) until the first real track is added. Reminder for the
+  owner: run `npm install` before deploy.bat (lamejs + fflate from the previous entry still need it).
