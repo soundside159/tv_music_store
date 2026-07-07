@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { LogOut } from "lucide-react";
 import { logout } from "@/hooks/useAuth";
-import { accountNavGroups, adminNavItems } from "@/lib/adminNav";
+import { accountNavGroups, adminNavGroups } from "@/lib/adminNav";
 import MenuGroupHeader from "@/components/MenuGroupHeader";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
@@ -144,7 +144,14 @@ const Admin = () => {
   const [licenses, setLicenses] = useState<AdminLicense[] | null>(null);
   const [licensesError, setLicensesError] = useState<string | null>(null);
   const [licenseQuery, setLicenseQuery] = useState("");
-  const s = mockAdminStats;
+
+  // Real dashboard numbers from the live users list (loaded below).
+  const custUsers = liveUsers ?? [];
+  const proCount = custUsers.filter((u) => u.plan === "pro").length;
+  const maxCount = custUsers.filter((u) => u.plan === "max").length;
+  const paidCount = proCount + maxCount;
+  const freeCount = Math.max(0, custUsers.length - paidCount);
+  const totalDownloads = custUsers.reduce((a, u) => a + (u.downloads ?? 0), 0);
 
   const isAdmin = !!user && user.role === "admin";
 
@@ -249,19 +256,26 @@ const Admin = () => {
 
               <MenuGroupHeader label="Admin" open={menu === "admin"} onClick={() => setMenu("admin")} />
               {menu === "admin" && (
-                <div className="flex gap-1 overflow-x-auto md:flex-col">
-                  {adminNavItems.map((sec) => (
-                    <button
-                      key={sec.id}
-                      type="button"
-                      onClick={() => setSection(sec.id as SectionId)}
-                      className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors ${
-                        section === sec.id ? "bg-secondary text-[#F4C430]" : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      <sec.icon className="h-4 w-4" />
-                      {sec.label}
-                    </button>
+                <div className="flex flex-col gap-3">
+                  {adminNavGroups.map((group) => (
+                    <div key={group.label}>
+                      <p className="px-3 pb-1 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
+                        {group.label}
+                      </p>
+                      {group.items.map((sec) => (
+                        <button
+                          key={sec.id}
+                          type="button"
+                          onClick={() => setSection(sec.id as SectionId)}
+                          className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors ${
+                            section === sec.id ? "bg-secondary text-[#F4C430]" : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          <sec.icon className="h-4 w-4" />
+                          {sec.label}
+                        </button>
+                      ))}
+                    </div>
                   ))}
                 </div>
               )}
@@ -292,55 +306,40 @@ const Admin = () => {
             {section === "dashboard" && (
               <>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <Stat label="MRR" value={`$${s.mrr}`} sub={`+${s.mrrGrowthPct}% vs last month`} />
                   <Stat
-                    label="Subscribers"
-                    value={`${s.subscribers.pro + s.subscribers.max}`}
-                    sub={`Pro ${s.subscribers.pro} · Max ${s.subscribers.max} · Free ${s.subscribers.free}`}
+                    label="Customers"
+                    value={liveUsers ? String(custUsers.length) : "—"}
+                    sub={liveUsers ? `${freeCount} on Free` : undefined}
                   />
-                  <Stat label="Free → Paid" value={`${s.freeToPaidPct}%`} sub={`churn ${s.churnPct}%/mo`} />
-                  <Stat label="Downloads (30d)" value={`${s.downloads30d}`} sub={`${s.signups30d} new signups`} />
+                  <Stat
+                    label="Paid subscribers"
+                    value={liveUsers ? String(paidCount) : "—"}
+                    sub={liveUsers ? `Pro ${proCount} · Max ${maxCount}` : undefined}
+                  />
+                  <Stat
+                    label="Downloads (all-time)"
+                    value={liveUsers ? String(totalDownloads) : "—"}
+                  />
+                  <Stat
+                    label="Paid share"
+                    value={liveUsers && custUsers.length ? `${Math.round((paidCount / custUsers.length) * 100)}%` : "—"}
+                    sub="of all accounts"
+                  />
                 </div>
-                <Card title="Revenue streams (this month)">
-                  <ul className="flex flex-col gap-3">
-                    {s.revenueStreams.map((r) => {
-                      const total = s.revenueStreams.reduce((a, b) => a + b.amount, 0);
-                      const pct = (r.amount / total) * 100;
-                      return (
-                        <li key={r.label}>
-                          <div className="flex justify-between font-body text-sm">
-                            <span className="text-foreground">{r.label}</span>
-                            <span className="font-semibold" style={{ color: GOLD }}>${r.amount}</span>
-                          </div>
-                          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
-                            <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: GOLD }} />
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </Card>
-                <Card title="Funnel (30 days)">
-                  <div className="grid grid-cols-2 gap-4 font-body text-sm sm:grid-cols-4">
-                    <div>
-                      <p className="text-2xl font-semibold text-foreground">{s.visitors30d}</p>
-                      <p className="text-xs text-muted-foreground">visitors</p>
-                    </div>
-                    <div>
-                      <p className="text-2xl font-semibold text-foreground">{s.signups30d}</p>
-                      <p className="text-xs text-muted-foreground">free accounts ({((s.signups30d / s.visitors30d) * 100).toFixed(1)}%)</p>
-                    </div>
-                    <div>
-                      <p className="text-2xl font-semibold text-foreground">{s.downloads30d}</p>
-                      <p className="text-xs text-muted-foreground">downloads</p>
-                    </div>
-                    <div>
-                      <p className="text-2xl font-semibold" style={{ color: GOLD }}>
-                        {Math.round(s.signups30d * (s.freeToPaidPct / 100))}
-                      </p>
-                      <p className="text-xs text-muted-foreground">new paid subs</p>
-                    </div>
-                  </div>
+                {usersError && (
+                  <Card>
+                    <p className="font-body text-sm text-red-400">{usersError}</p>
+                  </Card>
+                )}
+                {!liveUsers && !usersError && (
+                  <Card>
+                    <p className="font-body text-sm text-muted-foreground">Loading live stats…</p>
+                  </Card>
+                )}
+                <Card>
+                  <p className="font-body text-sm text-muted-foreground">
+                    Revenue &amp; funnel analytics will appear here once subscription billing goes live.
+                  </p>
                 </Card>
               </>
             )}
@@ -675,31 +674,6 @@ const Admin = () => {
 
             {section === "requests" && (
               <>
-                <Card title="Whitelist requests">
-                  <ul className="divide-y divide-border/60">
-                    {mockWhitelistChannels.map((w) => (
-                      <li key={w.id} className="flex items-center justify-between gap-4 py-2.5">
-                        <span className="truncate font-body text-sm text-foreground">{w.channelUrl}</span>
-                        <StatusPill text={w.status} active={w.status === "active"} />
-                      </li>
-                    ))}
-                  </ul>
-                </Card>
-                <Card title="Claim removals">
-                  <ul className="divide-y divide-border/60">
-                    {mockClaimRequests.map((c) => (
-                      <li key={c.id} className="flex items-center justify-between gap-4 py-2.5">
-                        <span className="min-w-0">
-                          <span className="block truncate font-body text-sm text-foreground">{c.videoUrl}</span>
-                          <span className="block font-body text-xs text-muted-foreground">
-                            {composerName(c.composerId)}
-                          </span>
-                        </span>
-                        <StatusPill text={c.status === "done" ? "resolved" : c.status.replace("_", " ")} active={c.status === "done"} />
-                      </li>
-                    ))}
-                  </ul>
-                </Card>
                 <Card title="Briefs">
                   <ul className="divide-y divide-border/60">
                     {mockBriefs.map((b) => (

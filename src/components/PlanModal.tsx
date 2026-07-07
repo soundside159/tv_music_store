@@ -141,14 +141,14 @@ const PlanModal = () => {
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-background/80 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-background/80 p-4 backdrop-blur-sm"
       onClick={close}
       role="dialog"
       aria-modal="true"
       aria-label="Pick a plan"
     >
       <div
-        className="my-8 w-full max-w-3xl rounded-2xl border border-border bg-card p-6 shadow-2xl sm:p-8"
+        className="my-8 max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl sm:p-8"
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -165,7 +165,7 @@ const PlanModal = () => {
           <p className="mx-auto mt-2 max-w-md font-body text-sm text-muted-foreground">
             {heading.subtitle}
           </p>
-          <div className="mt-6 inline-flex items-center gap-3 font-body text-sm">
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 font-body text-sm">
             <button
               type="button"
               onClick={() => setInterval("monthly")}
@@ -178,11 +178,11 @@ const PlanModal = () => {
               role="switch"
               aria-checked={interval === "annual"}
               onClick={() => setInterval((i) => (i === "annual" ? "monthly" : "annual"))}
-              className="relative h-6 w-11 rounded-full bg-[#F4C430]/30 transition-colors"
+              className="relative inline-flex h-6 w-12 shrink-0 items-center rounded-full bg-secondary transition-colors"
             >
               <span
-                className={`absolute top-0.5 h-5 w-5 rounded-full bg-[#F4C430] transition-transform ${
-                  interval === "annual" ? "translate-x-5" : "translate-x-0.5"
+                className={`inline-block h-4 w-4 transform rounded-full bg-[#F4C430] shadow transition-transform ${
+                  interval === "annual" ? "translate-x-7" : "translate-x-1"
                 }`}
               />
             </button>

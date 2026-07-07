@@ -1069,3 +1069,23 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   an optional context: `openPlanModal({title, subtitle})` (billing.ts) → PlanModal shows a custom
   heading; whitelisting passes "Upgrade to protect channels / YouTube channel protection is included
   with Pro and Max". (Get-plan buttons still show "Coming soon" while Stripe is paused.)
+- **2026-07-07 (admin panel consolidation + plan-popup fixes):** owner-approved audit of the admin
+  sidebar. PlanModal fixes first: the Monthly/Annual toggle overlapped the label — rebuilt as a
+  standard `inline-flex` switch (w-12 track, translate-x-1/7, gap-x-3, justify-center) so it no longer
+  collides; and the popup now centers vertically (`items-center` + inner `max-h-[90vh] overflow-y-auto`)
+  instead of hugging the top. Admin nav: `adminNav.ts` flat `adminNavItems` replaced by
+  **`adminNavGroups`** (4 always-visible, non-collapsible groups — owner didn't want collapsible):
+  **Overview** (Dashboard) · **Catalog** (Tracks [was "Tracks Edit"], Collections, Playlists,
+  Categories, Vocabulary) · **Customers** (Customers, Inbox, Licenses, Campaigns, Whitelisting) ·
+  **Requests** (Briefs). `adminNavItems` kept as `adminNavGroups.flatMap(...)` for the account page's
+  secondary Admin menu. REMOVED FROM THE MENU (dups/mock): **Finance** (mock payouts), the old mock
+  **Tracks** (moderation queue — the real manager is Tracks Edit, now just "Tracks"), **Trending** (a
+  per-track flag already lives in the Tracks manager), and the mock **Whitelist requests** inside
+  Requests. Admin.tsx renders the grouped nav; the **Dashboard** now shows REAL numbers computed from
+  the already-loaded live users (Customers, Paid subscribers Pro/Max, Downloads all-time, Paid share)
+  instead of mock MRR/revenue/funnel (placeholder note for revenue "once billing goes live"); the
+  **Requests** section trimmed to just the Briefs card. NOTE: the Finance / old-Tracks / Trending
+  section render code is retained but unreachable from the menu (kept in SectionId/SECTION_IDS) so it
+  can be re-enabled easily; a few now-unused mock imports remain (harmless — deploy.bat runs vite build
+  only, no lint/tsc). DEFERRED (owner to decide later): a real "Copyright Claims" admin view (replacing
+  the removed mock Claim-removals), and wiring Dashboard revenue once Paddle/billing is live.

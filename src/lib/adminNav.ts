@@ -1,9 +1,7 @@
 import {
   CreditCard,
-  DollarSign,
   Download,
   FileText,
-  Flame,
   Inbox,
   LayoutDashboard,
   Library,
@@ -11,7 +9,6 @@ import {
   ListFilter,
   ListMusic,
   Mail,
-  Music2,
   Send,
   ShieldCheck,
   SlidersHorizontal,
@@ -58,20 +55,39 @@ export const accountNavGroups: { label: string; items: NavItem[] }[] = [
   },
 ];
 
-export const adminNavItems: NavItem[] = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "finance", label: "Finance", icon: DollarSign },
-  { id: "tracks", label: "Tracks", icon: Music2 },
-  { id: "collections", label: "Collections", icon: Library },
-  { id: "playlists", label: "Playlists", icon: ListMusic },
-  { id: "categories", label: "Categories", icon: Tags },
-  { id: "vocabulary", label: "Vocabulary", icon: ListFilter },
-  { id: "trending", label: "Trending", icon: Flame },
-  { id: "tracksedit", label: "Tracks Edit", icon: SlidersHorizontal },
-  { id: "customers", label: "Customers", icon: Users },
-  { id: "licenses", label: "Licenses", icon: FileText },
-  { id: "whitelist", label: "Whitelisting", icon: Youtube },
-  { id: "campaigns", label: "Campaigns", icon: Send },
-  { id: "mail", label: "Inbox", icon: Mail },
-  { id: "requests", label: "Requests", icon: Inbox },
+// Grouped admin sidebar (headers always shown, not collapsible). Dead/mock
+// sections removed: Finance, the old mock Tracks, Trending (now a per-track flag
+// in the Tracks manager), and the mock Whitelist-requests.
+export const adminNavGroups: { label: string; items: NavItem[] }[] = [
+  {
+    label: "Overview",
+    items: [{ id: "dashboard", label: "Dashboard", icon: LayoutDashboard }],
+  },
+  {
+    label: "Catalog",
+    items: [
+      { id: "tracksedit", label: "Tracks", icon: SlidersHorizontal },
+      { id: "collections", label: "Collections", icon: Library },
+      { id: "playlists", label: "Playlists", icon: ListMusic },
+      { id: "categories", label: "Categories", icon: Tags },
+      { id: "vocabulary", label: "Vocabulary", icon: ListFilter },
+    ],
+  },
+  {
+    label: "Customers",
+    items: [
+      { id: "customers", label: "Customers", icon: Users },
+      { id: "mail", label: "Inbox", icon: Mail },
+      { id: "licenses", label: "Licenses", icon: FileText },
+      { id: "campaigns", label: "Campaigns", icon: Send },
+      { id: "whitelist", label: "Whitelisting", icon: Youtube },
+    ],
+  },
+  {
+    label: "Requests",
+    items: [{ id: "requests", label: "Briefs", icon: Inbox }],
+  },
 ];
+
+// Flat list (used by the secondary "Admin" menu on the account page).
+export const adminNavItems: NavItem[] = adminNavGroups.flatMap((g) => g.items);
