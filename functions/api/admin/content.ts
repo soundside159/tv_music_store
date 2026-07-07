@@ -12,6 +12,7 @@ import {
   type VocabFacet,
 } from "../_utils";
 import { seedCollections, seedTracks } from "./_seed_data";
+import { ensureTrackCodes, generateTrackCode } from "../_codes";
 
 // Admin content editor API (collections, playlists, trending, track editing).
 // GET  -> { collections, playlists, trending } with ordered track ids.
@@ -563,15 +564,14 @@ export const onRequestPost = async (ctx: Ctx) => {
         return json({ error: "Upload at least one WAV (its 320 kbps preview is required)" }, 400);
       }
       await ensureTrackCoverColumn(db);
+      await ensureTrackCodes(db);
 
-      // Unique slug from the title.
-      const baseSlug = slugify(title);
-      let slug = baseSlug;
-      for (let n = 2; n <= 60; n++) {
-        const clash = await db.prepare(`SELECT id FROM tracks WHERE slug = ?1`).bind(slug).first();
-        if (!clash) break;
-        slug = `${baseSlug}-${n}`;
+      // Random public code (1000-9999); the slug carries it: 1042-opening-up-space.
+      const code = await generateTrackCode(db);
+      if (code === null) {
+        return json({ error: "All track codes (1000-9999) are in use" }, 507);
       }
+      const slug = `${code}-${slugify(title)}`;
 
       const trackId = newId("trk");
       const bpm = Number.isFinite(body.bpm) ? Math.round(body.bpm as number) : null;
@@ -585,8 +585,8 @@ export const onRequestPost = async (ctx: Ctx) => {
         .prepare(
           `INSERT INTO tracks
              (id, slug, title, composer_id, category, genre, mood, use_case, style_of,
-              bpm, duration, description, tags, has_stems, cover, cover_thumb, r2_key_wav_zip)
-           VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7, '', ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)`,
+              bpm, duration, description, tags, has_stems, cover, cover_thumb, r2_key_wav_zip, code)
+           VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7, '', ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)`,
         )
         .bind(
           trackId,
@@ -604,6 +604,7 @@ export const onRequestPost = async (ctx: Ctx) => {
           body.cover ?? "",
           body.coverThumb ?? "",
           wavZipKey,
+          code,
         )
         .run();
 
@@ -630,7 +631,7 @@ export const onRequestPost = async (ctx: Ctx) => {
           .run();
       }
 
-      return json({ ok: true, id: trackId, slug });
+      return json({ ok: true, id: trackId, slug, code });
     }
 
     case "delete_track": {

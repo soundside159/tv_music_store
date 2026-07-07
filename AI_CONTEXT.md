@@ -1028,3 +1028,28 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   `tvms-mail-worker` (keeps optional Gmail forward via FORWARD_TO); (3) verify ROOT domain
   tvmusicstore.com in Resend so replies from contact@ send (reading works without it; replying fails
   with a toast until then). The mail worker is a separate deploy — NOT part of deploy.bat.
+  UPDATE (owner confirmed mail works, in+out): Inbox got (a) a **search** box in the header — new `?q=`
+  on `GET /api/admin/mail` searches email/name + message subject/body (LIKE, incl. archived, DISTINCT
+  threads), debounced client input in AdminInbox; (b) the conversation header name/email is now
+  **clickable** when the correspondent is a registered user → opens AdminCustomerProfile (Admin passes
+  `onOpenCustomer={setProfileUserId}`), same as Customers/Licenses.
+- **2026-07-07 (track codes — tunetank-style unique numbers):** every track now gets a RANDOM unique
+  public code 1000-9999 (owner's choice over sequential — can't read catalog size off the numbers),
+  used in the URL and filenames. NEW `functions/api/_codes.ts`: `generateTrackCode(db)` (random,
+  uniqueness-checked, scan fallback, null if all 9000 taken) + `ensureTrackCodes(db)` (lazy `ALTER
+  TABLE tracks ADD COLUMN code`, backfills any code-less track and PREFIXES its slug with the code).
+  `admin/content.ts` `create_track` mints a code and sets `slug = <code>-<title>` (e.g.
+  `1042-opening-up-space`) — the old title-only dedup loop is gone (code guarantees uniqueness); returns
+  507 if codes are exhausted. `/api/tracks` calls `ensureTrackCodes` (idempotent) and returns `code`;
+  migration 0001_init.sql gained `tracks.code`. Frontend: `CatalogTrack.code` + useTracks map it;
+  `TrackDetail` resolves by the LEADING code (`/track/1042-anything` works, text can change without
+  breaking the link; exact-slug fallback kept). Filenames now include the code:
+  `downloadFileName`/`wavZipFileName` take a code (parsed from the slug via new `codeFromSlug`), and the
+  server `download.ts` content-disposition matches → `tvmusicstore.com_1042_Opening Up Space.mp3` /
+  `_1042_...zip`. All `/track/${track.slug}` links pick up the code automatically (slug now carries it).
+  Existing/test tracks get codes + coded slugs on the next /api/tracks load (their old code-less URLs
+  change — fine at this stage). LATER (documented, tasks open, docs/CATALOG_SORTING.md): (a) smart
+  catalog ordering — default "Recommended" = featured (daily-shuffled) pinned + genre/mood round-robin
+  diverse mix with a daily seed; New by date; Popular by real download_log later; (b) after the big
+  import, a 1-10 star "newness" rating per track with same-tier cross-composer round-robin to seed New.
+  Owner: build codes now (done) → sorting next → staging after the bulk import.

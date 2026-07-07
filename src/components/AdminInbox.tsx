@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Archive, Mail, RefreshCw, Send, Trash2, User } from "lucide-react";
+import { Archive, Mail, RefreshCw, Search, Send, Trash2, User } from "lucide-react";
 import { toast } from "sonner";
 
 // Admin -> Inbox. Reads contact@ conversations from D1 (filled by the separate
@@ -53,19 +53,21 @@ const fmt = (s: string | null) => {
   return Number.isNaN(d.getTime()) ? s : d.toLocaleString();
 };
 
-const AdminInbox = () => {
+const AdminInbox = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => void }) => {
   const [threads, setThreads] = useState<ThreadRow[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
   const [reply, setReply] = useState("");
   const [subject, setSubject] = useState("");
   const [sending, setSending] = useState(false);
 
-  const loadThreads = useCallback(async () => {
+  const loadThreads = useCallback(async (q?: string) => {
     setLoading(true);
     try {
-      const d = (await api("/api/admin/mail")) as { threads: ThreadRow[] };
+      const url = q && q.trim() ? `/api/admin/mail?q=${encodeURIComponent(q.trim())}` : "/api/admin/mail";
+      const d = (await api(url)) as { threads: ThreadRow[] };
       setThreads(d.threads ?? []);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not load inbox");
@@ -74,9 +76,11 @@ const AdminInbox = () => {
     }
   }, []);
 
+  // Initial load + debounced search as you type.
   useEffect(() => {
-    void loadThreads();
-  }, [loadThreads]);
+    const t = setTimeout(() => void loadThreads(query), query ? 300 : 0);
+    return () => clearTimeout(t);
+  }, [query, loadThreads]);
 
   const openThread = async (id: string) => {
     setActiveId(id);
@@ -106,7 +110,7 @@ const AdminInbox = () => {
       toast.success("Reply sent");
       setReply("");
       await openThread(detail.thread.id);
-      void loadThreads();
+      void loadThreads(query);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not send reply");
     } finally {
@@ -126,7 +130,7 @@ const AdminInbox = () => {
         setActiveId(null);
         setDetail(null);
       }
-      void loadThreads();
+      void loadThreads(query);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Action failed");
     }
@@ -134,13 +138,32 @@ const AdminInbox = () => {
 
   return (
     <div className="rounded-xl border border-border bg-card">
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
         <h2 className="flex items-center gap-2 font-body text-base font-semibold text-foreground">
           <Mail className="h-4 w-4" style={{ color: GOLD }} /> Inbox
         </h2>
+        <div className="relative ml-auto min-w-[12rem] flex-1 sm:max-w-sm">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search email, name, or message text…"
+            className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-8 font-body text-xs text-foreground focus:border-[#F4C430] focus:outline-none"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              ×
+            </button>
+          )}
+        </div>
         <button
           type="button"
-          onClick={() => void loadThreads()}
+          onClick={() => void loadThreads(query)}
           className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 font-body text-xs text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
         >
           <RefreshCw className="h-3.5 w-3.5" /> Refresh
@@ -203,12 +226,26 @@ const AdminInbox = () => {
           ) : (
             <>
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
-                <div className="min-w-0">
-                  <p className="truncate font-body text-sm font-semibold text-foreground">
-                    {detail.thread.name || detail.thread.email}
-                  </p>
-                  <p className="truncate font-body text-xs text-muted-foreground">{detail.thread.email}</p>
-                </div>
+                {detail.customer && onOpenCustomer ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpenCustomer(detail.customer!.id)}
+                    title="Open customer profile"
+                    className="group min-w-0 text-left"
+                  >
+                    <p className="truncate font-body text-sm font-semibold text-foreground transition-colors group-hover:text-[#F4C430]">
+                      {detail.thread.name || detail.thread.email}
+                    </p>
+                    <p className="truncate font-body text-xs text-muted-foreground">{detail.thread.email}</p>
+                  </button>
+                ) : (
+                  <div className="min-w-0">
+                    <p className="truncate font-body text-sm font-semibold text-foreground">
+                      {detail.thread.name || detail.thread.email}
+                    </p>
+                    <p className="truncate font-body text-xs text-muted-foreground">{detail.thread.email}</p>
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
                   {detail.customer && (
                     <span className="flex items-center gap-1 rounded-full border border-border px-2 py-1 font-body text-[11px] text-muted-foreground">

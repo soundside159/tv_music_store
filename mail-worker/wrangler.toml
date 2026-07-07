@@ -11,7 +11,7 @@ compatibility_date = "2024-11-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "tvmusicstore-db"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "850d7a3a-1f1c-440e-b4e0-997263959bdb"
 
 [vars]
 # Optional: keep a backup copy in Gmail. Must be a VERIFIED destination address

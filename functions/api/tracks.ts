@@ -1,4 +1,5 @@
 import { json, type Ctx } from "./_utils";
+import { ensureTrackCodes } from "./_codes";
 
 interface TrackRow {
   id: string;
@@ -15,6 +16,7 @@ interface TrackRow {
   tags: string | null;
   cover: string | null;
   cover_thumb: string | null;
+  code: number | null;
   has_stems: number;
 }
 
@@ -29,19 +31,22 @@ interface VersionRow {
 export const onRequestGet = async (ctx: Ctx) => {
   if (!ctx.env.DB) return json({ error: "DB not bound. See docs/SETUP_BACKEND.md" }, 503);
 
+  // Assign public codes to any track missing one (idempotent — no-op once set).
+  await ensureTrackCodes(ctx.env.DB);
+
   // `cover` / `cover_thumb` are added lazily by the admin editor; older DBs may
   // not have them yet, so degrade gracefully in two steps.
   const WHERE = `WHERE status = 'published' AND moderation_status = 'approved' ORDER BY created_at DESC`;
   let tracks: { results: TrackRow[] };
   try {
     tracks = await ctx.env.DB.prepare(
-      `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, cover, cover_thumb, has_stems
+      `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, cover, cover_thumb, code, has_stems
          FROM tracks ${WHERE}`,
     ).all<TrackRow>();
   } catch {
     try {
       const withCover = await ctx.env.DB.prepare(
-        `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, cover, has_stems
+        `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, cover, code, has_stems
            FROM tracks ${WHERE}`,
       ).all<Omit<TrackRow, "cover_thumb">>();
       tracks = { results: withCover.results.map((t) => ({ ...t, cover_thumb: null })) };
@@ -49,8 +54,8 @@ export const onRequestGet = async (ctx: Ctx) => {
       const legacy = await ctx.env.DB.prepare(
         `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, has_stems
            FROM tracks ${WHERE}`,
-      ).all<Omit<TrackRow, "cover" | "cover_thumb">>();
-      tracks = { results: legacy.results.map((t) => ({ ...t, cover: null, cover_thumb: null })) };
+      ).all<Omit<TrackRow, "cover" | "cover_thumb" | "code">>();
+      tracks = { results: legacy.results.map((t) => ({ ...t, cover: null, cover_thumb: null, code: null })) };
     }
   }
 

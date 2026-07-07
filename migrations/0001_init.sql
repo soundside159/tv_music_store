@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS tracks (
   cover TEXT,            -- 1000x1000 cover art path
   cover_thumb TEXT,      -- small square thumbnail path (track rows)
   r2_key_wav_zip TEXT,   -- private zip of all WAV versions (WAV/licensed download)
+  code INTEGER,          -- random public code 1000-9999 (URL + filenames)
   moderation_status TEXT NOT NULL DEFAULT 'approved', -- pending | approved | rejected
   status TEXT NOT NULL DEFAULT 'published', -- draft | scheduled | published
   publish_at TEXT,

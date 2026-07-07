@@ -23,15 +23,22 @@ export const cleanVersionLabel = (label: string, title: string): string => {
   return s;
 };
 
-/** tunetank-style download name: "tvmusicstore.com_Title (version).mp3". */
-export const downloadFileName = (title: string, label: string, format: string): string => {
+/** Pulls the leading track code out of a slug ("1042-opening-up-space" -> "1042"). */
+export const codeFromSlug = (slug: string): string => slug.match(/^(\d+)/)?.[1] ?? "";
+
+/** tunetank-style name: "tvmusicstore.com_1042_Title (version).mp3". */
+export const downloadFileName = (title: string, label: string, format: string, code = ""): string => {
   const suffix = cleanVersionLabel(label ?? "", title);
   const base = suffix ? `${title} (${suffix})` : title;
-  return `${SITE}_${sanitizeName(base)}.${format}`;
+  const prefix = code ? `${SITE}_${code}` : SITE;
+  return `${prefix}_${sanitizeName(base)}.${format}`;
 };
 
-/** WAV bundle name: "tvmusicstore.com_Title.zip". */
-export const wavZipFileName = (title: string): string => `${SITE}_${sanitizeName(title)}.zip`;
+/** WAV bundle name: "tvmusicstore.com_1042_Title.zip". */
+export const wavZipFileName = (title: string, code = ""): string => {
+  const prefix = code ? `${SITE}_${code}` : SITE;
+  return `${prefix}_${sanitizeName(title)}.zip`;
+};
 
 export interface DownloadArgs {
   slug: string;
@@ -83,8 +90,11 @@ export const downloadTrackVersion = async (args: DownloadArgs): Promise<boolean>
       const a = document.createElement("a");
       a.href = url;
       // WAV downloads arrive as a zip of every version.
+      const code = codeFromSlug(args.slug);
       a.download =
-        format === "wav" ? wavZipFileName(args.title) : downloadFileName(args.title, args.label, format);
+        format === "wav"
+          ? wavZipFileName(args.title, code)
+          : downloadFileName(args.title, args.label, format, code);
       document.body.appendChild(a);
       a.click();
       a.remove();

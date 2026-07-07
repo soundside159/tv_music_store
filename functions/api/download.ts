@@ -179,7 +179,8 @@ export const onRequestPost = async (ctx: Ctx) => {
   // prefix the site (tunetank-style): "tvmusicstore.com_Title (short version).mp3".
   const suffix = isZip ? "" : cleanVersionSuffix(body?.label ?? versionId, rawTitle);
   const base = suffix ? `${title} (${sanitizeFilename(suffix)})` : title;
-  const filename = `tvmusicstore.com_${base}.${ext}`;
+  const code = slug.match(/^(\d+)/)?.[1] ?? "";
+  const filename = code ? `tvmusicstore.com_${code}_${base}.${ext}` : `tvmusicstore.com_${base}.${ext}`;
 
   return new Response(audioBody, {
     status: 200,

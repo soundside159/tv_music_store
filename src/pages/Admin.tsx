@@ -565,7 +565,7 @@ const Admin = () => {
 
             {section === "campaigns" && <AdminCampaign />}
 
-            {section === "mail" && <AdminInbox />}
+            {section === "mail" && <AdminInbox onOpenCustomer={setProfileUserId} />}
 
             {section === "licenses" && (
               <Card title={`Licenses${licenses ? ` (${licenses.length})` : ""}`}>

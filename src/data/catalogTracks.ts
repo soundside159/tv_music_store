@@ -46,6 +46,8 @@ export interface CatalogTrack {
   cover?: string;
   /** Small square thumbnail (track rows). Falls back to `cover` when absent. */
   coverThumb?: string;
+  /** Public track code (1000-9999) — appears in the URL slug and filenames. */
+  code?: number;
   /** Admin-curated category membership; when absent, [category] is the fallback. */
   categoryIds?: string[];
   /** True when the track ships stems (shown as a STEMS badge; Max-plan download). */

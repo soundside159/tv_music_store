@@ -30,7 +30,12 @@ type DetailTab = "versions" | "similar";
 const TrackDetail = () => {
   const { slug } = useParams();
   const { tracks: catalogTracks } = useTracks();
-  const track = catalogTracks.find((item) => item.slug === slug);
+  // Resolve by the leading code (/track/1042-anything) so the text part can
+  // change without breaking the link; fall back to an exact slug match.
+  const codeParam = slug?.match(/^(\d+)/)?.[1];
+  const track =
+    catalogTracks.find((item) => item.slug === slug) ??
+    (codeParam ? catalogTracks.find((item) => String(item.code) === codeParam) : undefined);
   const [activeTab, setActiveTab] = useState<DetailTab>("versions");
   const [selectedVersions, setSelectedVersions] = useState<Record<string, TrackVersion>>({});
   const [selectedTier, setSelectedTier] = useState<LicenseTierId>("personal");

@@ -108,6 +108,25 @@ export const onRequestGet = async (ctx: Ctx) => {
     return json({ thread, messages: messages.results, customer });
   }
 
+  // Search across correspondents AND message bodies (e.g. paste a YouTube link to
+  // find who sent it). Searching also looks inside archived threads.
+  const q = new URL(ctx.request.url).searchParams.get("q")?.trim();
+  if (q) {
+    const like = `%${q}%`;
+    const found = await ctx.env.DB.prepare(
+      `SELECT DISTINCT t.id, t.email, t.name, t.last_message_at, t.last_snippet,
+              t.last_direction, t.unread, t.archived
+         FROM mail_threads t
+         LEFT JOIN mail_messages m ON m.thread_id = t.id
+        WHERE t.email LIKE ?1 OR t.name LIKE ?1 OR m.subject LIKE ?1 OR m.body LIKE ?1
+        ORDER BY t.last_message_at DESC
+        LIMIT 300`,
+    )
+      .bind(like)
+      .all();
+    return json({ threads: found.results, unreadThreads: 0 });
+  }
+
   const threads = await ctx.env.DB.prepare(
     `SELECT id, email, name, last_message_at, last_snippet, last_direction, unread, archived
        FROM mail_threads
