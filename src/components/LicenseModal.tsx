@@ -63,9 +63,9 @@ const LicenseModal = () => {
       >
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-xl text-foreground">Buy a license</h2>
+            <h2 className="text-xl text-foreground">License this track</h2>
             <p className="mt-1 font-body text-sm text-muted-foreground">
-              A PDF certificate for {args.title ? <span className="text-foreground">“{args.title}”</span> : "this track"} — for client work, broadcast, contracts.
+              Own {args.title ? <span className="text-foreground">“{args.title}”</span> : "this track"} forever with a signed PDF certificate — for client work, broadcast and contracts.
             </p>
           </div>
           <button

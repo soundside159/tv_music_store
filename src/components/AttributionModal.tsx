@@ -58,14 +58,14 @@ const AttributionModal = () => {
       onClick={close}
       role="dialog"
       aria-modal="true"
-      aria-label="Say thanks"
+      aria-label="Credit the composer"
     >
       <div
         className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h2 className="text-xl text-foreground">Say thanks!</h2>
+          <h2 className="text-xl text-foreground">Credit the composer</h2>
           <button
             type="button"
             onClick={close}
@@ -75,6 +75,9 @@ const AttributionModal = () => {
             <X className="h-5 w-5" />
           </button>
         </div>
+        <p className="mt-1 font-body text-xs text-muted-foreground">
+          Free downloads just ask for a credit — paste this wherever you publish.
+        </p>
 
         <pre className="mt-4 whitespace-pre-wrap break-words rounded-xl border border-border bg-background/50 p-4 font-body text-sm text-muted-foreground">
           {attribution}
@@ -86,7 +89,7 @@ const AttributionModal = () => {
           className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-background/40 py-3 font-body text-sm font-semibold text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
         >
           {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-          {copied ? "Copied" : "Copy attribution"}
+          {copied ? "Copied" : "Copy credit"}
         </button>
 
         <p className="mt-4 text-center font-body text-xs text-muted-foreground">
@@ -102,7 +105,7 @@ const AttributionModal = () => {
         </p>
 
         <p className="mt-4 border-t border-border/60 pt-4 text-center font-body text-xs text-muted-foreground">
-          Want studio WAV, 320 Kbps and no attribution?{" "}
+          Want WAV, 320 kbps and no credit line?{" "}
           <button
             type="button"
             onClick={() => {

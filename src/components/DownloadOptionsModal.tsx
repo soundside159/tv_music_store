@@ -22,10 +22,10 @@ interface FormatOption {
 }
 
 const options: FormatOption[] = [
-  { id: "mp3-128", title: "MP3 128 Kbps", description: "Standard quality for quick playback.", need: "free" },
-  { id: "mp3-320", title: "MP3 320 Kbps", description: "High-quality audio clarity.", need: "pro", badge: "PRO" },
-  { id: "wav", title: "WAV 44.1 kHz", description: "Studio-grade, professional quality.", need: "max", badge: "MAX" },
-  { id: "stems", title: "STEMS", description: "Individual tracks for full control.", need: "max", badge: "MAX", soon: true },
+  { id: "mp3-128", title: "MP3 128 Kbps", description: "Light file for rough cuts and previews.", need: "free" },
+  { id: "mp3-320", title: "MP3 320 Kbps", description: "Full-quality MP3 for your final edit.", need: "pro", badge: "PRO" },
+  { id: "wav", title: "WAV 44.1 kHz", description: "Uncompressed master for the edit suite.", need: "max", badge: "MAX" },
+  { id: "stems", title: "STEMS", description: "Separated layers to remix and re-balance.", need: "max", badge: "MAX", soon: true },
 ];
 
 const planRank: Record<string, number> = { free: 0, pro: 1, max: 2 };
@@ -151,19 +151,12 @@ const DownloadOptionsModal = () => {
                 type="button"
                 disabled={o.soon}
                 onClick={() => setSelected(o.id)}
-                className={`flex items-start gap-3 rounded-xl border p-3.5 text-left transition-colors ${
+                className={`flex items-center gap-3 rounded-xl border p-3.5 text-left transition-colors ${
                   isActive
                     ? "border-[#F4C430] bg-[#F4C430]/10"
                     : "border-border bg-background/40 hover:border-[#F4C430]/50"
                 } ${o.soon ? "cursor-not-allowed opacity-50" : ""}`}
               >
-                <span
-                  className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
-                    isActive ? "border-[#F4C430]" : "border-border"
-                  }`}
-                >
-                  {isActive && <span className="h-2 w-2 rounded-full" style={{ backgroundColor: GOLD }} />}
-                </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">
                     <span className="font-body text-sm font-semibold text-foreground">{o.title}</span>
@@ -176,6 +169,7 @@ const DownloadOptionsModal = () => {
                   </span>
                   <span className="mt-0.5 block font-body text-xs text-muted-foreground">{o.description}</span>
                 </span>
+                {isActive && <Check className="h-5 w-5 shrink-0" style={{ color: GOLD }} />}
               </button>
             );
           })}

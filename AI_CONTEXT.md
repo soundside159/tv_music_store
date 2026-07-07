@@ -1120,3 +1120,16 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   next steps in `docs/SEO.md`. NEXT (owner sign-off): wire useSeo on the remaining pages; a Function-
   generated `/sitemap-tracks.xml` from D1; and prerendering/dynamic-rendering for full JS-less coverage
   (the real fix for ChatGPT/social bots on every page — bigger, needs build changes + testing).
+- **2026-07-07 (de-tunetank pass — Level 1 microcopy + download-modal look):** owner wanted to feel less
+  like tunetank without changing the layout/style he likes (Levels 2/3 declined). Reworded the
+  verbatim/near-verbatim strings into our own cinematic voice, structure unchanged: DownloadOptionsModal
+  format descriptions ("Light file for rough cuts…", "Full-quality MP3 for your final edit", "Uncompressed
+  master…", "Separated layers to remix…") AND replaced the tunetank-style **gold radio dot** with a gold
+  **check on the right** (card already highlights) — same minimalist rows, different signature;
+  AttributionModal "Say thanks!" → "Credit the composer" (+ subtitle, "Copy attribution"→"Copy credit",
+  "no attribution"→"no credit line"); PlanModal card subtitles "For everyday creators/…agencies" → "For
+  solo creators & channels" / "For studios, brands & client work" and default subtitle reworded off the
+  "Higher plans give you…" phrasing; LicenseModal "Buy a license" → "License this track" + reworded
+  subtitle; NotificationsSettings marketing subtitle reworded; `lib/licenses.ts` usage-term bullets
+  rephrased (meaning-preserving, no new scope claims — kept "Lifetime license" consistent with the
+  perpetual-license docs). Structure/logic untouched; owner keeps the visual style.

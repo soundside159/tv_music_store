@@ -127,7 +127,7 @@ const NotificationsSettings = () => {
         <GroupHeader label="Marketing" />
         <Row
           title="Promotions & offers"
-          subtitle="Special deals, discounts, new releases and recommendations"
+          subtitle="New releases, occasional offers and picks for your taste"
           on={marketing ?? false}
           onChange={() => void toggleMarketing()}
           disabled={marketing === null || savingMarketing}

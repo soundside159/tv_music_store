@@ -63,7 +63,7 @@ const PlanCard = ({
       )}
       <h3 className="font-body text-xl font-semibold text-foreground">{plan.name}</h3>
       <p className="mt-1 font-body text-sm text-muted-foreground">
-        {plan.id === "max" ? "For professionals and agencies" : "For everyday creators"}
+        {plan.id === "max" ? "For studios, brands & client work" : "For solo creators & channels"}
       </p>
       <div className="mt-4 flex items-baseline gap-2">
         {interval === "annual" && (
@@ -108,7 +108,7 @@ const PlanModal = () => {
   const [interval, setInterval] = useState<BillingInterval>("annual");
   const [heading, setHeading] = useState<{ title: string; subtitle: string }>({
     title: "Pick a plan",
-    subtitle: "Higher plans give you unlimited downloads, WAV & stems, and commercial licensing.",
+    subtitle: "Unlock unlimited downloads, lossless WAV & stems, and full commercial licensing.",
   });
 
   useEffect(() => {
@@ -116,7 +116,7 @@ const PlanModal = () => {
       const ctx = (event as CustomEvent<{ title?: string; subtitle?: string }>).detail ?? {};
       setHeading({
         title: ctx.title || "Pick a plan",
-        subtitle: ctx.subtitle || "Higher plans give you unlimited downloads, WAV & stems, and commercial licensing.",
+        subtitle: ctx.subtitle || "Unlock unlimited downloads, lossless WAV & stems, and full commercial licensing.",
       });
       setInterval("annual");
       setOpen(true);
