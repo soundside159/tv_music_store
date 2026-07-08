@@ -9,6 +9,8 @@ const PREFS_KEY = "tvms_notif_prefs_v1";
 
 type OtherKey = "downloads" | "recommendations" | "notifications";
 
+// Skeuomorphic on/off switch: dark grip knob that slides, with a glowing gold
+// "ON" (or dim "OFF") label revealed on the opposite side.
 const Toggle = ({ on, onChange, disabled }: { on: boolean; onChange: () => void; disabled?: boolean }) => (
   <button
     type="button"
@@ -16,15 +18,44 @@ const Toggle = ({ on, onChange, disabled }: { on: boolean; onChange: () => void;
     aria-checked={on}
     disabled={disabled}
     onClick={onChange}
-    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
-      on ? "bg-[#F4C430]" : "bg-secondary"
-    }`}
+    className="relative inline-flex h-8 w-[4.5rem] shrink-0 items-center rounded-full border border-black/60 transition-all disabled:opacity-50"
+    style={{
+      background: "linear-gradient(180deg,#141517,#0b0c0e)",
+      boxShadow: on
+        ? "inset 0 1px 2px rgba(0,0,0,0.6), 0 0 16px -3px rgba(244,196,48,0.65)"
+        : "inset 0 1px 3px rgba(0,0,0,0.75)",
+    }}
   >
     <span
-      className={`inline-block h-4 w-4 transform rounded-full bg-background shadow transition-transform ${
-        on ? "translate-x-6" : "translate-x-1"
+      className={`pointer-events-none absolute inset-0 flex items-center font-body text-[10px] font-bold tracking-[0.15em] ${
+        on ? "justify-end pr-3" : "justify-start pl-3"
       }`}
-    />
+    >
+      <span
+        style={
+          on
+            ? { color: "#F4C430", textShadow: "0 0 8px rgba(244,196,48,0.9)" }
+            : { color: "rgba(255,255,255,0.32)" }
+        }
+      >
+        {on ? "ON" : "OFF"}
+      </span>
+    </span>
+    <span
+      className={`absolute bottom-1 top-1 w-8 rounded-full transition-all duration-200 ${on ? "left-1" : "right-1"}`}
+      style={{
+        background: "linear-gradient(180deg,#3b3d42,#1e2023)",
+        boxShadow: "inset 0 1px 1px rgba(255,255,255,0.18), 0 2px 5px rgba(0,0,0,0.55)",
+      }}
+    >
+      <span
+        className="absolute inset-0 m-auto h-3 w-4 rounded"
+        style={{
+          backgroundImage: "radial-gradient(rgba(255,255,255,0.3) 0.8px, transparent 1px)",
+          backgroundSize: "4px 4px",
+        }}
+      />
+    </span>
   </button>
 );
 

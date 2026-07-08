@@ -130,7 +130,8 @@ const Account = () => {
               {(user.role !== "admin" || menu === "main") &&
                 accountNavGroups.map((group) => (
                   <div key={group.label} className="shrink-0 md:mb-5">
-                    <p className="px-3 pb-1.5 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
+                    <p className="flex items-center gap-1.5 px-3 pb-1.5 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
+                      <span className="h-2.5 w-0.5 rounded-full" style={{ backgroundColor: GOLD }} />
                       {group.label}
                     </p>
                     <div className="flex gap-1 md:flex-col">

@@ -1160,3 +1160,12 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   flow into a right-side **TV MUSIC STORE** brand node (glow + a purple→gold→cyan gradient bar +
   "Cinematic music, licensed clean."). Beams are desktop-only (`hidden lg:block`); on mobile the cards
   stack above the brand node. Pure CSS/SVG, no deps. `Index.tsx` trust section only.
+- **2026-07-07 (live moods on home + gold menu bars + skeuomorphic toggle):** (1) Homepage "Browse by
+  mood" used a hardcoded `moods` array, so admin-added moods showed in Catalog but not on Home — now
+  it reads the live vocabulary (`useVocabularies().mood`) so it stays in sync. (2) Added the gold
+  accent bar (from the Notifications group headers) in front of every sidebar group label in the
+  Account and Admin menus (both the account groups and the admin groups). (3) Redesigned the on/off
+  Toggle (NotificationsSettings) into a skeuomorphic button: a dark grip-dot knob that slides, with a
+  glowing **"ON"** / dim **"OFF"** label revealed on the opposite side. Used the brand **gold** glow
+  (not the blue from the owner's reference screenshot) to stay on-theme — trivial to switch to blue if
+  he prefers. Pure inline styles, no deps.

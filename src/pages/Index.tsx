@@ -3,12 +3,10 @@ import { ArrowRight, Check, Layers, Library, ListMusic, Music2, ShieldCheck, Use
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { TrackRowList } from "@/components/TrackRowPlayer";
-import { useCategories, useTrendingTracks } from "@/hooks/useContent";
+import { useCategories, useTrendingTracks, useVocabularies } from "@/hooks/useContent";
 import { usePlans } from "@/hooks/useMockData";
 
 const GOLD = "#F4C430";
-
-const moods = ["Emotional", "Powerful", "Inspiring", "Suspenseful", "Aggressive", "Tense", "Heroic", "Uplifting"];
 
 const trustPoints = [
   { icon: ShieldCheck, label: "Content ID protected", text: "Every track is registered. Claims removed within 24 hours." },
@@ -21,6 +19,7 @@ const Index = () => {
   const plans = usePlans();
   const trendingTracks = useTrendingTracks(8);
   const categories = useCategories();
+  const moods = useVocabularies().mood;
 
   return (
     <div className="min-h-screen bg-background">

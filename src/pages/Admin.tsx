@@ -236,7 +236,8 @@ const Admin = () => {
                 <div className="mb-3 flex flex-col gap-3">
                   {accountNavGroups.map((group) => (
                     <div key={group.label}>
-                      <p className="px-3 pb-1 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
+                      <p className="flex items-center gap-1.5 px-3 pb-1 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
+                        <span className="h-2.5 w-0.5 rounded-full" style={{ backgroundColor: GOLD }} />
                         {group.label}
                       </p>
                       {group.items.map((item) => (
@@ -259,7 +260,8 @@ const Admin = () => {
                 <div className="flex flex-col gap-3">
                   {adminNavGroups.map((group) => (
                     <div key={group.label}>
-                      <p className="px-3 pb-1 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
+                      <p className="flex items-center gap-1.5 px-3 pb-1 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
+                        <span className="h-2.5 w-0.5 rounded-full" style={{ backgroundColor: GOLD }} />
                         {group.label}
                       </p>
                       {group.items.map((sec) => (
