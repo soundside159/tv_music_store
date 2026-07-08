@@ -317,6 +317,8 @@ export const onRequestPost = async (ctx: Ctx) => {
       hasStems?: boolean;
       /** R2 masters/ key of the stems zip; setting it also flips has_stems on. */
       stemsKey?: string;
+      /** Removes the stems bundle reference + switches the badge off. */
+      clearStems?: boolean;
       /** draft | published — bulk publish/unpublish. */
       status?: string;
     };
@@ -535,6 +537,10 @@ export const onRequestPost = async (ctx: Ctx) => {
           if (typeof f.stemsKey === "string" && /^masters\//.test(f.stemsKey)) {
             next.r2_key_stems = f.stemsKey;
             next.has_stems = 1;
+          }
+          if (f.clearStems) {
+            next.r2_key_stems = null;
+            next.has_stems = 0;
           }
           if (f.status === "draft" || f.status === "published") next.status = f.status;
         }

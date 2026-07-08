@@ -1530,3 +1530,14 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   ALSO: AdminContent header buttons Publish/Delete/+Add Track grouped in one right-side cluster
   (no more spreading); track-page admin panel: trash now says "Delete track", Trending box shows
   "This track is in Trending — position #N" instead of the Add button when already listed.
+- **2026-07-08 (Tracks Edit v4 — owner polish round):** (1) PANEL ORDER changed to owner's:
+  table · Track details · Tags · Add to (grid `[minmax(0,1fr)_21rem_16rem_16rem]`), and ALL
+  panels are ALWAYS rendered — panels that don't apply to the selection are DIMMED
+  (`opacity-40 pointer-events-none` via `dimIf`): Tags/Add-to dim with no selection, Track
+  details dims unless exactly one track is selected (shows a hint then). (2) Track details
+  fields: BPM got its own labeled row; EXTRA TAGS grew from a small input into a 4-row TEXTAREA
+  below Description. (3) STEMS handling: the Ver. button shows `×N +S` (gold) when the track has
+  a stems bundle (col widened 3.5→4.5rem); the versions expander got a "Stems ZIP attached" row
+  with an X → new `fields.clearStems` in bulk_update_tracks (NULLs r2_key_stems + has_stems=0);
+  after removal onApplyOverrides flips hasStems locally + onTracksReload. NOTE: clearing does not
+  delete the zip object from R2 (orphan files are harmless; R2 cleanup = maybe later).
