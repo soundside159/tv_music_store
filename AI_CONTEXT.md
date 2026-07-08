@@ -1176,3 +1176,13 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   when a track started). UPDATE: the gold (played) bars now dim WITH the grey — `played ? (active ? 1
   : 0.5) : active ? 0.42 : 0.18` — so on idle rows the whole waveform (gold + grey) is muted and lights
   up together (0.35s transition) when the track plays.
+- **2026-07-07 (gold bars moved to content headers + admin menu paint fix):** the gold accent bar was
+  meant for CONTENT section headers (like Notifications' Marketing/Other), NOT the sidebar nav group
+  labels. Reverted the sidebar group-label bars (Admin + Account) and instead: `SectionCard` (Account)
+  now renders a gold `h-4 w-1` bar before its `<h2>` (covers Profile / Downloads / Licenses "What your
+  plan covers" & "One-time sync licenses" / Claims), and the Plan & Billing "Your plan" / "Account
+  details" dots became matching gold bars. ADMIN MENU PAINT BUG: opening the Admin menu showed the
+  group labels (Overview/Catalog/Customers/Requests) blank until a click — the blocks were conditionally
+  mounted (`{menu === 'admin' && …}`) and the freshly-mounted subtree wasn't painted until a reflow.
+  Fixed by always rendering both menu blocks and toggling visibility with `hidden`/`flex` instead of
+  mount/unmount, so everything is painted up front.

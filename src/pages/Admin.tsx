@@ -232,55 +232,49 @@ const Admin = () => {
           <aside className="shrink-0 md:w-56">
             <nav className="flex flex-col space-y-1">
               <MenuGroupHeader label="Main" open={menu === "main"} onClick={() => setMenu("main")} />
-              {menu === "main" && (
-                <div className="mb-3 flex flex-col gap-3">
-                  {accountNavGroups.map((group) => (
-                    <div key={group.label}>
-                      <p className="flex items-center gap-1.5 px-3 pb-1 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
-                        <span className="h-2.5 w-0.5 rounded-full" style={{ backgroundColor: GOLD }} />
-                        {group.label}
-                      </p>
-                      {group.items.map((item) => (
-                        <Link
-                          key={item.id}
-                          to={`/account?section=${item.id}`}
-                          className="flex items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
-                        >
-                          <item.icon className="h-4 w-4" />
-                          {item.label}
-                        </Link>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div className={`mb-3 flex-col gap-3 ${menu === "main" ? "flex" : "hidden"}`}>
+                {accountNavGroups.map((group) => (
+                  <div key={group.label}>
+                    <p className="px-3 pb-1 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
+                      {group.label}
+                    </p>
+                    {group.items.map((item) => (
+                      <Link
+                        key={item.id}
+                        to={`/account?section=${item.id}`}
+                        className="flex items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        <item.icon className="h-4 w-4" />
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
+                ))}
+              </div>
 
               <MenuGroupHeader label="Admin" open={menu === "admin"} onClick={() => setMenu("admin")} />
-              {menu === "admin" && (
-                <div className="flex flex-col gap-3">
-                  {adminNavGroups.map((group) => (
-                    <div key={group.label}>
-                      <p className="flex items-center gap-1.5 px-3 pb-1 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
-                        <span className="h-2.5 w-0.5 rounded-full" style={{ backgroundColor: GOLD }} />
-                        {group.label}
-                      </p>
-                      {group.items.map((sec) => (
-                        <button
-                          key={sec.id}
-                          type="button"
-                          onClick={() => setSection(sec.id as SectionId)}
-                          className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors ${
-                            section === sec.id ? "bg-secondary text-[#F4C430]" : "text-muted-foreground hover:text-foreground"
-                          }`}
-                        >
-                          <sec.icon className="h-4 w-4" />
-                          {sec.label}
-                        </button>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div className={`flex-col gap-3 ${menu === "admin" ? "flex" : "hidden"}`}>
+                {adminNavGroups.map((group) => (
+                  <div key={group.label}>
+                    <p className="px-3 pb-1 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
+                      {group.label}
+                    </p>
+                    {group.items.map((sec) => (
+                      <button
+                        key={sec.id}
+                        type="button"
+                        onClick={() => setSection(sec.id as SectionId)}
+                        className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors ${
+                          section === sec.id ? "bg-secondary text-[#F4C430]" : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <sec.icon className="h-4 w-4" />
+                        {sec.label}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
 
               <button
                 type="button"

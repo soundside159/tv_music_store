@@ -57,7 +57,10 @@ const fmtDate = (iso: string) => {
 
 const SectionCard = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <div className="rounded-xl border border-border bg-card p-6">
-    <h2 className="font-body text-base font-semibold text-foreground">{title}</h2>
+    <h2 className="flex items-center gap-2 font-body text-base font-semibold text-foreground">
+      <span className="h-4 w-1 rounded-full" style={{ backgroundColor: GOLD }} />
+      {title}
+    </h2>
     <div className="mt-4">{children}</div>
   </div>
 );
@@ -130,8 +133,7 @@ const Account = () => {
               {(user.role !== "admin" || menu === "main") &&
                 accountNavGroups.map((group) => (
                   <div key={group.label} className="shrink-0 md:mb-5">
-                    <p className="flex items-center gap-1.5 px-3 pb-1.5 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
-                      <span className="h-2.5 w-0.5 rounded-full" style={{ backgroundColor: GOLD }} />
+                    <p className="px-3 pb-1.5 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
                       {group.label}
                     </p>
                     <div className="flex gap-1 md:flex-col">
@@ -494,7 +496,7 @@ const Account = () => {
 
                 <div className="rounded-xl border border-border bg-card p-6">
                   <p className="flex items-center gap-2 font-body text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: GOLD }} /> Your plan
+                    <span className="h-3 w-1 rounded-full" style={{ backgroundColor: GOLD }} /> Your plan
                   </p>
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
                     <div>
@@ -528,7 +530,7 @@ const Account = () => {
 
                 <div className="rounded-xl border border-border bg-card p-6">
                   <p className="flex items-center gap-2 font-body text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    <span className="h-2 w-2 rounded-full border border-[#F4C430]" /> Account details
+                    <span className="h-3 w-1 rounded-full" style={{ backgroundColor: GOLD }} /> Account details
                   </p>
                   <p className="mt-4 font-body text-base font-semibold text-foreground">{user.name || "—"}</p>
                   <p className="font-body text-sm text-muted-foreground">{user.email}</p>
