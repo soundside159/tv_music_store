@@ -625,7 +625,12 @@ const AdminTracksEdit = ({
                         }`}
                       >
                         <span className="truncate">{t.title}</span>
-                        {t.status === "draft" && (
+                        {t.moderation === "pending" && (
+                          <span className="shrink-0 rounded border border-orange-400/60 bg-orange-400/10 px-1 py-px font-body text-[9px] font-bold uppercase tracking-wide text-orange-400">
+                            Review
+                          </span>
+                        )}
+                        {t.status === "draft" && t.moderation !== "pending" && (
                           <span className="shrink-0 rounded border border-amber-400/50 bg-amber-400/10 px-1 py-px font-body text-[9px] font-bold uppercase tracking-wide text-amber-400">
                             Draft
                           </span>

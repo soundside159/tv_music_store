@@ -30,7 +30,10 @@ export const onRequestPost = async (ctx: Ctx) => {
 
   const user = await getSessionUser(ctx);
   if (!user) return json({ error: "Not signed in" }, 401);
-  if (user.role !== "admin" && user.email !== OWNER_EMAIL) {
+  const isAdmin = user.role === "admin" || user.email === OWNER_EMAIL;
+  // Composers may upload track material too (their Add-track flow encodes
+  // previews client-side and zips WAVs/stems, same as the admin pipeline).
+  if (!isAdmin && user.role !== "composer") {
     return json({ error: "Admin only" }, 403);
   }
   if (!ctx.env.R2) {
@@ -46,6 +49,9 @@ export const onRequestPost = async (ctx: Ctx) => {
     kindParam === "master" || kindParam === "wavzip" || kindParam === "preview128" || kindParam === "stems"
       ? kindParam
       : "preview";
+  if (!isAdmin && kind === "master") {
+    return json({ error: "Admin only" }, 403);
+  }
   const isPublic = PUBLIC_KINDS.includes(kind);
 
   const contentType = (ctx.request.headers.get("content-type") ?? "").split(";")[0].trim();

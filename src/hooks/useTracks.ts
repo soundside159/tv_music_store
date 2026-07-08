@@ -25,13 +25,16 @@ type ApiTrack = {
   created_at?: string | null;
   downloads?: number;
   status?: string;
+  moderation_status?: string;
+  /** Composer pseudonym (composers.display_name) — null = house catalog. */
+  artist?: string | null;
 };
 
 const mapTrack = (t: ApiTrack): CatalogTrack => ({
   id: t.id,
   slug: t.slug,
   title: t.title,
-  artist: "TVMUSICSTORE",
+  artist: t.artist || "TVMUSICSTORE",
   category: t.category as TrackCategory,
   genre: t.genre ?? "",
   mood: t.mood ?? "",
@@ -51,6 +54,7 @@ const mapTrack = (t: ApiTrack): CatalogTrack => ({
   createdAt: t.created_at ?? undefined,
   downloads: t.downloads ?? 0,
   status: t.status ?? undefined,
+  moderation: t.moderation_status ?? undefined,
   audioVersions: (t.versions ?? []).map((v) => ({
     id: v.version_id as TrackVersion,
     label: v.label,

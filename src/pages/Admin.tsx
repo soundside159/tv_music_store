@@ -87,6 +87,8 @@ interface LiveUser {
   created_at: string;
   plan: string | null;
   downloads: number;
+  /** Composer display pseudonym (composers.display_name), if a profile exists. */
+  pseudonym: string | null;
 }
 
 interface AdminLicense {
@@ -198,6 +200,31 @@ const Admin = () => {
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Update failed");
     } catch (e) {
       setLiveUsers(prev);
+      setUsersError(e instanceof Error ? e.message : "Update failed");
+    } finally {
+      setSavingUserId(null);
+    }
+  };
+
+  // Composer pseudonym — shown as the track artist site-wide. Saved on blur/Enter.
+  const savePseudonym = async (userId: string, pseudonym: string) => {
+    if (!liveUsers) return;
+    const current = liveUsers.find((u) => u.id === userId);
+    const next = pseudonym.trim();
+    if (!current || !next || next === (current.pseudonym ?? "")) return;
+    setSavingUserId(userId);
+    setUsersError(null);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ userId, pseudonym: next }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Update failed");
+      setLiveUsers((us) => (us ?? []).map((u) => (u.id === userId ? { ...u, pseudonym: next } : u)));
+    } catch (e) {
       setUsersError(e instanceof Error ? e.message : "Update failed");
     } finally {
       setSavingUserId(null);
@@ -553,6 +580,19 @@ const Admin = () => {
                                   <option key={r} value={r}>{r}</option>
                                 ))}
                               </select>
+                              {u.role === "composer" && (
+                                <input
+                                  defaultValue={u.pseudonym ?? ""}
+                                  placeholder="Pseudonym…"
+                                  title="Composer pseudonym — shown as the track artist on the site (saves on Enter / focus out)"
+                                  disabled={savingUserId === u.id}
+                                  onBlur={(e) => void savePseudonym(u.id, e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                                  }}
+                                  className="mt-1.5 block w-32 rounded-md border border-border bg-background px-2 py-1 font-body text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none disabled:opacity-50"
+                                />
+                              )}
                             </td>
                             <td className="py-2.5 pr-4">
                               <StatusPill text={u.plan ?? "free"} active={!!u.plan && u.plan !== "free"} />

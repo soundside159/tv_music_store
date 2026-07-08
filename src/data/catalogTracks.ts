@@ -58,6 +58,8 @@ export interface CatalogTrack {
   downloads?: number;
   /** draft | published — drafts are only visible on admin pages (?drafts=1). */
   status?: string;
+  /** pending | approved | rejected — composer uploads await admin review. */
+  moderation?: string;
 }
 
 export const categoryLabels: Record<TrackCategory, string> = {

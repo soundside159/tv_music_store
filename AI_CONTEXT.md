@@ -1602,3 +1602,44 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   review, where the owner adds the rest (Use Case/Genre/Mood, cover, collections…) and
   approves/publishes. Composers see only their own tracks in their panel.
   THEN STAGE 5 (former 3): CSV metadata export → match with composers' spreadsheets → import.
+- **2026-07-08 (STAGE 4 "COMPOSERS" — built per the spec above):**
+  **(1) Roles & pseudonyms:** `/api/admin/users` GET now returns `pseudonym` (LEFT-join-style
+  subquery on composers.user_id); PATCH accepts `{userId, role?, pseudonym?}` — pseudonym upserts
+  a `composers` row (newId cmp_, unique slug w/ suffix on collision). Admin → Customers: when a
+  user's role is composer, a small "Pseudonym…" input appears under the role select (saves on
+  Enter/blur). `/api/tracks` joins a composers id→display_name map and returns `artist` per track;
+  `useTracks.mapTrack` uses `t.artist || "TVMUSICSTORE"` (hardcode replaced).
+  **(2) Composer picker on uploads:** `/api/admin/content` GET returns `composers`
+  [{id,userId,displayName}]. AddTrackModal got a "Composer" select (default = house/TVMUSICSTORE)
+  → `create_track` accepts validated `composerId`. AdminBulkUpload fetches the list itself and has
+  a batch-wide Composer select in the toolbar (every track of the run gets it). Also in
+  AddTrackModal: the stems CHECKBOX was removed per the spec — replaced by an optional "Stems ZIP"
+  picker; `create_track` now accepts `stemsKey` (sets r2_key_stems + has_stems=1 automatically).
+  **(3) Composer Panel:** NEW `src/components/ComposerUpload.tsx` (default export = the exact-UX
+  Add-track flow: WAV drop zone (several files = versions of ONE track, title auto-suggested from
+  the first filename), star = Main override (default longest), fields ONLY Title/BPM/Description/
+  Extra tags + optional Stems ZIP, one gold Upload button; encodes MP3 320/128 in-browser, zips
+  WAVs — same pipeline as admin) + named export `useComposerTracks(enabled)` (profile + own
+  tracks). NEW endpoint `functions/api/composer/tracks.ts`: GET = own tracks (status,
+  moderation_status, versions/downloads counts) + composer profile; POST = create track with
+  composer_id = own profile, status='draft' + moderation_status='pending'. Requires a composers
+  row linked to the user (clear error message otherwise). `/api/admin/upload-audio` now allows
+  role=composer for preview/preview128/wavzip/stems (master stays admin-only). `/composer` page:
+  Upload section renders ComposerUpload; "My tracks" shows LIVE own rows (pending review / draft /
+  published / rejected badges) for real composer accounts, mock personas keep demo data; gate no
+  longer locks out live composers without a mock profile (dashboard/earnings sections still mock —
+  stage 5+).
+  **(4) Review queue:** `/api/tracks?drafts=1` (admin) now returns ALL rows incl.
+  moderation_status='pending' (+ the `moderation_status` field; public WHERE unchanged:
+  published+approved only). CatalogTrack gained `moderation`. Admin Tracks table shows an orange
+  REVIEW badge (pending) alongside the amber DRAFT badge; the track-page admin top bar shows
+  "Pending review — <pseudonym>". Publishing APPROVES: bulk_update_tracks `fields.status=
+  'published'` also sets moderation_status='approved' (+ explicit `fields.moderationStatus` and
+  `fields.composerId` reassignment are supported).
+  NOTE: cowork sandbox VM would not start this session — `npm run lint`/tsc were NOT run here;
+  code was verified by careful read-through of host files. Run deploy.bat (it lints + builds) and
+  fix anything it flags before pushing further work.
+  NEXT: STAGE 5 — CSV metadata export → match composers' spreadsheets → import. Nice-to-haves
+  spotted: composer select in the Tracks Edit single-track panel (reassign is API-ready via
+  fields.composerId), "Reject" button UI for the review queue (API ready via
+  fields.moderationStatus='rejected'), composer dashboard/earnings off mocks.

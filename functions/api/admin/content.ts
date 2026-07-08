@@ -218,6 +218,16 @@ export const onRequestGet = async (ctx: Ctx) => {
     .first<{ value: string }>();
   const trackCount = await db.prepare(`SELECT COUNT(*) AS n FROM tracks`).first<{ n: number }>();
   const vocabularies = await getVocabularies(db);
+  // Composer profiles (pseudonyms) — the upload composer picker needs them.
+  let composers: { id: string; userId: string | null; displayName: string }[] = [];
+  try {
+    const cs = await db
+      .prepare(`SELECT id, user_id, display_name FROM composers ORDER BY display_name`)
+      .all<{ id: string; user_id: string | null; display_name: string }>();
+    composers = cs.results.map((c) => ({ id: c.id, userId: c.user_id, displayName: c.display_name }));
+  } catch {
+    // composers table missing — picker stays empty
+  }
 
   const group = (rows: { [k: string]: string }[], key: string) => {
     const map: Record<string, string[]> = {};
@@ -231,6 +241,7 @@ export const onRequestGet = async (ctx: Ctx) => {
   return json({
     dbTrackCount: trackCount?.n ?? 0,
     vocabularies,
+    composers,
     trending: trendingRow ? (JSON.parse(trendingRow.value) as string[]) : [],
     categories: categories.results.map((c) => ({
       id: c.id,
@@ -288,6 +299,10 @@ export const onRequestPost = async (ctx: Ctx) => {
     masterKey?: string;
     coverThumb?: string;
     wavZipKey?: string;
+    /** create_track: composer profile the track belongs to (picker). */
+    composerId?: string;
+    /** create_track: private stems zip key (masters/stems-…) — flips has_stems. */
+    stemsKey?: string;
     // add_version / delete_version / rename_version / set_main_version
     versionId?: string;
     label?: string;
@@ -323,6 +338,10 @@ export const onRequestPost = async (ctx: Ctx) => {
       clearStems?: boolean;
       /** draft | published — bulk publish/unpublish. */
       status?: string;
+      /** pending | approved | rejected — composer-upload review verdict. */
+      moderationStatus?: string;
+      /** Reassign the track to another composer profile ("" clears). */
+      composerId?: string;
     };
     /** create_track: "draft" keeps the track off the public catalog. */
     status?: string;
@@ -545,7 +564,30 @@ export const onRequestPost = async (ctx: Ctx) => {
             next.r2_key_stems = null;
             next.has_stems = 0;
           }
-          if (f.status === "draft" || f.status === "published") next.status = f.status;
+          if (f.status === "draft" || f.status === "published") {
+            next.status = f.status;
+            // Publishing implies approval — composer uploads land as
+            // moderation_status='pending' and the owner's Publish is the review.
+            if (f.status === "published") next.moderation_status = "approved";
+          }
+          if (
+            f.moderationStatus === "pending" ||
+            f.moderationStatus === "approved" ||
+            f.moderationStatus === "rejected"
+          ) {
+            next.moderation_status = f.moderationStatus;
+          }
+          if (typeof f.composerId === "string") {
+            if (f.composerId === "") {
+              next.composer_id = null;
+            } else {
+              const cmp = await db
+                .prepare(`SELECT id FROM composers WHERE id = ?1`)
+                .bind(f.composerId)
+                .first();
+              if (cmp) next.composer_id = f.composerId;
+            }
+          }
         }
         const keys = Object.keys(next);
         if (keys.length > 0) {
@@ -645,6 +687,19 @@ export const onRequestPost = async (ctx: Ctx) => {
         typeof body.wavZipKey === "string" && /^masters\//.test(body.wavZipKey)
           ? body.wavZipKey
           : null;
+      const stemsKey =
+        typeof body.stemsKey === "string" && /^masters\//.test(body.stemsKey)
+          ? body.stemsKey
+          : null;
+      // Composer picker: validate the profile exists (NULL = house/TVMUSICSTORE).
+      let composerId: string | null = null;
+      if (typeof body.composerId === "string" && body.composerId) {
+        const cmp = await db
+          .prepare(`SELECT id FROM composers WHERE id = ?1`)
+          .bind(body.composerId)
+          .first();
+        if (cmp) composerId = body.composerId;
+      }
       const mainDuration = versions[0].duration ?? body.duration ?? "";
       // Bulk uploads create DRAFTS (hidden from the public catalog until the
       // owner tags them and presses Publish); the single Add-Track form
@@ -654,13 +709,14 @@ export const onRequestPost = async (ctx: Ctx) => {
         .prepare(
           `INSERT INTO tracks
              (id, slug, title, composer_id, category, genre, mood, use_case, style_of,
-              bpm, duration, description, tags, has_stems, cover, cover_thumb, r2_key_wav_zip, code, status)
-           VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7, '', ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)`,
+              bpm, duration, description, tags, has_stems, cover, cover_thumb, r2_key_wav_zip, r2_key_stems, code, status)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, '', ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)`,
         )
         .bind(
           trackId,
           slug,
           title,
+          composerId,
           body.category?.trim() || "production",
           body.genre ?? "",
           body.mood ?? "",
@@ -669,10 +725,11 @@ export const onRequestPost = async (ctx: Ctx) => {
           mainDuration,
           body.description ?? "",
           JSON.stringify(tags),
-          body.hasStems ? 1 : 0,
+          stemsKey || body.hasStems ? 1 : 0,
           body.cover ?? "",
           body.coverThumb ?? "",
           wavZipKey,
+          stemsKey,
           code,
           status,
         )

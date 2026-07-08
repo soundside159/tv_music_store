@@ -20,6 +20,7 @@ interface TrackRow {
   has_stems: number;
   created_at: string | null;
   status?: string;
+  moderation_status?: string;
 }
 
 interface VersionRow {
@@ -46,29 +47,44 @@ export const onRequestGet = async (ctx: Ctx) => {
 
   // `cover` / `cover_thumb` are added lazily by the admin editor; older DBs may
   // not have them yet, so degrade gracefully in two steps.
+  // Admin (?drafts=1) sees EVERYTHING incl. composer uploads pending review;
+  // the public catalog only gets published + approved rows.
   const WHERE = includeDrafts
-    ? `WHERE moderation_status = 'approved' ORDER BY created_at DESC`
+    ? `ORDER BY created_at DESC`
     : `WHERE status = 'published' AND moderation_status = 'approved' ORDER BY created_at DESC`;
   let tracks: { results: TrackRow[] };
   try {
     tracks = await ctx.env.DB.prepare(
-      `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, cover, cover_thumb, code, has_stems, created_at, status
+      `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, cover, cover_thumb, code, has_stems, created_at, status, moderation_status
          FROM tracks ${WHERE}`,
     ).all<TrackRow>();
   } catch {
     try {
       const withCover = await ctx.env.DB.prepare(
-        `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, cover, code, has_stems, created_at, status
+        `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, cover, code, has_stems, created_at, status, moderation_status
            FROM tracks ${WHERE}`,
       ).all<Omit<TrackRow, "cover_thumb">>();
       tracks = { results: withCover.results.map((t) => ({ ...t, cover_thumb: null })) };
     } catch {
       const legacy = await ctx.env.DB.prepare(
-        `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, has_stems, created_at, status
+        `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, has_stems, created_at, status, moderation_status
            FROM tracks ${WHERE}`,
       ).all<Omit<TrackRow, "cover" | "cover_thumb" | "code">>();
       tracks = { results: legacy.results.map((t) => ({ ...t, cover: null, cover_thumb: null, code: null })) };
     }
+  }
+
+  // Composer pseudonyms: tracks.composer_id -> composers.display_name, shown
+  // as the artist site-wide (fallback handled client-side: "TVMUSICSTORE").
+  const composerNames = new Map<string, string>();
+  try {
+    const cs = await ctx.env.DB.prepare(`SELECT id, display_name FROM composers`).all<{
+      id: string;
+      display_name: string;
+    }>();
+    for (const c of cs.results) composerNames.set(c.id, c.display_name);
+  } catch {
+    // composers table missing — artist stays null
   }
 
   // Real per-track download counts (Popular sort). download_log exists from the
@@ -125,6 +141,7 @@ export const onRequestGet = async (ctx: Ctx) => {
   return json({
     tracks: tracks.results.map((t) => ({
       ...t,
+      artist: (t.composer_id && composerNames.get(t.composer_id)) || null,
       tags: t.tags ? (JSON.parse(t.tags) as string[]) : [],
       versions: byTrack.get(t.id) ?? [],
       collection_ids: collectionsByTrack.get(t.id) ?? [],

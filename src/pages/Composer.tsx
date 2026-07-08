@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
+import ComposerUpload, { useComposerTracks } from "@/components/ComposerUpload";
 import { useComposer, useCurrentUser } from "@/hooks/useMockData";
 import {
   mockBriefs,
@@ -46,8 +47,26 @@ const Card = ({ title, children, className = "" }: { title?: string; children: R
 
 const Composer = () => {
   const user = useCurrentUser();
-  const composer = useComposer();
+  const mockComposer = useComposer();
   const [section, setSection] = useState<SectionId>("dashboard");
+  // Live composer profile + own tracks (stage 4). Mock personas keep the old
+  // demo data; live composer accounts get real rows from /api/composer/tracks.
+  const isComposerRole = !!user && (user.role === "composer" || user.role === "admin");
+  const live = useComposerTracks(isComposerRole);
+  const composer =
+    mockComposer ??
+    (live.composer
+      ? {
+          id: live.composer.id,
+          userId: user?.id ?? "",
+          slug: "",
+          displayName: live.composer.displayName,
+          bio: "",
+          styles: [] as string[],
+          trackCount: live.tracks.length,
+          revenueWeight: 1,
+        }
+      : null);
 
   const myDownloads = useMemo(
     () => (composer ? mockDownloadLog.filter((d) => d.composerId === composer.id) : []),
@@ -86,20 +105,28 @@ const Composer = () => {
     : [];
 
   if (!user || !composer) {
+    const waitingForProfile = !!user && isComposerRole;
     return (
       <div className="min-h-screen bg-background">
         <Navigation />
         <main className="mx-auto flex min-h-[60vh] w-full max-w-md flex-col items-center justify-center px-4 pt-20 text-center">
           <h1 className="text-2xl text-foreground">Composer area</h1>
           <p className="mt-3 font-body text-sm text-muted-foreground">
-            This dashboard is for catalog composers. Sign in with a composer account.
+            {waitingForProfile
+              ? live.loading
+                ? "Loading your composer profile…"
+                : live.error ??
+                  "No composer profile yet — ask the site owner to set your pseudonym."
+              : "This dashboard is for catalog composers. Sign in with a composer account."}
           </p>
-          <Link
-            to="/login"
-            className="mt-6 rounded-lg bg-[#F4C430] px-6 py-2.5 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
-          >
-            Sign in
-          </Link>
+          {!waitingForProfile && (
+            <Link
+              to="/login"
+              className="mt-6 rounded-lg bg-[#F4C430] px-6 py-2.5 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
+            >
+              Sign in
+            </Link>
+          )}
         </main>
         <Footer />
       </div>
@@ -186,84 +213,125 @@ const Composer = () => {
               </>
             )}
 
-            {section === "tracks" && (
-              <Card title={`My tracks (${myTracks.length})`}>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[420px] font-body text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                        <th className="py-2 pr-4">Title</th>
-                        <th className="py-2 pr-4">Status</th>
-                        <th className="py-2">Downloads</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {myTracks.map((t) => (
-                        <tr key={t.id} className="border-b border-border/50 last:border-0">
-                          <td className="py-2.5 pr-4 text-foreground">{t.title}</td>
-                          <td className="py-2.5 pr-4">
-                            <span
-                              className={`rounded-full px-2.5 py-0.5 text-xs ${
-                                t.status === "approved"
-                                  ? "bg-[#F4C430]/15 text-[#F4C430]"
-                                  : "bg-secondary text-muted-foreground"
-                              }`}
-                            >
-                              {t.status === "approved" ? "published" : t.status}
-                            </span>
-                          </td>
-                          <td className="py-2.5 text-muted-foreground">
-                            {myDownloads.filter((d) => d.trackId === t.id).length}
-                          </td>
+            {section === "tracks" &&
+              (live.composer ? (
+                /* Live rows from /api/composer/tracks — only this composer's tracks. */
+                <Card title={`My tracks (${live.tracks.length})`}>
+                  {live.tracks.length === 0 ? (
+                    <p className="font-body text-sm text-muted-foreground">
+                      No tracks yet — upload your first one in the Upload section.
+                    </p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[480px] font-body text-sm">
+                        <thead>
+                          <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                            <th className="py-2 pr-4">Title</th>
+                            <th className="py-2 pr-4">Versions</th>
+                            <th className="py-2 pr-4">Status</th>
+                            <th className="py-2">Downloads</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {live.tracks.map((t) => {
+                            const state =
+                              t.moderation_status === "pending"
+                                ? "pending review"
+                                : t.moderation_status === "rejected"
+                                  ? "rejected"
+                                  : t.status === "published"
+                                    ? "published"
+                                    : "draft";
+                            return (
+                              <tr key={t.id} className="border-b border-border/50 last:border-0">
+                                <td className="py-2.5 pr-4 text-foreground">
+                                  {state === "published" ? (
+                                    <Link to={`/track/${t.slug}`} className="hover:text-[#F4C430]">
+                                      {t.title}
+                                    </Link>
+                                  ) : (
+                                    t.title
+                                  )}
+                                </td>
+                                <td className="py-2.5 pr-4 text-muted-foreground">{t.versions}</td>
+                                <td className="py-2.5 pr-4">
+                                  <span
+                                    className={`rounded-full px-2.5 py-0.5 text-xs ${
+                                      state === "published"
+                                        ? "bg-[#F4C430]/15 text-[#F4C430]"
+                                        : state === "pending review"
+                                          ? "bg-amber-500/15 text-amber-400"
+                                          : state === "rejected"
+                                            ? "bg-red-500/15 text-red-400"
+                                            : "bg-secondary text-muted-foreground"
+                                    }`}
+                                  >
+                                    {state}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 text-muted-foreground">{t.downloads}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </Card>
+              ) : (
+                <Card title={`My tracks (${myTracks.length})`}>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[420px] font-body text-sm">
+                      <thead>
+                        <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                          <th className="py-2 pr-4">Title</th>
+                          <th className="py-2 pr-4">Status</th>
+                          <th className="py-2">Downloads</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Card>
-            )}
+                      </thead>
+                      <tbody>
+                        {myTracks.map((t) => (
+                          <tr key={t.id} className="border-b border-border/50 last:border-0">
+                            <td className="py-2.5 pr-4 text-foreground">{t.title}</td>
+                            <td className="py-2.5 pr-4">
+                              <span
+                                className={`rounded-full px-2.5 py-0.5 text-xs ${
+                                  t.status === "approved"
+                                    ? "bg-[#F4C430]/15 text-[#F4C430]"
+                                    : "bg-secondary text-muted-foreground"
+                                }`}
+                              >
+                                {t.status === "approved" ? "published" : t.status}
+                              </span>
+                            </td>
+                            <td className="py-2.5 text-muted-foreground">
+                              {myDownloads.filter((d) => d.trackId === t.id).length}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              ))}
 
             {section === "upload" && (
-              <Card title="Upload tracks">
-                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-12 text-center">
-                  <Upload className="h-8 w-8 text-muted-foreground" />
-                  <p className="mt-3 font-body text-sm text-foreground">Drag &amp; drop WAV files here</p>
-                  <p className="mt-1 font-body text-xs text-muted-foreground">or</p>
-                  <button
-                    type="button"
-                    className="mt-3 rounded-lg border border-[#F4C430]/70 px-4 py-2 font-body text-sm font-semibold text-[#F4C430] transition-colors hover:bg-[#F4C430] hover:text-background"
-                  >
-                    Choose files
-                  </button>
-                </div>
-                <form className="mt-6 flex flex-col gap-3" onSubmit={(e) => e.preventDefault()}>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <input
-                      placeholder="Track title"
-                      className="rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
-                    />
-                    <input
-                      placeholder="BPM"
-                      className="rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
-                    />
-                  </div>
-                  <input
-                    placeholder="Genres, moods, use-cases (comma separated)"
-                    className="rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
+              <Card title="Add track">
+                {live.composer ? (
+                  <ComposerUpload
+                    onCreated={() => {
+                      live.reload();
+                      setSection("tracks");
+                    }}
                   />
-                  <label className="flex items-center gap-2 font-body text-sm text-muted-foreground">
-                    <input type="checkbox" className="accent-[#F4C430]" /> Stems available
-                  </label>
-                  <button
-                    type="submit"
-                    className="self-start rounded-lg bg-[#F4C430] px-5 py-2 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
-                  >
-                    Submit for review
-                  </button>
-                  <p className="font-body text-xs text-muted-foreground">
-                    Tracks go live after admin review. Make sure the track is registered in Content ID first.
+                ) : (
+                  <p className="font-body text-sm text-muted-foreground">
+                    {live.loading
+                      ? "Loading your composer profile…"
+                      : live.error ??
+                        "Uploads need a live composer profile — ask the site owner to set your pseudonym."}
                   </p>
-                </form>
+                )}
               </Card>
             )}
 

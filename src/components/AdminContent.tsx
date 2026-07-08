@@ -38,6 +38,8 @@ interface ContentData {
   collections: ContentItem[];
   playlists: ContentItem[];
   vocabularies?: Vocabularies;
+  /** Composer profiles (pseudonyms) for the upload composer picker. */
+  composers?: { id: string; userId: string | null; displayName: string }[];
 }
 
 type Tab = "collections" | "playlists" | "categories" | "vocabulary" | "trending" | "tracks";
@@ -979,6 +981,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
           }}
           vocabularies={vocab}
           categories={(data.categories ?? []).map((c) => ({ id: c.id, title: c.title }))}
+          composers={(data.composers ?? []).map((c) => ({ id: c.id, displayName: c.displayName }))}
         />
       )}
     </div>

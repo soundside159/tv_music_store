@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
   FileAudio,
@@ -128,9 +128,31 @@ const createTrack = async (payload: Record<string, unknown>): Promise<void> => {
 const AdminBulkUpload = () => {
   const [groups, setGroups] = useState<Group[]>([]);
   const [running, setRunning] = useState(false);
+  // Whole-batch composer: every track created in this run gets this profile
+  // ("" = house catalog / TVMUSICSTORE). List comes from the admin content API.
+  const [composers, setComposers] = useState<{ id: string; displayName: string }[]>([]);
+  const [composerId, setComposerId] = useState("");
   const filesRef = useRef<HTMLInputElement>(null);
   const folderRef = useRef<HTMLInputElement>(null);
   const stopRef = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/admin/content", { credentials: "include" })
+      .then(async (res) => {
+        if (!res.ok) return;
+        const d = (await res.json()) as {
+          composers?: { id: string; displayName: string }[];
+        };
+        if (!cancelled && d.composers) setComposers(d.composers);
+      })
+      .catch(() => {
+        // picker simply stays "house"
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const patch = (key: string, p: Partial<Group>) =>
     setGroups((gs) => gs.map((g) => (g.key === key ? { ...g, ...p } : g)));
@@ -278,6 +300,7 @@ const AdminBulkUpload = () => {
       duration: versions[0].duration,
       versions,
       wavZipKey: zipUp.key,
+      composerId: composerId || undefined,
     });
 
     patch(group.key, { status: "done", note: `Draft created · ${versions.length} version${versions.length > 1 ? "s" : ""}` });
@@ -409,6 +432,21 @@ const AdminBulkUpload = () => {
                 </>
               )}
             </button>
+            <select
+              value={composerId}
+              disabled={running}
+              onChange={(e) => setComposerId(e.target.value)}
+              aria-label="Composer for this batch"
+              title="Every track created in this run is credited to this composer"
+              className="rounded-lg border border-border bg-background px-2.5 py-2 font-body text-xs text-foreground focus:border-[#F4C430] focus:outline-none disabled:opacity-50"
+            >
+              <option value="">Composer: TVMUSICSTORE (house)</option>
+              {composers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.displayName}
+                </option>
+              ))}
+            </select>
             <span className="font-body text-xs text-muted-foreground">
               {groups.length} track{groups.length > 1 ? "s" : ""} in the list · {doneCount} done
             </span>

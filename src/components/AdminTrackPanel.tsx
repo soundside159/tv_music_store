@@ -129,6 +129,8 @@ export const AdminTrackTopBar = ({
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const isDraft = track.status === "draft";
+  // Composer uploads await review; Publish approves + publishes in one go.
+  const isPending = track.moderation === "pending";
 
   const setStatus = async (status: "published" | "draft") => {
     setBusy(true);
@@ -164,12 +166,18 @@ export const AdminTrackTopBar = ({
       </span>
       <span
         className={`rounded border px-1.5 py-0.5 font-body text-[10px] font-bold uppercase tracking-wide ${
-          isDraft
-            ? "border-amber-400/50 bg-amber-400/10 text-amber-400"
-            : "border-green-500/40 bg-green-500/10 text-green-400"
+          isPending
+            ? "border-orange-400/60 bg-orange-400/10 text-orange-400"
+            : isDraft
+              ? "border-amber-400/50 bg-amber-400/10 text-amber-400"
+              : "border-green-500/40 bg-green-500/10 text-green-400"
         }`}
       >
-        {isDraft ? "Draft — hidden from customers" : "Published"}
+        {isPending
+          ? `Pending review${track.artist && track.artist !== "TVMUSICSTORE" ? ` — ${track.artist}` : ""}`
+          : isDraft
+            ? "Draft — hidden from customers"
+            : "Published"}
       </span>
       <span className="ml-auto flex items-center gap-2">
         {isDraft ? (

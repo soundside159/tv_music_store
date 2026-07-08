@@ -38,18 +38,21 @@ const AddTrackModal = ({
   onCreated,
   vocabularies,
   categories,
+  composers = [],
 }: {
   onClose: () => void;
   run: (payload: Record<string, unknown>, okMsg: string) => Promise<boolean>;
   uploadCover: (file: File | Blob, apply: (path: string) => void, filename?: string) => Promise<void> | void;
   uploadAudio: (
     file: File | Blob,
-    kind: "preview" | "preview128" | "master" | "wavzip",
+    kind: "preview" | "preview128" | "master" | "wavzip" | "stems",
     filename?: string,
   ) => Promise<{ key: string; path: string | null } | null>;
   onCreated: () => void;
   vocabularies: Vocabularies;
   categories: { id: string; title: string }[];
+  /** Composer profiles for the artist picker ("" = house / TVMUSICSTORE). */
+  composers?: { id: string; displayName: string }[];
 }) => {
   const [title, setTitle] = useState("");
   const [bpm, setBpm] = useState("");
@@ -58,7 +61,10 @@ const AddTrackModal = ({
   const [cover, setCover] = useState("");
   const [coverThumb, setCoverThumb] = useState("");
   const [category, setCategory] = useState(categories[0]?.id ?? "");
-  const [hasStems, setHasStems] = useState(false);
+  const [composerId, setComposerId] = useState("");
+  // Stems ship as an optional zip — has_stems flips automatically when present
+  // (the old manual checkbox was redundant and got removed).
+  const [stemsFile, setStemsFile] = useState<File | null>(null);
   const [sel, setSel] = useState<Record<Facet, string[]>>({ useCase: [], genre: [], mood: [] });
   const [versions, setVersions] = useState<VersionRow[]>([]);
   const [mainIdx, setMainIdx] = useState(0);
@@ -153,6 +159,14 @@ const AddTrackModal = ({
       const zipUp = await uploadAudio(zipBlob, "wavzip", `${title.trim()}-wav`);
       if (!zipUp?.key) throw new Error("WAV bundle upload failed");
 
+      let stemsKey: string | undefined;
+      if (stemsFile) {
+        setProgress("Uploading stems zip…");
+        const stemsUp = await uploadAudio(stemsFile, "stems", stemsFile.name);
+        if (!stemsUp?.key) throw new Error("Stems upload failed");
+        stemsKey = stemsUp.key;
+      }
+
       setProgress("Saving track…");
       const ok = await run(
         {
@@ -168,7 +182,8 @@ const AddTrackModal = ({
           cover: cover || undefined,
           coverThumb: coverThumb || undefined,
           category: category || undefined,
-          hasStems,
+          composerId: composerId || undefined,
+          stemsKey,
           versions: outVersions,
           wavZipKey: zipUp.key,
         },
@@ -266,6 +281,20 @@ const AddTrackModal = ({
                 </option>
               ))}
             </select>
+            <select
+              value={composerId}
+              onChange={(e) => setComposerId(e.target.value)}
+              className={`${inputCls} min-w-0 flex-1`}
+              aria-label="Composer"
+              title="Composer pseudonym shown as the track artist"
+            >
+              <option value="">Composer: TVMUSICSTORE (house)</option>
+              {composers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.displayName}
+                </option>
+              ))}
+            </select>
           </div>
           <textarea
             placeholder="Description"
@@ -285,19 +314,38 @@ const AddTrackModal = ({
           {facetRow("genre", "Genre")}
           {facetRow("mood", "Mood")}
 
-          <label className="flex items-center gap-2.5">
-            <span
-              onClick={() => setHasStems((v) => !v)}
-              className={`flex h-4 w-4 cursor-pointer items-center justify-center rounded border ${
-                hasStems ? "border-[#F4C430] bg-[#F4C430]" : "border-border"
-              }`}
-            >
-              {hasStems && <Check className="h-3 w-3 text-background" />}
+          {/* Optional stems zip — attaching it flips has_stems on automatically. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <label className={`${btnCls} inline-flex cursor-pointer items-center gap-1.5`}>
+              <Check className={`h-3.5 w-3.5 ${stemsFile ? "text-[#F4C430]" : "opacity-40"}`} />
+              {stemsFile ? "Replace stems ZIP" : "Stems ZIP (optional)"}
+              <input
+                type="file"
+                accept="application/zip,.zip"
+                className="hidden"
+                onChange={(e) => {
+                  setStemsFile(e.target.files?.[0] ?? null);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            {stemsFile && (
+              <span className="flex items-center gap-1.5 font-body text-[11px] text-muted-foreground">
+                <span className="max-w-[14rem] truncate">{stemsFile.name}</span>
+                <button
+                  type="button"
+                  onClick={() => setStemsFile(null)}
+                  aria-label="Remove stems zip"
+                  className="text-muted-foreground transition-colors hover:text-red-400"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            )}
+            <span className="font-body text-[11px] text-muted-foreground">
+              STEMS badge &amp; Max-plan download switch on automatically
             </span>
-            <span className="font-body text-xs text-foreground/90">
-              Includes stems (shown on the track page, Max-plan download)
-            </span>
-          </label>
+          </div>
 
           {/* WAV versions */}
           <div className="border-t border-border/60 pt-4">
