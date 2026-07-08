@@ -120,7 +120,15 @@ const TrackDetail = () => {
   const mainVersion = getSelectedVersion(track);
   const mainIsPlaying = activePlayer?.trackId === track.id && activePlayer.versionId === mainVersion.id && isPlaying;
   const tier = licenseTiers.find((t) => t.id === selectedTier) ?? licenseTiers[0];
-  const tags = [track.useCase, track.genre, track.mood, ...track.tags].filter(Boolean).slice(0, 6);
+  // Each use-case / genre / mood value is its own clickable chip that jumps to
+  // the catalog pre-filtered by that value (matching the Catalog ?usecase/genre/mood params).
+  const filterChips = [
+    ...splitFilterValues(track.useCase).map((value) => ({ value, param: "usecase" })),
+    ...splitFilterValues(track.genre).map((value) => ({ value, param: "genre" })),
+    ...splitFilterValues(track.mood).map((value) => ({ value, param: "mood" })),
+  ];
+  // Freeform tags (not filter dimensions) link to a catalog search instead.
+  const extraTags = track.tags.filter(Boolean);
 
   const share = async () => {
     try {
@@ -207,13 +215,23 @@ const TrackDetail = () => {
             </button>
 
             <div className="mt-5 flex flex-wrap gap-2">
-              {tags.map((t) => (
-                <span
-                  key={t}
-                  className="rounded-full border border-border px-3 py-1 font-body text-xs text-muted-foreground"
+              {filterChips.map((chip) => (
+                <Link
+                  key={`${chip.param}:${chip.value}`}
+                  to={`/catalog?${chip.param}=${encodeURIComponent(chip.value)}`}
+                  className="rounded-full border border-border px-3 py-1 font-body text-xs text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
+                >
+                  {chip.value}
+                </Link>
+              ))}
+              {extraTags.map((t) => (
+                <Link
+                  key={`tag:${t}`}
+                  to={`/catalog?search=${encodeURIComponent(t)}`}
+                  className="rounded-full border border-border px-3 py-1 font-body text-xs text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
                 >
                   {t}
-                </span>
+                </Link>
               ))}
             </div>
 

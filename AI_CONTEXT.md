@@ -1243,3 +1243,18 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   (hero, trust point "Original, not stock", about paragraph), Footer, Catalog, index.html Org
   description, and License Terms §8. (Note for Paddle strength: exclusive composer agreements read
   stronger than non-exclusive, but that's a business decision, not a copy change.)
+- **2026-07-08 (Favourites + Similar Tracks + header account menu):** (1) FAVOURITES made real —
+  `functions/api/favourites.ts` (D1 `favourites` table, GET/POST/DELETE, 401 for guests), client store
+  `src/lib/favourites.ts` (`useFavourites` via useSyncExternalStore, optimistic toggle, guest→open-auth
+  event + toast). Heart wired in TrackRowPlayer rows, PlayerProvider mini-player, and TrackDetail
+  (fill #F4C430 when active). New `FavouritesSection.tsx` in the account under Downloads
+  (adminNav + Account SectionId "favourites"). (2) SIMILAR TRACKS — TrackRowPlayer row "Similar"
+  action navigates `/catalog?genre=&mood=` from the track's first genre+mood; TrackDetail
+  similarTracks scored genre*2 + mood*2 + useCase overlap, top 6, fallback first 4. (3) HEADER ACCOUNT
+  MENU — clicking the person icon while logged in now opens a dropdown (Navigation.tsx: acctOpen state,
+  click-away ref, close on route change) instead of jumping to the dashboard: Profile / Plan & Billing /
+  Downloads / Favourites / Licenses / Support, divider, then Log out (calls logout()+navigate("/")).
+  Items link to `/account?section=<id>`; Account.tsx got a useEffect to sync the active section from
+  the query param live (so switching works when already on /account). Same items inlined in the mobile
+  burger for logged-in users; guests still get the auth modal. Renamed account "Sign out" → "Log out".
+  Build ✓. STILL LATER: smart popularity ranking (anti-gamed) #30, funnel audit #26.

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, Minus, Music, Pause, Play, Search, X } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Check, ChevronLeft, ChevronRight, ExternalLink, Minus, Music, Pause, Play, Search, X } from "lucide-react";
 import WaveformPreview from "@/components/WaveformPreview";
 import { usePlayer } from "@/components/playerContext";
 import { splitFilterValues } from "@/components/TrackRowPlayer";
@@ -527,13 +528,18 @@ const AdminTracksEdit = ({
                       )}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p
-                        className={`truncate font-body text-sm font-medium ${
+                      <Link
+                        to={`/track/${t.slug}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Open track page in a new tab"
+                        className={`group/title inline-flex max-w-full items-center gap-1 truncate font-body text-sm font-medium transition-colors hover:text-[#F4C430] ${
                           active ? "text-[#F4C430]" : "text-foreground"
                         }`}
                       >
-                        {t.title}
-                      </p>
+                        <span className="truncate">{t.title}</span>
+                        <ExternalLink className="h-3 w-3 shrink-0 opacity-0 transition-opacity group-hover/title:opacity-70" />
+                      </Link>
                       {version && (
                         <WaveformPreview
                           active={active}

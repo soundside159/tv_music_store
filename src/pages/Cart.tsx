@@ -114,11 +114,16 @@ const PayPalCheckout = ({ disabled }: { disabled: boolean }) => {
   if (state === "unavailable") {
     return (
       <div className="rounded-lg border border-border/70 bg-background/60 p-4 font-body text-xs text-muted-foreground">
-        Checkout is being set up and will be enabled shortly. Meanwhile, subscriptions on the{" "}
-        <Link to="/pricing" className="font-semibold text-[#F4C430] hover:underline">
-          Pricing
-        </Link>{" "}
-        page are fully active.
+        Checkout is being set up and will be enabled shortly. In the meantime you can preview every
+        track and download with a{" "}
+        <Link to="/login" className="font-semibold text-[#F4C430] hover:underline">
+          free account
+        </Link>
+        . Need this license now? Email{" "}
+        <a href="mailto:contact@tvmusicstore.com" className="font-semibold text-[#F4C430] hover:underline">
+          contact@tvmusicstore.com
+        </a>
+        .
       </div>
     );
   }
