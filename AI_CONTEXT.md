@@ -1186,3 +1186,12 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   mounted (`{menu === 'admin' && …}`) and the freshly-mounted subtree wasn't painted until a reflow.
   Fixed by always rendering both menu blocks and toggling visibility with `hidden`/`flex` instead of
   mount/unmount, so everything is painted up front.
+- **2026-07-07 (cover becomes the play button):** the track-row play control is now the cover art
+  itself. Replaced the circular play button (col 1) with the square cover thumbnail (bigger — the
+  `.music-track-grid` play column went 2.75rem → 3.5rem in all breakpoints; image `h-12 w-12`), and
+  removed the duplicate thumb from the title cell. On hover the cover dims and shows a play triangle
+  (or pause while playing) — icon appears ONLY on hover (`group/cover` + opacity). No-cover tracks show
+  a Music2 placeholder square. The circular progress ring became a **square progress border** around
+  the cover: an SVG `<rect>` (rounded, `pathLength=100`, gold stroke, dashoffset = 100−progress) layered
+  OUTSIDE the `overflow-hidden` image so it isn't clipped. Alt-version rows keep the small circular
+  PlayProgressRing (they share the track's cover, no separate art).

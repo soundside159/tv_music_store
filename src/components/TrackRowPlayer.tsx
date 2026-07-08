@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Copy, Download, Heart, Pause, Play, ShoppingCart } from "lucide-react";
+import { Copy, Download, Heart, Music2, Pause, Play, ShoppingCart } from "lucide-react";
 import { openDownloadOptions } from "@/lib/downloadTrack";
 import { openLicenseModal } from "@/hooks/useCart";
 import WaveformPreview from "@/components/WaveformPreview";
@@ -174,13 +174,45 @@ export const TrackRow = ({
       <button
         type="button"
         onClick={() => onPlayVersion(track, selectedVersion)}
-        className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-colors duration-200 ${
-          mainIsPlaying ? "border-transparent text-[#F4C430]" : "border-border/70 text-foreground hover:border-[#F4C430] hover:text-[#F4C430]"
-        }`}
+        className="group/cover relative h-12 w-12 shrink-0"
         aria-label={mainIsPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
       >
-        {mainIsPlaying && <PlayProgressRing progress={versionProgress(selectedVersion.id)} />}
-        {mainIsPlaying ? <Pause className="h-4 w-4" /> : <Play className="ml-0.5 h-4 w-4" />}
+        <span className="absolute inset-0 overflow-hidden rounded-md border border-border/60">
+          {track.coverThumb || track.cover ? (
+            <img
+              src={track.coverThumb || track.cover}
+              alt=""
+              loading="lazy"
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <span className="flex h-full w-full items-center justify-center bg-secondary text-muted-foreground">
+              <Music2 className="h-5 w-5" />
+            </span>
+          )}
+          {/* Play/pause icon — visible only while hovering the cover */}
+          <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-white opacity-0 transition-opacity duration-150 group-hover/cover:opacity-100">
+            {mainIsPlaying ? <Pause className="h-5 w-5" /> : <Play className="ml-0.5 h-5 w-5" />}
+          </span>
+        </span>
+        {/* Square progress border around the cover while playing (not clipped) */}
+        {mainIsPlaying && (
+          <svg viewBox="0 0 48 48" fill="none" className="pointer-events-none absolute inset-0 h-full w-full">
+            <rect
+              x="1.5"
+              y="1.5"
+              width="45"
+              height="45"
+              rx="6"
+              pathLength={100}
+              stroke="#F4C430"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeDasharray="100"
+              strokeDashoffset={100 - Math.max(0, Math.min(100, versionProgress(selectedVersion.id) * 100))}
+            />
+          </svg>
+        )}
       </button>
 
       <Link
@@ -189,14 +221,6 @@ export const TrackRow = ({
           mainIsPlaying ? "text-[#F4C430]" : "text-foreground hover:text-[#F4C430]"
         }`}
       >
-        {(track.coverThumb || track.cover) && (
-          <img
-            src={track.coverThumb || track.cover}
-            alt=""
-            loading="lazy"
-            className="hidden h-9 w-9 shrink-0 rounded-md border border-border/50 object-cover sm:block"
-          />
-        )}
         <span className="min-w-0 truncate whitespace-nowrap">{track.title}</span>
       </Link>
 
