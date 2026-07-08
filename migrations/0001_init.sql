@@ -221,6 +221,17 @@ CREATE TABLE IF NOT EXISTS wl_channels (
 );
 CREATE INDEX IF NOT EXISTS idx_wl_channels_user ON wl_channels(user_id);
 
+-- Whitelisted-channel videos already sent to the Content ID provider for claim
+-- removal (admin "Mark as sent"). Also created lazily at runtime.
+CREATE TABLE IF NOT EXISTS wl_handled (
+  video_id   TEXT PRIMARY KEY,   -- YouTube video id
+  user_id    TEXT NOT NULL,      -- channel owner (customer)
+  channel_id TEXT,               -- wl_channels.id
+  video_url  TEXT,
+  title      TEXT,
+  marked_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Newsletter/marketing opt-in list (may include non-account visitors).
 -- Each row has an unsubscribe token used in campaign emails. Lazy-created too.
 CREATE TABLE IF NOT EXISTS newsletter_subscribers (

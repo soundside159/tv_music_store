@@ -1,58 +1,11 @@
 import { getSessionUser, json, OWNER_EMAIL, type Ctx, type Env } from "../_utils";
+import { channelNewVideos, handledMap } from "./_whitelist";
 
-// GET /api/admin/whitelist-videos?id=<whitelist_channel_id> — admin only.
+// GET /api/admin/whitelist-videos?id=<wl_channels id> — admin only.
 // On-demand (Pages has no cron): resolves the whitelisted channel via the
-// YouTube Data API and returns recent uploads published AFTER it was whitelisted,
-// so the owner can open each and clear Content ID claims. Only serviced while the
-// owning customer's subscription is active.
-
-const YT = "https://www.googleapis.com/youtube/v3";
-
-interface ChannelResolved {
-  uploads: string;
-  title: string;
-}
-
-const ytChannel = async (key: string, channelUrl: string): Promise<ChannelResolved | null> => {
-  // Derive the best lookup param from the stored URL.
-  let param: string | null = null;
-  const handle = channelUrl.match(/youtube\.com\/(@[\w.-]+)/i);
-  const chanId = channelUrl.match(/youtube\.com\/channel\/([\w-]+)/i);
-  const user = channelUrl.match(/youtube\.com\/user\/([\w.-]+)/i);
-  const custom = channelUrl.match(/youtube\.com\/c\/([\w.-]+)/i);
-  if (chanId) param = `id=${encodeURIComponent(chanId[1])}`;
-  else if (handle) param = `forHandle=${encodeURIComponent(handle[1])}`;
-  else if (user) param = `forUsername=${encodeURIComponent(user[1])}`;
-  else if (custom) param = `forHandle=${encodeURIComponent("@" + custom[1])}`;
-  if (!param) return null;
-
-  const res = await fetch(`${YT}/channels?part=contentDetails,snippet&${param}&key=${key}`);
-  if (!res.ok) return null;
-  const data = (await res.json()) as {
-    items?: { snippet?: { title?: string }; contentDetails?: { relatedPlaylists?: { uploads?: string } } }[];
-  };
-  const item = data.items?.[0];
-  const uploads = item?.contentDetails?.relatedPlaylists?.uploads;
-  if (!uploads) return null;
-  return { uploads, title: item?.snippet?.title ?? "" };
-};
-
-const ytUploads = async (key: string, playlist: string) => {
-  const res = await fetch(
-    `${YT}/playlistItems?part=snippet&maxResults=20&playlistId=${encodeURIComponent(playlist)}&key=${key}`,
-  );
-  if (!res.ok) return [];
-  const data = (await res.json()) as {
-    items?: { snippet?: { title?: string; publishedAt?: string; resourceId?: { videoId?: string } } }[];
-  };
-  return (data.items ?? [])
-    .map((i) => ({
-      videoId: i.snippet?.resourceId?.videoId ?? "",
-      title: i.snippet?.title ?? "",
-      publishedAt: i.snippet?.publishedAt ?? "",
-    }))
-    .filter((v) => v.videoId);
-};
+// YouTube Data API and returns recent uploads published AFTER it was whitelisted
+// (each flagged `handled` when already sent for claim removal). Only serviced
+// while the owning customer's subscription is active.
 
 export const onRequestGet = async (ctx: Ctx) => {
   if (!ctx.env.DB) return json({ error: "DB not bound" }, 503);
@@ -88,16 +41,17 @@ export const onRequestGet = async (ctx: Ctx) => {
     return json({ videos: [], inactive: true, cutoff: row.added_at });
   }
 
-  const channel = await ytChannel(env.YOUTUBE_API_KEY, row.channel_url);
-  if (!channel) {
+  const resolved = await channelNewVideos(env.YOUTUBE_API_KEY, row.channel_url, row.added_at);
+  if (!resolved) {
     return json({ error: "Couldn't resolve this channel on YouTube. Ask the customer for the @handle or /channel/ URL." }, 422);
   }
 
-  const cutoff = row.added_at; // videos published after the channel was whitelisted
-  const videos = (await ytUploads(env.YOUTUBE_API_KEY, channel.uploads))
-    .filter((v) => !cutoff || v.publishedAt >= cutoff)
-    .sort((a, b) => (a.publishedAt < b.publishedAt ? 1 : -1))
-    .map((v) => ({ ...v, url: `https://www.youtube.com/watch?v=${v.videoId}` }));
+  const handled = await handledMap(ctx.env.DB);
+  const videos = resolved.videos.map((v) => ({
+    ...v,
+    handled: handled.has(v.videoId),
+    handledAt: handled.get(v.videoId) ?? null,
+  }));
 
-  return json({ videos, channelTitle: channel.title, cutoff });
+  return json({ videos, channelTitle: resolved.channelTitle, cutoff: row.added_at });
 };

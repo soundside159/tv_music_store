@@ -1416,3 +1416,19 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   stating the catalog is original first-party music licensed directly (not third-party stock
   resale). Billing stays paused (BILLING_ENABLED=false) until Paddle approves or the
   Stripe/PayPal fallback is chosen.
+- **2026-07-08 (whitelist claim workflow — NEXT_STEPS §1 DONE):** the owner's morning claim-removal
+  routine is now one screen. BACKEND: new `functions/api/admin/_whitelist.ts` (shared ytChannel/
+  ytUploads/channelNewVideos + `ensureWlHandled` + `handledMap`); `whitelist-videos.ts` refactored
+  onto it and now returns `handled`/`handledAt` per video; NEW `whitelist-videos-all.ts` (GET,
+  admin) = new uploads across ALL active channels (JOIN users + latest sub, sequential YT calls,
+  cap 50 channels) grouped `{channelId, channelUrl, channelTitle, userId, customer, plan,
+  videos[{...,handled,handledAt}]}`; NEW `whitelist-handled.ts` (POST {videos:[{videoId,userId,
+  channelId,url,title}]} → INSERT OR IGNORE into new `wl_handled` table; DELETE ?videoId= →
+  un-mark). `wl_handled` added to 0001_init.sql + lazy-created. FRONTEND: `AdminWhitelist.tsx`
+  got two tabs — **"All new videos"** (default): toolbar with "N new · M handled" counter,
+  Select all/none, **Copy all/selected** (newline-joined URLs → clipboard, ready for the provider's
+  bulk tool), gold **Mark as sent (N)** (optimistic local update), **Show handled** toggle
+  (handled rows struck through with an "undo" button), Refresh, per-video Copy + per-group
+  "X new · Y handled"; and **"Channels"** = the original table (its expander now strikes handled
+  videos too). No new owner steps (YOUTUBE_API_KEY already set; wl_handled self-creates).
+  Verified via host reads; lint/build = deploy.bat.
