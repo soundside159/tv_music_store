@@ -38,10 +38,14 @@ type DetailTab = "versions" | "similar";
 
 const TrackDetail = () => {
   const { slug } = useParams();
-  const { tracks: catalogTracks, reload: reloadTracks, source } = useTracks();
+  const user = useCurrentUser();
+  // Admins also load draft tracks (the server ignores ?drafts=1 for everyone
+  // else), so bulk-uploaded drafts can be curated on their own track pages.
+  const { tracks: catalogTracks, reload: reloadTracks, source } = useTracks({
+    drafts: user?.role === "admin",
+  });
   // Admin-only side panels (tags/trending left, collections/playlists right).
   // Only when the catalog is DB-backed — edits against mock ids would no-op.
-  const user = useCurrentUser();
   const isAdmin = user?.role === "admin" && source === "api";
   const admin = useAdminTrackContent(isAdmin);
   // Resolve by the leading code (/track/1042-anything) so the text part can
@@ -195,7 +199,14 @@ const TrackDetail = () => {
               )}
             </div>
 
-            <h1 className="mt-5 font-body text-2xl font-semibold text-foreground">{track.title}</h1>
+            <h1 className="mt-5 font-body text-2xl font-semibold text-foreground">
+              {track.title}
+              {isAdmin && track.status === "draft" && (
+                <span className="ml-2 align-middle rounded border border-amber-400/50 bg-amber-400/10 px-1.5 py-0.5 font-body text-[10px] font-bold uppercase tracking-wide text-amber-400">
+                  Draft
+                </span>
+              )}
+            </h1>
             <p className="mt-1 font-body text-sm text-muted-foreground">by {track.artist}</p>
             <p className="mt-2 font-body text-xs text-muted-foreground">
               {mainVersion.duration} · {track.bpm} BPM

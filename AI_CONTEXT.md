@@ -1494,3 +1494,22 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   small trash button → confirm → `delete_track {id}` → refreshContent + navigate to /catalog.
   Composer pseudonyms (artist is still hardcoded "TVMUSICSTORE" in useTracks.mapTrack) = plan
   stage 4, next.
+- **2026-07-08 (per-version management on the track page — owner-approved design):** decision:
+  admin Tracks stays the MASS tool (tags/publish/delete in bulk); everything per-track lives on
+  the track page's admin panels. NEW left-panel **Versions block** (`VersionsBlock` in
+  AdminTrackPanel.tsx, between facets and Trending): each version row = ★ (gold = Main; click
+  another star → `set_main_version`), play (global player), label (✎ inline rename →
+  `rename_version`), duration, X (delete → `delete_version`; Main and the last version are
+  protected), and a gold **+ Add** button (pick a WAV → browser encodes MP3 320/128 via
+  audioEncoding → uploads previews → `add_version`). WAV BUNDLE REBUILD: new admin-only
+  `GET /api/admin/master?track=<id>` streams the private zip; the panel unzips it (new
+  `unzipBlob`/`zipEntries` in audioEncoding.ts, fflate), adds/removes the file (delete matches
+  the zip entry by normalized label — warns and leaves the zip untouched when no match), re-zips
+  (store level 0), uploads a new wavzip and passes `wavZipKey` to the action. SERVER
+  (admin/content.ts): new actions `add_version` (next free vN id, sort=max+1, optional
+  wavZipKey), `delete_version` (main + last-version guards), `rename_version`,
+  `set_main_version` (rewrites all rows — chosen first as version_id "main"/sort 0, rest v2+;
+  tracks.duration follows the new main; PKs are trackId:versionId so rows are re-inserted).
+  ALSO: TrackDetail now loads `useTracks({drafts: user.role==="admin"})` so DRAFT track pages
+  open for the admin (they 404'd before — broke curating bulk drafts) + an amber DRAFT badge
+  next to the title (admin only). Body type in content.ts gained versionId/label/preview128.

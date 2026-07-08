@@ -288,6 +288,10 @@ export const onRequestPost = async (ctx: Ctx) => {
     masterKey?: string;
     coverThumb?: string;
     wavZipKey?: string;
+    // add_version / delete_version / rename_version / set_main_version
+    versionId?: string;
+    label?: string;
+    preview128?: string;
     versions?: {
       label?: string;
       previewSrc?: string;
@@ -689,6 +693,143 @@ export const onRequestPost = async (ctx: Ctx) => {
       }
 
       return json({ ok: true, id: trackId, slug, code });
+    }
+
+    // ---- Per-version management (track-page admin panel) -------------------
+
+    case "add_version": {
+      // { id: trackId, label, previewSrc, preview128?, duration?, wavZipKey? }
+      const trackId = body.id;
+      const previewSrc = body.previewSrc;
+      if (!trackId || !previewSrc || !/^\/(api\/file\/previews|audio\/previews)\//.test(previewSrc)) {
+        return json({ error: "id and an uploaded previewSrc required" }, 400);
+      }
+      await ensureTrackCoverColumn(db);
+      const existing = await db
+        .prepare(`SELECT version_id, COALESCE(MAX(sort), -1) AS maxsort FROM track_versions WHERE track_id = ?1`)
+        .bind(trackId)
+        .all<{ version_id: string; maxsort: number }>();
+      const usedIds = new Set(existing.results.map((r) => r.version_id));
+      let n = existing.results.length + 1;
+      while (usedIds.has(`v${n}`)) n += 1;
+      const versionId = `v${n}`;
+      const maxSort = existing.results[0]?.maxsort ?? -1;
+      const preview128 =
+        body.preview128 && /^\/(api\/file\/previews|audio\/previews)\//.test(body.preview128)
+          ? body.preview128
+          : null;
+      await db
+        .prepare(
+          `INSERT INTO track_versions
+             (id, track_id, version_id, label, duration, preview_src, preview_128, r2_key_wav, sort)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL, ?8)`,
+        )
+        .bind(
+          `${trackId}:${versionId}`,
+          trackId,
+          versionId,
+          body.label?.trim() || `Version ${n}`,
+          body.duration ?? "",
+          previewSrc,
+          preview128,
+          maxSort + 1,
+        )
+        .run();
+      if (typeof body.wavZipKey === "string" && /^masters\//.test(body.wavZipKey)) {
+        await db.prepare(`UPDATE tracks SET r2_key_wav_zip = ?2 WHERE id = ?1`).bind(trackId, body.wavZipKey).run();
+      }
+      return json({ ok: true, versionId });
+    }
+
+    case "delete_version": {
+      // { id: trackId, versionId, wavZipKey? } — main is protected (set another
+      // version as main first); the last remaining version can't be deleted.
+      const trackId = body.id;
+      const versionId = body.versionId;
+      if (!trackId || !versionId) return json({ error: "id and versionId required" }, 400);
+      if (versionId === "main") {
+        return json({ error: "Set another version as Main first, then delete this one" }, 400);
+      }
+      const count = await db
+        .prepare(`SELECT COUNT(*) AS n FROM track_versions WHERE track_id = ?1`)
+        .bind(trackId)
+        .first<{ n: number }>();
+      if ((count?.n ?? 0) <= 1) return json({ error: "A track needs at least one version" }, 400);
+      await db
+        .prepare(`DELETE FROM track_versions WHERE track_id = ?1 AND version_id = ?2`)
+        .bind(trackId, versionId)
+        .run();
+      if (typeof body.wavZipKey === "string" && /^masters\//.test(body.wavZipKey)) {
+        await db.prepare(`UPDATE tracks SET r2_key_wav_zip = ?2 WHERE id = ?1`).bind(trackId, body.wavZipKey).run();
+      }
+      return json({ ok: true });
+    }
+
+    case "rename_version": {
+      const trackId = body.id;
+      const versionId = body.versionId;
+      const label = body.label?.trim();
+      if (!trackId || !versionId || !label) return json({ error: "id, versionId and label required" }, 400);
+      await db
+        .prepare(`UPDATE track_versions SET label = ?3 WHERE track_id = ?1 AND version_id = ?2`)
+        .bind(trackId, versionId, label.slice(0, 60))
+        .run();
+      return json({ ok: true });
+    }
+
+    case "set_main_version": {
+      // Rewrites the track's versions with the chosen one first (version_id
+      // "main", sort 0); the rest become v2, v3… Track duration follows the
+      // new main. Primary keys are trackId:versionId so rows are re-inserted.
+      const trackId = body.id;
+      const versionId = body.versionId;
+      if (!trackId || !versionId) return json({ error: "id and versionId required" }, 400);
+      if (versionId === "main") return json({ ok: true });
+      const rows = await db
+        .prepare(
+          `SELECT version_id, label, duration, preview_src, preview_128, r2_key_wav
+             FROM track_versions WHERE track_id = ?1 ORDER BY sort ASC`,
+        )
+        .bind(trackId)
+        .all<{
+          version_id: string;
+          label: string;
+          duration: string | null;
+          preview_src: string;
+          preview_128: string | null;
+          r2_key_wav: string | null;
+        }>();
+      const target = rows.results.find((r) => r.version_id === versionId);
+      if (!target) return json({ error: "Version not found" }, 404);
+      const ordered = [target, ...rows.results.filter((r) => r.version_id !== versionId)];
+      await db.prepare(`DELETE FROM track_versions WHERE track_id = ?1`).bind(trackId).run();
+      for (let i = 0; i < ordered.length; i++) {
+        const v = ordered[i];
+        const vid = i === 0 ? "main" : `v${i + 1}`;
+        await db
+          .prepare(
+            `INSERT INTO track_versions
+               (id, track_id, version_id, label, duration, preview_src, preview_128, r2_key_wav, sort)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`,
+          )
+          .bind(
+            `${trackId}:${vid}`,
+            trackId,
+            vid,
+            v.label,
+            v.duration ?? "",
+            v.preview_src,
+            v.preview_128,
+            v.r2_key_wav,
+            i,
+          )
+          .run();
+      }
+      await db
+        .prepare(`UPDATE tracks SET duration = ?2 WHERE id = ?1`)
+        .bind(trackId, target.duration ?? "")
+        .run();
+      return json({ ok: true });
     }
 
     case "delete_track": {

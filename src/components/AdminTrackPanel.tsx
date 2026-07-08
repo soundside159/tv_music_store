@@ -1,13 +1,28 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowDown, ArrowUp, Check, ChevronDown, Music2, Pause, Play, Plus, Trash2, X } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  Check,
+  ChevronDown,
+  Music2,
+  Pause,
+  Pencil,
+  Play,
+  Plus,
+  Star,
+  Trash2,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
-import type { CatalogTrack } from "@/data/catalogTracks";
+import type { CatalogTrack, TrackAudioVersion } from "@/data/catalogTracks";
 import { splitFilterValues } from "@/components/TrackRowPlayer";
 import WaveformPreview from "@/components/WaveformPreview";
 import { usePlayer } from "@/components/playerContext";
 import { refreshContent } from "@/hooks/useContent";
+import { formatDuration, unzipBlob, wavToMp3Pair, zipEntries } from "@/lib/audioEncoding";
+import { cleanVersionLabel } from "@/lib/downloadTrack";
 import type { Vocabularies } from "@/lib/tagOptions";
 
 // Admin-only side panels for the public track page (/track/:slug).
@@ -108,6 +123,266 @@ const PanelShell = ({ children, headerAction }: { children: ReactNode; headerAct
     {children}
   </aside>
 );
+
+// ---------------------------------------------------------------------------
+// Versions block (left panel): star = Main, rename, delete, + add WAV version.
+// Adding/removing a version rebuilds the private WAV zip in the browser.
+// ---------------------------------------------------------------------------
+
+const uploadAudioApi = async (
+  file: Blob,
+  kind: "preview" | "preview128" | "wavzip",
+  filename: string,
+): Promise<{ key: string; path: string | null }> => {
+  const base = filename.replace(/\.[^.]+$/, "");
+  const res = await fetch(`/api/admin/upload-audio?kind=${kind}&filename=${encodeURIComponent(base)}`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": file.type || (kind === "wavzip" ? "application/zip" : "audio/mpeg") },
+    body: file,
+  });
+  const d = (await res.json().catch(() => ({}))) as { ok?: boolean; key?: string; path?: string | null; error?: string };
+  if (!res.ok || !d.ok || !d.key) throw new Error(d.error ?? "Upload failed");
+  return { key: d.key, path: d.path ?? null };
+};
+
+/** The track's current WAV bundle unpacked, or null when there is none. */
+const fetchZipEntries = async (trackId: string): Promise<Record<string, Uint8Array> | null> => {
+  const r = await fetch(`/api/admin/master?track=${encodeURIComponent(trackId)}`, { credentials: "include" });
+  if (!r.ok) return null;
+  try {
+    return await unzipBlob(await r.blob());
+  } catch {
+    return null;
+  }
+};
+
+const VersionsBlock = ({
+  track,
+  run,
+  onTracksChanged,
+}: {
+  track: CatalogTrack;
+  run: (payload: RunPayload) => Promise<boolean>;
+  onTracksChanged: () => void;
+}) => {
+  const { activePlayer, isPlaying, playVersion } = usePlayer();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const versions = track.audioVersions;
+  const norm = (s: string) => (cleanVersionLabel(s, track.title) || s).trim().toLowerCase();
+
+  const addVersion = async (file: File) => {
+    setBusy("Encoding MP3…");
+    try {
+      const { mp3_320, mp3_128, duration } = await wavToMp3Pair(file);
+      setBusy("Uploading previews…");
+      const p320 = await uploadAudioApi(mp3_320, "preview", file.name);
+      const p128 = await uploadAudioApi(mp3_128, "preview128", file.name).catch(() => null);
+
+      // Rebuild the WAV bundle with the new file inside (when a bundle exists).
+      let wavZipKey: string | undefined;
+      setBusy("Updating WAV bundle…");
+      const entries = await fetchZipEntries(track.id);
+      if (entries) {
+        let name = file.name.replace(/[^\w.\- ]+/g, "_");
+        if (!/\.wav$/i.test(name)) name += ".wav";
+        let unique = name;
+        let k = 2;
+        while (Object.keys(entries).some((e) => e.toLowerCase() === unique.toLowerCase())) {
+          unique = name.replace(/\.wav$/i, ` (${k++}).wav`);
+        }
+        entries[unique] = new Uint8Array(await file.arrayBuffer());
+        const blob = await zipEntries(entries);
+        const up = await uploadAudioApi(blob, "wavzip", track.title);
+        wavZipKey = up.key;
+      }
+
+      const base = file.name.replace(/\.[a-z0-9]+$/i, "");
+      const label = cleanVersionLabel(base, track.title) || `Version ${versions.length + 1}`;
+      const ok = await run({
+        action: "add_version",
+        id: track.id,
+        label,
+        previewSrc: p320.path,
+        preview128: p128?.path ?? undefined,
+        duration: formatDuration(duration),
+        wavZipKey,
+      });
+      if (ok) {
+        toast.success(`Version "${label}" added`);
+        onTracksChanged();
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Add version failed");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const deleteVersion = async (v: TrackAudioVersion) => {
+    if (!window.confirm(`Delete version "${v.label}"?`)) return;
+    setPendingId(v.id);
+    try {
+      // Try to drop the matching WAV from the bundle (matched by label).
+      let wavZipKey: string | undefined;
+      const entries = await fetchZipEntries(track.id);
+      if (entries) {
+        const match = Object.keys(entries).find(
+          (name) => norm(name.replace(/\.wav$/i, "")) === norm(v.label),
+        );
+        if (match) {
+          delete entries[match];
+          const blob = await zipEntries(entries);
+          const up = await uploadAudioApi(blob, "wavzip", track.title);
+          wavZipKey = up.key;
+        } else {
+          toast("WAV bundle unchanged", {
+            description: "Couldn't match this version's file inside the zip.",
+          });
+        }
+      }
+      const ok = await run({ action: "delete_version", id: track.id, versionId: v.id, wavZipKey });
+      if (ok) {
+        toast.success("Version deleted");
+        onTracksChanged();
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setPendingId(null);
+    }
+  };
+
+  const setMain = async (v: TrackAudioVersion) => {
+    setPendingId(v.id);
+    const ok = await run({ action: "set_main_version", id: track.id, versionId: v.id });
+    setPendingId(null);
+    if (ok) {
+      toast.success(`"${v.label}" is now the Main version`);
+      onTracksChanged();
+    }
+  };
+
+  const rename = async (v: TrackAudioVersion) => {
+    const t = draft.trim();
+    setRenamingId(null);
+    if (!t || t === v.label) return;
+    const ok = await run({ action: "rename_version", id: track.id, versionId: v.id, label: t });
+    if (ok) onTracksChanged();
+  };
+
+  return (
+    <div className="border-b border-border/50 py-3">
+      <div className="flex items-center justify-between">
+        <p className="font-body text-sm font-semibold text-foreground">Versions ({versions.length})</p>
+        <button
+          type="button"
+          disabled={!!busy}
+          onClick={() => fileRef.current?.click()}
+          className="inline-flex items-center gap-1 rounded-md border border-[#F4C430]/50 px-2 py-0.5 font-body text-[11px] font-semibold text-[#F4C430] transition-colors hover:bg-[#F4C430]/10 disabled:opacity-50"
+        >
+          <Plus className="h-3 w-3" />
+          Add
+        </button>
+      </div>
+      {busy && (
+        <p className="mt-1 font-body text-[11px]" style={{ color: GOLD }}>
+          {busy}
+        </p>
+      )}
+      <div className="mt-1.5 flex flex-col gap-0.5">
+        {versions.map((v, i) => {
+          const isMain = i === 0;
+          const active = activePlayer?.trackId === track.id && activePlayer.versionId === v.id;
+          const rowBusy = pendingId === v.id;
+          return (
+            <div
+              key={v.id}
+              className={`flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-white/5 ${rowBusy ? "opacity-50" : ""}`}
+            >
+              <button
+                type="button"
+                disabled={isMain || rowBusy || !!busy}
+                onClick={() => void setMain(v)}
+                title={isMain ? "Main version" : "Make this the Main version"}
+                aria-label={isMain ? "Main version" : `Make ${v.label} the main version`}
+                className="shrink-0 disabled:cursor-default"
+              >
+                <Star className="h-3 w-3" style={isMain ? { color: GOLD, fill: GOLD } : { color: "#666" }} />
+              </button>
+              <button
+                type="button"
+                onClick={() => playVersion(track, v)}
+                aria-label={active && isPlaying ? `Pause ${v.label}` : `Play ${v.label}`}
+                className="shrink-0 text-muted-foreground transition-colors hover:text-[#F4C430]"
+              >
+                {active && isPlaying ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
+              </button>
+              {renamingId === v.id ? (
+                <input
+                  autoFocus
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onBlur={() => void rename(v)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void rename(v);
+                    if (e.key === "Escape") setRenamingId(null);
+                  }}
+                  className="min-w-0 flex-1 rounded border border-[#F4C430]/60 bg-background px-1 py-0.5 font-body text-xs text-foreground focus:outline-none"
+                />
+              ) : (
+                <span
+                  className={`min-w-0 flex-1 truncate font-body text-xs ${active ? "text-[#F4C430]" : "text-foreground"}`}
+                  title={v.label}
+                >
+                  {v.label}
+                </span>
+              )}
+              <span className="shrink-0 font-body text-[10px] tabular-nums text-muted-foreground">{v.duration}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setDraft(v.label);
+                  setRenamingId(v.id);
+                }}
+                aria-label={`Rename ${v.label}`}
+                className="shrink-0 text-muted-foreground transition-colors hover:text-[#F4C430]"
+              >
+                <Pencil className="h-3 w-3" />
+              </button>
+              <button
+                type="button"
+                disabled={isMain || versions.length <= 1 || rowBusy || !!busy}
+                onClick={() => void deleteVersion(v)}
+                title={isMain ? "Main can't be deleted — star another version first" : "Delete version"}
+                aria-label={`Delete ${v.label}`}
+                className="shrink-0 text-muted-foreground transition-colors hover:text-red-400 disabled:opacity-30"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".wav,audio/wav,audio/x-wav"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void addVersion(f);
+          e.target.value = "";
+        }}
+      />
+    </div>
+  );
+};
 
 // ---------------------------------------------------------------------------
 // LEFT: tags (Use Case / Genre / Mood) + Trending box
@@ -259,6 +534,9 @@ export const AdminTrackTagsPanel = ({
           </div>
         );
       })}
+
+      {/* Versions: star = Main, rename, delete, + add a WAV version. */}
+      <VersionsBlock track={track} run={run} onTracksChanged={onTracksChanged} />
 
       {/* Trending — same admin-picked list as the homepage block. */}
       <div className="pt-3">

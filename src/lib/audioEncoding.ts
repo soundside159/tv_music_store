@@ -1,5 +1,5 @@
 import { Mp3Encoder } from "@breezystack/lamejs";
-import { zip } from "fflate";
+import { unzip, zip } from "fflate";
 
 // Browser-side audio pipeline for the admin "Add Track" flow.
 // The owner uploads WAV files; we do everything client-side (no server
@@ -89,6 +89,26 @@ export const zipWavs = (files: { name: string; file: File }[]): Promise<Blob> =>
         else resolve(new Blob([data as BlobPart], { type: "application/zip" }));
       });
     })().catch(reject);
+  });
+
+/** Unpack a zip Blob into { filename: bytes } (rebuilding the WAV bundle). */
+export const unzipBlob = async (blob: Blob): Promise<Record<string, Uint8Array>> => {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  return new Promise((resolve, reject) => {
+    unzip(bytes, (err, data) => {
+      if (err) reject(err);
+      else resolve(data as Record<string, Uint8Array>);
+    });
+  });
+};
+
+/** Pack raw { filename: bytes } entries into a stored (level 0) zip Blob. */
+export const zipEntries = (entries: Record<string, Uint8Array>): Promise<Blob> =>
+  new Promise((resolve, reject) => {
+    zip(entries, { level: 0 }, (err, data) => {
+      if (err) reject(err);
+      else resolve(new Blob([data as BlobPart], { type: "application/zip" }));
+    });
   });
 
 /** Format seconds as m:ss. */
