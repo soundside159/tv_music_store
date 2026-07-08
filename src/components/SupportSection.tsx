@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Mail, Send } from "lucide-react";
+import { Check, Copy, Mail, Send } from "lucide-react";
 import { toast } from "sonner";
-import { openPlanModal } from "@/lib/billing";
 
 // Account -> Support. Free plan: contact email. Pro/Max (priority support): an
 // internal ticket chat backed by /api/support (shows up in /admin -> Inbox with
@@ -25,6 +24,18 @@ const SupportSection = () => {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const copyEmail = async () => {
+    try {
+      await navigator.clipboard.writeText(contact);
+      setCopied(true);
+      toast.success("Email copied");
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Couldn't copy — select the address manually");
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -93,20 +104,14 @@ const SupportSection = () => {
             </a>
           </div>
         </div>
-        {plan && !isPaid && (
-          <button
-            type="button"
-            onClick={() =>
-              openPlanModal({
-                title: "Priority support",
-                subtitle: "Pro and Max include priority in-app support — message us and get a faster reply.",
-              })
-            }
-            className="rounded-lg border border-border px-4 py-2 font-body text-xs font-semibold text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
-          >
-            Upgrade for priority
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => void copyEmail()}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-4 py-2 font-body text-xs font-semibold text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
+        >
+          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+          {copied ? "Copied" : "Copy email"}
+        </button>
       </div>
 
       {/* Priority ticket chat (paid plans) */}

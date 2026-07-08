@@ -38,6 +38,7 @@ const COLUMNS: { title: string; links: FooterLink[] }[] = [
       { label: "Contact Us", to: "mailto:contact@tvmusicstore.com", external: true },
       { label: "License Terms", to: "/license-terms" },
       { label: "Privacy Policy", to: "/privacy" },
+      { label: "Refund Policy", to: "/refunds" },
     ],
   },
 ];

@@ -10,4 +10,5 @@
   <url><loc>https://tvmusicstore.com/custom</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
   <url><loc>https://tvmusicstore.com/license-terms</loc><changefreq>yearly</changefreq><priority>0.4</priority></url>
   <url><loc>https://tvmusicstore.com/privacy</loc><changefreq>yearly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://tvmusicstore.com/refunds</loc><changefreq>yearly</changefreq><priority>0.4</priority></url>
 </urlset>

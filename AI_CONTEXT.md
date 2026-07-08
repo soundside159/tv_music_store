@@ -1202,3 +1202,12 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   remains anywhere in the sidebar; combined with the always-rendered `hidden/flex` toggle the menu now
   lays out correctly the instant it's shown. (Account page menu already used margin-based `md:mb-5`,
   so it wasn't affected.)
+- **2026-07-07 (Support copy-email + Refund Policy page for Paddle):** (1) Removed the "Upgrade for
+  priority" button from Account → Support; replaced with a **Copy email** button (copies contact@).
+  (2) Paddle verification requires linked Terms/Privacy/Refund pages — we had /license-terms and
+  /privacy but no refund page. NEW `src/pages/Refunds.tsx` (`/refunds`, routed in App.tsx, linked in
+  the Footer Company column + sitemap) — a proper Refund Policy consistent with the License Terms
+  (digital-goods download waiver, faulty-file/duplicate refunds, subscription cancellation, chargeback
+  note). For Paddle: Web domain = tvmusicstore.com, Pricing = /pricing, Terms = /license-terms,
+  Privacy = /privacy, Refund = /refunds. (Owner ordered a London correspondence address — pending;
+  the EFFECTIVE/ADDRESS placeholders in Privacy/LicenseTerms can be filled once it arrives.)

@@ -22,6 +22,7 @@ import Admin from "./pages/Admin";
 import Login from "./pages/Login";
 import LicenseTerms from "./pages/LicenseTerms";
 import Privacy from "./pages/Privacy";
+import Refunds from "./pages/Refunds";
 import NotFound from "./pages/NotFound";
 import DevPersonaSwitcher from "./components/DevPersonaSwitcher";
 import DownloadOptionsModal from "./components/DownloadOptionsModal";
@@ -60,6 +61,7 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           <Route path="/license-terms" element={<LicenseTerms />} />
           <Route path="/privacy" element={<Privacy />} />
+          <Route path="/refunds" element={<Refunds />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
           </Routes>
