@@ -353,9 +353,19 @@ const AdminTracksEdit = ({
   const toggleTrack = (id: string) =>
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
-  // --- per-row versions expander (view / set main / delete) ---
+  // --- per-row versions expander (view / set main / rename / delete) ---
   const [versionsOpenId, setVersionsOpenId] = useState<string | null>(null);
   const [versionBusy, setVersionBusy] = useState<string | null>(null);
+  const [versionRenaming, setVersionRenaming] = useState<string | null>(null); // `${trackId}:${versionId}`
+  const [versionDraft, setVersionDraft] = useState("");
+
+  const renameVersion = async (t: CatalogTrack, versionId: string, oldLabel: string) => {
+    const label = versionDraft.trim();
+    setVersionRenaming(null);
+    if (!label || label === oldLabel) return;
+    const ok = await run({ action: "rename_version", id: t.id, versionId, label }, "Version renamed");
+    if (ok) onTracksReload?.();
+  };
 
   const setMainVersion = async (t: CatalogTrack, versionId: string, label: string) => {
     setVersionBusy(`${t.id}:${versionId}`);
@@ -697,11 +707,30 @@ const AdminTracksEdit = ({
                           >
                             {vActive ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
                           </button>
-                          <span
-                            className={`min-w-0 flex-1 truncate font-body text-xs ${vActive ? "text-[#F4C430]" : "text-foreground"}`}
-                          >
-                            {v.label}
-                          </span>
+                          {versionRenaming === `${t.id}:${v.id}` ? (
+                            <input
+                              autoFocus
+                              value={versionDraft}
+                              onChange={(e) => setVersionDraft(e.target.value)}
+                              onBlur={() => void renameVersion(t, v.id, v.label)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") void renameVersion(t, v.id, v.label);
+                                if (e.key === "Escape") setVersionRenaming(null);
+                              }}
+                              className="min-w-0 flex-1 rounded border border-[#F4C430]/60 bg-background px-1 py-0.5 font-body text-xs text-foreground focus:outline-none"
+                            />
+                          ) : (
+                            <span
+                              onDoubleClick={() => {
+                                setVersionDraft(v.label);
+                                setVersionRenaming(`${t.id}:${v.id}`);
+                              }}
+                              title="Double-click to rename"
+                              className={`min-w-0 flex-1 cursor-text truncate font-body text-xs ${vActive ? "text-[#F4C430]" : "text-foreground"}`}
+                            >
+                              {v.label}
+                            </span>
+                          )}
                           <span className="shrink-0 font-body text-[10px] tabular-nums text-muted-foreground">
                             {v.duration}
                           </span>

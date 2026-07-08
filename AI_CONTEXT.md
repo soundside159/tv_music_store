@@ -1541,3 +1541,17 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   with an X → new `fields.clearStems` in bulk_update_tracks (NULLs r2_key_stems + has_stems=0);
   after removal onApplyOverrides flips hasStems locally + onTracksReload. NOTE: clearing does not
   delete the zip object from R2 (orphan files are harmless; R2 cleanup = maybe later).
+- **2026-07-08 (version rename in table + footer discipline + account menu paint fix):**
+  (1) Tracks Edit versions expander: DOUBLE-CLICK a version label → inline input →
+  `rename_version` → onTracksReload (Esc cancels). (2) FOOTER: owner complained short pages pull
+  the footer up mid-screen; wanted tunetank behavior (always below the fold, revealed by
+  scrolling). ONE global CSS rule in index.css @layer base instead of touching 17 pages:
+  `.min-h-screen:has(> footer)` becomes flex-column and its direct `> main` gets
+  `flex:1 0 auto; min-height:100vh` — footer always sits below the viewport, scroll reveals it;
+  pages without a Footer (catalog, track) untouched; needs :has() (all evergreen browsers).
+  (3) ACCOUNT PAGE MENU FIX (owner screenshots): /account still conditionally MOUNTED its menu
+  blocks (`{menu === "admin" && …}`) → Chromium "no paint until reflow" bug (blank/flat items
+  until a click), and its Admin submenu was the FLAT adminNavItems list without group headers.
+  Now: both blocks always rendered, toggled hidden/flex, and the Admin submenu renders
+  **adminNavGroups** with Overview/Catalog/Customers/Requests headers — identical to the /admin
+  sidebar (adminNavItems import dropped). /admin itself was already fixed earlier.

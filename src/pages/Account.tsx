@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowUpRight, LogOut } from "lucide-react";
-import { accountNavGroups, adminNavItems } from "@/lib/adminNav";
+import { accountNavGroups, adminNavGroups } from "@/lib/adminNav";
 import MenuGroupHeader from "@/components/MenuGroupHeader";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
@@ -142,8 +142,15 @@ const Account = () => {
               {user.role === "admin" && (
                 <MenuGroupHeader label="Main" open={menu === "main"} onClick={() => setMenu("main")} />
               )}
-              {(user.role !== "admin" || menu === "main") &&
-                accountNavGroups.map((group) => (
+              {/* Both menu blocks are ALWAYS rendered and toggled with hidden/
+                  flex + margin-based spacing — conditional mounting hit the
+                  Chromium "no paint until reflow" bug (blank items on switch). */}
+              <div
+                className={`${
+                  user.role !== "admin" || menu === "main" ? "flex" : "hidden"
+                } gap-4 md:flex-col md:gap-0`}
+              >
+                {accountNavGroups.map((group) => (
                   <div key={group.label} className="shrink-0 md:mb-5">
                     <p className="px-3 pb-1.5 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
                       {group.label}
@@ -167,6 +174,7 @@ const Account = () => {
                     </div>
                   </div>
                 ))}
+              </div>
               {user.role === "admin" && (
                 <div className="shrink-0 md:mb-5">
                   <MenuGroupHeader
@@ -174,20 +182,28 @@ const Account = () => {
                     open={menu === "admin"}
                     onClick={() => setMenu("admin")}
                   />
-                  {menu === "admin" && (
-                    <div className="flex gap-1 md:flex-col">
-                      {adminNavItems.map((item) => (
-                        <Link
-                          key={item.id}
-                          to={`/admin?section=${item.id}`}
-                          className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
-                        >
-                          <item.icon className="h-4 w-4" />
-                          {item.label}
-                        </Link>
-                      ))}
-                    </div>
-                  )}
+                  {/* Grouped like the /admin sidebar (Overview/Catalog/…), always rendered. */}
+                  <div className={`${menu === "admin" ? "flex" : "hidden"} gap-4 md:flex-col md:gap-0`}>
+                    {adminNavGroups.map((group) => (
+                      <div key={group.label} className="shrink-0 md:mb-4">
+                        <p className="px-3 pb-1.5 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
+                          {group.label}
+                        </p>
+                        <div className="flex gap-1 md:flex-col">
+                          {group.items.map((item) => (
+                            <Link
+                              key={item.id}
+                              to={`/admin?section=${item.id}`}
+                              className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
+                            >
+                              <item.icon className="h-4 w-4" />
+                              {item.label}
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
               <button

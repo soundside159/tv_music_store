@@ -105,6 +105,20 @@
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
   }
+
+  /* Footer discipline (tunetank-style): every page whose root wrapper
+     (.min-h-screen) directly contains the <footer> becomes a flex column and
+     its <main> is guaranteed a full viewport of height — so on short pages the
+     footer never floats up mid-screen; it always sits below the fold and is
+     revealed by scrolling down. Pages without a footer are untouched. */
+  .min-h-screen:has(> footer) {
+    display: flex;
+    flex-direction: column;
+  }
+  .min-h-screen:has(> footer) > main {
+    flex: 1 0 auto;
+    min-height: 100vh;
+  }
 }
 
 @layer components {
