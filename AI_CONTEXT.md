@@ -1195,3 +1195,10 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   the cover: an SVG `<rect>` (rounded, `pathLength=100`, gold stroke, dashoffset = 100−progress) layered
   OUTSIDE the `overflow-hidden` image so it isn't clipped. Alt-version rows keep the small circular
   PlayProgressRing (they share the track's cover, no separate art).
+- **2026-07-07 (admin menu jump — real fix):** the earlier fix only removed `gap` from the `nav` but
+  the two menu BLOCKS still used `flex flex-col gap-3`, so switching Admin↔Main still left the group
+  spacing/sizes wrong until a click forced a reflow (Chromium flex-`gap` recalc bug on
+  dynamically-shown containers). Changed both blocks `gap-3 → space-y-3` (margin-based) so no flex gap
+  remains anywhere in the sidebar; combined with the always-rendered `hidden/flex` toggle the menu now
+  lays out correctly the instant it's shown. (Account page menu already used margin-based `md:mb-5`,
+  so it wasn't affected.)

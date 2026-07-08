@@ -232,7 +232,7 @@ const Admin = () => {
           <aside className="shrink-0 md:w-56">
             <nav className="flex flex-col space-y-1">
               <MenuGroupHeader label="Main" open={menu === "main"} onClick={() => setMenu("main")} />
-              <div className={`mb-3 flex-col gap-3 ${menu === "main" ? "flex" : "hidden"}`}>
+              <div className={`mb-3 flex-col space-y-3 ${menu === "main" ? "flex" : "hidden"}`}>
                 {accountNavGroups.map((group) => (
                   <div key={group.label}>
                     <p className="px-3 pb-1 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
@@ -253,7 +253,7 @@ const Admin = () => {
               </div>
 
               <MenuGroupHeader label="Admin" open={menu === "admin"} onClick={() => setMenu("admin")} />
-              <div className={`flex-col gap-3 ${menu === "admin" ? "flex" : "hidden"}`}>
+              <div className={`flex-col space-y-3 ${menu === "admin" ? "flex" : "hidden"}`}>
                 {adminNavGroups.map((group) => (
                   <div key={group.label}>
                     <p className="px-3 pb-1 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
