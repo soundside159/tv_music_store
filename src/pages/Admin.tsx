@@ -286,16 +286,18 @@ const Admin = () => {
                 ))}
               </div>
 
+              {/* Identical to the /account logout (no extra margin, same label)
+                  so it doesn't shift when navigating between the two pages. */}
               <button
                 type="button"
                 onClick={async () => {
                   await logout();
                   navigate("/");
                 }}
-                className="mt-1 flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-red-400 transition-colors hover:text-red-300"
+                className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-red-400 transition-colors hover:text-red-300"
               >
                 <LogOut className="h-4 w-4" />
-                Log Out
+                Log out
               </button>
             </nav>
           </aside>

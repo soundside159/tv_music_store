@@ -1582,4 +1582,23 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   global order; then reload() + refreshContent() so the public page follows instantly.
   ContentItem/emptyDraft gained `theme`; the playlist EDIT form got a "Theme" input (empty = no
   section) and the upsert sends it (collections unaffected — their flat list kept). All layout
-  ops disabled while busy.
+  ops disabled while busy. Also: /admin Log-out button unified with /account ("Log out", no mt-1)
+  so it doesn't shift between pages.
+- **NEXT SESSION — STAGE 4 "COMPOSERS", owner-approved spec (2026-07-08). Build this next:**
+  (1) Roles & pseudonyms: admin sets a user's role to composer + a display pseudonym; the site
+  shows the pseudonym as the track artist everywhere (replace the hardcoded "TVMUSICSTORE" in
+  useTracks.mapTrack; `composers` table + tracks.composer_id already exist in the schema).
+  (2) Admin composer picker: when the OWNER uploads (Bulk Upload + Add Track) he picks the
+  composer from a list (including himself/his pseudonym).
+  (3) **Composer Panel upload — owner's exact UX** (composers get NO Bulk Upload, one simple
+  "Add track" flow): opening it shows a Bulk-style drop zone "drop WAV files here" — several
+  WAVs = versions of ONE track; then ONLY these fields: Title, BPM, Description, Extra Tags,
+  Stems ZIP (optional) — **NO category field**; the stems CHECKBOX does not exist — has_stems
+  flips automatically when a stems zip is attached (checkbox is redundant; consider removing the
+  manual checkbox from the admin panels too for the same reason); the composer can star which
+  WAV is the Main version; one "Upload" button at the bottom.
+  (4) **Review queue**: composer uploads are created with `moderation_status='pending'` (column
+  already in schema; /api/tracks filters approved only) → the track lands in the ADMIN for
+  review, where the owner adds the rest (Use Case/Genre/Mood, cover, collections…) and
+  approves/publishes. Composers see only their own tracks in their panel.
+  THEN STAGE 5 (former 3): CSV metadata export → match with composers' spreadsheets → import.
