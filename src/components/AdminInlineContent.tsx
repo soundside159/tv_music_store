@@ -24,6 +24,8 @@ export interface ContentAdmin {
   enabled: boolean;
   data: AdminContentData | null;
   run: (payload: Record<string, unknown>) => Promise<boolean>;
+  /** Like run, but returns the parsed response (e.g. the created id). */
+  call: (payload: Record<string, unknown>) => Promise<Record<string, unknown> | null>;
   reload: () => Promise<void> | void;
 }
 
@@ -32,8 +34,8 @@ export const useContentAdmin = (): ContentAdmin => {
   const user = useCurrentUser();
   const { source } = useTracks();
   const enabled = user?.role === "admin" && source === "api";
-  const { data, run, reload } = useAdminTrackContent(enabled);
-  return { enabled, data, run, reload };
+  const { data, run, call, reload } = useAdminTrackContent(enabled);
+  return { enabled, data, run, call, reload };
 };
 
 const itemsOf = (data: AdminContentData | null, kind: ContentKind): AdminContentItem[] =>

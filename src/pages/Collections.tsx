@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import { useCollections } from "@/hooks/useContent";
+import { useCollections, useContentReady } from "@/hooks/useContent";
 import {
   AdminAddItem,
   AdminItemBar,
@@ -11,6 +11,7 @@ import {
 
 const Collections = () => {
   const musicCollections = useCollections();
+  const ready = useContentReady();
   // Inline admin editing (rename/delete/add + drag to reorder) — admins only.
   const admin = useContentAdmin();
   const { dragProps, dragClass } = useAdminDragReorder("collection", admin);
@@ -31,6 +32,16 @@ const Collections = () => {
         Curated groups of the catalog by style and genre.
       </p>
 
+      {!ready ? (
+        <div className="mt-10 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div
+              key={i}
+              className="aspect-[4/3] w-full animate-pulse rounded-xl border border-white/10 bg-white/[0.05]"
+            />
+          ))}
+        </div>
+      ) : (
       <div className="mt-10 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
         {musicCollections.map((c) => (
           <div key={c.id} {...dragProps(c.id)} className={dragClass(c.id)}>
@@ -57,6 +68,7 @@ const Collections = () => {
           </div>
         ))}
       </div>
+      )}
     </main>
     <Footer />
   </div>

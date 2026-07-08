@@ -2,7 +2,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { TrackRowList } from "@/components/TrackRowPlayer";
-import { useCollections } from "@/hooks/useContent";
+import { useCollections, useContentReady } from "@/hooks/useContent";
 import { useTracks } from "@/hooks/useTracks";
 import {
   AdminCoverControl,
@@ -19,12 +19,37 @@ const CollectionDetail = () => {
   const { tracks: allTracks, reload: reloadTracks } = useTracks();
   // Inline admin editing: click title/description, hover cover, X on rows.
   const admin = useContentAdmin();
+  const ready = useContentReady();
   const collection = musicCollections.find((c) => c.id === slug);
   const tracks = collection
     ? allTracks.filter((t) => t.collectionIds.includes(collection.id))
     : [];
 
   if (!collection) {
+    // Content still loading — skeleton instead of a premature "not found".
+    if (!ready) {
+      return (
+        <div className="min-h-screen bg-background">
+          <Navigation />
+          <main className="mx-auto w-full max-w-7xl px-4 pb-24 pt-24 sm:px-6 md:pt-28">
+            <div className="flex flex-col gap-6 md:flex-row md:items-center">
+              <div className="h-40 w-40 shrink-0 animate-pulse rounded-xl border border-white/10 bg-white/[0.05]" />
+              <div className="flex min-w-0 flex-1 flex-col gap-3">
+                <div className="h-3 w-24 animate-pulse rounded bg-white/[0.07]" />
+                <div className="h-8 w-64 animate-pulse rounded bg-white/[0.09]" />
+                <div className="h-3 w-96 max-w-full animate-pulse rounded bg-white/[0.06]" />
+              </div>
+            </div>
+            <div className="mt-8 flex flex-col gap-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="h-14 animate-pulse rounded-lg border border-white/5 bg-white/[0.04]" />
+              ))}
+            </div>
+          </main>
+          <Footer />
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen bg-background">
         <Navigation />

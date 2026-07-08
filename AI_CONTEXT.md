@@ -1372,3 +1372,24 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   clears). DnD reorder still works inside/across sections (it edits the one global sort).
   Migration 0001_init.sql NOT updated with theme (lazy ALTER covers prod; add on next migration
   touch). Verified via host reads; lint/build = deploy.bat.
+- **2026-07-08 (modern loading + theme-first creation UX — owner round):** owner flagged mock-data
+  flashes on F5 ("collection pics load then vanish", "Playlist not found flashes before content").
+  (1) NEW `useContentReady()` in useContent.ts (module `settled` flag — false until the first
+  /api/content attempt finishes). `refreshContent()` reworked to STALE-WHILE-REVALIDATE: it no
+  longer nulls the cache; it refetches, swaps the cache in, THEN notifies hooks — and returns a
+  Promise so flows can await fresh data before navigating. `useCollections`/`usePlaylists` now
+  lazy-init their state from the module cache (no mock flash on SPA navigation) via extracted
+  `mapCollections`/`mapPlaylists`. (2) SKELETONS: /playlists shows pulsing parallelogram
+  placeholders until ready; /collections pulsing 4:3 cards; PlaylistDetail + CollectionDetail
+  show a full header+rows skeleton and render "not found" ONLY after `ready` — no more flash.
+  (3) PlaylistDetail header cover is now a PARALLELOGRAM (skew wrapper via AdminCoverControl
+  className `[transform:skewX(-9deg)]`, counter-skewed img, fade-in onLoad). Breadcrumb eyebrow
+  shows "Playlist · <Theme>". (4) CREATION UX redesigned (owner: "готовый продукт, не тесты"):
+  the top "Add playlist" button is GONE from /playlists; every theme section (incl. themeless)
+  ends with an admin-only dashed GHOST parallelogram card "+ New playlist in <theme>" → inline
+  title input → creates via new `admin.call()` (returns the created id; `useAdminTrackContent`
+  gained `call`, `run` now wraps it) → AWAITS refreshContent()+reload → navigates to the new
+  /playlist/<id> where the owner uploads the cover (hover) and clicks the description in.
+  Page bottom: admin-only "+ New theme" button → adds a client-side draft section (empty sections
+  persist only once a playlist is created in them; drafts list in page state). Collections page
+  keeps AdminAddItem (no themes there). Verified via host reads; lint/build = deploy.bat.

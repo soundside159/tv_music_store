@@ -28,6 +28,9 @@ interface ApiContent {
 
 let cache: ApiContent | null = null;
 let inflight: Promise<ApiContent | null> | null = null;
+// True once the FIRST /api/content attempt finished (ok or not). Pages use it
+// to show skeletons instead of flashing mock data / "not found".
+let settled = false;
 
 const fetchContent = (): Promise<ApiContent | null> => {
   if (cache) return Promise.resolve(cache);
@@ -39,20 +42,48 @@ const fetchContent = (): Promise<ApiContent | null> => {
     })
     .catch(() => null)
     .finally(() => {
+      settled = true;
       inflight = null;
     });
   return inflight;
 };
 
+/** False until the first /api/content response lands — render skeletons then. */
+export const useContentReady = (): boolean => {
+  const [ready, setReady] = useState(settled);
+  useEffect(() => {
+    if (settled) return;
+    let cancelled = false;
+    void fetchContent().then(() => {
+      if (!cancelled) setReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return ready;
+};
+
 // Admin inline editing (rename/delete/reorder on the public pages) changes the
-// content — this drops the cache and tells every mounted hook to refetch.
+// content — refetch it and notify every mounted hook AFTER the new data lands
+// (stale-while-revalidate: the old content keeps rendering meanwhile, so
+// nothing flashes back to mock data). Await the promise before navigating to a
+// just-created item so its page finds it.
 const contentListeners = new Set<() => void>();
 
-export const refreshContent = (): void => {
-  cache = null;
-  inflight = null;
-  contentListeners.forEach((l) => l());
-};
+export const refreshContent = (): Promise<void> =>
+  fetch("/api/content")
+    .then((res) => (res.ok ? (res.json() as Promise<ApiContent>) : null))
+    .then((data) => {
+      if (data) cache = data;
+    })
+    .catch(() => {
+      // network hiccup — keep showing the stale content
+    })
+    .then(() => {
+      settled = true;
+      contentListeners.forEach((l) => l());
+    });
 
 export interface LiveCategory {
   id: string;
@@ -117,25 +148,33 @@ export const useVocabularies = (): Vocabularies => {
   return v;
 };
 
+const mapCollections = (data: ApiContent): MusicCollection[] | null =>
+  data.collections?.length
+    ? data.collections.map((c) => ({
+        id: c.id,
+        title: c.title,
+        shortTitle: c.shortTitle || c.title,
+        eyebrow: "Collection",
+        description: c.description ?? "",
+        trackCount: c.trackIds?.length ?? 0,
+        image: c.image || "/images/collections/orchestral.jpg",
+      }))
+    : null;
+
 /** Collections for the catalog strip / collections pages (live, mock fallback). */
 export const useCollections = (): MusicCollection[] => {
-  const [list, setList] = useState<MusicCollection[]>(musicCollections);
+  // Start from the module cache when it's already there (SPA navigation) so
+  // live data renders on the very first frame instead of flashing mocks.
+  const [list, setList] = useState<MusicCollection[]>(
+    () => (cache && mapCollections(cache)) || musicCollections,
+  );
   useEffect(() => {
     let cancelled = false;
     const apply = () => {
       void fetchContent().then((data) => {
-        if (cancelled || !data?.collections?.length) return;
-        setList(
-          data.collections.map((c) => ({
-            id: c.id,
-            title: c.title,
-            shortTitle: c.shortTitle || c.title,
-            eyebrow: "Collection",
-            description: c.description ?? "",
-            trackCount: c.trackIds?.length ?? 0,
-            image: c.image || "/images/collections/orchestral.jpg",
-          })),
-        );
+        if (cancelled || !data) return;
+        const mapped = mapCollections(data);
+        if (mapped) setList(mapped);
       });
     };
     apply();
@@ -159,25 +198,32 @@ export interface LivePlaylist {
   trackIds: string[];
 }
 
+const mapPlaylists = (data: ApiContent): LivePlaylist[] | null =>
+  data.playlists?.length
+    ? data.playlists.map((p) => ({
+        id: p.id,
+        slug: p.id,
+        title: p.title,
+        description: p.description ?? "",
+        image: p.image || "/images/collections/orchestral.jpg",
+        theme: p.theme ?? "",
+        trackIds: p.trackIds ?? [],
+      }))
+    : null;
+
 /** Playlists for /playlists pages (live, mock fallback). */
 export const usePlaylists = (): LivePlaylist[] => {
-  const [list, setList] = useState<LivePlaylist[] | null>(null);
+  // Start from the module cache when present — no mock flash on navigation.
+  const [list, setList] = useState<LivePlaylist[] | null>(() =>
+    cache ? mapPlaylists(cache) : null,
+  );
   useEffect(() => {
     let cancelled = false;
     const apply = () => {
       void fetchContent().then((data) => {
-        if (cancelled || !data?.playlists?.length) return;
-        setList(
-          data.playlists.map((p) => ({
-            id: p.id,
-            slug: p.id,
-            title: p.title,
-            description: p.description ?? "",
-            image: p.image || "/images/collections/orchestral.jpg",
-            theme: p.theme ?? "",
-            trackIds: p.trackIds ?? [],
-          })),
-        );
+        if (cancelled || !data) return;
+        const mapped = mapPlaylists(data);
+        if (mapped) setList(mapped);
       });
     };
     apply();

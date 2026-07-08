@@ -68,7 +68,8 @@ export const useAdminTrackContent = (enabled: boolean) => {
     void load();
   }, [load]);
 
-  const run = useCallback(async (payload: RunPayload): Promise<boolean> => {
+  // Like `run`, but returns the parsed response (e.g. the created item's id).
+  const call = useCallback(async (payload: RunPayload): Promise<Record<string, unknown> | null> => {
     try {
       const res = await fetch("/api/admin/content", {
         method: "POST",
@@ -76,19 +77,24 @@ export const useAdminTrackContent = (enabled: boolean) => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       });
+      const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       if (!res.ok) {
-        const e = (await res.json().catch(() => ({}))) as { error?: string };
-        toast.error(e.error ?? "Save failed");
-        return false;
+        toast.error((body.error as string) ?? "Save failed");
+        return null;
       }
-      return true;
+      return body;
     } catch {
       toast.error("Network error");
-      return false;
+      return null;
     }
   }, []);
 
-  return { data, setData, run, reload: load };
+  const run = useCallback(
+    async (payload: RunPayload): Promise<boolean> => (await call(payload)) !== null,
+    [call],
+  );
+
+  return { data, setData, run, call, reload: load };
 };
 
 const PanelShell = ({ children }: { children: ReactNode }) => (

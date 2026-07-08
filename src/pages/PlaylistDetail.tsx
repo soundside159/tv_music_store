@@ -3,7 +3,7 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { TrackRowList } from "@/components/TrackRowPlayer";
 import type { CatalogTrack } from "@/data/catalogTracks";
-import { usePlaylists } from "@/hooks/useContent";
+import { useContentReady, usePlaylists } from "@/hooks/useContent";
 import { useTracks } from "@/hooks/useTracks";
 import {
   AdminCoverControl,
@@ -13,10 +13,33 @@ import {
   useContentAdmin,
 } from "@/components/AdminInlineContent";
 
+/** Loading skeleton — shown until /api/content answers (no "not found" flash). */
+const DetailSkeleton = () => (
+  <main className="mx-auto w-full max-w-7xl px-4 pb-24 pt-24 sm:px-6 md:pt-28">
+    <div className="flex flex-col gap-6 md:flex-row md:items-center">
+      <div
+        style={{ transform: "skewX(-9deg)" }}
+        className="ml-2 h-40 w-40 shrink-0 animate-pulse rounded-xl border border-white/10 bg-white/[0.05]"
+      />
+      <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <div className="h-3 w-24 animate-pulse rounded bg-white/[0.07]" />
+        <div className="h-8 w-64 animate-pulse rounded bg-white/[0.09]" />
+        <div className="h-3 w-96 max-w-full animate-pulse rounded bg-white/[0.06]" />
+      </div>
+    </div>
+    <div className="mt-8 flex flex-col gap-3">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="h-14 animate-pulse rounded-lg border border-white/5 bg-white/[0.04]" />
+      ))}
+    </div>
+  </main>
+);
+
 const PlaylistDetail = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
   const playlists = usePlaylists();
+  const ready = useContentReady();
   const { tracks: allTracks } = useTracks();
   // Inline admin editing: click title/description, hover cover, X on rows.
   const admin = useContentAdmin();
@@ -28,6 +51,16 @@ const PlaylistDetail = () => {
     : [];
 
   if (!playlist) {
+    // Still loading — show the skeleton, not a premature "not found".
+    if (!ready) {
+      return (
+        <div className="min-h-screen bg-background">
+          <Navigation />
+          <DetailSkeleton />
+          <Footer />
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen bg-background">
         <Navigation />
@@ -49,17 +82,33 @@ const PlaylistDetail = () => {
       <Navigation />
       <main className="mx-auto w-full max-w-7xl px-4 pb-24 pt-24 sm:px-6 md:pt-28">
         <div className="flex flex-col gap-6 md:flex-row md:items-center">
-          <AdminCoverControl
-            kind="playlist"
-            id={playlist.id}
-            admin={admin}
-            className="h-40 w-40 shrink-0 overflow-hidden rounded-xl border border-border"
-          >
-            <img src={playlist.image} alt={playlist.title} className="h-full w-full object-cover" />
-          </AdminCoverControl>
+          {/* Parallelogram cover — same skew language as the playlist cards. */}
+          <div className="ml-2 shrink-0">
+            <AdminCoverControl
+              kind="playlist"
+              id={playlist.id}
+              admin={admin}
+              className="h-40 w-40 overflow-hidden rounded-xl border border-white/15 bg-white/[0.04] [transform:skewX(-9deg)]"
+            >
+              <img
+                src={playlist.image}
+                alt={playlist.title}
+                onLoad={(event) => {
+                  event.currentTarget.style.opacity = "1";
+                }}
+                style={{
+                  transform: "skewX(9deg) scale(1.32) translateZ(0)",
+                  backfaceVisibility: "hidden",
+                  opacity: 0,
+                  transition: "opacity 0.4s ease",
+                }}
+                className="h-full w-full object-cover"
+              />
+            </AdminCoverControl>
+          </div>
           <div className="min-w-0">
             <p className="font-body text-[0.7rem] font-semibold uppercase tracking-[0.32em] text-[#F4C430]/90">
-              Playlist
+              {playlist.theme ? `Playlist · ${playlist.theme}` : "Playlist"}
             </p>
             <h1 className="mt-1 font-display text-3xl font-bold tracking-tight text-white sm:text-4xl">
               <AdminEditableText

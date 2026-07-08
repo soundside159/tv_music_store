@@ -1,17 +1,21 @@
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Check, Plus, X } from "lucide-react";
+import { toast } from "sonner";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import { usePlaylists, type LivePlaylist } from "@/hooks/useContent";
+import { refreshContent, useContentReady, usePlaylists, type LivePlaylist } from "@/hooks/useContent";
 import {
-  AdminAddItem,
   AdminItemBar,
   useAdminDragReorder,
   useContentAdmin,
+  type ContentAdmin,
 } from "@/components/AdminInlineContent";
 
 // Parallelogram playlist cards (same skew language as the catalog collections
-// strip), grouped into THEME sections ("Featured", "Podcast", …) the owner
-// assigns from the admin bar's Tags button. Themeless playlists come first.
+// strip), grouped into THEME sections the owner manages inline: every section
+// ends with a ghost "+" card that creates a playlist in that theme, and the
+// page ends with "+ New theme". Visitors see none of the admin controls.
 
 const PlaylistCard = ({ playlist }: { playlist: LivePlaylist }) => (
   <Link to={`/playlist/${playlist.slug}`} className="group block">
@@ -50,14 +54,169 @@ const PlaylistCard = ({ playlist }: { playlist: LivePlaylist }) => (
   </Link>
 );
 
+/** Pulsing parallelogram placeholder shown while /api/content loads. */
+const SkeletonCard = () => (
+  <div
+    style={{ transform: "skewX(-9deg)" }}
+    className="h-64 w-full animate-pulse rounded-lg border border-white/10 bg-white/[0.05]"
+  />
+);
+
+/** Admin ghost card: "+" → title input → creates a playlist in this theme. */
+const GhostCreateCard = ({ theme, admin }: { theme: string; admin: ContentAdmin }) => {
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  if (!admin.enabled) return null;
+
+  const create = async () => {
+    const t = title.trim();
+    if (!t || busy) return;
+    setBusy(true);
+    const res = await admin.call({ action: "upsert_playlist", title: t, theme });
+    if (!res || typeof res.id !== "string") {
+      setBusy(false);
+      return;
+    }
+    toast.success(`Playlist "${t}" created — add a cover and tracks`);
+    // Wait for the fresh content BEFORE navigating, so the new page finds it.
+    await refreshContent();
+    await admin.reload();
+    navigate(`/playlist/${res.id}`);
+  };
+
+  return (
+    <div
+      style={{ transform: "skewX(-9deg)" }}
+      className="flex h-64 w-full items-center justify-center rounded-lg border border-dashed border-[#F4C430]/40 bg-[#F4C430]/[0.03] transition-colors hover:border-[#F4C430]/70"
+    >
+      <div style={{ transform: "skewX(9deg)" }} className="w-full px-4 text-center">
+        {open ? (
+          <div className="flex flex-col items-center gap-2">
+            <input
+              autoFocus
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void create();
+                if (e.key === "Escape") setOpen(false);
+              }}
+              placeholder="Playlist title"
+              className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 font-body text-xs text-foreground focus:border-[#F4C430] focus:outline-none"
+            />
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void create()}
+                aria-label="Create playlist"
+                className="text-[#F4C430] transition-colors hover:opacity-80 disabled:opacity-40"
+              >
+                <Check className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label="Cancel"
+                className="text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {busy && <span className="font-body text-[10px] text-muted-foreground">Creating…</span>}
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="flex w-full flex-col items-center gap-2 py-8 text-[#F4C430]/70 transition-colors hover:text-[#F4C430]"
+          >
+            <Plus className="h-8 w-8" />
+            <span className="font-body text-xs font-semibold">
+              New playlist{theme ? ` in ${theme}` : ""}
+            </span>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/** Admin: "+ New theme" — adds an empty section (saved once a playlist joins it). */
+const NewThemeButton = ({
+  admin,
+  onCreate,
+}: {
+  admin: ContentAdmin;
+  onCreate: (theme: string) => void;
+}) => {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+
+  if (!admin.enabled) return null;
+
+  const create = () => {
+    const t = name.trim();
+    if (!t) return;
+    onCreate(t);
+    setName("");
+    setOpen(false);
+  };
+
+  return (
+    <div className="mt-14 flex justify-center">
+      {open ? (
+        <span className="inline-flex items-center gap-2">
+          <input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") create();
+              if (e.key === "Escape") setOpen(false);
+            }}
+            placeholder="Theme name (e.g. Podcast)"
+            className="w-56 rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground focus:border-[#F4C430] focus:outline-none"
+          />
+          <button type="button" onClick={create} aria-label="Add theme" className="text-[#F4C430]">
+            <Check className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            aria-label="Cancel"
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </span>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="inline-flex items-center gap-2 rounded-xl border border-dashed border-[#F4C430]/40 px-6 py-3 font-body text-sm font-semibold text-[#F4C430]/80 transition-colors hover:border-[#F4C430]/70 hover:text-[#F4C430]"
+        >
+          <Plus className="h-4 w-4" />
+          New theme
+        </button>
+      )}
+    </div>
+  );
+};
+
 const Playlists = () => {
   const playlists = usePlaylists();
-  // Inline admin editing (rename/theme/delete/add + drag to reorder).
+  const ready = useContentReady();
   const admin = useContentAdmin();
   const { dragProps, dragClass } = useAdminDragReorder("playlist", admin);
+  // Freshly created (still empty) theme sections — they live in the DB only
+  // once a playlist is created inside them.
+  const [draftThemes, setDraftThemes] = useState<string[]>([]);
 
   // Group by theme, keeping the global (drag-sorted) order: themeless first,
-  // then each theme section in order of first appearance.
+  // then each theme section in order of first appearance, then empty drafts.
   const sections: { theme: string; items: LivePlaylist[] }[] = [];
   for (const p of playlists) {
     const theme = p.theme.trim();
@@ -66,6 +225,12 @@ const Playlists = () => {
     else sections.push({ theme, items: [p] });
   }
   sections.sort((a, b) => (a.theme === "" ? -1 : b.theme === "" ? 1 : 0));
+  for (const t of draftThemes) {
+    if (!sections.some((s) => s.theme.toLowerCase() === t.toLowerCase())) {
+      sections.push({ theme: t, items: [] });
+    }
+  }
+  if (sections.length === 0) sections.push({ theme: "", items: [] });
 
   return (
     <div className="min-h-screen bg-background">
@@ -74,33 +239,45 @@ const Playlists = () => {
         <p className="font-body text-[0.7rem] font-semibold uppercase tracking-[0.32em] text-[#F4C430]/90">
           Discover
         </p>
-        <div className="mt-2 flex flex-wrap items-center gap-4">
-          <h1 className="font-display text-4xl font-bold tracking-tight text-white sm:text-5xl">
-            Playlists
-          </h1>
-          <AdminAddItem kind="playlist" admin={admin} />
-        </div>
+        <h1 className="mt-2 font-display text-4xl font-bold tracking-tight text-white sm:text-5xl">
+          Playlists
+        </h1>
         <p className="mt-3 max-w-lg font-body text-sm leading-6 text-white/55">
           Handpicked playlists for your exact use case.
         </p>
 
-        {sections.map((section) => (
-          <section key={section.theme || "__general"} className="mt-12">
-            {section.theme && (
-              <h2 className="mb-6 font-display text-2xl font-semibold text-white">
-                {section.theme}
-              </h2>
-            )}
-            <div className="grid grid-cols-2 gap-x-6 gap-y-4 px-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
-              {section.items.map((p) => (
-                <div key={p.id} {...dragProps(p.id)} className={dragClass(p.id)}>
-                  <PlaylistCard playlist={p} />
-                  <AdminItemBar kind="playlist" id={p.id} admin={admin} />
+        {!ready ? (
+          <div className="mt-10 grid grid-cols-2 gap-x-6 gap-y-4 px-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
+        ) : (
+          <>
+            {sections.map((section) => (
+              <section key={section.theme || "__general"} className="mt-12">
+                {section.theme && (
+                  <h2 className="mb-6 font-display text-2xl font-semibold text-white">
+                    {section.theme}
+                  </h2>
+                )}
+                <div className="grid grid-cols-2 gap-x-6 gap-y-4 px-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
+                  {section.items.map((p) => (
+                    <div key={p.id} {...dragProps(p.id)} className={dragClass(p.id)}>
+                      <PlaylistCard playlist={p} />
+                      <AdminItemBar kind="playlist" id={p.id} admin={admin} />
+                    </div>
+                  ))}
+                  <GhostCreateCard theme={section.theme} admin={admin} />
                 </div>
-              ))}
-            </div>
-          </section>
-        ))}
+              </section>
+            ))}
+            <NewThemeButton
+              admin={admin}
+              onCreate={(theme) => setDraftThemes((prev) => [...prev, theme])}
+            />
+          </>
+        )}
       </main>
       <Footer />
     </div>
