@@ -396,6 +396,20 @@ export const onRequestPost = async (ctx: Ctx) => {
       return json({ ok: true });
     }
 
+    case "reorder_content": {
+      // Reorder collections or playlists (their `sort` drives every public
+      // list). values = the full id list in the desired order.
+      const table =
+        body.kind === "collection" ? "collections" : body.kind === "playlist" ? "playlists" : null;
+      if (!table || !Array.isArray(body.values)) {
+        return json({ error: "kind and values required" }, 400);
+      }
+      for (let i = 0; i < body.values.length; i++) {
+        await db.prepare(`UPDATE ${table} SET sort = ?2 WHERE id = ?1`).bind(body.values[i], i).run();
+      }
+      return json({ ok: true });
+    }
+
     case "set_trending": {
       if (!Array.isArray(body.trackIds)) return json({ error: "trackIds required" }, 400);
       await db

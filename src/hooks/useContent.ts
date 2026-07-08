@@ -43,6 +43,16 @@ const fetchContent = (): Promise<ApiContent | null> => {
   return inflight;
 };
 
+// Admin inline editing (rename/delete/reorder on the public pages) changes the
+// content — this drops the cache and tells every mounted hook to refetch.
+const contentListeners = new Set<() => void>();
+
+export const refreshContent = (): void => {
+  cache = null;
+  inflight = null;
+  contentListeners.forEach((l) => l());
+};
+
 export interface LiveCategory {
   id: string;
   title: string;
@@ -60,12 +70,17 @@ export const useCategories = (): LiveCategory[] => {
   const [list, setList] = useState<LiveCategory[]>(defaultCategories);
   useEffect(() => {
     let cancelled = false;
-    void fetchContent().then((data) => {
-      if (cancelled || !data?.categories?.length) return;
-      setList(data.categories);
-    });
+    const apply = () => {
+      void fetchContent().then((data) => {
+        if (cancelled || !data?.categories?.length) return;
+        setList(data.categories);
+      });
+    };
+    apply();
+    contentListeners.add(apply);
     return () => {
       cancelled = true;
+      contentListeners.delete(apply);
     };
   }, []);
   return list;
@@ -80,17 +95,22 @@ export const useVocabularies = (): Vocabularies => {
   const [v, setV] = useState<Vocabularies>(defaultVocabularies);
   useEffect(() => {
     let cancelled = false;
-    void fetchContent().then((data) => {
-      if (cancelled || !data?.vocabularies) return;
-      const dv = data.vocabularies;
-      setV({
-        useCase: dv.useCase?.length ? dv.useCase : defaultVocabularies.useCase,
-        genre: dv.genre?.length ? dv.genre : defaultVocabularies.genre,
-        mood: dv.mood?.length ? dv.mood : defaultVocabularies.mood,
+    const apply = () => {
+      void fetchContent().then((data) => {
+        if (cancelled || !data?.vocabularies) return;
+        const dv = data.vocabularies;
+        setV({
+          useCase: dv.useCase?.length ? dv.useCase : defaultVocabularies.useCase,
+          genre: dv.genre?.length ? dv.genre : defaultVocabularies.genre,
+          mood: dv.mood?.length ? dv.mood : defaultVocabularies.mood,
+        });
       });
-    });
+    };
+    apply();
+    contentListeners.add(apply);
     return () => {
       cancelled = true;
+      contentListeners.delete(apply);
     };
   }, []);
   return v;
@@ -101,22 +121,27 @@ export const useCollections = (): MusicCollection[] => {
   const [list, setList] = useState<MusicCollection[]>(musicCollections);
   useEffect(() => {
     let cancelled = false;
-    void fetchContent().then((data) => {
-      if (cancelled || !data?.collections?.length) return;
-      setList(
-        data.collections.map((c) => ({
-          id: c.id,
-          title: c.title,
-          shortTitle: c.shortTitle || c.title,
-          eyebrow: "Collection",
-          description: c.description ?? "",
-          trackCount: c.trackIds?.length ?? 0,
-          image: c.image || "/images/collections/orchestral.jpg",
-        })),
-      );
-    });
+    const apply = () => {
+      void fetchContent().then((data) => {
+        if (cancelled || !data?.collections?.length) return;
+        setList(
+          data.collections.map((c) => ({
+            id: c.id,
+            title: c.title,
+            shortTitle: c.shortTitle || c.title,
+            eyebrow: "Collection",
+            description: c.description ?? "",
+            trackCount: c.trackIds?.length ?? 0,
+            image: c.image || "/images/collections/orchestral.jpg",
+          })),
+        );
+      });
+    };
+    apply();
+    contentListeners.add(apply);
     return () => {
       cancelled = true;
+      contentListeners.delete(apply);
     };
   }, []);
   return list;
@@ -136,21 +161,26 @@ export const usePlaylists = (): LivePlaylist[] => {
   const [list, setList] = useState<LivePlaylist[] | null>(null);
   useEffect(() => {
     let cancelled = false;
-    void fetchContent().then((data) => {
-      if (cancelled || !data?.playlists?.length) return;
-      setList(
-        data.playlists.map((p) => ({
-          id: p.id,
-          slug: p.id,
-          title: p.title,
-          description: p.description ?? "",
-          image: p.image || "/images/collections/orchestral.jpg",
-          trackIds: p.trackIds ?? [],
-        })),
-      );
-    });
+    const apply = () => {
+      void fetchContent().then((data) => {
+        if (cancelled || !data?.playlists?.length) return;
+        setList(
+          data.playlists.map((p) => ({
+            id: p.id,
+            slug: p.id,
+            title: p.title,
+            description: p.description ?? "",
+            image: p.image || "/images/collections/orchestral.jpg",
+            trackIds: p.trackIds ?? [],
+          })),
+        );
+      });
+    };
+    apply();
+    contentListeners.add(apply);
     return () => {
       cancelled = true;
+      contentListeners.delete(apply);
     };
   }, []);
   if (list) return list;
@@ -169,11 +199,16 @@ export const useTrendingIds = (): string[] => {
   const [ids, setIds] = useState<string[]>([]);
   useEffect(() => {
     let cancelled = false;
-    void fetchContent().then((data) => {
-      if (!cancelled && data?.trending?.length) setIds(data.trending);
-    });
+    const apply = () => {
+      void fetchContent().then((data) => {
+        if (!cancelled && data?.trending?.length) setIds(data.trending);
+      });
+    };
+    apply();
+    contentListeners.add(apply);
     return () => {
       cancelled = true;
+      contentListeners.delete(apply);
     };
   }, []);
   return ids;
@@ -185,11 +220,16 @@ export const useTrendingTracks = (limit = 8): CatalogTrack[] => {
   const [ids, setIds] = useState<string[] | null>(null);
   useEffect(() => {
     let cancelled = false;
-    void fetchContent().then((data) => {
-      if (!cancelled && data?.trending?.length) setIds(data.trending);
-    });
+    const apply = () => {
+      void fetchContent().then((data) => {
+        if (!cancelled && data?.trending?.length) setIds(data.trending);
+      });
+    };
+    apply();
+    contentListeners.add(apply);
     return () => {
       cancelled = true;
+      contentListeners.delete(apply);
     };
   }, []);
 

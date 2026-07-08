@@ -1313,3 +1313,24 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   content wrapped in `xl:grid-cols-[17rem_minmax(0,1fr)_19rem]` (panels stack above/below content
   under xl); customers see the unchanged centered page. No new backend — reuses the admin content
   API as-is. Verified via host reads (sandbox VM still down); lint/build = deploy.bat on the host.
+- **2026-07-08 (track-panel polish + inline admin on Playlists/Collections pages):** owner round 2.
+  (1) TRACK PANEL: right-panel Collection/Playlist titles are now Links to /collection/:id //
+  playlist/:id; Trending rows got a play button + a WaveformPreview (h-5) under each title (wired
+  to the global player, click-to-seek). `AdminContentItem` gained shortTitle/description.
+  (2) INLINE ADMIN ON PUBLIC CONTENT PAGES — NEW `src/components/AdminInlineContent.tsx`:
+  `useContentAdmin()` (role=admin && useTracks().source==="api"; reuses useAdminTrackContent),
+  `AdminAddItem` ("+ Add playlist/collection" inline title form next to the H1),
+  `AdminItemBar` (gold bar under every card: ↑↓ reorder / ✎ rename [collections also sync
+  shortTitle] / 🗑 delete with confirm; hidden for mock rows), `AdminItemEditor` (detail pages:
+  title/image URL/description form + Save, red Delete → navigates back, and a "Tracks in this
+  {kind}" list with per-track X = set_tracks without that id). Wired into Playlists.tsx /
+  Collections.tsx (cards wrapped in a div so the bar sits under the Link) and PlaylistDetail /
+  CollectionDetail (editor card under the header; CollectionDetail passes reloadTracks since its
+  rows come from /api/tracks collectionIds). (3) BACKEND: new `reorder_content` action in
+  admin/content.ts ({kind, values: ordered ids} → UPDATE sort). (4) LIVE REFRESH: useContent.ts got
+  `refreshContent()` (drops the module cache + notifies `contentListeners`); ALL content hooks
+  (useCategories/useVocabularies/useCollections/usePlaylists/useTrendingIds/useTrendingTracks) now
+  subscribe and refetch, so admin edits repaint the public pages instantly. KNOWN EDGE: hooks keep
+  the last non-empty list, so deleting the LAST playlist/collection leaves its card until a page
+  reload (the guards that power mock-fallback also skip empty live lists). Verified via host reads;
+  lint/build = deploy.bat.

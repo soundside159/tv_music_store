@@ -5,11 +5,14 @@ import { TrackRowList } from "@/components/TrackRowPlayer";
 import type { CatalogTrack } from "@/data/catalogTracks";
 import { usePlaylists } from "@/hooks/useContent";
 import { useTracks } from "@/hooks/useTracks";
+import { AdminItemEditor, useContentAdmin } from "@/components/AdminInlineContent";
 
 const PlaylistDetail = () => {
   const { slug } = useParams();
   const playlists = usePlaylists();
   const { tracks: allTracks } = useTracks();
+  // Inline admin editing (title/description/image, delete, remove tracks).
+  const admin = useContentAdmin();
   const playlist = playlists.find((p) => p.slug === slug || p.id === slug);
   const tracks = playlist
     ? playlist.trackIds
@@ -55,6 +58,14 @@ const PlaylistDetail = () => {
             </p>
           </div>
         </div>
+
+        <AdminItemEditor
+          kind="playlist"
+          id={playlist.id}
+          admin={admin}
+          tracks={allTracks}
+          backTo="/playlists"
+        />
 
         <div className="mt-8">
           {tracks.length > 0 ? (

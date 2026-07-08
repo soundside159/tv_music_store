@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
-import { ArrowDown, ArrowUp, Check, ChevronDown, Music2, Plus, X } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ArrowDown, ArrowUp, Check, ChevronDown, Music2, Pause, Play, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import type { CatalogTrack } from "@/data/catalogTracks";
 import { splitFilterValues } from "@/components/TrackRowPlayer";
+import WaveformPreview from "@/components/WaveformPreview";
+import { usePlayer } from "@/components/playerContext";
 import type { Vocabularies } from "@/lib/tagOptions";
 
 // Admin-only side panels for the public track page (/track/:slug).
@@ -18,6 +21,8 @@ const GOLD = "#F4C430";
 export interface AdminContentItem {
   id: string;
   title: string;
+  shortTitle?: string;
+  description?: string;
   image?: string;
   trackIds: string[];
 }
@@ -119,6 +124,7 @@ export const AdminTrackTagsPanel = ({
 }) => {
   const [open, setOpen] = useState<Record<string, boolean>>({ useCase: true });
   const [pending, setPending] = useState<string | null>(null);
+  const { activePlayer, isPlaying, progress, playVersion } = usePlayer();
 
   if (!data) {
     return (
@@ -219,48 +225,73 @@ export const AdminTrackTagsPanel = ({
           )}
           {data.trending.map((id, i) => {
             const isCurrent = id === track.id;
+            const trendTrack = tracks.find((t) => t.id === id);
+            const version = trendTrack?.audioVersions[0];
+            const isActive =
+              !!version && activePlayer?.trackId === id && activePlayer.versionId === version.id;
             return (
               <div
                 key={id}
-                className={`flex items-center gap-1.5 rounded px-1.5 py-1 ${
-                  isCurrent ? "bg-[#F4C430]/10" : ""
-                }`}
+                className={`rounded px-1.5 py-1 ${isCurrent ? "bg-[#F4C430]/10" : ""}`}
               >
-                <span className="w-4 shrink-0 font-body text-[10px] text-muted-foreground">{i + 1}</span>
-                <span
-                  className={`min-w-0 flex-1 truncate font-body text-xs ${
-                    isCurrent ? "font-semibold text-[#F4C430]" : "text-foreground"
-                  }`}
-                  title={titleOf(id)}
-                >
-                  {titleOf(id)}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => move(i, -1)}
-                  disabled={i === 0}
-                  aria-label="Move up"
-                  className="text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
-                >
-                  <ArrowUp className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => move(i, 1)}
-                  disabled={i === data.trending.length - 1}
-                  aria-label="Move down"
-                  className="text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
-                >
-                  <ArrowDown className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void saveTrending(data.trending.filter((x) => x !== id))}
-                  aria-label="Remove from trending"
-                  className="text-muted-foreground transition-colors hover:text-red-400"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-4 shrink-0 font-body text-[10px] text-muted-foreground">{i + 1}</span>
+                  {trendTrack && version && (
+                    <button
+                      type="button"
+                      onClick={() => playVersion(trendTrack, version)}
+                      aria-label={isActive && isPlaying ? `Pause ${titleOf(id)}` : `Play ${titleOf(id)}`}
+                      className="shrink-0 text-muted-foreground transition-colors hover:text-[#F4C430]"
+                    >
+                      {isActive && isPlaying ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
+                    </button>
+                  )}
+                  <span
+                    className={`min-w-0 flex-1 truncate font-body text-xs ${
+                      isCurrent ? "font-semibold text-[#F4C430]" : "text-foreground"
+                    }`}
+                    title={titleOf(id)}
+                  >
+                    {titleOf(id)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => move(i, -1)}
+                    disabled={i === 0}
+                    aria-label="Move up"
+                    className="text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
+                  >
+                    <ArrowUp className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => move(i, 1)}
+                    disabled={i === data.trending.length - 1}
+                    aria-label="Move down"
+                    className="text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
+                  >
+                    <ArrowDown className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void saveTrending(data.trending.filter((x) => x !== id))}
+                    aria-label="Remove from trending"
+                    className="text-muted-foreground transition-colors hover:text-red-400"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                {trendTrack && version && (
+                  <div className="mt-1 pl-4">
+                    <WaveformPreview
+                      active={isActive && isPlaying}
+                      onSeek={(p) => playVersion(trendTrack, version, p)}
+                      progress={isActive ? progress : 0}
+                      src={version.src}
+                      className="h-5"
+                    />
+                  </div>
+                )}
               </div>
             );
           })}
@@ -290,12 +321,15 @@ const MembershipList = ({
   trackId,
   onToggle,
   pendingId,
+  linkBase,
 }: {
   heading: string;
   items: AdminContentItem[];
   trackId: string;
   onToggle: (item: AdminContentItem, isMember: boolean) => void;
   pendingId: string | null;
+  /** Public page prefix, e.g. "/collection" — titles link there (slug = id). */
+  linkBase: string;
 }) => (
   <div className="border-b border-border/50 pb-3 pt-2 last:border-b-0 last:pb-0">
     <p className="font-body text-sm font-semibold text-foreground">{heading}</p>
@@ -313,9 +347,13 @@ const MembershipList = ({
                 <Music2 className="h-3.5 w-3.5 text-muted-foreground" />
               </span>
             )}
-            <span className="min-w-0 flex-1 truncate font-body text-xs text-foreground" title={item.title}>
+            <Link
+              to={`${linkBase}/${item.id}`}
+              className="min-w-0 flex-1 truncate font-body text-xs text-foreground transition-colors hover:text-[#F4C430]"
+              title={item.title}
+            >
               {item.title}
-            </span>
+            </Link>
             <button
               type="button"
               disabled={busy}
@@ -391,6 +429,7 @@ export const AdminTrackCollectionsPanel = ({
         items={data.collections}
         trackId={track.id}
         pendingId={pendingId}
+        linkBase="/collection"
         onToggle={(item, isMember) => void toggle("collections", item, isMember)}
       />
       <MembershipList
@@ -398,6 +437,7 @@ export const AdminTrackCollectionsPanel = ({
         items={data.playlists}
         trackId={track.id}
         pendingId={pendingId}
+        linkBase="/playlist"
         onToggle={(item, isMember) => void toggle("playlists", item, isMember)}
       />
     </PanelShell>

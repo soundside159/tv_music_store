@@ -4,11 +4,14 @@ import Footer from "@/components/Footer";
 import { TrackRowList } from "@/components/TrackRowPlayer";
 import { useCollections } from "@/hooks/useContent";
 import { useTracks } from "@/hooks/useTracks";
+import { AdminItemEditor, useContentAdmin } from "@/components/AdminInlineContent";
 
 const CollectionDetail = () => {
   const { slug } = useParams();
   const musicCollections = useCollections();
-  const { tracks: allTracks } = useTracks();
+  const { tracks: allTracks, reload: reloadTracks } = useTracks();
+  // Inline admin editing (title/description/image, delete, remove tracks).
+  const admin = useContentAdmin();
   const collection = musicCollections.find((c) => c.id === slug);
   const tracks = collection
     ? allTracks.filter((t) => t.collectionIds.includes(collection.id))
@@ -52,6 +55,15 @@ const CollectionDetail = () => {
             </p>
           </div>
         </div>
+
+        <AdminItemEditor
+          kind="collection"
+          id={collection.id}
+          admin={admin}
+          tracks={allTracks}
+          backTo="/collections"
+          onTracksChanged={() => void reloadTracks()}
+        />
 
         <div className="mt-8">
           {tracks.length > 0 ? (
