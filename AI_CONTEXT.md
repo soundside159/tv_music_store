@@ -1476,3 +1476,21 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   arrives (mail forwarding is blocked until then). This address is also what goes to Paddle if
   they ask for a business address. NOTE: it's a mail-forwarding address for a sole-trader/
   partnership — NOT usable as a Companies House registered office if a Ltd is ever formed.
+- **2026-07-08 (bulk upload v2 — folders, star-Main, clean labels + delete on track page):** owner
+  test feedback (grouping missed when files were added after a group finished; wanted visible/
+  overridable Main; wanted folder-based import). `AdminBulkUpload.tsx` REWRITTEN:
+  (1) **Folder = track**: drop folders (webkitGetAsEntry traversal, chunked readEntries, nested
+  dirs keep the TOP folder name) or use the new "Select folder" button (`webkitdirectory` input,
+  React attr cast) — folder name = title, every WAV inside = a version; loose files still group
+  by "(suffix)" filename parsing, and later drops MERGE into an existing queued group by title.
+  (2) Groups whose track is already CREATED (status done) reject new files with a toast (no
+  duplicate tracks); "working" groups can't be modified mid-flight (was the Action Pulse bug —
+  files added to a running/finished group were silently mishandled).
+  (3) Each group lists its files: **star = Main override** (default auto: longest, shown as
+  "main: longest (auto)"), X removes a file from the group.
+  (4) Version labels now run through `cleanVersionLabel(fileBase, title)` — "Opening Up Space
+  (middle version).wav" → site label "middle version" (Main falls back to "Main").
+  (5) TRACK-PAGE DELETE: `AdminTrackTagsPanel` header (PanelShell gained `headerAction`) got a
+  small trash button → confirm → `delete_track {id}` → refreshContent + navigate to /catalog.
+  Composer pseudonyms (artist is still hardcoded "TVMUSICSTORE" in useTracks.mapTrack) = plan
+  stage 4, next.

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
-import { Link } from "react-router-dom";
-import { ArrowDown, ArrowUp, Check, ChevronDown, Music2, Pause, Play, Plus, X } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { ArrowDown, ArrowUp, Check, ChevronDown, Music2, Pause, Play, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import type { CatalogTrack } from "@/data/catalogTracks";
 import { splitFilterValues } from "@/components/TrackRowPlayer";
@@ -97,11 +97,14 @@ export const useAdminTrackContent = (enabled: boolean) => {
   return { data, setData, run, call, reload: load };
 };
 
-const PanelShell = ({ children }: { children: ReactNode }) => (
+const PanelShell = ({ children, headerAction }: { children: ReactNode; headerAction?: ReactNode }) => (
   <aside className="h-fit rounded-xl border border-[#F4C430]/30 bg-card p-4 xl:sticky xl:top-24">
-    <p className="mb-3 font-body text-[10px] font-bold uppercase tracking-[0.24em]" style={{ color: GOLD }}>
-      Admin
-    </p>
+    <div className="mb-3 flex items-center justify-between">
+      <p className="font-body text-[10px] font-bold uppercase tracking-[0.24em]" style={{ color: GOLD }}>
+        Admin
+      </p>
+      {headerAction}
+    </div>
     {children}
   </aside>
 );
@@ -136,6 +139,7 @@ export const AdminTrackTagsPanel = ({
   const [open, setOpen] = useState<Record<string, boolean>>({ useCase: true });
   const [pending, setPending] = useState<string | null>(null);
   const { activePlayer, isPlaying, progress, playVersion } = usePlayer();
+  const navigate = useNavigate();
 
   if (!data) {
     return (
@@ -144,6 +148,21 @@ export const AdminTrackTagsPanel = ({
       </PanelShell>
     );
   }
+
+  const deleteTrack = async () => {
+    if (
+      !window.confirm(
+        `Delete "${track.title}" from the catalog? Its files, collections and playlist entries go too. This cannot be undone.`,
+      )
+    )
+      return;
+    const ok = await run({ action: "delete_track", id: track.id });
+    if (ok) {
+      toast.success("Track deleted");
+      refreshContent();
+      navigate("/catalog");
+    }
+  };
 
   const trackFacetValues = (key: "useCase" | "genre" | "mood") =>
     new Set(splitFilterValues(track[key] ?? "").map((v) => v.toLowerCase()));
@@ -181,7 +200,19 @@ export const AdminTrackTagsPanel = ({
   const titleOf = (id: string) => tracks.find((t) => t.id === id)?.title ?? id;
 
   return (
-    <PanelShell>
+    <PanelShell
+      headerAction={
+        <button
+          type="button"
+          onClick={() => void deleteTrack()}
+          title="Delete this track"
+          aria-label="Delete this track"
+          className="text-muted-foreground transition-colors hover:text-red-400"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      }
+    >
       {FACETS.map(({ key, label }) => {
         const values = trackFacetValues(key);
         const isOpen = !!open[key];
