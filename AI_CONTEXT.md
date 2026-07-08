@@ -1334,3 +1334,22 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   the last non-empty list, so deleting the LAST playlist/collection leaves its card until a page
   reload (the guards that power mock-fallback also skip empty live lists). Verified via host reads;
   lint/build = deploy.bat.
+- **2026-07-08 (inline admin v2 — owner feedback round):** (1) Detail pages: the bulky
+  "Admin — edit this {kind}" card is GONE. Replaced by in-place editing: `AdminEditableText`
+  (click the H1 title or the description paragraph → input/textarea in place, Enter/blur saves,
+  Esc cancels; empty description shows a clickable italic placeholder) + `AdminCoverControl`
+  (hover the 40x40 header cover → Upload button [file picker → POST /api/admin/upload → upsert
+  image] and a Trash button to clear it) + small red `AdminDeleteItemButton` under the header.
+  (2) REMOVE-TRACK X moved onto the track rows themselves: `TrackRowList` gained optional
+  `adminRemove?: (trackId) => void` (renders a slim X column right of each row);
+  `makeRemoveTrackHandler(kind, id, admin, onTracksChanged?)` (NOT a hook) feeds it on both detail
+  pages; the old side "Tracks in this…" list is gone with the editor card. (3) DRAG & DROPP
+  reorder on /playlists and /collections: `useAdminDragReorder(kind, admin)` (native HTML5 DnD,
+  no deps) → spread `dragProps(id)` + `dragClass(id)` on each card wrapper; dragged card dims,
+  drop target gets a gold ring; arrows removed from `AdminItemBar` (now grip-hint + rename +
+  delete). (4) NO-F5 FIX: membership toggles + trending saves in AdminTrackPanel now call
+  `refreshContent()`, so adding a track from its page and opening the playlist immediately shows
+  it. (5) Track-page membership thumbs use the public fallback cover
+  (/images/collections/orchestral.jpg) with a Music2 placeholder behind onError, so playlist
+  minis are never blank. `AdminItemEditor` component deleted. Verified via host reads; lint/build
+  = deploy.bat.

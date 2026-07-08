@@ -2,12 +2,18 @@ import { Link } from "react-router-dom";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { usePlaylists } from "@/hooks/useContent";
-import { AdminAddItem, AdminItemBar, useContentAdmin } from "@/components/AdminInlineContent";
+import {
+  AdminAddItem,
+  AdminItemBar,
+  useAdminDragReorder,
+  useContentAdmin,
+} from "@/components/AdminInlineContent";
 
 const Playlists = () => {
   const mockPlaylists = usePlaylists();
-  // Inline admin editing (rename/delete/reorder/add) — admins only.
+  // Inline admin editing (rename/delete/add + drag to reorder) — admins only.
   const admin = useContentAdmin();
+  const { dragProps, dragClass } = useAdminDragReorder("playlist", admin);
   return (
   <div className="min-h-screen bg-background">
     <Navigation />
@@ -27,7 +33,7 @@ const Playlists = () => {
 
       <div className="mt-10 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
         {mockPlaylists.map((p) => (
-          <div key={p.id}>
+          <div key={p.id} {...dragProps(p.id)} className={dragClass(p.id)}>
             <Link
               to={`/playlist/${p.slug}`}
               className="group block overflow-hidden rounded-xl border border-border bg-card transition-colors hover:border-[#F4C430]/60"

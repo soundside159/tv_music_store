@@ -7,6 +7,7 @@ import type { CatalogTrack } from "@/data/catalogTracks";
 import { splitFilterValues } from "@/components/TrackRowPlayer";
 import WaveformPreview from "@/components/WaveformPreview";
 import { usePlayer } from "@/components/playerContext";
+import { refreshContent } from "@/hooks/useContent";
 import type { Vocabularies } from "@/lib/tagOptions";
 
 // Admin-only side panels for the public track page (/track/:slug).
@@ -17,6 +18,8 @@ import type { Vocabularies } from "@/lib/tagOptions";
 // and every call goes through the admin-gated /api/admin/content API.
 
 const GOLD = "#F4C430";
+// Same default cover the public collection/playlist pages fall back to.
+const FALLBACK_COVER = "/images/collections/orchestral.jpg";
 
 export interface AdminContentItem {
   id: string;
@@ -156,6 +159,8 @@ export const AdminTrackTagsPanel = ({
     setData((d) => (d ? { ...d, trending: next } : d));
     const ok = await run({ action: "set_trending", trackIds: next });
     if (!ok) setData((d) => (d ? { ...d, trending: prev } : d));
+    // Repaint the homepage Trending block without a manual reload.
+    else refreshContent();
   };
   const trendingIndex = data.trending.indexOf(track.id);
   const move = (i: number, dir: -1 | 1) => {
@@ -340,13 +345,18 @@ const MembershipList = ({
         const busy = pendingId === item.id;
         return (
           <div key={item.id} className="flex items-center gap-2 rounded px-1 py-1 hover:bg-white/5">
-            {item.image ? (
-              <img src={item.image} alt="" className="h-8 w-8 shrink-0 rounded object-cover" />
-            ) : (
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-background/60">
-                <Music2 className="h-3.5 w-3.5 text-muted-foreground" />
-              </span>
-            )}
+            {/* Same fallback image the public pages use, so the thumb never looks empty. */}
+            <span className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded bg-background/60">
+              <Music2 className="absolute h-3.5 w-3.5 text-muted-foreground" />
+              <img
+                src={item.image || FALLBACK_COVER}
+                alt=""
+                className="relative h-8 w-8 object-cover"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.display = "none";
+                }}
+              />
+            </span>
             <Link
               to={`${linkBase}/${item.id}`}
               className="min-w-0 flex-1 truncate font-body text-xs text-foreground transition-colors hover:text-[#F4C430]"
@@ -420,6 +430,9 @@ export const AdminTrackCollectionsPanel = ({
       );
       return { ...d, [kind]: list };
     });
+    // Drop the public /api/content cache so opening the playlist/collection
+    // right after shows the change without a manual reload (F5).
+    refreshContent();
   };
 
   return (

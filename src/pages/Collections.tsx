@@ -2,12 +2,18 @@ import { Link } from "react-router-dom";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { useCollections } from "@/hooks/useContent";
-import { AdminAddItem, AdminItemBar, useContentAdmin } from "@/components/AdminInlineContent";
+import {
+  AdminAddItem,
+  AdminItemBar,
+  useAdminDragReorder,
+  useContentAdmin,
+} from "@/components/AdminInlineContent";
 
 const Collections = () => {
   const musicCollections = useCollections();
-  // Inline admin editing (rename/delete/reorder/add) — admins only.
+  // Inline admin editing (rename/delete/add + drag to reorder) — admins only.
   const admin = useContentAdmin();
+  const { dragProps, dragClass } = useAdminDragReorder("collection", admin);
   return (
   <div className="min-h-screen bg-background">
     <Navigation />
@@ -27,7 +33,7 @@ const Collections = () => {
 
       <div className="mt-10 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
         {musicCollections.map((c) => (
-          <div key={c.id}>
+          <div key={c.id} {...dragProps(c.id)} className={dragClass(c.id)}>
             <Link
               to={`/collection/${c.id}`}
               className="group block overflow-hidden rounded-xl border border-border bg-card transition-colors hover:border-[#F4C430]/60"

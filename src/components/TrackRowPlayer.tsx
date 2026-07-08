@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Copy, Download, Heart, Music2, Pause, Play, ShoppingCart } from "lucide-react";
+import { Copy, Download, Heart, Music2, Pause, Play, ShoppingCart, X } from "lucide-react";
 import { openDownloadOptions } from "@/lib/downloadTrack";
 import { openLicenseModal } from "@/hooks/useCart";
 import { toggleFavourite, useFavourites } from "@/lib/favourites";
@@ -573,7 +573,14 @@ export const useTrackAudioEngine = () => {
 export type PlayerEngine = ReturnType<typeof useTrackAudioEngine>;
 
 /** Drop-in track list with full playback — visually identical to the catalog rows. */
-export const TrackRowList = ({ tracks }: { tracks: CatalogTrack[] }) => {
+export const TrackRowList = ({
+  tracks,
+  adminRemove,
+}: {
+  tracks: CatalogTrack[];
+  /** Admin-only: renders a small X at the right of every row (remove from list). */
+  adminRemove?: ((trackId: string) => void) | null;
+}) => {
   const engine = usePlayer();
   const staggerDone = useEntranceStagger();
 
@@ -587,7 +594,7 @@ export const TrackRowList = ({ tracks }: { tracks: CatalogTrack[] }) => {
           engine.activePlayer.versionId === mainVersion.id &&
           engine.isPlaying;
 
-        return (
+        const row = (
           <TrackRow
             key={track.id}
             activePlayer={engine.activePlayer}
@@ -603,6 +610,22 @@ export const TrackRowList = ({ tracks }: { tracks: CatalogTrack[] }) => {
             selectedVersion={mainVersion}
             track={track}
           />
+        );
+
+        if (!adminRemove) return row;
+        return (
+          <div key={track.id} className="flex items-stretch">
+            <div className="min-w-0 flex-1">{row}</div>
+            <button
+              type="button"
+              onClick={() => adminRemove(track.id)}
+              aria-label={`Remove ${track.title} from this list`}
+              title="Admin: remove from this list"
+              className="flex w-9 shrink-0 items-center justify-center border-l border-border/30 text-muted-foreground/60 transition-colors hover:bg-red-400/10 hover:text-red-400"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
         );
       })}
     </div>
