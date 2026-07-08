@@ -1,9 +1,10 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Copy, Download, Heart, Music2, Pause, Play, ShoppingCart } from "lucide-react";
 import { openDownloadOptions } from "@/lib/downloadTrack";
 import { openLicenseModal } from "@/hooks/useCart";
+import { toggleFavourite, useFavourites } from "@/lib/favourites";
 import WaveformPreview from "@/components/WaveformPreview";
 import type { CatalogTrack, TrackAudioVersion, TrackVersion } from "@/data/catalogTracks";
 import { usePlayer } from "@/components/playerContext";
@@ -148,6 +149,18 @@ export const TrackRow = ({
     if (!expanded) setVersionsOverflowVisible(false);
   }, [expanded]);
 
+  const isFav = useFavourites().has(track.id);
+  const navigate = useNavigate();
+  // "Similar" = more tracks sharing this one's primary genre + mood.
+  const goSimilar = () => {
+    const params = new URLSearchParams();
+    const g = firstOf(track.genre);
+    const m = firstOf(track.mood);
+    if (g) params.set("genre", g);
+    if (m) params.set("mood", m);
+    navigate(`/catalog${params.toString() ? `?${params.toString()}` : ""}`);
+  };
+
   // Fixed tag order: 1 = Use Case, 2 = Genre, 3 = Mood. Each links to the
   // catalog with only that filter active.
   const firstOf = (value: string) => splitFilterValues(value)[0] ?? null;
@@ -268,11 +281,14 @@ export const TrackRow = ({
         {track.bpm} BPM
       </span>
       <div className="flex items-center justify-end gap-3 text-muted-foreground">
-        <ActionIcon label="Favorite">
-          <Heart className="h-5 w-5 stroke-[1.6]" />
+        <ActionIcon
+          label={isFav ? "Remove from favourites" : "Favorite"}
+          onClick={() => void toggleFavourite(track.id)}
+        >
+          <Heart className={`h-5 w-5 stroke-[1.6] ${isFav ? "fill-[#F4C430] text-[#F4C430]" : ""}`} />
         </ActionIcon>
         <span className="hidden xl:contents">
-          <ActionIcon label="Similar Tracks">
+          <ActionIcon label="Similar Tracks" onClick={goSimilar}>
             <Copy className="h-5 w-5 stroke-[1.6]" />
           </ActionIcon>
         </span>

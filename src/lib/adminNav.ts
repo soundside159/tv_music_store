@@ -3,6 +3,7 @@ import {
   CreditCard,
   Download,
   FileText,
+  Heart,
   Inbox,
   LayoutDashboard,
   Library,
@@ -36,6 +37,7 @@ export const accountNavGroups: { label: string; items: NavItem[] }[] = [
     items: [
       { id: "profile", label: "Profile", icon: UserRound },
       { id: "downloads", label: "Downloads", icon: Download },
+      { id: "favourites", label: "Favourites", icon: Heart },
       { id: "notifications", label: "Notifications", icon: Bell },
     ],
   },

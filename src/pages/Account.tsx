@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowUpRight, LogOut } from "lucide-react";
 import { accountNavGroups, adminNavItems } from "@/lib/adminNav";
@@ -17,6 +17,7 @@ import { mockClaimRequests } from "@/mocks";
 import MyChannels from "@/components/MyChannels";
 import NotificationsSettings from "@/components/NotificationsSettings";
 import SupportSection from "@/components/SupportSection";
+import FavouritesSection from "@/components/FavouritesSection";
 import { logout, updateProfile } from "@/hooks/useAuth";
 import { BILLING_ENABLED, openBillingPortal, openPlanModal } from "@/lib/billing";
 import { downloadTrackVersion } from "@/lib/downloadTrack";
@@ -27,6 +28,7 @@ type SectionId =
   | "profile"
   | "notifications"
   | "downloads"
+  | "favourites"
   | "license"
   | "whitelist"
   | "claims"
@@ -37,6 +39,7 @@ const SECTION_IDS: SectionId[] = [
   "profile",
   "notifications",
   "downloads",
+  "favourites",
   "license",
   "whitelist",
   "claims",
@@ -82,6 +85,15 @@ const Account = () => {
     SECTION_IDS.includes(sectionParam as SectionId) ? (sectionParam as SectionId) : "profile",
   );
   const [menu, setMenu] = useState<"main" | "admin">("main");
+
+  // Header account dropdown links to /account?section=... — keep the active
+  // section in sync when the query param changes while already mounted.
+  useEffect(() => {
+    if (sectionParam && SECTION_IDS.includes(sectionParam as SectionId)) {
+      setSection(sectionParam as SectionId);
+    }
+  }, [sectionParam]);
+
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [profileBusy, setProfileBusy] = useState(false);
@@ -187,7 +199,7 @@ const Account = () => {
                 className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-red-400 transition-colors hover:text-red-300"
               >
                 <LogOut className="h-4 w-4" />
-                Sign out
+                Log out
               </button>
             </nav>
           </aside>
@@ -304,6 +316,8 @@ const Account = () => {
             )}
 
             {section === "notifications" && <NotificationsSettings />}
+
+            {section === "favourites" && <FavouritesSection />}
 
             {section === "downloads" && (
               <SectionCard title="Download history">

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Download, Heart, Pause, Play, ShoppingCart, Volume2 } from "lucide-react";
 import { openDownloadOptions } from "@/lib/downloadTrack";
 import { openLicenseModal } from "@/hooks/useCart";
+import { toggleFavourite, useFavourites } from "@/lib/favourites";
 import WaveformPreview from "@/components/WaveformPreview";
 import {
   ActionIcon,
@@ -20,6 +21,7 @@ export const PlayerProvider = ({ children }: { children: ReactNode }) => {
   const { isPlaying, progress, playVersion, volume, setVolume } = engine;
   const currentTrack = engine.activeTrack;
   const currentVersion = engine.activeVersion;
+  const favIds = useFavourites();
 
   return (
     <PlayerContext.Provider value={engine}>
@@ -83,8 +85,15 @@ export const PlayerProvider = ({ children }: { children: ReactNode }) => {
                 />
               </div>
               <div className="flex items-center gap-5 text-muted-foreground">
-                <ActionIcon label="Favorite">
-                  <Heart className="h-5 w-5 stroke-[1.6]" />
+                <ActionIcon
+                  label={favIds.has(currentTrack.id) ? "Remove from favourites" : "Favorite"}
+                  onClick={() => void toggleFavourite(currentTrack.id)}
+                >
+                  <Heart
+                    className={`h-5 w-5 stroke-[1.6] ${
+                      favIds.has(currentTrack.id) ? "fill-[#F4C430] text-[#F4C430]" : ""
+                    }`}
+                  />
                 </ActionIcon>
                 <ActionIcon
                   label="Buy License"

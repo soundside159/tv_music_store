@@ -19,6 +19,8 @@ import WaveformPreview from "@/components/WaveformPreview";
 import type { CatalogTrack, TrackAudioVersion, TrackVersion } from "@/data/catalogTracks";
 import { useTracks } from "@/hooks/useTracks";
 import { useSeo } from "@/hooks/useSeo";
+import { splitFilterValues } from "@/components/TrackRowPlayer";
+import { toggleFavourite, useFavourites } from "@/lib/favourites";
 import { usePlayer } from "@/components/playerContext";
 import { licenseTiers, type LicenseTierId } from "@/lib/licenses";
 import { addToCart } from "@/hooks/useCart";
@@ -40,11 +42,30 @@ const TrackDetail = () => {
   const [activeTab, setActiveTab] = useState<DetailTab>("versions");
   const [selectedVersions, setSelectedVersions] = useState<Record<string, TrackVersion>>({});
   const [selectedTier, setSelectedTier] = useState<LicenseTierId>("personal");
-  const [liked, setLiked] = useState(false);
   const { activePlayer, isPlaying, progress, playVersion: playFromEngine } = usePlayer();
+  const favIds = useFavourites();
+  const liked = track ? favIds.has(track.id) : false;
 
+  // Similar = tracks sharing this one's genre / mood / use case, ranked by overlap.
   const similarTracks = useMemo(() => {
     if (!track) return [];
+    const set = (s: string) => new Set(splitFilterValues(s || "").map((x) => x.toLowerCase()));
+    const g = set(track.genre);
+    const m = set(track.mood);
+    const u = set(track.useCase);
+    const overlap = (a: Set<string>, s: string) =>
+      splitFilterValues(s || "").reduce((n, x) => n + (a.has(x.toLowerCase()) ? 1 : 0), 0);
+    const scored = catalogTracks
+      .filter((item) => item.id !== track.id)
+      .map((item) => ({
+        item,
+        score: overlap(g, item.genre) * 2 + overlap(m, item.mood) * 2 + overlap(u, item.useCase),
+      }))
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 6)
+      .map((x) => x.item);
+    if (scored.length > 0) return scored;
     return catalogTracks.filter((item) => item.id !== track.id).slice(0, 4);
   }, [track, catalogTracks]);
 
@@ -151,7 +172,7 @@ const TrackDetail = () => {
               </button>
               <IconButton
                 label={liked ? "Remove from favorites" : "Add to favorites"}
-                onClick={() => setLiked((v) => !v)}
+                onClick={() => void toggleFavourite(track.id)}
               >
                 <Heart className="h-4 w-4" style={liked ? { color: GOLD, fill: GOLD } : undefined} />
               </IconButton>
