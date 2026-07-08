@@ -1173,4 +1173,6 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   knob stays fixed left, the ON/OFF label stays fixed on the right, and only the glow + word change;
   widened to `w-20` so "OFF" fits. (2) WaveformPreview unplayed-bar opacity lowered: idle rows
   `0.3 → 0.18` (darker when not playing) and the active/playing track `0.62 → 0.42` (was too bright
-  when a track started). Played part stays solid gold (1).
+  when a track started). UPDATE: the gold (played) bars now dim WITH the grey — `played ? (active ? 1
+  : 0.5) : active ? 0.42 : 0.18` — so on idle rows the whole waveform (gold + grey) is muted and lights
+  up together (0.35s transition) when the track plays.
