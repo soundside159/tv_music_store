@@ -11,6 +11,7 @@ import {
   ListFilter,
   ListMusic,
   Mail,
+  Music2,
   Send,
   ShieldCheck,
   SlidersHorizontal,
@@ -97,3 +98,11 @@ export const adminNavGroups: { label: string; items: NavItem[] }[] = [
 
 // Flat list (used by the secondary "Admin" menu on the account page).
 export const adminNavItems: NavItem[] = adminNavGroups.flatMap((g) => g.items);
+
+// Composer studio links shown in the /account sidebar for role=composer.
+// They cross-link to /composer?section=… (the composer panel honors ?section=).
+export const composerNavItems: NavItem[] = [
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "upload", label: "Upload track", icon: UploadCloud },
+  { id: "tracks", label: "My tracks", icon: Music2 },
+];

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   BarChart3,
   DollarSign,
@@ -48,7 +48,11 @@ const Card = ({ title, children, className = "" }: { title?: string; children: R
 const Composer = () => {
   const user = useCurrentUser();
   const mockComposer = useComposer();
-  const [section, setSection] = useState<SectionId>("dashboard");
+  const [searchParams] = useSearchParams();
+  const sectionParam = searchParams.get("section");
+  const [section, setSection] = useState<SectionId>(
+    sections.some((s) => s.id === sectionParam) ? (sectionParam as SectionId) : "dashboard",
+  );
   // Live composer profile + own tracks (stage 4). Mock personas keep the old
   // demo data; live composer accounts get real rows from /api/composer/tracks.
   const isComposerRole = !!user && (user.role === "composer" || user.role === "admin");

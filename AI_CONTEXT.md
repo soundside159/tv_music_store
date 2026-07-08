@@ -34,6 +34,11 @@ GitHub auth is configured on the owner's Windows machine — never ask for token
 
 ## 4. Ground rules
 
+- **HOW TO TALK TO THE OWNER:** plain, simple language — he designs the product logic himself
+  but is NOT a coder. Big-picture things (which technology/service to pick, general terms) are
+  fine; do NOT walk him through implementation internals (file names, hooks, endpoints, column
+  names etc.) in chat. Explain WHAT changed for the user/site and what HE needs to do — keep the
+  deep technical detail in this file's Progress Log, not in the conversation.
 - Keep changes scoped; follow existing Tailwind / shadcn patterns.
 - Never commit secrets, `.env`, tokens, or private master WAV/ZIP audio.
 - Full architecture/spec: `AGENTS.md` and `docs/TVMUSICSTORE_MASTER_PLAN.md`. Update `AGENTS.md`
@@ -1643,3 +1648,10 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   spotted: composer select in the Tracks Edit single-track panel (reassign is API-ready via
   fields.composerId), "Reject" button UI for the review queue (API ready via
   fields.moderationStatus='rejected'), composer dashboard/earnings off mocks.
+- **2026-07-08 (composer panel discoverability):** owner test: gave a user role composer + the
+  pseudonym, but "nothing appeared" — the panel worked, there was just NO LINK to /composer
+  anywhere in the UI (only the route existed). Fix: `composerNavItems` in adminNav.ts
+  (Dashboard / Upload track / My tracks); /account sidebar now shows a "Composer" group with
+  those links for `role === "composer"` (static links, always rendered — same spacing scale as
+  the other groups); links go to `/composer?section=…` and Composer.tsx now honors `?section=`
+  on load (same pattern as /admin). Tell composers to open Account → Composer → Upload track.

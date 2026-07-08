@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowUpRight, LogOut } from "lucide-react";
-import { accountNavGroups, adminNavGroups } from "@/lib/adminNav";
+import { accountNavGroups, adminNavGroups, composerNavItems } from "@/lib/adminNav";
 import MenuGroupHeader from "@/components/MenuGroupHeader";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
@@ -178,6 +178,27 @@ const Account = () => {
                   </div>
                 ))}
               </div>
+              {user.role === "composer" && (
+                /* Composer studio: cross-links to the /composer panel (upload
+                   tracks for review, own-track list). Static links — no toggle. */
+                <div className="shrink-0 md:mb-5">
+                  <p className="px-3 pb-1.5 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
+                    Composer
+                  </p>
+                  <div className="flex space-x-1 md:flex-col md:space-x-0 md:space-y-1">
+                    {composerNavItems.map((item) => (
+                      <Link
+                        key={item.id}
+                        to={`/composer?section=${item.id}`}
+                        className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        <item.icon className="h-4 w-4" />
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
               {user.role === "admin" && (
                 <div className="shrink-0">
                   <MenuGroupHeader
