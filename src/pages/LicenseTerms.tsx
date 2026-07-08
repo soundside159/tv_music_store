@@ -136,10 +136,12 @@ const LicenseTerms = () => (
       <H2>8. Ownership &amp; intellectual property</H2>
       <P>
         All music, recordings, compositions, stems, artwork, the TV Music Store name, logo, and site
-        content remain the exclusive property of TV Music Store and its composers. These Terms grant
-        a limited license only and transfer no ownership, copyright, or moral rights. TV Music Store
-        licenses each track on behalf of its composer, who warrants that they own or control the
-        rights they supply.
+        content are original works and remain the property of TV Music Store and/or the relevant
+        composer. These Terms grant a limited license only and transfer no ownership, copyright, or
+        moral rights. Each composer creates their music for the TV Music Store catalogue and authorises
+        TV Music Store to license it; on that basis TV Music Store grants every customer license
+        directly, as the authorised licensor. TV Music Store is not a reseller, marketplace or
+        aggregator of third-party stock content.
       </P>
 
       <H2>9. Warranties &amp; disclaimer</H2>

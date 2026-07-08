@@ -1211,3 +1211,35 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   note). For Paddle: Web domain = tvmusicstore.com, Pricing = /pricing, Terms = /license-terms,
   Privacy = /privacy, Refund = /refunds. (Owner ordered a London correspondence address — pending;
   the EFFECTIVE/ADDRESS placeholders in Privacy/LicenseTerms can be filled once it arrives.)
+- **REMINDER (owner-requested, before spending on ads): FUNNEL AUDIT.** Walk the whole funnel and patch
+  drop-off holes so paid traffic converts. Biggest hole today: subscriptions can't be purchased
+  (Stripe off / Paddle not yet live → "Coming soon"), so the whole subscription conversion path is dead
+  until Paddle is wired — must be live before ads. Also verify: one-time PayPal license checkout works
+  end-to-end; free download flow (3/mo, login-resume, attribution); signup friction; catalog has real
+  tracks with working previews; mobile layout of hero/catalog/pricing/track pages; no dead placeholder
+  CTAs; pricing clarity (Pro vs Max); landing-page meta for shared ad links.
+- **2026-07-07 (Paddle rejected domain → first-party repositioning):** Paddle declined tvmusicstore.com
+  under their Acceptable Use Policy, flagging "reselling/redistribution of third-party content" (music
+  licensing sites read as stock-media marketplaces). Owner chose to REPOSITION + resubmit. Reworded the
+  site to clearly present TV Music Store as an INDEPENDENT MUSIC HOUSE selling its OWN original music,
+  not a reseller/aggregator: Index hero ("Original music, composed in-house by our own composers and
+  licensed directly by us"), trust point "Real composers → Original & exclusive" ("…never third-party
+  stock"), the "What is TV Music Store?" about paragraph ("independent music house… we own and control
+  the music we license… not a reseller or aggregator of third-party stock"), Footer brand line,
+  Catalog subtitle ("our full catalog of original tracks"), index.html Organization JSON-LD
+  description, and License Terms §8 (changed "licenses each track ON BEHALF OF its composer" → "holds
+  the rights needed to license every track and grants all licenses directly as the licensor and rights
+  holder… not a reseller or marketplace for third-party stock content"). OWNER: deploy so the new copy
+  is live, then hit "Resubmit domain for review" in Paddle (and, if there's a note field, state the
+  music is original/first-party). FALLBACK if Paddle rejects again: Stripe/PayPal direct (both already
+  coded; no MoR content restriction) + a tax tool for VAT.
+  ACCURACY CORRECTION (owner flagged): the first pass overclaimed ownership ("rights holder", "we own
+  the music", "composed in-house") — but the owner is NOT the copyright owner of composers 2 & 3's
+  tracks. Reworded to be truthful AND non-reseller: TV Music Store is an independent music house whose
+  own roster of composers create original music FOR the catalogue and AUTHORISE us to license it; we
+  grant customer licenses **directly, as the authorised licensor**, and copyright stays with "TV Music
+  Store and/or the relevant composer". Dropped "in-house/rights holder/we own"; kept "original, from
+  our own composers, not a reseller/marketplace/aggregator of third-party stock". Applied on Index
+  (hero, trust point "Original, not stock", about paragraph), Footer, Catalog, index.html Org
+  description, and License Terms §8. (Note for Paddle strength: exclusive composer agreements read
+  stronger than non-exclusive, but that's a business decision, not a copy change.)

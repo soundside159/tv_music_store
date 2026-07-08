@@ -70,7 +70,8 @@ const Footer = () => {
               <span className="font-display text-lg text-foreground">TV Music Store</span>
             </Link>
             <p className="mt-4 max-w-[15rem] font-body text-sm text-muted-foreground">
-              Cinematic and production music for film, TV, and creators.
+              Original cinematic and production music from our own composers, licensed directly — for
+              film, TV, and creators.
             </p>
             <div className="mt-5">
               <p className="mb-2 font-body text-xs font-semibold uppercase tracking-wider text-foreground/70">

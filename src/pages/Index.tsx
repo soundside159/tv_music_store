@@ -10,7 +10,7 @@ const GOLD = "#F4C430";
 
 const trustPoints = [
   { icon: ShieldCheck, label: "Content ID protected", text: "Every track is registered. Claims removed within 24 hours." },
-  { icon: Users, label: "Real composers", text: "Three composers, one curated catalog. No AI-generated filler." },
+  { icon: Users, label: "Original, not stock", text: "Every track is made by one of our own composers and licensed to you directly — not third-party stock." },
   { icon: Music2, label: "Versions included", text: "Cut-downs and alternate mixes with every track." },
   { icon: Check, label: "License instantly", text: "Clear licenses, PDF certificate right after download." },
 ];
@@ -31,8 +31,8 @@ const Index = () => {
             Cinematic music for your next video
           </h1>
           <p className="mt-3 max-w-xl font-body text-sm text-muted-foreground md:text-base">
-            A curated catalog from three real composers. Monetization-safe, claim-free,
-            licensed in one click.
+            Original music from our own composers, licensed to you directly.
+            Monetization-safe, claim-free, licensed in one click.
           </p>
           <div className="mt-6 flex flex-wrap items-center gap-2">
             {categories.map((c) => (
@@ -210,17 +210,19 @@ const Index = () => {
                 className="mx-auto mt-3 h-1 w-28 rounded-full"
                 style={{ background: "linear-gradient(90deg,#7c3aed,#F4C430,#22d3ee)" }}
               />
-              <p className="mt-4 font-body text-xs text-muted-foreground">Cinematic music, licensed clean.</p>
+              <p className="mt-4 font-body text-xs text-muted-foreground">Original music, licensed clean.</p>
             </div>
           </div>
           <div className="mt-14 max-w-3xl">
             <h2 className="text-xl text-foreground">What is TV Music Store?</h2>
             <p className="mt-3 font-body text-sm leading-relaxed text-muted-foreground">
-              TV Music Store is a curated library of cinematic music for video creators, editors,
-              agencies and game developers. Every track is written by a real composer — modern
-              score, thriller, game OST and production music — and comes with cut-down versions,
-              a clear license and Content ID protection. Download free tracks every month, or
-              subscribe for unlimited access to the full catalog.
+              TV Music Store is an independent music house. We work with our own small roster of
+              composers who create original cinematic music — modern score, thriller, game OST and
+              production music — for our catalog, and we license it to you directly. We are not a
+              reseller, marketplace or aggregator of third-party stock: every track comes from one of
+              our composers under agreement with us, and ships with cut-down versions, a clear license
+              and Content ID protection. Copyright stays with TV Music Store and/or the composer — you
+              receive a license to use the music.
             </p>
           </div>
         </section>

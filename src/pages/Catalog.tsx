@@ -364,7 +364,7 @@ const LibraryHero = () => (
       <span className="text-[#F4C430]">Premium</span> Music Library
     </h1>
     <p className="mt-3 max-w-lg font-body text-sm leading-6 text-white/55">
-      Explore our entire library of premium tracks for any project and mood.
+      Explore our full catalog of original tracks for any project and mood.
     </p>
   </section>
 );
