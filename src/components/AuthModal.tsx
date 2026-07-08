@@ -200,8 +200,8 @@ const AuthModal = ({ open, onClose }: AuthModalProps) => {
         {step === "email" && (
           <p className="mt-6 text-center font-body text-xs text-muted-foreground">
             By continuing you agree to our{" "}
-            <a href="/licensing" className="underline hover:text-foreground">Terms of Use</a> and{" "}
-            <a href="/licensing" className="underline hover:text-foreground">Privacy Policy</a>
+            <a href="/license-terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">Terms of Use</a> and{" "}
+            <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">Privacy Policy</a>
           </p>
         )}
       </div>
