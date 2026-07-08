@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { ChevronDown, ChevronUp, Pause, Play, Plus, X } from "lucide-react";
+import { ChevronDown, ChevronUp, GripVertical, Pause, Play, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { usePlayer } from "@/components/playerContext";
 import { useTracks } from "@/hooks/useTracks";
+import { refreshContent } from "@/hooks/useContent";
 import AdminTracksEdit from "@/components/AdminTracksEdit";
 import AddTrackModal from "@/components/AddTrackModal";
 import { defaultVocabularies, type Vocabularies } from "@/lib/tagOptions";
@@ -19,6 +20,8 @@ interface ContentItem {
   shortTitle?: string;
   description: string;
   image: string;
+  /** Playlists only: section on the /playlists page ("" = no theme). */
+  theme?: string;
   trackIds: string[];
 }
 
@@ -106,7 +109,15 @@ const TrackPicker = ({
   );
 };
 
-const emptyDraft = { id: "", title: "", shortTitle: "", description: "", image: "", trackIds: [] as string[] };
+const emptyDraft = {
+  id: "",
+  title: "",
+  shortTitle: "",
+  description: "",
+  image: "",
+  theme: "",
+  trackIds: [] as string[],
+};
 
 const tabLabels: Record<Tab, string> = {
   collections: "Collections",
@@ -133,6 +144,8 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
   const [addOpen, setAddOpen] = useState(false);
   const [selectedTrackIds, setSelectedTrackIds] = useState<string[]>([]);
   const [selResetKey, setSelResetKey] = useState(0);
+  // Playlists tab: id of the playlist being dragged between/within theme sections.
+  const [dragPlaylistId, setDragPlaylistId] = useState<string | null>(null);
 
   const deleteSelectedTracks = async () => {
     if (selectedTrackIds.length === 0) return;
@@ -283,6 +296,90 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
   const mergedTracks = tracks.map((t) => ({ ...t, ...trackOverrides[t.id] }));
   const vocab = data.vocabularies ?? defaultVocabularies;
 
+  // ---- Playlists grouped by THEME (mirrors /playlists) + drag&drop ----------
+  const playlistSections: { theme: string; items: ContentItem[] }[] = [];
+  if (tab === "playlists") {
+    for (const p of data.playlists) {
+      const theme = (p.theme ?? "").trim();
+      const s = playlistSections.find((x) => x.theme === theme);
+      if (s) s.items.push(p);
+      else playlistSections.push({ theme, items: [p] });
+    }
+    playlistSections.sort((a, b) => (a.theme === "" ? -1 : b.theme === "" ? 1 : 0));
+  }
+
+  /** Persists a new section layout: optional theme move for one playlist + the
+      global sort order (themes move with their playlists automatically). */
+  const savePlaylistLayout = async (
+    sections: { theme: string; items: ContentItem[] }[],
+    moved?: ContentItem,
+    newTheme?: string,
+  ) => {
+    setBusy(true);
+    try {
+      if (moved && newTheme !== undefined) {
+        await api({
+          action: "upsert_playlist",
+          id: moved.id,
+          title: moved.title,
+          description: moved.description,
+          image: moved.image,
+          theme: newTheme,
+        });
+      }
+      await api({
+        action: "reorder_content",
+        kind: "playlist",
+        values: sections.flatMap((s) => s.items.map((i) => i.id)),
+      });
+      toast.success("Playlists updated");
+      reload();
+      void refreshContent();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Reorder failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Drop the dragged playlist into `targetTheme`, before `beforeId` (null = end). */
+  const dropPlaylist = (targetTheme: string, beforeId: string | null) => {
+    const id = dragPlaylistId;
+    setDragPlaylistId(null);
+    if (!id || busy) return;
+    const sections = playlistSections.map((s) => ({ ...s, items: [...s.items] }));
+    let movedItem: ContentItem | undefined;
+    for (const s of sections) {
+      const i = s.items.findIndex((x) => x.id === id);
+      if (i !== -1) {
+        movedItem = s.items.splice(i, 1)[0];
+        break;
+      }
+    }
+    if (!movedItem || movedItem.id === beforeId) return;
+    const target = sections.find((s) => s.theme === targetTheme);
+    if (!target) return;
+    let idx = beforeId ? target.items.findIndex((x) => x.id === beforeId) : target.items.length;
+    if (idx < 0) idx = target.items.length;
+    target.items.splice(idx, 0, movedItem);
+    const themeChanged = (movedItem.theme ?? "").trim() !== targetTheme;
+    void savePlaylistLayout(
+      sections,
+      themeChanged ? movedItem : undefined,
+      themeChanged ? targetTheme : undefined,
+    );
+  };
+
+  /** Move a whole theme section up/down — its playlists travel with it. */
+  const moveTheme = (index: number, dir: -1 | 1) => {
+    if (busy) return;
+    const sections = [...playlistSections];
+    const j = index + dir;
+    if (j < 0 || j >= sections.length) return;
+    [sections[index], sections[j]] = [sections[j], sections[index]];
+    void savePlaylistLayout(sections);
+  };
+
   return (
     <div className="rounded-xl border border-border bg-card p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -335,6 +432,131 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
 
       {(tab === "collections" || tab === "playlists") && (
         <>
+          {tab === "playlists" ? (
+            /* Grouped by theme, mirroring /playlists. Drag a playlist row to
+               reorder or drop it into another theme; ↑↓ move whole themes. */
+            <div className="mt-5 flex flex-col gap-4">
+              {playlistSections.map((sec, si) => (
+                <div
+                  key={sec.theme || "__none"}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    dropPlaylist(sec.theme, null);
+                  }}
+                  className={`rounded-lg border border-border/60 ${busy ? "opacity-60" : ""}`}
+                >
+                  <div className="flex items-center gap-2 border-b border-border/50 bg-secondary/30 px-3 py-2">
+                    <span className="font-body text-xs font-semibold uppercase tracking-wide text-foreground">
+                      {sec.theme || "No theme (top of the page)"}
+                    </span>
+                    <span className="font-body text-[11px] text-muted-foreground">
+                      {sec.items.length} playlist{sec.items.length === 1 ? "" : "s"}
+                    </span>
+                    <span className="ml-auto flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        disabled={si === 0 || busy}
+                        onClick={() => moveTheme(si, -1)}
+                        title="Move theme up (with its playlists)"
+                        aria-label={`Move ${sec.theme || "no-theme"} section up`}
+                        className="text-muted-foreground transition-colors hover:text-[#F4C430] disabled:opacity-30"
+                      >
+                        <ChevronUp className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={si === playlistSections.length - 1 || busy}
+                        onClick={() => moveTheme(si, 1)}
+                        title="Move theme down (with its playlists)"
+                        aria-label={`Move ${sec.theme || "no-theme"} section down`}
+                        className="text-muted-foreground transition-colors hover:text-[#F4C430] disabled:opacity-30"
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                      </button>
+                    </span>
+                  </div>
+                  <ul className="divide-y divide-border/50">
+                    {sec.items.map((item) => (
+                      <li
+                        key={item.id}
+                        draggable={!busy}
+                        onDragStart={(e) => {
+                          setDragPlaylistId(item.id);
+                          e.dataTransfer.effectAllowed = "move";
+                        }}
+                        onDragEnd={() => setDragPlaylistId(null)}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          dropPlaylist(sec.theme, item.id);
+                        }}
+                        className={`flex items-center gap-3 px-3 py-2.5 ${
+                          dragPlaylistId === item.id ? "opacity-40" : ""
+                        }`}
+                      >
+                        <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-muted-foreground/50" />
+                        {item.image && (
+                          <img src={item.image} alt="" className="h-9 w-9 shrink-0 rounded object-cover" />
+                        )}
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-body text-sm font-semibold text-foreground">
+                            {item.title}
+                          </span>
+                          <span className="block truncate font-body text-xs text-muted-foreground">
+                            {item.trackIds.length} tracks · /playlists/{item.id}
+                          </span>
+                        </span>
+                        <span className="flex shrink-0 gap-2">
+                          <button
+                            type="button"
+                            className={btnCls}
+                            onClick={() =>
+                              setDraft({
+                                id: item.id,
+                                title: item.title,
+                                shortTitle: item.shortTitle ?? "",
+                                description: item.description,
+                                image: item.image,
+                                theme: item.theme ?? "",
+                                trackIds: item.trackIds,
+                              })
+                            }
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            className="rounded-lg border border-border px-3 py-1.5 font-body text-xs text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
+                            onClick={() => {
+                              if (window.confirm(`Delete "${item.title}"?`)) {
+                                void run({ action: "delete_playlist", id: item.id }, "Deleted");
+                              }
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </span>
+                      </li>
+                    ))}
+                    {sec.items.length === 0 && (
+                      <li className="px-3 py-3 font-body text-xs text-muted-foreground">
+                        Drop playlists here.
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              ))}
+              {playlistSections.length === 0 && (
+                <p className="font-body text-sm text-muted-foreground">Nothing here yet.</p>
+              )}
+            </div>
+          ) : (
           <ul className="mt-5 divide-y divide-border/60">
             {items.map((item) => (
               <li key={item.id} className="flex items-center justify-between gap-4 py-2.5">
@@ -343,7 +565,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                     {item.title}
                   </span>
                   <span className="block truncate font-body text-xs text-muted-foreground">
-                    {item.trackIds.length} tracks · /{kind === "collection" ? "collections" : "playlists"}/{item.id}
+                    {item.trackIds.length} tracks · /collections/{item.id}
                   </span>
                 </span>
                 <span className="flex shrink-0 gap-2">
@@ -357,6 +579,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                         shortTitle: item.shortTitle ?? "",
                         description: item.description,
                         image: item.image,
+                        theme: item.theme ?? "",
                         trackIds: item.trackIds,
                       })
                     }
@@ -382,6 +605,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
               <li className="py-3 font-body text-sm text-muted-foreground">Nothing here yet.</li>
             )}
           </ul>
+          )}
 
           {!draft && (
             <button type="button" className={`mt-4 ${goldBtnCls}`} onClick={() => setDraft({ ...emptyDraft })}>
@@ -402,9 +626,11 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                     shortTitle: draft.shortTitle || undefined,
                     description: draft.description,
                     image: draft.image,
+                    ...(kind === "playlist" ? { theme: draft.theme } : {}),
                   },
                   "Saved",
                 );
+                if (saved && kind === "playlist") void refreshContent();
                 if (saved && draft.id) {
                   await run(
                     { action: "set_tracks", kind, id: draft.id, trackIds: draft.trackIds },
@@ -460,6 +686,14 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                   placeholder="Short title (for cards)"
                   value={draft.shortTitle}
                   onChange={(e) => setDraft({ ...draft, shortTitle: e.target.value })}
+                  className={inputCls}
+                />
+              )}
+              {kind === "playlist" && (
+                <input
+                  placeholder="Theme — section on the /playlists page (empty = top, no section)"
+                  value={draft.theme}
+                  onChange={(e) => setDraft({ ...draft, theme: e.target.value })}
                   className={inputCls}
                 />
               )}

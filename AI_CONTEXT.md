@@ -1565,3 +1565,21 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   auto-generates a row thumbnail via makeThumbnail (uploaded separately, non-fatal on failure) and
   saves via bulk_update_tracks fields {cover, coverThumb}; remove clears both. Server: `fields`
   gained `coverThumb` (→ cover_thumb). Works for tracks with no cover yet (placeholder hover).
+- **2026-07-08 (sidebar spacing unified — /account and /admin identical rhythm):** the "spacing
+  shifts on click" was TWO different sidebars: clicking an admin item on /account navigates to
+  /admin whose sidebar used its own scale (nav space-y-1, blocks space-y-3, labels pb-1 /50
+  opacity) vs /account (groups mb-5, labels pb-1.5 /70). BOTH now use ONE scale: group blocks
+  `md:mb-5`, group labels `px-3 pb-1.5 …/70`, item lists `md:space-y-1`, margin-based spacing
+  only (no flex `gap` anywhere in either sidebar — Chromium's gap-recalc bug), both menu blocks
+  always rendered + hidden/flex toggling on both pages.
+- **2026-07-08 (admin Playlists grouped by theme + DnD):** the /admin → Playlists view now
+  mirrors the public /playlists page: playlists render inside THEME sections (themeless first =
+  "No theme (top of the page)"), each section header shows the count + ↑↓ buttons that move the
+  WHOLE theme (its playlists travel with it), and every playlist row (grip icon + 36px cover
+  thumb) is native-DnD draggable — drop on another row inserts before it, drop on a section's
+  empty area appends; dropping into a different theme also updates that playlist's `theme`
+  (upsert_playlist with full current fields) before `reorder_content` persists the flattened
+  global order; then reload() + refreshContent() so the public page follows instantly.
+  ContentItem/emptyDraft gained `theme`; the playlist EDIT form got a "Theme" input (empty = no
+  section) and the upsert sends it (collections unaffected — their flat list kept). All layout
+  ops disabled while busy.

@@ -138,24 +138,27 @@ const Account = () => {
         <div className="flex flex-col gap-8 md:flex-row">
           {/* Sidebar */}
           <aside className="shrink-0 md:w-56">
-            <nav className="flex gap-4 overflow-x-auto md:flex-col md:gap-0">
+            {/* NO flex `gap` anywhere in this sidebar and ONE spacing scale
+                (groups md:mb-5, items md:space-y-1) — flex gaps hit Chromium's
+                "gap not recalculated until reflow" bug when blocks toggle, and
+                mixed margins made the rhythm shift on the first click. */}
+            <nav className="flex space-x-4 overflow-x-auto md:flex-col md:space-x-0">
               {user.role === "admin" && (
                 <MenuGroupHeader label="Main" open={menu === "main"} onClick={() => setMenu("main")} />
               )}
               {/* Both menu blocks are ALWAYS rendered and toggled with hidden/
-                  flex + margin-based spacing — conditional mounting hit the
-                  Chromium "no paint until reflow" bug (blank items on switch). */}
+                  flex — conditional mounting hit the "no paint until reflow" bug. */}
               <div
                 className={`${
                   user.role !== "admin" || menu === "main" ? "flex" : "hidden"
-                } gap-4 md:flex-col md:gap-0`}
+                } space-x-4 md:flex-col md:space-x-0`}
               >
                 {accountNavGroups.map((group) => (
                   <div key={group.label} className="shrink-0 md:mb-5">
                     <p className="px-3 pb-1.5 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
                       {group.label}
                     </p>
-                    <div className="flex gap-1 md:flex-col">
+                    <div className="flex space-x-1 md:flex-col md:space-x-0 md:space-y-1">
                       {group.items.map((s) => (
                         <button
                           key={s.id}
@@ -176,20 +179,20 @@ const Account = () => {
                 ))}
               </div>
               {user.role === "admin" && (
-                <div className="shrink-0 md:mb-5">
+                <div className="shrink-0">
                   <MenuGroupHeader
                     label="Admin"
                     open={menu === "admin"}
                     onClick={() => setMenu("admin")}
                   />
                   {/* Grouped like the /admin sidebar (Overview/Catalog/…), always rendered. */}
-                  <div className={`${menu === "admin" ? "flex" : "hidden"} gap-4 md:flex-col md:gap-0`}>
+                  <div className={`${menu === "admin" ? "flex" : "hidden"} space-x-4 md:flex-col md:space-x-0`}>
                     {adminNavGroups.map((group) => (
-                      <div key={group.label} className="shrink-0 md:mb-4">
+                      <div key={group.label} className="shrink-0 md:mb-5">
                         <p className="px-3 pb-1.5 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
                           {group.label}
                         </p>
-                        <div className="flex gap-1 md:flex-col">
+                        <div className="flex space-x-1 md:flex-col md:space-x-0 md:space-y-1">
                           {group.items.map((item) => (
                             <Link
                               key={item.id}

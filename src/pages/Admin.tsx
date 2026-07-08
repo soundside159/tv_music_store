@@ -233,48 +233,55 @@ const Admin = () => {
       <main className="mx-auto w-full max-w-6xl px-4 pb-24 pt-24 sm:px-6 md:pt-28">
         <div className="flex flex-col gap-8 md:flex-row">
           <aside className="shrink-0 md:w-56">
-            <nav className="flex flex-col space-y-1">
+            {/* Same spacing scale as the /account sidebar (groups mb-5, labels
+                pb-1.5, items space-y-1) so nothing shifts when navigating
+                between the two pages. Margin-based spacing only — no flex gap. */}
+            <nav className="flex flex-col">
               <MenuGroupHeader label="Main" open={menu === "main"} onClick={() => setMenu("main")} />
-              <div className={`mb-3 flex-col space-y-3 ${menu === "main" ? "flex" : "hidden"}`}>
+              <div className={`flex-col ${menu === "main" ? "flex" : "hidden"}`}>
                 {accountNavGroups.map((group) => (
-                  <div key={group.label}>
-                    <p className="px-3 pb-1 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
+                  <div key={group.label} className="md:mb-5">
+                    <p className="px-3 pb-1.5 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
                       {group.label}
                     </p>
-                    {group.items.map((item) => (
-                      <Link
-                        key={item.id}
-                        to={`/account?section=${item.id}`}
-                        className="flex items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
-                      >
-                        <item.icon className="h-4 w-4" />
-                        {item.label}
-                      </Link>
-                    ))}
+                    <div className="flex flex-col md:space-y-1">
+                      {group.items.map((item) => (
+                        <Link
+                          key={item.id}
+                          to={`/account?section=${item.id}`}
+                          className="flex items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          <item.icon className="h-4 w-4" />
+                          {item.label}
+                        </Link>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
 
               <MenuGroupHeader label="Admin" open={menu === "admin"} onClick={() => setMenu("admin")} />
-              <div className={`flex-col space-y-3 ${menu === "admin" ? "flex" : "hidden"}`}>
+              <div className={`flex-col ${menu === "admin" ? "flex" : "hidden"}`}>
                 {adminNavGroups.map((group) => (
-                  <div key={group.label}>
-                    <p className="px-3 pb-1 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
+                  <div key={group.label} className="md:mb-5">
+                    <p className="px-3 pb-1.5 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
                       {group.label}
                     </p>
-                    {group.items.map((sec) => (
-                      <button
-                        key={sec.id}
-                        type="button"
-                        onClick={() => setSection(sec.id as SectionId)}
-                        className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors ${
-                          section === sec.id ? "bg-secondary text-[#F4C430]" : "text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        <sec.icon className="h-4 w-4" />
-                        {sec.label}
-                      </button>
-                    ))}
+                    <div className="flex flex-col md:space-y-1">
+                      {group.items.map((sec) => (
+                        <button
+                          key={sec.id}
+                          type="button"
+                          onClick={() => setSection(sec.id as SectionId)}
+                          className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors ${
+                            section === sec.id ? "bg-secondary text-[#F4C430]" : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          <sec.icon className="h-4 w-4" />
+                          {sec.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
