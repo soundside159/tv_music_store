@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowUpRight, LogOut } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { ArrowUpRight } from "lucide-react";
 import { accountNavGroups, adminNavGroups, composerNavItems } from "@/lib/adminNav";
 import MenuGroupHeader from "@/components/MenuGroupHeader";
+import ComposerPanel, { type ComposerSectionId } from "@/components/ComposerPanel";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { catalogTracks } from "@/data/catalogTracks";
@@ -18,7 +19,7 @@ import MyChannels from "@/components/MyChannels";
 import NotificationsSettings from "@/components/NotificationsSettings";
 import SupportSection from "@/components/SupportSection";
 import FavouritesSection from "@/components/FavouritesSection";
-import { logout, updateProfile } from "@/hooks/useAuth";
+import { updateProfile } from "@/hooks/useAuth";
 import { BILLING_ENABLED, openBillingPortal, openPlanModal } from "@/lib/billing";
 import { downloadTrackVersion } from "@/lib/downloadTrack";
 
@@ -33,7 +34,14 @@ type SectionId =
   | "whitelist"
   | "claims"
   | "billing"
-  | "support";
+  | "support"
+  // Composer studio sections (sidebar "Composer" group; content = ComposerPanel).
+  | "composer-dashboard"
+  | "composer-tracks"
+  | "composer-upload"
+  | "composer-earnings"
+  | "composer-requests"
+  | "composer-profile";
 
 const SECTION_IDS: SectionId[] = [
   "profile",
@@ -45,6 +53,12 @@ const SECTION_IDS: SectionId[] = [
   "claims",
   "billing",
   "support",
+  "composer-dashboard",
+  "composer-tracks",
+  "composer-upload",
+  "composer-earnings",
+  "composer-requests",
+  "composer-profile",
 ];
 
 const trackTitle = (trackId: string) =>
@@ -73,7 +87,6 @@ const EmptyNote = ({ text }: { text: string }) => (
 );
 
 const Account = () => {
-  const navigate = useNavigate();
   const user = useCurrentUser();
   const subscription = useSubscription();
   const plans = usePlans();
@@ -84,13 +97,16 @@ const Account = () => {
   const [section, setSection] = useState<SectionId>(
     SECTION_IDS.includes(sectionParam as SectionId) ? (sectionParam as SectionId) : "profile",
   );
-  const [menu, setMenu] = useState<"main" | "admin">("main");
+  const [menu, setMenu] = useState<"main" | "composer" | "admin">(
+    sectionParam?.startsWith("composer-") ? "composer" : "main",
+  );
 
   // Header account dropdown links to /account?section=... — keep the active
   // section in sync when the query param changes while already mounted.
   useEffect(() => {
     if (sectionParam && SECTION_IDS.includes(sectionParam as SectionId)) {
       setSection(sectionParam as SectionId);
+      setMenu(sectionParam.startsWith("composer-") ? "composer" : "main");
     }
   }, [sectionParam]);
 
@@ -178,24 +194,52 @@ const Account = () => {
                   </div>
                 ))}
               </div>
-              {user.role === "composer" && (
-                /* Composer studio: cross-links to the /composer panel (upload
-                   tracks for review, own-track list). Static links — no toggle. */
-                <div className="shrink-0 md:mb-5">
-                  <p className="px-3 pb-1.5 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
-                    Composer
-                  </p>
-                  <div className="flex space-x-1 md:flex-col md:space-x-0 md:space-y-1">
-                    {composerNavItems.map((item) => (
-                      <Link
-                        key={item.id}
-                        to={`/composer?section=${item.id}`}
-                        className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
-                      >
-                        <item.icon className="h-4 w-4" />
-                        {item.label}
-                      </Link>
-                    ))}
+              {(user.role === "composer" || user.role === "admin") && (
+                /* Composer studio — sections render INSIDE this page. Composers
+                   see it as a plain group under a separator; admins get a
+                   Main/Composer/Admin toggle header like the other menus. */
+                <div className="shrink-0">
+                  {user.role === "admin" ? (
+                    <MenuGroupHeader
+                      label="Composer"
+                      open={menu === "composer"}
+                      onClick={() => setMenu("composer")}
+                    />
+                  ) : (
+                    <div className="mb-4 border-t border-border/60 md:mx-3" />
+                  )}
+                  <div
+                    className={`${
+                      user.role !== "admin" || menu === "composer" ? "flex" : "hidden"
+                    } space-x-4 md:flex-col md:space-x-0`}
+                  >
+                    <div className="shrink-0 md:mb-5">
+                      {user.role !== "admin" && (
+                        <p className="px-3 pb-1.5 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
+                          Composer
+                        </p>
+                      )}
+                      <div className="flex space-x-1 md:flex-col md:space-x-0 md:space-y-1">
+                        {composerNavItems.map((item) => {
+                          const id = `composer-${item.id}` as SectionId;
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => setSection(id)}
+                              className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors ${
+                                section === id
+                                  ? "bg-secondary text-[#F4C430]"
+                                  : "text-muted-foreground hover:text-foreground"
+                              }`}
+                            >
+                              <item.icon className="h-4 w-4" />
+                              {item.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -230,17 +274,7 @@ const Account = () => {
                   </div>
                 </div>
               )}
-              <button
-                type="button"
-                onClick={async () => {
-                  await logout();
-                  navigate("/");
-                }}
-                className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-red-400 transition-colors hover:text-red-300"
-              >
-                <LogOut className="h-4 w-4" />
-                Log out
-              </button>
+              {/* Log out lives in the header account popup — no sidebar copy. */}
             </nav>
           </aside>
 
@@ -254,6 +288,11 @@ const Account = () => {
                   Resubscribe
                 </Link>
               </div>
+            )}
+
+            {/* Composer studio sections (sidebar "Composer" group). */}
+            {section.startsWith("composer-") && (
+              <ComposerPanel section={section.slice("composer-".length) as ComposerSectionId} />
             )}
 
             {section === "profile" && (

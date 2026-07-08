@@ -1655,3 +1655,24 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   those links for `role === "composer"` (static links, always rendered — same spacing scale as
   the other groups); links go to `/composer?section=…` and Composer.tsx now honors `?section=`
   on load (same pattern as /admin). Tell composers to open Account → Composer → Upload track.
+  [SUPERSEDED same day — see next entry: the studio moved INSIDE /account.]
+- **2026-07-08 (composer studio inside /account + customers by role — owner feedback round):**
+  (1) UPLOAD FORM: ComposerUpload shows ONLY the drop zone until WAVs are added — the version
+  list, Title/BPM/Description/Tags/Stems and the Upload button appear after the first drop.
+  (2) NO SEPARATE PANEL: composer sections moved into /account. NEW
+  `src/components/ComposerPanel.tsx` (all six sections — dashboard / tracks / upload / earnings /
+  requests / profile — ported from the old Composer page; exports ComposerSectionId +
+  COMPOSER_SECTION_IDS; prefers the LIVE profile over mock personas, so an admin with a composers
+  row sees his real pseudonym; dashboard shows live download/published totals when live).
+  Account.tsx: SectionId gained `composer-*` ids; sidebar "Composer" group renders them in-page
+  (for role composer: divider + plain group under Main; for admins: a third Main/Composer/Admin
+  MenuGroupHeader toggle; ?section=composer-… auto-opens the right menu). composerNavItems now =
+  the 6 sections. `/composer` route = redirect to /account?section=composer-… (old links keep
+  working). /admin sidebar got the same Composer toggle (links to /account). ComposerPanel's
+  profile section: pseudonym is read-only text (owner edits it in Customers), bio/payout fields
+  still mock. (3) LOG OUT removed from BOTH /account and /admin sidebars (header avatar popup
+  already has it). (4) ADMIN → CUSTOMERS: one table → three role groups (Admins / Composers /
+  Customers, each with count); the pseudonym input now also shows for ADMINS (the owner composes
+  too — set his pseudonym there so he appears in upload pickers and gets his own composer studio);
+  changing a role INTO or OUT OF admin asks window.confirm first. NOTE: sandbox VM still down —
+  lint/tsc not run here; verified by read-through, deploy.bat validates on the host.

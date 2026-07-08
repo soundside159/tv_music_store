@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { LogOut } from "lucide-react";
-import { logout } from "@/hooks/useAuth";
-import { accountNavGroups, adminNavGroups } from "@/lib/adminNav";
+import { Link, useSearchParams } from "react-router-dom";
+import { accountNavGroups, adminNavGroups, composerNavItems } from "@/lib/adminNav";
 import MenuGroupHeader from "@/components/MenuGroupHeader";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
@@ -134,13 +132,12 @@ const StatusPill = ({ text, active }: { text: string; active: boolean }) => (
 
 const Admin = () => {
   const user = useCurrentUser();
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const sectionParam = searchParams.get("section");
   const [section, setSection] = useState<SectionId>(
     SECTION_IDS.includes(sectionParam as SectionId) ? (sectionParam as SectionId) : "dashboard",
   );
-  const [menu, setMenu] = useState<"main" | "admin">("admin");
+  const [menu, setMenu] = useState<"main" | "composer" | "admin">("admin");
   const [openPeriod, setOpenPeriod] = useState<string | null>(null);
   const [liveUsers, setLiveUsers] = useState<LiveUser[] | null>(null);
   const [usersError, setUsersError] = useState<string | null>(null);
@@ -185,6 +182,24 @@ const Admin = () => {
 
   const changeRole = async (userId: string, role: string) => {
     if (!liveUsers) return;
+    const current = liveUsers.find((u) => u.id === userId);
+    if (!current || current.role === role) return;
+    // Guard rails around the admin role — both directions need a confirm.
+    if (current.role === "admin" && role !== "admin") {
+      if (
+        !window.confirm(
+          `Remove ADMIN access from ${current.email}?\nThey immediately lose the admin area and become "${role}".`,
+        )
+      )
+        return;
+    } else if (role === "admin") {
+      if (
+        !window.confirm(
+          `Give ${current.email} FULL ADMIN access?\nAdmins can manage tracks, content, customers and billing.`,
+        )
+      )
+        return;
+    }
     const prev = liveUsers;
     setSavingUserId(userId);
     setUsersError(null);
@@ -287,6 +302,30 @@ const Admin = () => {
                 ))}
               </div>
 
+              {/* Composer studio — the owner composes too; links open the
+                  account page where the composer sections live. */}
+              <MenuGroupHeader
+                label="Composer"
+                open={menu === "composer"}
+                onClick={() => setMenu("composer")}
+              />
+              <div className={`flex-col ${menu === "composer" ? "flex" : "hidden"}`}>
+                <div className="md:mb-5">
+                  <div className="flex flex-col md:space-y-1">
+                    {composerNavItems.map((item) => (
+                      <Link
+                        key={item.id}
+                        to={`/account?section=composer-${item.id}`}
+                        className="flex items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        <item.icon className="h-4 w-4" />
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
               <MenuGroupHeader label="Admin" open={menu === "admin"} onClick={() => setMenu("admin")} />
               <div className={`flex-col ${menu === "admin" ? "flex" : "hidden"}`}>
                 {adminNavGroups.map((group) => (
@@ -313,19 +352,7 @@ const Admin = () => {
                 ))}
               </div>
 
-              {/* Identical to the /account logout (no extra margin, same label)
-                  so it doesn't shift when navigating between the two pages. */}
-              <button
-                type="button"
-                onClick={async () => {
-                  await logout();
-                  navigate("/");
-                }}
-                className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-red-400 transition-colors hover:text-red-300"
-              >
-                <LogOut className="h-4 w-4" />
-                Log out
-              </button>
+              {/* Log out lives in the header account popup — no sidebar copy. */}
             </nav>
           </aside>
 
@@ -545,66 +572,85 @@ const Admin = () => {
                   <p className="font-body text-sm text-muted-foreground">No registered users yet.</p>
                 )}
                 {liveUsers && liveUsers.length > 0 && (
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[640px] font-body text-sm">
-                      <thead>
-                        <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                          <th className="py-2 pr-4">User</th>
-                          <th className="py-2 pr-4">Role</th>
-                          <th className="py-2 pr-4">Plan</th>
-                          <th className="py-2 pr-4">Downloads</th>
-                          <th className="py-2">Joined</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {liveUsers.map((u) => (
-                          <tr key={u.id} className="border-b border-border/50 last:border-0">
-                            <td className="py-2.5 pr-4">
-                              <button
-                                type="button"
-                                onClick={() => setProfileUserId(u.id)}
-                                className="block text-left text-foreground hover:text-[#F4C430]"
-                              >
-                                {u.name ?? u.email.split("@")[0]}
-                              </button>
-                              <span className="block text-xs text-muted-foreground">{u.email}</span>
-                            </td>
-                            <td className="py-2.5 pr-4">
-                              <select
-                                value={u.role}
-                                disabled={savingUserId === u.id}
-                                onChange={(e) => void changeRole(u.id, e.target.value)}
-                                className="rounded-md border border-border bg-background px-2 py-1 font-body text-xs text-foreground focus:border-[#F4C430] focus:outline-none disabled:opacity-50"
-                              >
-                                {ROLES.map((r) => (
-                                  <option key={r} value={r}>{r}</option>
+                  /* Grouped by role: Admins / Composers / Customers (owner request).
+                     Admins get the pseudonym field too — the owner composes as well. */
+                  <div className="flex flex-col gap-7">
+                    {(
+                      [
+                        ["Admins", liveUsers.filter((u) => u.role === "admin")],
+                        ["Composers", liveUsers.filter((u) => u.role === "composer")],
+                        ["Customers", liveUsers.filter((u) => u.role === "customer")],
+                      ] as const
+                    ).map(([label, list]) =>
+                      list.length === 0 ? null : (
+                        <div key={label}>
+                          <p className="mb-2 font-body text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground/80">
+                            {label} <span className="text-muted-foreground/50">({list.length})</span>
+                          </p>
+                          <div className="overflow-x-auto">
+                            <table className="w-full min-w-[640px] font-body text-sm">
+                              <thead>
+                                <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                                  <th className="py-2 pr-4">User</th>
+                                  <th className="py-2 pr-4">Role</th>
+                                  <th className="py-2 pr-4">Plan</th>
+                                  <th className="py-2 pr-4">Downloads</th>
+                                  <th className="py-2">Joined</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {list.map((u) => (
+                                  <tr key={u.id} className="border-b border-border/50 last:border-0">
+                                    <td className="py-2.5 pr-4">
+                                      <button
+                                        type="button"
+                                        onClick={() => setProfileUserId(u.id)}
+                                        className="block text-left text-foreground hover:text-[#F4C430]"
+                                      >
+                                        {u.name ?? u.email.split("@")[0]}
+                                      </button>
+                                      <span className="block text-xs text-muted-foreground">{u.email}</span>
+                                    </td>
+                                    <td className="py-2.5 pr-4">
+                                      <select
+                                        value={u.role}
+                                        disabled={savingUserId === u.id}
+                                        onChange={(e) => void changeRole(u.id, e.target.value)}
+                                        className="rounded-md border border-border bg-background px-2 py-1 font-body text-xs text-foreground focus:border-[#F4C430] focus:outline-none disabled:opacity-50"
+                                      >
+                                        {ROLES.map((r) => (
+                                          <option key={r} value={r}>{r}</option>
+                                        ))}
+                                      </select>
+                                      {(u.role === "composer" || u.role === "admin") && (
+                                        <input
+                                          defaultValue={u.pseudonym ?? ""}
+                                          placeholder="Pseudonym…"
+                                          title="Composer pseudonym — shown as the track artist on the site (saves on Enter / focus out)"
+                                          disabled={savingUserId === u.id}
+                                          onBlur={(e) => void savePseudonym(u.id, e.target.value)}
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                                          }}
+                                          className="mt-1.5 block w-32 rounded-md border border-border bg-background px-2 py-1 font-body text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none disabled:opacity-50"
+                                        />
+                                      )}
+                                    </td>
+                                    <td className="py-2.5 pr-4">
+                                      <StatusPill text={u.plan ?? "free"} active={!!u.plan && u.plan !== "free"} />
+                                    </td>
+                                    <td className="py-2.5 pr-4 text-muted-foreground">{u.downloads}</td>
+                                    <td className="py-2.5 text-muted-foreground">
+                                      {u.created_at ? u.created_at.slice(0, 10) : "—"}
+                                    </td>
+                                  </tr>
                                 ))}
-                              </select>
-                              {u.role === "composer" && (
-                                <input
-                                  defaultValue={u.pseudonym ?? ""}
-                                  placeholder="Pseudonym…"
-                                  title="Composer pseudonym — shown as the track artist on the site (saves on Enter / focus out)"
-                                  disabled={savingUserId === u.id}
-                                  onBlur={(e) => void savePseudonym(u.id, e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                                  }}
-                                  className="mt-1.5 block w-32 rounded-md border border-border bg-background px-2 py-1 font-body text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none disabled:opacity-50"
-                                />
-                              )}
-                            </td>
-                            <td className="py-2.5 pr-4">
-                              <StatusPill text={u.plan ?? "free"} active={!!u.plan && u.plan !== "free"} />
-                            </td>
-                            <td className="py-2.5 pr-4 text-muted-foreground">{u.downloads}</td>
-                            <td className="py-2.5 text-muted-foreground">
-                              {u.created_at ? u.created_at.slice(0, 10) : "—"}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      ),
+                    )}
                   </div>
                 )}
               </Card>

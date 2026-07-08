@@ -272,8 +272,11 @@ const ComposerUpload = ({ onCreated }: { onCreated: () => void }) => {
         </label>
       </div>
 
-      {/* Version list: star = Main override (default longest). */}
+      {/* Everything below the drop zone appears only once files are added —
+          the empty form was just noise (owner request). */}
       {wavs.length > 0 && (
+        <>
+        {/* Version list: star = Main override (default longest). */}
         <ul className="flex flex-col gap-1 rounded-lg border border-border/60 bg-background/40 p-3">
           {wavs.map((w) => {
             const isMain = mainId === w.id;
@@ -315,7 +318,6 @@ const ComposerUpload = ({ onCreated }: { onCreated: () => void }) => {
             </li>
           )}
         </ul>
-      )}
 
       {/* Fields — exactly Title / BPM / Description / Extra tags / Stems ZIP. */}
       <div className="grid gap-3 sm:grid-cols-[1fr_6rem]">
@@ -394,6 +396,8 @@ const ComposerUpload = ({ onCreated }: { onCreated: () => void }) => {
           {busy ? "Uploading…" : "Upload"}
         </button>
       </div>
+      </>
+      )}
     </div>
   );
 };

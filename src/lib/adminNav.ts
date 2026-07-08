@@ -1,6 +1,7 @@
 import {
   Bell,
   CreditCard,
+  DollarSign,
   Download,
   FileText,
   Heart,
@@ -99,10 +100,14 @@ export const adminNavGroups: { label: string; items: NavItem[] }[] = [
 // Flat list (used by the secondary "Admin" menu on the account page).
 export const adminNavItems: NavItem[] = adminNavGroups.flatMap((g) => g.items);
 
-// Composer studio links shown in the /account sidebar for role=composer.
-// They cross-link to /composer?section=… (the composer panel honors ?section=).
+// Composer studio sections — rendered INSIDE /account (sidebar "Composer"
+// group; account section ids are prefixed: composer-<id>). Shown for
+// role=composer AND admins (the owner is a composer too).
 export const composerNavItems: NavItem[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "upload", label: "Upload track", icon: UploadCloud },
   { id: "tracks", label: "My tracks", icon: Music2 },
+  { id: "upload", label: "Upload", icon: UploadCloud },
+  { id: "earnings", label: "Earnings", icon: DollarSign },
+  { id: "requests", label: "Requests", icon: Inbox },
+  { id: "profile", label: "Profile", icon: UserRound },
 ];
