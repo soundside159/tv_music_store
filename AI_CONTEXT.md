@@ -1169,3 +1169,8 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   glowing **"ON"** / dim **"OFF"** label revealed on the opposite side. Used the brand **gold** glow
   (not the blue from the owner's reference screenshot) to stay on-theme — trivial to switch to blue if
   he prefers. Pure inline styles, no deps.
+- **2026-07-07 (toggle tweak + waveform dimming):** (1) Toggle no longer slides the knob — the grip
+  knob stays fixed left, the ON/OFF label stays fixed on the right, and only the glow + word change;
+  widened to `w-20` so "OFF" fits. (2) WaveformPreview unplayed-bar opacity lowered: idle rows
+  `0.3 → 0.18` (darker when not playing) and the active/playing track `0.62 → 0.42` (was too bright
+  when a track started). Played part stays solid gold (1).

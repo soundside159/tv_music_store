@@ -18,7 +18,7 @@ const Toggle = ({ on, onChange, disabled }: { on: boolean; onChange: () => void;
     aria-checked={on}
     disabled={disabled}
     onClick={onChange}
-    className="relative inline-flex h-8 w-[4.5rem] shrink-0 items-center rounded-full border border-black/60 transition-all disabled:opacity-50"
+    className="relative inline-flex h-8 w-20 shrink-0 items-center rounded-full border border-black/60 transition-all disabled:opacity-50"
     style={{
       background: "linear-gradient(180deg,#141517,#0b0c0e)",
       boxShadow: on
@@ -26,23 +26,19 @@ const Toggle = ({ on, onChange, disabled }: { on: boolean; onChange: () => void;
         : "inset 0 1px 3px rgba(0,0,0,0.75)",
     }}
   >
-    <span
-      className={`pointer-events-none absolute inset-0 flex items-center font-body text-[10px] font-bold tracking-[0.15em] ${
-        on ? "justify-end pr-3" : "justify-start pl-3"
-      }`}
-    >
+    <span className="pointer-events-none absolute inset-0 flex items-center justify-end pr-3.5 font-body text-[10px] font-bold tracking-[0.15em]">
       <span
         style={
           on
             ? { color: "#F4C430", textShadow: "0 0 8px rgba(244,196,48,0.9)" }
-            : { color: "rgba(255,255,255,0.32)" }
+            : { color: "rgba(255,255,255,0.3)" }
         }
       >
         {on ? "ON" : "OFF"}
       </span>
     </span>
     <span
-      className={`absolute bottom-1 top-1 w-8 rounded-full transition-all duration-200 ${on ? "left-1" : "right-1"}`}
+      className="absolute bottom-1 left-1 top-1 w-8 rounded-full"
       style={{
         background: "linear-gradient(180deg,#3b3d42,#1e2023)",
         boxShadow: "inset 0 1px 1px rgba(255,255,255,0.18), 0 2px 5px rgba(0,0,0,0.55)",

@@ -260,7 +260,9 @@ const WaveformPreview = ({
               // Tunetank-style states: idle rows are dim grey, the selected
               // (playing) track brightens smoothly, played part is solid gold.
               const color = played ? "#F4C430" : "currentColor";
-              const opacity = played ? 1 : active ? 0.62 : 0.3;
+              // Unplayed grey: darker when idle (0.18) and only moderately lit
+              // when the track is playing (0.42) — was too bright at 0.62/0.3.
+              const opacity = played ? 1 : active ? 0.42 : 0.18;
               const height = Math.max(6, peak * 86);
               const center = 50;
               const x = index * BAR_STEP + BAR_STEP / 2;
