@@ -18,10 +18,17 @@ export const ensureMailTables = async (db: D1Database): Promise<void> => {
          last_direction TEXT,
          unread INTEGER NOT NULL DEFAULT 0,
          archived INTEGER NOT NULL DEFAULT 0,
+         priority INTEGER NOT NULL DEFAULT 0,
          created_at TEXT NOT NULL DEFAULT (datetime('now'))
        )`,
     )
     .run();
+  // priority marks paid-plan support tickets; guarded ALTER for pre-existing tables.
+  try {
+    await db.prepare(`ALTER TABLE mail_threads ADD COLUMN priority INTEGER NOT NULL DEFAULT 0`).run();
+  } catch {
+    // column already exists — fine
+  }
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_mail_threads_last ON mail_threads(last_message_at)`).run();
   await db
     .prepare(
@@ -52,6 +59,8 @@ export interface RecordMessageInput {
   subject?: string | null;
   body?: string | null;
   providerId?: string | null;
+  /** Marks the thread as a paid-plan priority support ticket. */
+  priority?: boolean;
 }
 
 /** Upserts the per-person thread and appends one message. Returns the thread id. */
@@ -66,6 +75,7 @@ export const recordMessage = async (db: D1Database, m: RecordMessageInput): Prom
     .bind(email)
     .first<{ id: string }>();
 
+  const prio = m.priority ? 1 : 0;
   let threadId: string;
   if (existing) {
     threadId = existing.id;
@@ -77,20 +87,21 @@ export const recordMessage = async (db: D1Database, m: RecordMessageInput): Prom
                 last_snippet = ?3,
                 last_direction = ?4,
                 unread = unread + ?5,
+                priority = MAX(priority, ?6),
                 archived = 0
           WHERE id = ?1`,
       )
-      .bind(threadId, m.name ?? null, snippet, m.direction, unreadBump)
+      .bind(threadId, m.name ?? null, snippet, m.direction, unreadBump, prio)
       .run();
   } else {
     threadId = newId("mth");
     await db
       .prepare(
         `INSERT INTO mail_threads
-           (id, email, name, last_message_at, last_snippet, last_direction, unread)
-         VALUES (?1, ?2, ?3, datetime('now'), ?4, ?5, ?6)`,
+           (id, email, name, last_message_at, last_snippet, last_direction, unread, priority)
+         VALUES (?1, ?2, ?3, datetime('now'), ?4, ?5, ?6, ?7)`,
       )
-      .bind(threadId, email, m.name ?? null, snippet, m.direction, unreadBump)
+      .bind(threadId, email, m.name ?? null, snippet, m.direction, unreadBump, prio)
       .run();
   }
 

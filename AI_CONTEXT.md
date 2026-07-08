@@ -1133,3 +1133,20 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   subtitle; NotificationsSettings marketing subtitle reworded; `lib/licenses.ts` usage-term bullets
   rephrased (meaning-preserving, no new scope claims — kept "Lifetime license" consistent with the
   perpetual-license docs). Structure/logic untouched; owner keeps the visual style.
+- **2026-07-07 (signup consent + fixes batch + priority support tickets):** (1) SIGNUP CONSENT LINE
+  added under the email form in AuthModal + Login. (2) DownloadOptionsModal subtitle no longer
+  duplicates the title (uses `cleanVersionLabel`). (3) Download history track titles are now links to
+  `/track/<slug>`. (4) Pricing intro reworded to a benefit line. (5) De-tunetank tweaks: Plan&Billing
+  section dots recolored to gold + labels "Your plan"/"Account details"; Notifications group headers
+  got a gold accent bar; YouTube Whitelisting reworded ("we take care of Content ID claims on your new
+  videos… set it once and relax"), the N/limit badge moved INTO the Add-a-channel card, the "Need more
+  channels?" banner removed, and the Crown icon dropped. (6) **PRIORITY SUPPORT (new):** Account →
+  Support (`SupportSection.tsx`) — Free shows the contact email + an "Upgrade for priority" prompt;
+  Pro/Max get an **internal ticket chat** backed by NEW `functions/api/support.ts` (GET the user's own
+  thread, POST a message). It reuses the mailbox tables: a support message is a `mail_messages` row
+  (direction 'in') on the user's thread with `mail_threads.priority=1` (new column, lazy ALTER +
+  migration + `_mail.ts recordMessage` gained a `priority` flag, MAX-merged). Admin **Inbox** now sorts
+  priority threads first and shows a gold **PRO** badge; admin replies (existing Inbox reply → Resend
+  email + stored 'out' message) appear back in the customer's Support thread, so it's a two-way
+  internal chat + email notification. NOTE: reverted an accidental "Unlimited MP3 → Unlimited" Pro edit
+  (WAV stays Max-only). Owner: mail worker deploy already covers the schema (priority ALTER self-heals).

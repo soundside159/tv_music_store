@@ -13,6 +13,7 @@ interface ThreadRow {
   last_snippet: string | null;
   last_direction: string | null;
   unread: number;
+  priority?: number;
 }
 
 interface MessageRow {
@@ -198,14 +199,24 @@ const AdminInbox = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => v
                   >
                     {t.name || t.email}
                   </span>
-                  {t.unread > 0 && (
-                    <span
-                      className="shrink-0 rounded-full px-1.5 py-0.5 font-body text-[10px] font-bold text-background"
-                      style={{ backgroundColor: GOLD }}
-                    >
-                      {t.unread}
-                    </span>
-                  )}
+                  <span className="flex shrink-0 items-center gap-1">
+                    {t.priority ? (
+                      <span
+                        className="rounded-full px-1.5 py-0.5 font-body text-[9px] font-bold uppercase tracking-wide text-background"
+                        style={{ backgroundColor: GOLD }}
+                      >
+                        Pro
+                      </span>
+                    ) : null}
+                    {t.unread > 0 && (
+                      <span
+                        className="rounded-full px-1.5 py-0.5 font-body text-[10px] font-bold text-background"
+                        style={{ backgroundColor: GOLD }}
+                      >
+                        {t.unread}
+                      </span>
+                    )}
+                  </span>
                 </div>
                 <span className="truncate font-body text-xs text-muted-foreground">
                   {t.last_direction === "out" ? "You: " : ""}

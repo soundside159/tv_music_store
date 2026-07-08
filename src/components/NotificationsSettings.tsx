@@ -53,7 +53,10 @@ const Row = ({
 );
 
 const GroupHeader = ({ label }: { label: string }) => (
-  <p className="border-b border-border/60 px-5 py-3 font-body text-sm font-semibold text-foreground">{label}</p>
+  <p className="flex items-center gap-2 border-b border-border/60 px-5 py-3 font-body text-sm font-semibold text-foreground">
+    <span className="h-3 w-1 rounded-full" style={{ backgroundColor: "#F4C430" }} />
+    {label}
+  </p>
 );
 
 const loadOther = (): Record<OtherKey, boolean> => {

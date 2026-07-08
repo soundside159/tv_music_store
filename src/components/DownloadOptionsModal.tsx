@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Check, Download, X } from "lucide-react";
 import { refreshSession, useAuthSession } from "@/hooks/useAuth";
-import { downloadTrackVersion, openAttribution, type DownloadArgs } from "@/lib/downloadTrack";
+import { cleanVersionLabel, downloadTrackVersion, openAttribution, type DownloadArgs } from "@/lib/downloadTrack";
 
 // Tunetank-style download dialog. Any Download button dispatches
 // "tvms:download-options" (see openDownloadOptions) and this modal takes over:
@@ -139,7 +139,8 @@ const DownloadOptionsModal = () => {
           </button>
         </div>
         <p className="mt-1 truncate font-body text-xs text-muted-foreground">
-          {args.title} — {args.label}
+          {args.title}
+          {cleanVersionLabel(args.label, args.title) ? ` — ${cleanVersionLabel(args.label, args.title)}` : ""}
         </p>
 
         <div className="mt-5 flex flex-col gap-2.5">

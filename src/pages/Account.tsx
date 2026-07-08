@@ -16,6 +16,7 @@ import {
 import { mockClaimRequests } from "@/mocks";
 import MyChannels from "@/components/MyChannels";
 import NotificationsSettings from "@/components/NotificationsSettings";
+import SupportSection from "@/components/SupportSection";
 import { logout, updateProfile } from "@/hooks/useAuth";
 import { BILLING_ENABLED, openBillingPortal, openPlanModal } from "@/lib/billing";
 import { downloadTrackVersion } from "@/lib/downloadTrack";
@@ -320,7 +321,15 @@ const Account = () => {
                       <tbody>
                         {downloads.map((d) => (
                           <tr key={d.id} className="border-b border-border/50 last:border-0">
-                            <td className="py-2.5 pr-4 text-foreground">{d.trackTitle ?? trackTitle(d.trackId)}</td>
+                            <td className="py-2.5 pr-4">
+                              {d.trackSlug ? (
+                                <Link to={`/track/${d.trackSlug}`} className="text-foreground transition-colors hover:text-[#F4C430]">
+                                  {d.trackTitle ?? trackTitle(d.trackId)}
+                                </Link>
+                              ) : (
+                                <span className="text-foreground">{d.trackTitle ?? trackTitle(d.trackId)}</span>
+                              )}
+                            </td>
                             <td className="py-2.5 pr-4 uppercase text-muted-foreground">{d.format}</td>
                             <td className="py-2.5 pr-4 capitalize text-muted-foreground">{d.planAtDownload}</td>
                             <td className="py-2.5 pr-4 text-muted-foreground">{fmtDate(d.createdAt)}</td>
@@ -484,7 +493,7 @@ const Account = () => {
 
                 <div className="rounded-xl border border-border bg-card p-6">
                   <p className="flex items-center gap-2 font-body text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    <span className="h-2 w-2 rounded-full bg-emerald-400" /> Subscription
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: GOLD }} /> Your plan
                   </p>
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
                     <div>
@@ -518,7 +527,7 @@ const Account = () => {
 
                 <div className="rounded-xl border border-border bg-card p-6">
                   <p className="flex items-center gap-2 font-body text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    <span className="h-2 w-2 rounded-full bg-fuchsia-400" /> Billing Information
+                    <span className="h-2 w-2 rounded-full border border-[#F4C430]" /> Account details
                   </p>
                   <p className="mt-4 font-body text-base font-semibold text-foreground">{user.name || "—"}</p>
                   <p className="font-body text-sm text-muted-foreground">{user.email}</p>
@@ -533,27 +542,7 @@ const Account = () => {
               </div>
             )}
 
-            {section === "support" && (
-              <SectionCard title="Support">
-                <form className="flex flex-col gap-3" onSubmit={(e) => e.preventDefault()}>
-                  <input
-                    placeholder="Subject"
-                    className="rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
-                  />
-                  <textarea
-                    placeholder="How can we help?"
-                    rows={5}
-                    className="rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
-                  />
-                  <button
-                    type="submit"
-                    className="self-start rounded-lg bg-[#F4C430] px-5 py-2 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
-                  >
-                    Send message
-                  </button>
-                </form>
-              </SectionCard>
-            )}
+            {section === "support" && <SupportSection />}
           </div>
         </div>
       </main>

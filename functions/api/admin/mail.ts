@@ -115,7 +115,7 @@ export const onRequestGet = async (ctx: Ctx) => {
     const like = `%${q}%`;
     const found = await ctx.env.DB.prepare(
       `SELECT DISTINCT t.id, t.email, t.name, t.last_message_at, t.last_snippet,
-              t.last_direction, t.unread, t.archived
+              t.last_direction, t.unread, t.archived, t.priority
          FROM mail_threads t
          LEFT JOIN mail_messages m ON m.thread_id = t.id
         WHERE t.email LIKE ?1 OR t.name LIKE ?1 OR m.subject LIKE ?1 OR m.body LIKE ?1
@@ -128,10 +128,10 @@ export const onRequestGet = async (ctx: Ctx) => {
   }
 
   const threads = await ctx.env.DB.prepare(
-    `SELECT id, email, name, last_message_at, last_snippet, last_direction, unread, archived
+    `SELECT id, email, name, last_message_at, last_snippet, last_direction, unread, archived, priority
        FROM mail_threads
       WHERE archived = 0
-      ORDER BY last_message_at DESC
+      ORDER BY priority DESC, last_message_at DESC
       LIMIT 300`,
   ).all();
   const unreadRow = await ctx.env.DB.prepare(

@@ -187,8 +187,8 @@ const Pricing = () => {
         <header className="text-center">
           <h1 className="text-3xl text-foreground md:text-4xl">Plans &amp; pricing</h1>
           <p className="mx-auto mt-3 max-w-xl font-body text-sm text-muted-foreground">
-            Listen to the full catalog for free. Download with a free account. Upgrade when your
-            projects need more.
+            Unlimited royalty-free cinematic music for your videos — YouTube monetization-safe, with
+            commercial licensing and lossless WAV when you need it.
           </p>
           <div className="mt-8 inline-flex items-center rounded-full border border-border bg-card p-1">
             {(["annual", "monthly"] as BillingInterval[]).map((i) => (

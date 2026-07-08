@@ -309,6 +309,7 @@ CREATE TABLE IF NOT EXISTS mail_threads (
   last_direction TEXT,                  -- in | out
   unread INTEGER NOT NULL DEFAULT 0,    -- count of unread inbound messages
   archived INTEGER NOT NULL DEFAULT 0,
+  priority INTEGER NOT NULL DEFAULT 0,  -- 1 = paid-plan priority support ticket
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_mail_threads_last ON mail_threads(last_message_at);
