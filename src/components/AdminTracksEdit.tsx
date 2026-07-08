@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, ChevronLeft, ChevronRight, ExternalLink, Minus, Music, Pause, Play, Search, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, ExternalLink, Minus, Music, Pause, Play, Search, Star, X } from "lucide-react";
 import WaveformPreview from "@/components/WaveformPreview";
 import { usePlayer } from "@/components/playerContext";
 import { splitFilterValues } from "@/components/TrackRowPlayer";
@@ -117,6 +117,7 @@ const AdminTracksEdit = ({
   run,
   uploadCover,
   uploadStems,
+  onTracksReload,
   onApplyOverrides,
   onSelectionChange,
   selectionResetKey,
@@ -134,6 +135,8 @@ const AdminTracksEdit = ({
   uploadCover: (file: File, apply: (path: string) => void) => Promise<void> | void;
   /** Uploads a stems .zip for one track (stores key + flips has_stems on). */
   uploadStems?: (file: File, trackId: string) => Promise<boolean>;
+  /** Refetch /api/tracks (after version set-main/delete in the table). */
+  onTracksReload?: () => void;
   onApplyOverrides: (overrides: Record<string, Partial<CatalogTrack>>) => void;
   onSelectionChange?: (ids: string[]) => void;
   selectionResetKey?: number;
@@ -350,6 +353,28 @@ const AdminTracksEdit = ({
   const toggleTrack = (id: string) =>
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
+  // --- per-row versions expander (view / set main / delete) ---
+  const [versionsOpenId, setVersionsOpenId] = useState<string | null>(null);
+  const [versionBusy, setVersionBusy] = useState<string | null>(null);
+
+  const setMainVersion = async (t: CatalogTrack, versionId: string, label: string) => {
+    setVersionBusy(`${t.id}:${versionId}`);
+    const ok = await run(
+      { action: "set_main_version", id: t.id, versionId },
+      `"${label}" is now the Main version`,
+    );
+    setVersionBusy(null);
+    if (ok) onTracksReload?.();
+  };
+
+  const deleteVersion = async (t: CatalogTrack, versionId: string, label: string) => {
+    if (!window.confirm(`Delete version "${label}" of "${t.title}"?`)) return;
+    setVersionBusy(`${t.id}:${versionId}`);
+    const ok = await run({ action: "delete_version", id: t.id, versionId }, "Version deleted");
+    setVersionBusy(null);
+    if (ok) onTracksReload?.();
+  };
+
   // Per-row Trending toggle — persists immediately; the parent reload refreshes
   // the `trending` list.
   const trendingSet = new Set(trending);
@@ -390,7 +415,7 @@ const AdminTracksEdit = ({
     searchValue?: string,
     setSearchValue?: (v: string) => void,
   ) => (
-    <div className="border-t border-border/60 pt-4">
+    <div className="border-t border-border/60 pt-4 first:border-t-0 first:pt-0">
       <p className="mb-2 font-body text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         {title}
       </p>
@@ -423,10 +448,60 @@ const AdminTracksEdit = ({
   );
 
   const hasSelection = selTracks.length > 0;
+  const single = selTracks.length === 1;
+
+  // Track-page-style layout: with a selection, TWO slim panels appear to the
+  // LEFT of the table (Collections/Playlists/Categories, then the tag facets);
+  // with exactly ONE track selected a compact fields panel appears on the right.
+  const gridCols = !hasSelection
+    ? "xl:grid-cols-1"
+    : single
+      ? "xl:grid-cols-[16rem_16rem_minmax(0,1fr)_21rem]"
+      : "xl:grid-cols-[16rem_16rem_minmax(0,1fr)]";
+  const panelColCls =
+    "flex flex-col gap-4 rounded-xl border border-[#F4C430]/30 bg-card p-4 xl:sticky xl:top-24 xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto";
 
   return (
-    <div className="mt-5 items-start gap-6 xl:grid xl:grid-cols-[minmax(44rem,1fr)_minmax(32rem,1fr)]">
-      {/* ===== Left: toolbar + table + pagination ===== */}
+    <div className={`mt-5 items-start gap-5 xl:grid ${gridCols}`}>
+      {/* ===== Far left: collections / playlists / categories membership ===== */}
+      {hasSelection && (
+        <aside className={panelColCls}>
+          <p className="font-body text-[10px] font-bold uppercase tracking-[0.24em] text-[#F4C430]">
+            Add to
+          </p>
+          {membershipSection("Collections", collections, collectionDelta, setCollectionDelta)}
+          {membershipSection("Playlists", playlists, playlistDelta, setPlaylistDelta, playlistSearch, setPlaylistSearch)}
+          {membershipSection("Categories", categories, categoryDelta, setCategoryDelta)}
+        </aside>
+      )}
+
+      {/* ===== Left: Use Case / Genre / Mood facets ===== */}
+      {hasSelection && (
+        <aside className={panelColCls}>
+          <p className="font-body text-[10px] font-bold uppercase tracking-[0.24em] text-[#F4C430]">
+            Tags{selTracks.length > 1 ? ` · ${selTracks.length} tracks` : ""}
+          </p>
+          {FACETS.map(({ key, label }) => (
+            <div key={key} className="border-t border-border/60 pt-4 first:border-t-0 first:pt-0">
+              <p className="mb-2 font-body text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {label}
+              </p>
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,max-content))] gap-x-5 gap-y-1">
+                {vocabularies[key].map((opt) => (
+                  <TriCheckbox
+                    key={opt}
+                    label={opt}
+                    state={facetDisplay(key, opt)}
+                    onToggle={() => toggleFacet(key, opt)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </aside>
+      )}
+
+      {/* ===== Center: toolbar + table + pagination ===== */}
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative">
@@ -457,6 +532,31 @@ const AdminTracksEdit = ({
               </option>
             ))}
           </select>
+
+          {/* Selection cluster: one Apply saves the side panels + the fields panel. */}
+          {hasSelection && (
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelected([])}
+                className="inline-flex items-center gap-1 font-body text-xs text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+                {selected.length} selected
+              </button>
+              <button type="button" disabled={!dirty || busy} onClick={resetChanges} className={btnCls}>
+                Reset
+              </button>
+              <button
+                type="button"
+                disabled={!dirty || busy || disabled}
+                onClick={() => void applyChanges()}
+                className={goldBtnCls}
+              >
+                {busy ? "Applying..." : "Apply Changes"}
+              </button>
+            </div>
+          )}
         </div>
 
         {disabled && (
@@ -468,12 +568,13 @@ const AdminTracksEdit = ({
 
         <div className="mt-4 overflow-x-auto rounded-lg border border-border/60">
           <div className="min-w-[44rem]">
-            <div className="grid grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_8rem_4.5rem_5rem] items-center gap-2 border-b border-border/60 bg-secondary/40 px-3 py-2.5">
+            <div className="grid grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_3.5rem_7rem_4.5rem_5rem] items-center gap-2 border-b border-border/60 bg-secondary/40 px-3 py-2.5">
               <span className="flex justify-center">
                 <RowCheckbox state={pageState} onToggle={togglePage} label="Select all visible" />
               </span>
               <span />
               <span className="font-body text-xs uppercase tracking-wide text-muted-foreground">Track</span>
+              <span className="text-center font-body text-xs uppercase tracking-wide text-muted-foreground">Ver.</span>
               <span className="font-body text-xs uppercase tracking-wide text-muted-foreground">Composer</span>
               <button
                 type="button"
@@ -495,10 +596,11 @@ const AdminTracksEdit = ({
                 player.activePlayer.versionId === version?.id &&
                 player.isPlaying;
               const isSelected = selectedSet.has(t.id);
+              const versionsOpen = versionsOpenId === t.id;
               return (
+                <div key={t.id} className="border-b border-border/40 last:border-b-0">
                 <div
-                  key={t.id}
-                  className={`grid grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_8rem_4.5rem_5rem] items-center gap-2 border-b border-border/40 px-3 py-2 transition-colors last:border-b-0 ${
+                  className={`grid grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_3.5rem_7rem_4.5rem_5rem] items-center gap-2 px-3 py-2 transition-colors ${
                     isSelected ? "bg-[#F4C430]/[0.06]" : "hover:bg-foreground/[0.03]"
                   }`}
                 >
@@ -562,6 +664,19 @@ const AdminTracksEdit = ({
                     </div>
                   </div>
 
+                  <button
+                    type="button"
+                    onClick={() => setVersionsOpenId(versionsOpen ? null : t.id)}
+                    title="Show versions"
+                    aria-label={`${t.audioVersions.length} versions of ${t.title}`}
+                    className={`justify-self-center rounded-md border px-2 py-0.5 font-body text-xs tabular-nums transition-colors ${
+                      versionsOpen
+                        ? "border-[#F4C430] text-[#F4C430]"
+                        : "border-border/60 text-muted-foreground hover:border-[#F4C430] hover:text-[#F4C430]"
+                    }`}
+                  >
+                    ×{t.audioVersions.length}
+                  </button>
                   <span className="truncate font-body text-xs text-muted-foreground">{t.artist}</span>
                   <span className="flex justify-center">
                     <RowCheckbox
@@ -571,6 +686,74 @@ const AdminTracksEdit = ({
                     />
                   </span>
                   <span className="font-body text-xs tabular-nums text-muted-foreground">{t.duration}</span>
+                </div>
+
+                {/* Versions expander: ★ set Main · play · delete. Add/rename +
+                    WAV-bundle rebuild live on the track page's admin panel. */}
+                {versionsOpen && (
+                  <div className="border-t border-border/30 bg-background/40 px-4 py-2.5 pl-[5.5rem]">
+                    {t.audioVersions.map((v, vi) => {
+                      const vActive =
+                        player.activePlayer?.trackId === t.id &&
+                        player.activePlayer.versionId === v.id &&
+                        player.isPlaying;
+                      const vBusy = versionBusy === `${t.id}:${v.id}`;
+                      return (
+                        <div
+                          key={v.id}
+                          className={`flex items-center gap-2 rounded px-1 py-0.5 hover:bg-white/5 ${vBusy ? "opacity-50" : ""}`}
+                        >
+                          <button
+                            type="button"
+                            disabled={vi === 0 || vBusy || busy}
+                            onClick={() => void setMainVersion(t, v.id, v.label)}
+                            title={vi === 0 ? "Main version" : "Make this the Main version"}
+                            aria-label={vi === 0 ? "Main version" : `Make ${v.label} the main version`}
+                            className="shrink-0 disabled:cursor-default"
+                          >
+                            <Star
+                              className="h-3 w-3"
+                              style={vi === 0 ? { color: "#F4C430", fill: "#F4C430" } : { color: "#666" }}
+                            />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => player.playVersion(t, v)}
+                            aria-label={vActive ? `Pause ${v.label}` : `Play ${v.label}`}
+                            className="shrink-0 text-muted-foreground transition-colors hover:text-[#F4C430]"
+                          >
+                            {vActive ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
+                          </button>
+                          <span
+                            className={`min-w-0 flex-1 truncate font-body text-xs ${vActive ? "text-[#F4C430]" : "text-foreground"}`}
+                          >
+                            {v.label}
+                          </span>
+                          <span className="shrink-0 font-body text-[10px] tabular-nums text-muted-foreground">
+                            {v.duration}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={vi === 0 || t.audioVersions.length <= 1 || vBusy || busy}
+                            onClick={() => void deleteVersion(t, v.id, v.label)}
+                            title={vi === 0 ? "Main can't be deleted — star another version first" : "Delete version"}
+                            aria-label={`Delete ${v.label}`}
+                            className="shrink-0 text-muted-foreground transition-colors hover:text-red-400 disabled:opacity-30"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                    <p className="mt-1 font-body text-[10px] text-muted-foreground">
+                      Add / rename versions (and WAV-bundle rebuild) — on the{" "}
+                      <Link to={`/track/${t.slug}`} target="_blank" rel="noopener noreferrer" className="text-[#F4C430] hover:underline">
+                        track page
+                      </Link>
+                      .
+                    </p>
+                  </div>
+                )}
                 </div>
               );
             })}
@@ -643,38 +826,27 @@ const AdminTracksEdit = ({
         </div>
       </div>
 
-      {/* ===== Right: permanent edit panel (sticky column, no overlay) ===== */}
-      <aside className="mt-6 flex flex-col rounded-xl border border-border bg-background/40 xl:sticky xl:top-24 xl:mt-0 xl:max-h-[calc(100vh-7rem)]">
-        <div className="flex items-center justify-between border-b border-border/60 px-4 py-3.5">
-          <h3 className="font-body text-sm font-semibold text-foreground">
-            {!hasSelection
-              ? "Edit Tracks"
-              : selTracks.length === 1
-                ? `Edit: ${selTracks[0].title}`
-                : `Edit ${selTracks.length} Tracks`}
-          </h3>
-          {hasSelection && (
-            <button
-              type="button"
-              aria-label="Clear selection"
-              onClick={() => setSelected([])}
-              className="text-muted-foreground transition-colors hover:text-foreground"
+      {/* ===== Right: single-track fields panel (title/BPM/tags/desc/cover/stems) ===== */}
+      {single && fields && (
+        <aside className="mt-6 flex flex-col rounded-xl border border-[#F4C430]/30 bg-card xl:sticky xl:top-24 xl:mt-0 xl:max-h-[calc(100vh-7rem)]">
+          <div className="flex items-center justify-between border-b border-border/60 px-4 py-3.5">
+            <h3 className="truncate font-body text-sm font-semibold text-foreground">
+              {selTracks[0].title}
+            </h3>
+            <Link
+              to={`/track/${selTracks[0].slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Open track page"
+              className="shrink-0 text-muted-foreground transition-colors hover:text-[#F4C430]"
             >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
+              <ExternalLink className="h-3.5 w-3.5" />
+            </Link>
+          </div>
 
-        {!hasSelection ? (
-          <p className="px-4 py-6 font-body text-sm text-muted-foreground">
-            Select one or more tracks in the table — tags, playlists, collections, categories and
-            trending become editable here. A gold dash means the selected tracks have mixed values.
-          </p>
-        ) : (
-          <>
             <div className="flex-1 overflow-y-auto px-4 py-4">
               {fields && selTracks.length === 1 && (
-                <div className="mb-4 flex flex-col gap-2.5">
+                <div className="flex flex-col gap-2.5">
                   <input
                     placeholder="Title"
                     value={fields.title}
@@ -774,50 +946,9 @@ const AdminTracksEdit = ({
                 </div>
               )}
 
-              {FACETS.map(({ key, label }) => (
-                <div key={key} className="mb-4 border-t border-border/60 pt-4 first:mt-0 first:border-t-0 first:pt-0">
-                  <p className="mb-2 font-body text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {label}
-                  </p>
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,max-content))] gap-x-5 gap-y-1">
-                    {vocabularies[key].map((opt) => (
-                      <TriCheckbox
-                        key={opt}
-                        label={opt}
-                        state={facetDisplay(key, opt)}
-                        onToggle={() => toggleFacet(key, opt)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))}
-
-              {membershipSection("Categories", categories, categoryDelta, setCategoryDelta)}
-              <div className="mt-4">
-                {membershipSection("Playlists", playlists, playlistDelta, setPlaylistDelta, playlistSearch, setPlaylistSearch)}
-              </div>
-              <div className="mt-4">
-                {membershipSection("Collections", collections, collectionDelta, setCollectionDelta)}
-              </div>
-
             </div>
-
-            <div className="flex gap-2 border-t border-border/60 px-4 py-3.5">
-              <button type="button" disabled={!dirty || busy} onClick={resetChanges} className={btnCls}>
-                Reset
-              </button>
-              <button
-                type="button"
-                disabled={!dirty || busy || disabled}
-                onClick={() => void applyChanges()}
-                className={`${goldBtnCls} flex-1`}
-              >
-                {busy ? "Applying..." : "Apply Changes"}
-              </button>
-            </div>
-          </>
-        )}
-      </aside>
+        </aside>
+      )}
     </div>
   );
 };

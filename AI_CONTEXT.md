@@ -1513,3 +1513,20 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   ALSO: TrackDetail now loads `useTracks({drafts: user.role==="admin"})` so DRAFT track pages
   open for the admin (they 404'd before — broke curating bulk drafts) + an amber DRAFT badge
   next to the title (admin only). Body type in content.ts gained versionId/label/preview128.
+- **2026-07-08 (Tracks Edit v3 — track-page-style layout, owner-approved):** owner disliked the
+  bulky right panel; restructured `AdminTracksEdit.tsx` to mirror the track page. LAYOUT: with a
+  selection, TWO slim sticky gold-bordered columns appear LEFT of the table — "Add to"
+  (Collections / Playlists / Categories tri-state membership; Collections leftmost per owner) and
+  "Tags" (Use Case / Genre / Mood tri-state); with EXACTLY ONE track selected a compact fields
+  panel appears on the RIGHT (title / BPM / extra tags / description / cover+Upload / stems
+  toggle+ZIP upload + link to the track page) — grid
+  `[16rem_16rem_minmax(0,1fr)_21rem]` (or without the last col for multi-select; plain 1-col when
+  nothing selected). The old monolithic right panel + its footer are gone; **Apply/Reset moved to
+  the table toolbar** ("N selected ✕ · Reset · Apply Changes", one Apply saves panels + fields).
+  VERSIONS IN THE TABLE: new "Ver." column (×N button) → expander row listing versions with
+  ★ set_main_version / play / X delete_version (main+last protected; NOTE: table delete does NOT
+  rebuild the WAV zip — full tools incl. bundle rebuild live on the track page, expander links
+  there). New `onTracksReload` prop from AdminContent refetches /api/tracks after version ops.
+  ALSO: AdminContent header buttons Publish/Delete/+Add Track grouped in one right-side cluster
+  (no more spreading); track-page admin panel: trash now says "Delete track", Trending box shows
+  "This track is in Trending — position #N" instead of the Add button when already listed.

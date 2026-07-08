@@ -297,30 +297,32 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
             Load demo catalog into DB
           </button>
         )}
-        {tab === "tracks" && trackSource === "api" && selectedTrackIds.length > 0 && (
-          <>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void publishSelectedTracks()}
-              className={goldBtnCls}
-            >
-              Publish ({selectedTrackIds.length})
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void deleteSelectedTracks()}
-              className="rounded-lg bg-red-600 px-4 py-2 font-body text-sm font-semibold text-white transition-colors hover:bg-red-500 disabled:opacity-50"
-            >
-              Delete ({selectedTrackIds.length})
-            </button>
-          </>
-        )}
         {tab === "tracks" && trackSource === "api" && (
-          <button type="button" onClick={() => setAddOpen(true)} className={goldBtnCls}>
-            + Add Track
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {selectedTrackIds.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void publishSelectedTracks()}
+                  className={goldBtnCls}
+                >
+                  Publish ({selectedTrackIds.length})
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void deleteSelectedTracks()}
+                  className="rounded-lg bg-red-600 px-4 py-2 font-body text-sm font-semibold text-white transition-colors hover:bg-red-500 disabled:opacity-50"
+                >
+                  Delete ({selectedTrackIds.length})
+                </button>
+              </>
+            )}
+            <button type="button" onClick={() => setAddOpen(true)} className={goldBtnCls}>
+              + Add Track
+            </button>
+          </div>
         )}
       </div>
 
@@ -718,6 +720,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
           run={run}
           uploadCover={uploadCover}
           uploadStems={uploadStems}
+          onTracksReload={() => void reloadTracks()}
           onApplyOverrides={(overrides) =>
             setTrackOverrides((prev) => {
               const next = { ...prev };

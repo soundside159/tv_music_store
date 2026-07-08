@@ -480,11 +480,11 @@ export const AdminTrackTagsPanel = ({
         <button
           type="button"
           onClick={() => void deleteTrack()}
-          title="Delete this track"
-          aria-label="Delete this track"
-          className="text-muted-foreground transition-colors hover:text-red-400"
+          title="Delete this track from the catalog"
+          className="inline-flex items-center gap-1 font-body text-[10px] font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:text-red-400"
         >
           <Trash2 className="h-3.5 w-3.5" />
+          Delete track
         </button>
       }
     >
@@ -618,7 +618,7 @@ export const AdminTrackTagsPanel = ({
             );
           })}
         </div>
-        {trendingIndex === -1 && (
+        {trendingIndex === -1 ? (
           <button
             type="button"
             onClick={() => void saveTrending([...data.trending, track.id])}
@@ -627,6 +627,10 @@ export const AdminTrackTagsPanel = ({
             <Plus className="h-3.5 w-3.5" />
             Add this track
           </button>
+        ) : (
+          <p className="mt-2 text-center font-body text-[11px] text-muted-foreground">
+            This track is in Trending — position #{trendingIndex + 1}
+          </p>
         )}
       </div>
     </PanelShell>
