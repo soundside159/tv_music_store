@@ -313,6 +313,8 @@ export const onRequestPost = async (ctx: Ctx) => {
       bpm?: number;
       description?: string;
       cover?: string;
+      /** Small square thumb for track rows (regenerated with the cover). */
+      coverThumb?: string;
       tags?: string[];
       hasStems?: boolean;
       /** R2 masters/ key of the stems zip; setting it also flips has_stems on. */
@@ -531,6 +533,7 @@ export const onRequestPost = async (ctx: Ctx) => {
           if (Number.isFinite(f.bpm)) next.bpm = Math.round(f.bpm as number);
           if (typeof f.description === "string") next.description = f.description;
           if (typeof f.cover === "string") next.cover = f.cover;
+          if (typeof f.coverThumb === "string") next.cover_thumb = f.coverThumb;
           if (Array.isArray(f.tags)) next.tags = JSON.stringify(f.tags.slice(0, 12));
           if (typeof f.hasStems === "boolean") next.has_stems = f.hasStems ? 1 : 0;
           // Stems bundle: storing the key also switches the STEMS badge on.

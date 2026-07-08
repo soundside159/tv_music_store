@@ -6,6 +6,7 @@ import {
   ArrowUp,
   Check,
   ChevronDown,
+  ImageUp,
   Music2,
   Pause,
   Pencil,
@@ -21,7 +22,7 @@ import { splitFilterValues } from "@/components/TrackRowPlayer";
 import WaveformPreview from "@/components/WaveformPreview";
 import { usePlayer } from "@/components/playerContext";
 import { refreshContent } from "@/hooks/useContent";
-import { formatDuration, unzipBlob, wavToMp3Pair, zipEntries } from "@/lib/audioEncoding";
+import { formatDuration, makeThumbnail, unzipBlob, wavToMp3Pair, zipEntries } from "@/lib/audioEncoding";
 import { cleanVersionLabel } from "@/lib/downloadTrack";
 import type { Vocabularies } from "@/lib/tagOptions";
 
@@ -110,6 +111,214 @@ export const useAdminTrackContent = (enabled: boolean) => {
   );
 
   return { data, setData, run, call, reload: load };
+};
+
+// ---------------------------------------------------------------------------
+// TOP BAR (under the site header): status chip + Publish/Unpublish + Delete.
+// ---------------------------------------------------------------------------
+
+export const AdminTrackTopBar = ({
+  track,
+  run,
+  onTracksChanged,
+}: {
+  track: CatalogTrack;
+  run: (payload: RunPayload) => Promise<boolean>;
+  onTracksChanged: () => void;
+}) => {
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const isDraft = track.status === "draft";
+
+  const setStatus = async (status: "published" | "draft") => {
+    setBusy(true);
+    const ok = await run({ action: "bulk_update_tracks", trackIds: [track.id], fields: { status } });
+    setBusy(false);
+    if (ok) {
+      toast.success(status === "published" ? "Track published — it's live in the catalog" : "Track unpublished (draft)");
+      onTracksChanged();
+    }
+  };
+
+  const deleteTrack = async () => {
+    if (
+      !window.confirm(
+        `Delete "${track.title}" from the catalog? Its files, collections and playlist entries go too. This cannot be undone.`,
+      )
+    )
+      return;
+    setBusy(true);
+    const ok = await run({ action: "delete_track", id: track.id });
+    setBusy(false);
+    if (ok) {
+      toast.success("Track deleted");
+      refreshContent();
+      navigate("/catalog");
+    }
+  };
+
+  return (
+    <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-[#F4C430]/30 bg-card px-4 py-2.5">
+      <span className="font-body text-[10px] font-bold uppercase tracking-[0.24em]" style={{ color: GOLD }}>
+        Admin
+      </span>
+      <span
+        className={`rounded border px-1.5 py-0.5 font-body text-[10px] font-bold uppercase tracking-wide ${
+          isDraft
+            ? "border-amber-400/50 bg-amber-400/10 text-amber-400"
+            : "border-green-500/40 bg-green-500/10 text-green-400"
+        }`}
+      >
+        {isDraft ? "Draft — hidden from customers" : "Published"}
+      </span>
+      <span className="ml-auto flex items-center gap-2">
+        {isDraft ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void setStatus("published")}
+            className="rounded-lg bg-[#F4C430] px-4 py-1.5 font-body text-xs font-bold text-background transition-colors hover:bg-[#F4C430]/85 disabled:opacity-50"
+          >
+            Publish
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void setStatus("draft")}
+            className="rounded-lg border border-border px-3 py-1.5 font-body text-xs font-semibold text-muted-foreground transition-colors hover:border-amber-400/60 hover:text-amber-400 disabled:opacity-50"
+          >
+            Unpublish
+          </button>
+        )}
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void deleteTrack()}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-red-400/40 px-3 py-1.5 font-body text-xs font-semibold text-red-400 transition-colors hover:bg-red-400/10 disabled:opacity-50"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Delete track
+        </button>
+      </span>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// COVER OVERLAY: hover the track cover → upload a new one (with an auto thumb
+// for the row lists) or remove it. Render inside a `group/cover` container.
+// ---------------------------------------------------------------------------
+
+const uploadImageApi = async (file: Blob, filename: string): Promise<string> => {
+  const base = filename.replace(/\.[^.]+$/, "");
+  const res = await fetch(`/api/admin/upload?filename=${encodeURIComponent(base)}`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": file.type || "image/jpeg" },
+    body: file,
+  });
+  const d = (await res.json().catch(() => ({}))) as { path?: string; error?: string };
+  if (!res.ok || !d.path) throw new Error(d.error ?? "Upload failed");
+  return d.path;
+};
+
+export const AdminTrackCoverOverlay = ({
+  track,
+  run,
+  onTracksChanged,
+}: {
+  track: CatalogTrack;
+  run: (payload: RunPayload) => Promise<boolean>;
+  onTracksChanged: () => void;
+}) => {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  const onFile = async (file: File) => {
+    setBusy(true);
+    try {
+      const cover = await uploadImageApi(file, file.name);
+      // Small square thumb for the track rows (non-fatal if it fails).
+      let coverThumb = "";
+      try {
+        coverThumb = await uploadImageApi(await makeThumbnail(file), `${file.name}-thumb.jpg`);
+      } catch {
+        // keep coverThumb empty — rows fall back to the full cover
+      }
+      const ok = await run({
+        action: "bulk_update_tracks",
+        trackIds: [track.id],
+        fields: { cover, coverThumb },
+      });
+      if (ok) {
+        toast.success("Cover updated");
+        onTracksChanged();
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeCover = async () => {
+    if (!window.confirm("Remove the cover image? The placeholder is shown instead.")) return;
+    setBusy(true);
+    const ok = await run({
+      action: "bulk_update_tracks",
+      trackIds: [track.id],
+      fields: { cover: "", coverThumb: "" },
+    });
+    setBusy(false);
+    if (ok) {
+      toast.success("Cover removed");
+      onTracksChanged();
+    }
+  };
+
+  return (
+    <>
+      <div
+        className={`absolute inset-0 z-10 flex items-center justify-center gap-2 bg-background/70 transition-opacity ${
+          busy ? "opacity-100" : "opacity-0 group-hover/cover:opacity-100"
+        }`}
+      >
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => inputRef.current?.click()}
+          title="Upload a new cover (1000x1000 recommended)"
+          className="flex h-10 w-10 items-center justify-center rounded-full border border-[#F4C430]/60 bg-card text-[#F4C430] transition-colors hover:bg-[#F4C430] hover:text-background disabled:opacity-50"
+        >
+          <ImageUp className="h-4 w-4" />
+        </button>
+        {track.cover && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void removeCover()}
+            title="Remove cover"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:border-red-400 hover:text-red-400 disabled:opacity-50"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
+        {busy && <span className="font-body text-[10px] text-muted-foreground">Uploading…</span>}
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void onFile(f);
+          e.target.value = "";
+        }}
+      />
+    </>
+  );
 };
 
 const PanelShell = ({ children, headerAction }: { children: ReactNode; headerAction?: ReactNode }) => (
@@ -414,7 +623,6 @@ export const AdminTrackTagsPanel = ({
   const [open, setOpen] = useState<Record<string, boolean>>({ useCase: true });
   const [pending, setPending] = useState<string | null>(null);
   const { activePlayer, isPlaying, progress, playVersion } = usePlayer();
-  const navigate = useNavigate();
 
   if (!data) {
     return (
@@ -423,21 +631,6 @@ export const AdminTrackTagsPanel = ({
       </PanelShell>
     );
   }
-
-  const deleteTrack = async () => {
-    if (
-      !window.confirm(
-        `Delete "${track.title}" from the catalog? Its files, collections and playlist entries go too. This cannot be undone.`,
-      )
-    )
-      return;
-    const ok = await run({ action: "delete_track", id: track.id });
-    if (ok) {
-      toast.success("Track deleted");
-      refreshContent();
-      navigate("/catalog");
-    }
-  };
 
   const trackFacetValues = (key: "useCase" | "genre" | "mood") =>
     new Set(splitFilterValues(track[key] ?? "").map((v) => v.toLowerCase()));
@@ -475,19 +668,7 @@ export const AdminTrackTagsPanel = ({
   const titleOf = (id: string) => tracks.find((t) => t.id === id)?.title ?? id;
 
   return (
-    <PanelShell
-      headerAction={
-        <button
-          type="button"
-          onClick={() => void deleteTrack()}
-          title="Delete this track from the catalog"
-          className="inline-flex items-center gap-1 font-body text-[10px] font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:text-red-400"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-          Delete track
-        </button>
-      }
-    >
+    <PanelShell>
       {FACETS.map(({ key, label }) => {
         const values = trackFacetValues(key);
         const isOpen = !!open[key];

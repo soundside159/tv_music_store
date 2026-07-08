@@ -22,7 +22,9 @@ import { useSeo } from "@/hooks/useSeo";
 import { useCurrentUser } from "@/hooks/useMockData";
 import {
   AdminTrackCollectionsPanel,
+  AdminTrackCoverOverlay,
   AdminTrackTagsPanel,
+  AdminTrackTopBar,
   useAdminTrackContent,
 } from "@/components/AdminTrackPanel";
 import { splitFilterValues } from "@/components/TrackRowPlayer";
@@ -160,6 +162,13 @@ const TrackDetail = () => {
       <main className={`mx-auto w-full px-4 pt-24 sm:px-6 ${isAdmin ? "max-w-[110rem]" : "max-w-7xl"}`}>
         <TrackBreadcrumb trackTitle={track.title} />
 
+        {/* Admin top bar: publish status + Publish/Unpublish + Delete track. */}
+        {isAdmin && (
+          <div className="mt-4">
+            <AdminTrackTopBar track={track} run={admin.run} onTracksChanged={() => void reloadTracks()} />
+          </div>
+        )}
+
         {/* Admin gets two extra side columns (tags/trending left, collections/
             playlists right); customers see the normal centered page. */}
         <div
@@ -184,8 +193,9 @@ const TrackDetail = () => {
         <section className="grid gap-8 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
           {/* Left: cover + info */}
           <div className="h-fit rounded-xl border border-border bg-card p-6">
-            {/* Square cover — real artwork from Admin -> Content -> Tracks; placeholder otherwise. */}
-            <div className="relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-secondary via-background to-secondary">
+            {/* Square cover — real artwork from admin; placeholder otherwise.
+                Admins: hover to upload/remove the cover right here. */}
+            <div className="group/cover relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-secondary via-background to-secondary">
               {track.cover ? (
                 <img src={track.cover} alt={`${track.title} cover art`} className="h-full w-full object-cover" />
               ) : (
@@ -196,6 +206,13 @@ const TrackDetail = () => {
                     TV Music Store
                   </span>
                 </>
+              )}
+              {isAdmin && (
+                <AdminTrackCoverOverlay
+                  track={track}
+                  run={admin.run}
+                  onTracksChanged={() => void reloadTracks()}
+                />
               )}
             </div>
 

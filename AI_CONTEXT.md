@@ -1555,3 +1555,13 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   Now: both blocks always rendered, toggled hidden/flex, and the Admin submenu renders
   **adminNavGroups** with Overview/Catalog/Customers/Requests headers — identical to the /admin
   sidebar (adminNavItems import dropped). /admin itself was already fixed earlier.
+- **2026-07-08 (track-page admin top bar + cover overlay):** (1) NEW `AdminTrackTopBar` (in
+  AdminTrackPanel.tsx, rendered in TrackDetail under the breadcrumb, admins only): "Admin" label +
+  status chip (amber "Draft — hidden from customers" / green "Published") + gold **Publish** (or
+  subtle **Unpublish** back to draft; bulk_update_tracks fields.status) + red **Delete track**
+  (moved here FROM the left panel header — deleteTrack/headerAction removed from
+  AdminTrackTagsPanel). (2) NEW `AdminTrackCoverOverlay`: hovering the track-page cover square
+  (now `group/cover`) shows Upload + Remove buttons — upload sends the image to /api/admin/upload,
+  auto-generates a row thumbnail via makeThumbnail (uploaded separately, non-fatal on failure) and
+  saves via bulk_update_tracks fields {cover, coverThumb}; remove clears both. Server: `fields`
+  gained `coverThumb` (→ cover_thumb). Works for tracks with no cover yet (placeholder hover).
