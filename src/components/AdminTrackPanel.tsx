@@ -27,6 +27,8 @@ export interface AdminContentItem {
   shortTitle?: string;
   description?: string;
   image?: string;
+  /** Playlists only: section name on the /playlists page ("Featured", "Podcast"…). */
+  theme?: string;
   trackIds: string[];
 }
 

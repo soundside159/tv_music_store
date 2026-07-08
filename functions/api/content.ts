@@ -10,9 +10,20 @@ export const onRequestGet = async (ctx: Ctx) => {
   const collections = await db
     .prepare(`SELECT id, title, short_title, description, image FROM collections ORDER BY sort`)
     .all<{ id: string; title: string; short_title: string | null; description: string | null; image: string | null }>();
-  const playlists = await db
-    .prepare(`SELECT id, title, description, image FROM playlists ORDER BY sort`)
-    .all<{ id: string; title: string; description: string | null; image: string | null }>();
+  // `theme` groups the /playlists page into sections; older DBs may not have
+  // the column yet (added lazily by the admin API) — degrade gracefully.
+  const playlists = await (async () => {
+    try {
+      return await db
+        .prepare(`SELECT id, title, description, image, theme FROM playlists ORDER BY sort`)
+        .all<{ id: string; title: string; description: string | null; image: string | null; theme: string | null }>();
+    } catch {
+      const legacy = await db
+        .prepare(`SELECT id, title, description, image FROM playlists ORDER BY sort`)
+        .all<{ id: string; title: string; description: string | null; image: string | null }>();
+      return { results: legacy.results.map((p) => ({ ...p, theme: null })) };
+    }
+  })();
   const colTracks = await db
     .prepare(`SELECT collection_id, track_id FROM collection_tracks ORDER BY sort`)
     .all<{ collection_id: string; track_id: string }>();
@@ -67,6 +78,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       title: p.title,
       description: p.description ?? "",
       image: p.image ?? "",
+      theme: p.theme ?? "",
       trackIds: plMap[p.id] ?? [],
     })),
   });

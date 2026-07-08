@@ -1353,3 +1353,22 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   (/images/collections/orchestral.jpg) with a Music2 placeholder behind onError, so playlist
   minis are never blank. `AdminItemEditor` component deleted. Verified via host reads; lint/build
   = deploy.bat.
+- **2026-07-08 (cover-flash fix + parallelogram playlist cards + playlist THEMES):** (1) FLASH BUG
+  (owner: "открываю плейлист — картинка на весь экран, потом уменьшается"): `AdminCoverControl`
+  returned bare children (no sized wrapper) until the admin data loaded / for non-admins, so the
+  h-40 w-40 header cover painted full-width for a moment. Now it ALWAYS renders
+  `<div className={className}>` around the children. (2) /playlists redesigned: cards are
+  PARALLELOGRAMS in the catalog-strip language (`skewX(-9deg)` box h-64, counter-skewed image
+  scale(1.32) with opacity fade-in on load, dark bottom gradient, title + "N tracks" + gold
+  hairline + arrow inside; new `PlaylistCard` in Playlists.tsx; grid 2/3/5/6 cols). (3) PLAYLIST
+  THEMES (sections like tunetank's Featured/Fashion/Podcast): new lazy `playlists.theme` column
+  (`ensurePlaylistThemeColumn` in admin/content.ts — ALTER try/catch, called from GET + upsert);
+  `upsert_playlist` accepts `theme` BUT leaves it untouched when the field is absent (so the old
+  /admin editor can't wipe it); admin GET + public /api/content return `theme` (public select has
+  a legacy fallback); `LivePlaylist.theme` + `AdminContentItem.theme`; upsertPayload resends it.
+  /playlists groups cards into theme sections (themeless first without a header, then themes in
+  global drag-order of first appearance; h2 per section). Theme is set from the card's admin bar:
+  new **Tags button** (gold when a theme is set) → same inline input saves the theme (empty
+  clears). DnD reorder still works inside/across sections (it edits the one global sort).
+  Migration 0001_init.sql NOT updated with theme (lazy ALTER covers prod; add on next migration
+  touch). Verified via host reads; lint/build = deploy.bat.

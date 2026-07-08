@@ -111,32 +111,55 @@ const slugify = (s: string) =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 60) || newId("itm");
 
+// Playlists get an optional THEME ("Featured", "Podcast", ...) used to group
+// the /playlists page into sections. Added lazily for existing DBs.
+const ensurePlaylistThemeColumn = async (db: D1Database) => {
+  try {
+    await db.prepare(`ALTER TABLE playlists ADD COLUMN theme TEXT`).run();
+  } catch {
+    // column already exists — fine
+  }
+};
+
 interface ItemBody {
   id?: string;
   title?: string;
   shortTitle?: string;
   description?: string;
   image?: string;
+  theme?: string;
 }
 
 const upsertItem = async (db: D1Database, table: "collections" | "playlists", body: ItemBody) => {
   const title = body.title?.trim();
   if (!title) return json({ error: "Title required" }, 400);
   const id = body.id?.trim() || slugify(title);
-  const shortCol = table === "collections" ? ", short_title = ?5" : "";
+  if (table === "playlists") await ensurePlaylistThemeColumn(db);
+  const theme = (body.theme ?? "").trim();
 
   const existing = await db.prepare(`SELECT id FROM ${table} WHERE id = ?1`).bind(id).first();
   if (existing) {
-    await db
-      .prepare(
-        `UPDATE ${table} SET title = ?2, description = ?3, image = ?4${shortCol} WHERE id = ?1`,
-      )
-      .bind(
-        ...(table === "collections"
-          ? [id, title, body.description ?? "", body.image ?? "", body.shortTitle ?? title]
-          : [id, title, body.description ?? "", body.image ?? ""]),
-      )
-      .run();
+    if (table === "collections") {
+      await db
+        .prepare(
+          `UPDATE collections SET title = ?2, description = ?3, image = ?4, short_title = ?5 WHERE id = ?1`,
+        )
+        .bind(id, title, body.description ?? "", body.image ?? "", body.shortTitle ?? title)
+        .run();
+    } else if (body.theme === undefined) {
+      // Caller doesn't know about themes (e.g. the /admin editor) — keep it.
+      await db
+        .prepare(`UPDATE playlists SET title = ?2, description = ?3, image = ?4 WHERE id = ?1`)
+        .bind(id, title, body.description ?? "", body.image ?? "")
+        .run();
+    } else {
+      await db
+        .prepare(
+          `UPDATE playlists SET title = ?2, description = ?3, image = ?4, theme = ?5 WHERE id = ?1`,
+        )
+        .bind(id, title, body.description ?? "", body.image ?? "", theme)
+        .run();
+    }
   } else {
     const maxSort = await db
       .prepare(`SELECT COALESCE(MAX(sort), -1) + 1 AS s FROM ${table}`)
@@ -152,10 +175,10 @@ const upsertItem = async (db: D1Database, table: "collections" | "playlists", bo
     } else {
       await db
         .prepare(
-          `INSERT INTO playlists (id, slug, title, description, image, sort)
-           VALUES (?1, ?1, ?2, ?3, ?4, ?5)`,
+          `INSERT INTO playlists (id, slug, title, description, image, theme, sort)
+           VALUES (?1, ?1, ?2, ?3, ?4, ?5, ?6)`,
         )
-        .bind(id, title, body.description ?? "", body.image ?? "", maxSort?.s ?? 0)
+        .bind(id, title, body.description ?? "", body.image ?? "", theme, maxSort?.s ?? 0)
         .run();
     }
   }
@@ -169,6 +192,7 @@ export const onRequestGet = async (ctx: Ctx) => {
   const db = ctx.env.DB;
   await ensureSiteConfig(db);
   await ensureCategoryTables(db);
+  await ensurePlaylistThemeColumn(db);
 
   const categories = await db
     .prepare(`SELECT id, title, sort FROM categories ORDER BY sort`)
@@ -180,8 +204,8 @@ export const onRequestGet = async (ctx: Ctx) => {
     .prepare(`SELECT id, title, short_title, description, image, sort FROM collections ORDER BY sort`)
     .all<{ id: string; title: string; short_title: string | null; description: string | null; image: string | null; sort: number }>();
   const playlists = await db
-    .prepare(`SELECT id, title, description, image, sort FROM playlists ORDER BY sort`)
-    .all<{ id: string; title: string; description: string | null; image: string | null; sort: number }>();
+    .prepare(`SELECT id, title, description, image, theme, sort FROM playlists ORDER BY sort`)
+    .all<{ id: string; title: string; description: string | null; image: string | null; theme: string | null; sort: number }>();
   const colTracks = await db
     .prepare(`SELECT collection_id, track_id FROM collection_tracks ORDER BY sort`)
     .all<{ collection_id: string; track_id: string }>();
@@ -225,6 +249,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       title: p.title,
       description: p.description ?? "",
       image: p.image ?? "",
+      theme: p.theme ?? "",
       trackIds: plMap[p.id] ?? [],
     })),
   });

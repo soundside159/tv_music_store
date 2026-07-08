@@ -14,6 +14,7 @@ interface ApiContentItem {
   shortTitle?: string;
   description?: string;
   image?: string;
+  theme?: string;
   trackIds?: string[];
 }
 
@@ -153,6 +154,8 @@ export interface LivePlaylist {
   title: string;
   description: string;
   image: string;
+  /** Section on the /playlists page ("Featured", "Podcast"…); "" = ungrouped. */
+  theme: string;
   trackIds: string[];
 }
 
@@ -171,6 +174,7 @@ export const usePlaylists = (): LivePlaylist[] => {
             title: p.title,
             description: p.description ?? "",
             image: p.image || "/images/collections/orchestral.jpg",
+            theme: p.theme ?? "",
             trackIds: p.trackIds ?? [],
           })),
         );
@@ -190,6 +194,7 @@ export const usePlaylists = (): LivePlaylist[] => {
     title: p.title,
     description: p.description ?? "",
     image: p.image,
+    theme: "",
     trackIds: p.trackIds,
   }));
 };

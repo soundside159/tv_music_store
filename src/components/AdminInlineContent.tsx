@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import type { DragEvent, ReactNode } from "react";
-import { Check, GripVertical, ImageUp, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, GripVertical, ImageUp, Pencil, Plus, Tags, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { useCurrentUser } from "@/hooks/useMockData";
 import { useTracks } from "@/hooks/useTracks";
@@ -46,7 +46,7 @@ const upsertAction = (kind: ContentKind) =>
 const upsertPayload = (
   kind: ContentKind,
   item: AdminContentItem,
-  patch: Partial<Pick<AdminContentItem, "title" | "description" | "image">>,
+  patch: Partial<Pick<AdminContentItem, "title" | "description" | "image" | "theme">>,
 ) => ({
   action: upsertAction(kind),
   id: item.id,
@@ -55,7 +55,7 @@ const upsertPayload = (
   image: patch.image ?? item.image ?? "",
   ...(kind === "collection"
     ? { shortTitle: patch.title ?? item.shortTitle ?? item.title }
-    : {}),
+    : { theme: patch.theme ?? item.theme ?? "" }),
 });
 
 /** Refresh both the admin copy and the public pages after any change. */
@@ -211,6 +211,8 @@ export const AdminItemBar = ({
   admin: ContentAdmin;
 }) => {
   const [renaming, setRenaming] = useState(false);
+  // "title" edits the name; "theme" edits the playlist's section on /playlists.
+  const [editField, setEditField] = useState<"title" | "theme">("title");
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -220,16 +222,19 @@ export const AdminItemBar = ({
 
   const rename = async () => {
     const t = draft.trim();
-    if (!t || t === item.title) {
+    const current = editField === "title" ? item.title : (item.theme ?? "");
+    if ((editField === "title" && !t) || t === current) {
       setRenaming(false);
       return;
     }
     setBusy(true);
-    const ok = await admin.run(upsertPayload(kind, item, { title: t }));
+    const ok = await admin.run(
+      upsertPayload(kind, item, editField === "title" ? { title: t } : { theme: t }),
+    );
     setBusy(false);
     setRenaming(false);
     if (ok) {
-      toast.success("Renamed");
+      toast.success(editField === "title" ? "Renamed" : t ? `Theme: ${t}` : "Theme cleared");
       await afterChange(admin);
     }
   };
@@ -270,9 +275,10 @@ export const AdminItemBar = ({
               if (e.key === "Enter") void rename();
               if (e.key === "Escape") setRenaming(false);
             }}
+            placeholder={editField === "theme" ? "Theme (empty = no section)" : undefined}
             className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1 font-body text-xs text-foreground focus:border-[#F4C430] focus:outline-none"
           />
-          <button type="button" onClick={() => void rename()} aria-label="Save name" className="text-[#F4C430]">
+          <button type="button" onClick={() => void rename()} aria-label="Save" className="text-[#F4C430]">
             <Check className="h-3.5 w-3.5" />
           </button>
           <button
@@ -286,9 +292,27 @@ export const AdminItemBar = ({
         </>
       ) : (
         <span className="ml-auto flex items-center gap-2.5">
+          {kind === "playlist" && (
+            <button
+              type="button"
+              onClick={() => {
+                setEditField("theme");
+                setDraft(item.theme ?? "");
+                setRenaming(true);
+              }}
+              aria-label="Set theme (section on the playlists page)"
+              title={item.theme ? `Theme: ${item.theme}` : "Set theme"}
+              className={`transition-colors hover:text-[#F4C430] ${
+                item.theme ? "text-[#F4C430]/80" : "text-muted-foreground"
+              }`}
+            >
+              <Tags className="h-3.5 w-3.5" />
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {
+              setEditField("title");
               setDraft(item.title);
               setRenaming(true);
             }}
@@ -424,7 +448,9 @@ export const AdminCoverControl = ({
   const [busy, setBusy] = useState(false);
 
   const item = itemsOf(admin.data, kind).find((x) => x.id === id);
-  if (!admin.enabled || !item) return <>{children}</>;
+  // ALWAYS render the sized wrapper — returning bare children while the admin
+  // data loads made the header image paint full-width for a moment (flash).
+  if (!admin.enabled || !item) return <div className={className}>{children}</div>;
 
   const setImage = async (image: string) => {
     const ok = await admin.run(upsertPayload(kind, item, { image }));
