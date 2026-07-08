@@ -15,7 +15,8 @@ import cinemaHero from "@/assets/cinema-hero-wide.png";
 import { Input } from "@/components/ui/input";
 import { useTracks } from "@/hooks/useTracks";
 import type { MusicCollection } from "@/data/musicCollections";
-import { useCollections, useVocabularies } from "@/hooks/useContent";
+import { useCollections, useTrendingIds, useVocabularies } from "@/hooks/useContent";
+import { buildRecommendedRank, sortTracks } from "@/lib/catalogSort";
 import { TrackRow } from "@/components/TrackRowPlayer";
 import { usePlayer } from "@/components/PlayerProvider";
 import { genreOptions, moodOptions, useCaseOptions } from "@/lib/tagOptions";
@@ -67,11 +68,19 @@ const Catalog = () => {
     };
   });
   const [expandedTrackId, setExpandedTrackId] = useState<string | null>(null);
-  const [sort, setSort] = useState("Featured");
+  const [sort, setSort] = useState("Recommended");
   const { activePlayer, isPlaying, progress, playedProgress, playVersion } = usePlayer();
   const { tracks, isLoading } = useTracks();
+  const trendingIds = useTrendingIds();
   const [page, setPage] = useState(1);
   const listTopRef = useRef<HTMLDivElement | null>(null);
+
+  // Daily-seeded diverse mix over the FULL catalog (featured pinned first,
+  // genre round-robin for the rest) — stable within a day, see catalogSort.ts.
+  const recommendedRank = useMemo(
+    () => buildRecommendedRank(tracks, trendingIds),
+    [tracks, trendingIds],
+  );
 
   const filteredTracks = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -98,10 +107,8 @@ const Catalog = () => {
       return matchesCollection && matchesCategory && matchesUseCase && matchesGenre && matchesMood && matchesQuery;
     });
 
-    if (sort === "New") return [...result].reverse();
-    if (sort === "Popular") return [...result].sort((a, b) => b.bpm - a.bpm);
-    return result;
-  }, [tracks, activeCollection, categoryParam, filters, query, sort]);
+    return sortTracks(result, sort, recommendedRank);
+  }, [tracks, activeCollection, categoryParam, filters, query, sort, recommendedRank]);
 
   // Pagination: filters/search/sort always run over the FULL catalog above,
   // then we slice the current page — so a checkbox never "loses" tracks.
@@ -299,7 +306,7 @@ const Catalog = () => {
   );
 };
 
-const sortOptions = ["Featured", "New", "Popular"];
+const sortOptions = ["Recommended", "New", "Popular"];
 
 const SortDropdown = ({ value, onChange }: { value: string; onChange: (value: string) => void }) => {
   const [open, setOpen] = useState(false);

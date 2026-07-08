@@ -64,28 +64,9 @@ export const onRequestPost = async (ctx: Ctx) => {
     .first<{ plan: string; status: string }>();
   const plan = sub?.status === "active" || sub?.status === "canceled" ? sub.plan : "free";
 
-  // Plan gates
-  if (format === "wav" && plan !== "max") {
-    return json({ error: "WAV & stems are included in the Max plan", code: "plan" }, 403);
-  }
-  if (plan === "free") {
-    const used = await ctx.env.DB.prepare(
-      `SELECT COUNT(*) AS n FROM download_log
-        WHERE user_id = ?1 AND format = 'mp3'
-          AND created_at >= datetime('now', 'start of month')`,
-    )
-      .bind(user.id)
-      .first<{ n: number }>();
-    if ((used?.n ?? 0) >= FREE_MONTHLY_LIMIT) {
-      return json(
-        { error: `Free plan limit reached (${FREE_MONTHLY_LIMIT} downloads/month)`, code: "limit" },
-        403,
-      );
-    }
-  }
-
-  // Resolve the file. Select the newer columns defensively — older DBs may not
-  // have r2_key_wav_zip yet (added lazily by the admin content API).
+  // Resolve the track FIRST (needed for the one-time-license check below).
+  // Select the newer columns defensively — older DBs may not have
+  // r2_key_wav_zip yet (added lazily by the admin content API).
   const track = await (async () => {
     try {
       return await ctx.env.DB.prepare(
@@ -102,6 +83,46 @@ export const onRequestPost = async (ctx: Ctx) => {
       return legacy ? { ...legacy, r2_key_wav_zip: null } : null;
     }
   })();
+
+  // One-time sync license for THIS track (any tier — all tiers include WAV).
+  // sync_orders.track_id normally holds tracks.id, but the PayPal capture falls
+  // back to the slug when the track row was missing at purchase time.
+  const hasLicense = await (async () => {
+    try {
+      const row = await ctx.env.DB.prepare(
+        `SELECT 1 AS ok FROM sync_orders WHERE user_id = ?1 AND track_id IN (?2, ?3) LIMIT 1`,
+      )
+        .bind(user.id, track?.id ?? slug, slug)
+        .first<{ ok: number }>();
+      return !!row;
+    } catch {
+      return false;
+    }
+  })();
+
+  // Plan gates (a purchased one-time license bypasses them for its track)
+  if (format === "wav" && plan !== "max" && !hasLicense) {
+    return json(
+      { error: "WAV files come with the Max plan or a one-time license for this track", code: "plan" },
+      403,
+    );
+  }
+  if (plan === "free" && !hasLicense) {
+    const used = await ctx.env.DB.prepare(
+      `SELECT COUNT(*) AS n FROM download_log
+        WHERE user_id = ?1 AND format = 'mp3'
+          AND plan_at_download != 'license'
+          AND created_at >= datetime('now', 'start of month')`,
+    )
+      .bind(user.id)
+      .first<{ n: number }>();
+    if ((used?.n ?? 0) >= FREE_MONTHLY_LIMIT) {
+      return json(
+        { error: `Free plan limit reached (${FREE_MONTHLY_LIMIT} downloads/month)`, code: "limit" },
+        403,
+      );
+    }
+  }
 
   let fileSrc: string | null = null;
   let r2Key: string | null = null;
@@ -169,7 +190,7 @@ export const onRequestPost = async (ctx: Ctx) => {
     `INSERT INTO download_log (user_id, track_id, composer_id, plan_at_download, format)
      VALUES (?1, ?2, ?3, ?4, ?5)`,
   )
-    .bind(user.id, track?.id ?? slug, track?.composer_id ?? null, plan, format)
+    .bind(user.id, track?.id ?? slug, track?.composer_id ?? null, hasLicense ? "license" : plan, format)
     .run();
 
   const rawTitle = body?.title ?? track?.title ?? slug;

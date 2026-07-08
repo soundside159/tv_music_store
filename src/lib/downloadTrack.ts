@@ -50,6 +50,46 @@ export interface DownloadArgs {
   quality?: 128 | 320;
 }
 
+// ---------------------------------------------------------------------------
+// One-time licenses owned by the signed-in user. A purchased license unlocks
+// WAV/320 for that track regardless of plan (the server enforces the same rule
+// via sync_orders). Cached briefly so opening the download dialog stays cheap.
+// ---------------------------------------------------------------------------
+
+export interface OwnedLicense {
+  /** sync_orders id — also the ?order= key for the license certificate PDF. */
+  id: string;
+  tier: string;
+}
+
+let licenseCache: { at: number; map: Map<string, OwnedLicense> } | null = null;
+
+/** The user's one-time license for a track (by slug), or null. */
+export const fetchMyLicenseFor = async (slug: string): Promise<OwnedLicense | null> => {
+  const now = Date.now();
+  if (!licenseCache || now - licenseCache.at > 30_000) {
+    try {
+      const res = await fetch("/api/licenses", { credentials: "include" });
+      if (!res.ok) return null; // guest / API down — don't cache, retry next open
+      const data = (await res.json()) as {
+        licenses?: { id: string; tier: string; trackId: string; trackSlug?: string }[];
+      };
+      const map = new Map<string, OwnedLicense>();
+      for (const l of data.licenses ?? []) {
+        const own = { id: l.id, tier: l.tier };
+        if (l.trackSlug) map.set(l.trackSlug, own);
+        // PayPal capture stores the slug as track_id when the track row was
+        // missing at purchase time — cover that fallback too.
+        map.set(l.trackId, own);
+      }
+      licenseCache = { at: now, map };
+    } catch {
+      return null;
+    }
+  }
+  return licenseCache.map.get(slug) ?? null;
+};
+
 /**
  * Opens the "Download options" dialog (format picker, plan gates, free
  * counter). DownloadOptionsModal is mounted globally in App.tsx.
@@ -125,8 +165,9 @@ export const downloadTrackVersion = async (args: DownloadArgs): Promise<boolean>
       return false;
     }
     if (data.code === "plan") {
-      toast.error("Max plan feature", {
-        description: data.error ?? "WAV & stems are included in the Max plan.",
+      toast.error("Not included in your plan", {
+        description:
+          data.error ?? "WAV files come with the Max plan or a one-time license for this track.",
         action: { label: "See plans", onClick: () => (window.location.href = "/pricing") },
       });
       return false;

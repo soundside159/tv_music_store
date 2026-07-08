@@ -1258,3 +1258,41 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   the query param live (so switching works when already on /account). Same items inlined in the mobile
   burger for logged-in users; guests still get the auth modal. Renamed account "Sign out" → "Log out".
   Build ✓. STILL LATER: smart popularity ranking (anti-gamed) #30, funnel audit #26.
+- **2026-07-08 (WAV zip + 320 unlocked for one-time license buyers):** closed the "sold WAV but
+  couldn't download it" gap — `/api/download` only honored the Max plan; sync_orders was never
+  checked. SERVER: `download.ts` reordered (track resolved BEFORE the gates), new `hasLicense` =
+  `sync_orders WHERE user_id AND track_id IN (track.id, slug)` (slug covers the PayPal-capture
+  fallback that stored a slug as track_id); a license bypasses BOTH the WAV Max-gate and the free
+  3/month limit for that track; such downloads are logged `plan_at_download='license'` and excluded
+  from the free-limit COUNT (same exclusion added to `/api/me` downloadsUsedThisMonth). WAV-gate
+  error text now mentions the license path. `licenses.ts` returns `trackSlug` (JOIN tracks.slug).
+  FRONTEND: `downloadTrack.ts` gained `fetchMyLicenseFor(slug)` (`OwnedLicense {id,tier}`, 30s
+  module cache, maps both trackSlug and trackId; non-ok NOT cached so login→resume isn't stale) +
+  the "plan" toast retitled "Not included in your plan". `DownloadOptionsModal` fetches the license
+  when opened (authed): unlocks WAV + MP3 320 (`locked = planRank check && !license`), badges show
+  LICENSED, gold footer note "You own a license for this track", attribution popup SKIPPED for
+  licensed free-plan downloads, "Include PDF License" checkbox now also shows for free-plan license
+  owners and fetches `?order=<sync_id>` (purchase cert) instead of `?slug=` when licensed.
+  `LicenseEntry` gained `trackSlug`; Account → Licenses rows got MP3 320 + WAV zip buttons (same
+  pattern as Downloads history; versionId "main"). NOTE: STEMS stays SOON/disabled; server treats
+  any tier as WAV-unlocking (all three tiers advertise WAV). Sandbox VM didn't start this session —
+  no sandbox checks at all; all edits made+verified via host Read (whole-file reads of download.ts
+  and DownloadOptionsModal.tsx), authoritative lint/tsc/build = deploy.bat on the host.
+- **2026-07-08 (catalog sorting #30 — Recommended/New/Popular BUILT):** implemented
+  docs/CATALOG_SORTING.md modes 1-3 (spec file updated with a STATUS block; star-rating staging
+  stays a post-import task). SERVER `/api/tracks`: now returns `created_at` (added to all three
+  defensive SELECT tiers) and `downloads` = per-track COUNT from download_log (single GROUP BY
+  query, guarded). CLIENT: `CatalogTrack` + useTracks mapTrack gained `createdAt`/`downloads`.
+  NEW `src/lib/catalogSort.ts`: mulberry32 PRNG + FNV-1a `dailySeed()` (local date → order stable
+  within a day, refreshes daily), `buildRecommendedRank(tracks, featuredIds)` (featured =
+  admin trending ids, seed-shuffled among themselves, pinned first; the rest grouped by primary
+  genre — first "/"-segment, fallback mood — groups + contents seed-shuffled, then dealt
+  round-robin one-per-group so single-genre batches spread out), `sortTracks(list, mode, rank)`.
+  `useContent.ts` gained `useTrendingIds()` (raw trending id list). `Catalog.tsx`: sort renamed
+  "Featured" → **"Recommended"** (new default), New = createdAt DESC (mock fallback keeps the old
+  reverse() since mocks have no dates; NOTE pre-code-system live rows may share created_at — ties
+  break by the mix), Popular = real `downloads` DESC with ties falling back to the Recommended mix
+  (was the BPM placeholder). recommendedRank computed once per tracks+trendingIds via useMemo;
+  filtering preserves it, pagination unaffected. Sandbox VM still down — verified via host reads;
+  lint/build = deploy.bat. LATER: anti-gamed popularity (weight by unique users/time window),
+  star-rating "newness" staging after the bulk import.

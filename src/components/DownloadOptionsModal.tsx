@@ -2,7 +2,14 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Check, Download, X } from "lucide-react";
 import { refreshSession, useAuthSession } from "@/hooks/useAuth";
-import { cleanVersionLabel, downloadTrackVersion, openAttribution, type DownloadArgs } from "@/lib/downloadTrack";
+import {
+  cleanVersionLabel,
+  downloadTrackVersion,
+  fetchMyLicenseFor,
+  openAttribution,
+  type DownloadArgs,
+  type OwnedLicense,
+} from "@/lib/downloadTrack";
 
 // Tunetank-style download dialog. Any Download button dispatches
 // "tvms:download-options" (see openDownloadOptions) and this modal takes over:
@@ -46,16 +53,30 @@ const DownloadOptionsModal = () => {
   const [selected, setSelected] = useState<OptionId>("mp3-128");
   const [includePdf, setIncludePdf] = useState(false);
   const [busy, setBusy] = useState(false);
+  // One-time license the user owns for THIS track (unlocks WAV/320 on any plan).
+  const [license, setLicense] = useState<OwnedLicense | null>(null);
 
   useEffect(() => {
     const open = (event: Event) => {
       setArgs((event as CustomEvent<DownloadArgs>).detail);
       setSelected("mp3-128");
       setIncludePdf(false);
+      setLicense(null);
     };
     window.addEventListener("tvms:download-options", open);
     return () => window.removeEventListener("tvms:download-options", open);
   }, []);
+
+  useEffect(() => {
+    if (!args || status !== "authed") return;
+    let cancelled = false;
+    void fetchMyLicenseFor(args.slug).then((own) => {
+      if (!cancelled) setLicense(own);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [args, status]);
 
   useEffect(() => {
     if (!args) return;
@@ -70,7 +91,8 @@ const DownloadOptionsModal = () => {
 
   const plan = status === "authed" ? (subscription?.plan ?? "free") : "free";
   const option = options.find((o) => o.id === selected) ?? options[0];
-  const locked = planRank[plan] < planRank[option.need];
+  // A purchased one-time license unlocks every available format for its track.
+  const locked = planRank[plan] < planRank[option.need] && !license;
   const freeLeft = Math.max(0, 3 - downloadsUsedThisMonth);
 
   const close = () => setArgs(null);
@@ -91,14 +113,19 @@ const DownloadOptionsModal = () => {
       const ok = await downloadTrackVersion(dl);
       // Refresh the session so the free-downloads counter reflects this download.
       if (ok) void refreshSession();
-      // Free-plan MP3 downloads require attribution — show the "Say thanks!" popup.
-      if (ok && status === "authed" && plan === "free" && option.id === "mp3-128") {
+      // Free-plan MP3 downloads require attribution — show the "Say thanks!"
+      // popup (skipped when the user bought a license: no credit line needed).
+      if (ok && status === "authed" && plan === "free" && !license && option.id === "mp3-128") {
         openAttribution({ title: args.title, slug: args.slug, download: dl });
       }
-      if (includePdf && status === "authed" && plan !== "free") {
-        // Attachment header makes this download the certificate without navigating.
+      if (includePdf && status === "authed" && (plan !== "free" || license)) {
+        // Attachment header makes this download the certificate without
+        // navigating. License owners get their purchase certificate (?order=),
+        // subscribers the plan certificate (?slug=).
         const a = document.createElement("a");
-        a.href = `/api/license-pdf?slug=${encodeURIComponent(args.slug)}`;
+        a.href = license
+          ? `/api/license-pdf?order=${encodeURIComponent(license.id)}`
+          : `/api/license-pdf?slug=${encodeURIComponent(args.slug)}`;
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -161,7 +188,7 @@ const DownloadOptionsModal = () => {
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">
                     <span className="font-body text-sm font-semibold text-foreground">{o.title}</span>
-                    {o.badge && <Badge label={o.badge} />}
+                    {o.badge && <Badge label={license && !o.soon ? "LICENSED" : o.badge} />}
                     {o.soon && (
                       <span className="rounded-full border border-border px-2 py-0.5 font-body text-[10px] text-muted-foreground">
                         SOON
@@ -176,7 +203,7 @@ const DownloadOptionsModal = () => {
           })}
         </div>
 
-        {status === "authed" && plan !== "free" && !option.soon && (
+        {status === "authed" && (plan !== "free" || license) && !option.soon && (
           <button
             type="button"
             onClick={() => setIncludePdf((v) => !v)}
@@ -192,18 +219,26 @@ const DownloadOptionsModal = () => {
             <span className="min-w-0 flex-1">
               <span className="block font-body text-xs font-semibold text-foreground">Include PDF License</span>
               <span className="block font-body text-[11px] text-muted-foreground">
-                A license certificate for this track on your current plan.
+                {license
+                  ? "The certificate for the license you purchased for this track."
+                  : "A license certificate for this track on your current plan."}
               </span>
             </span>
           </button>
         )}
 
-        {(status !== "authed" || plan === "free") && (
-          <p className="mt-4 text-center font-body text-xs text-muted-foreground">
-            {status === "authed"
-              ? `${freeLeft} of 3 free downloads left this month`
-              : "Free account includes 3 downloads every month"}
+        {license ? (
+          <p className="mt-4 text-center font-body text-xs" style={{ color: GOLD }}>
+            You own a license for this track — all formats unlocked
           </p>
+        ) : (
+          (status !== "authed" || plan === "free") && (
+            <p className="mt-4 text-center font-body text-xs text-muted-foreground">
+              {status === "authed"
+                ? `${freeLeft} of 3 free downloads left this month`
+                : "Free account includes 3 downloads every month"}
+            </p>
+          )
         )}
 
         <button

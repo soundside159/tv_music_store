@@ -444,14 +444,53 @@ const Account = () => {
                               {o.price ? ` · $${o.price}` : ""}
                             </span>
                           </span>
-                          <a
-                            href={`/api/license-pdf?order=${encodeURIComponent(o.id)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="shrink-0 font-body text-xs font-semibold text-[#F4C430] hover:underline"
-                          >
-                            License PDF
-                          </a>
+                          <span className="flex shrink-0 items-center gap-3">
+                            {o.trackSlug && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void downloadTrackVersion({
+                                      slug: o.trackSlug!,
+                                      versionId: "main",
+                                      src: "",
+                                      title: o.trackTitle ?? trackTitle(o.trackId),
+                                      label: "Main",
+                                      format: "mp3",
+                                      quality: 320,
+                                    })
+                                  }
+                                  className="font-body text-xs font-semibold text-muted-foreground hover:text-foreground hover:underline"
+                                >
+                                  MP3 320
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void downloadTrackVersion({
+                                      slug: o.trackSlug!,
+                                      versionId: "main",
+                                      src: "",
+                                      title: o.trackTitle ?? trackTitle(o.trackId),
+                                      label: "Main",
+                                      format: "wav",
+                                    })
+                                  }
+                                  className="font-body text-xs font-semibold text-muted-foreground hover:text-foreground hover:underline"
+                                >
+                                  WAV zip
+                                </button>
+                              </>
+                            )}
+                            <a
+                              href={`/api/license-pdf?order=${encodeURIComponent(o.id)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-body text-xs font-semibold text-[#F4C430] hover:underline"
+                            >
+                              License PDF
+                            </a>
+                          </span>
                         </li>
                       ))}
                     </ul>

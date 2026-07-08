@@ -127,6 +127,8 @@ export interface LicenseEntry {
   id: string;
   trackId: string;
   trackTitle?: string;
+  /** Current slug of the track (for download/track links); absent if the track row is gone. */
+  trackSlug?: string;
   tier: string;
   price: number;
   hasPdf?: boolean;

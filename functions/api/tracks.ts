@@ -18,6 +18,7 @@ interface TrackRow {
   cover_thumb: string | null;
   code: number | null;
   has_stems: number;
+  created_at: string | null;
 }
 
 interface VersionRow {
@@ -40,23 +41,35 @@ export const onRequestGet = async (ctx: Ctx) => {
   let tracks: { results: TrackRow[] };
   try {
     tracks = await ctx.env.DB.prepare(
-      `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, cover, cover_thumb, code, has_stems
+      `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, cover, cover_thumb, code, has_stems, created_at
          FROM tracks ${WHERE}`,
     ).all<TrackRow>();
   } catch {
     try {
       const withCover = await ctx.env.DB.prepare(
-        `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, cover, code, has_stems
+        `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, cover, code, has_stems, created_at
            FROM tracks ${WHERE}`,
       ).all<Omit<TrackRow, "cover_thumb">>();
       tracks = { results: withCover.results.map((t) => ({ ...t, cover_thumb: null })) };
     } catch {
       const legacy = await ctx.env.DB.prepare(
-        `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, has_stems
+        `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, has_stems, created_at
            FROM tracks ${WHERE}`,
       ).all<Omit<TrackRow, "cover" | "cover_thumb" | "code">>();
       tracks = { results: legacy.results.map((t) => ({ ...t, cover: null, cover_thumb: null, code: null })) };
     }
+  }
+
+  // Real per-track download counts (Popular sort). download_log exists from the
+  // initial migration; guarded anyway for odd DBs.
+  const downloadsByTrack = new Map<string, number>();
+  try {
+    const dl = await ctx.env.DB.prepare(
+      `SELECT track_id, COUNT(*) AS n FROM download_log GROUP BY track_id`,
+    ).all<{ track_id: string; n: number }>();
+    for (const r of dl.results) downloadsByTrack.set(r.track_id, r.n);
+  } catch {
+    // table missing — counts stay 0
   }
 
   const versions = await ctx.env.DB.prepare(
@@ -105,6 +118,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       versions: byTrack.get(t.id) ?? [],
       collection_ids: collectionsByTrack.get(t.id) ?? [],
       category_ids: categoryTableExists ? categoriesByTrack.get(t.id) ?? [] : [t.category],
+      downloads: downloadsByTrack.get(t.id) ?? 0,
     })),
   });
 };

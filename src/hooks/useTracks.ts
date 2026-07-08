@@ -22,6 +22,8 @@ type ApiTrack = {
   cover_thumb?: string | null;
   code?: number | null;
   has_stems?: number;
+  created_at?: string | null;
+  downloads?: number;
 };
 
 const mapTrack = (t: ApiTrack): CatalogTrack => ({
@@ -45,6 +47,8 @@ const mapTrack = (t: ApiTrack): CatalogTrack => ({
   coverThumb: t.cover_thumb || undefined,
   code: t.code ?? undefined,
   hasStems: !!t.has_stems,
+  createdAt: t.created_at ?? undefined,
+  downloads: t.downloads ?? 0,
   audioVersions: (t.versions ?? []).map((v) => ({
     id: v.version_id as TrackVersion,
     label: v.label,

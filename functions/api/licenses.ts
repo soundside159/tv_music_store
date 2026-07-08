@@ -18,7 +18,7 @@ export const onRequestGet = async (ctx: Ctx) => {
 
   const rows = await ctx.env.DB.prepare(
     `SELECT o.id, o.track_id, o.tier, o.price, o.license_r2_key, o.created_at,
-            t.title AS track_title
+            t.title AS track_title, t.slug AS track_slug
        FROM sync_orders o
        LEFT JOIN tracks t ON t.id = o.track_id
       WHERE o.user_id = ?1
@@ -34,6 +34,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       license_r2_key: string | null;
       created_at: string;
       track_title: string | null;
+      track_slug: string | null;
     }>();
 
   return json({
@@ -41,6 +42,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       id: r.id,
       trackId: r.track_id,
       trackTitle: r.track_title ?? prettify(r.track_id),
+      trackSlug: r.track_slug ?? undefined,
       tier: r.tier,
       price: r.price,
       hasPdf: !!r.license_r2_key,

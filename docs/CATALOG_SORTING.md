@@ -1,7 +1,13 @@
 # Catalog ordering — plan (build AFTER the code system + after the first big import)
 
-Owner-approved direction for how tracks are ordered on `/catalog`. Not built yet;
-this is the spec.
+Owner-approved direction for how tracks are ordered on `/catalog`.
+
+**STATUS 2026-07-08: sort modes 1-3 are BUILT** — `src/lib/catalogSort.ts`
+(daily-seeded mulberry32 mix; featured = admin trending ids via `useTrendingIds`,
+genre round-robin for the rest), wired in `Catalog.tsx` (default sort renamed
+Featured → Recommended); `/api/tracks` now returns `created_at` (New) and
+per-track `downloads` from download_log (Popular; ties fall back to the mix).
+The star-rating staging section below is still NOT built (post-import task).
 
 ## Sort modes
 

@@ -164,6 +164,21 @@ export const usePlaylists = (): LivePlaylist[] => {
   }));
 };
 
+/** Raw admin-picked trending/featured track ids (empty until content loads). */
+export const useTrendingIds = (): string[] => {
+  const [ids, setIds] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    void fetchContent().then((data) => {
+      if (!cancelled && data?.trending?.length) setIds(data.trending);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return ids;
+};
+
 /** Homepage "Trending tracks": admin-picked order, fallback = first N tracks. */
 export const useTrendingTracks = (limit = 8): CatalogTrack[] => {
   const { tracks } = useTracks();

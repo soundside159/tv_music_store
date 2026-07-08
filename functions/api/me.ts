@@ -22,9 +22,12 @@ export const onRequestGet = async (ctx: Ctx) => {
     .bind(user.id)
     .first();
 
+  // Downloads made under a purchased one-time license don't burn the free
+  // limit — mirrors the exclusion in /api/download.
   const used = await ctx.env.DB.prepare(
     `SELECT COUNT(*) AS n FROM download_log
       WHERE user_id = ?1 AND format = 'mp3'
+        AND plan_at_download != 'license'
         AND created_at >= datetime('now', 'start of month')`,
   )
     .bind(user.id)
