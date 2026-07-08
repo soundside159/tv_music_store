@@ -95,7 +95,7 @@ const DownloadOptionsModal = () => {
       if (ok && status === "authed" && plan === "free" && option.id === "mp3-128") {
         openAttribution({ title: args.title, slug: args.slug, download: dl });
       }
-      if (includePdf && status === "authed") {
+      if (includePdf && status === "authed" && plan !== "free") {
         // Attachment header makes this download the certificate without navigating.
         const a = document.createElement("a");
         a.href = `/api/license-pdf?slug=${encodeURIComponent(args.slug)}`;
@@ -176,7 +176,7 @@ const DownloadOptionsModal = () => {
           })}
         </div>
 
-        {status === "authed" && !option.soon && (
+        {status === "authed" && plan !== "free" && !option.soon && (
           <button
             type="button"
             onClick={() => setIncludePdf((v) => !v)}

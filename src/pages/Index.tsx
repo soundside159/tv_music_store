@@ -149,16 +149,70 @@ const Index = () => {
           </div>
         </section>
 
-        {/* Trust */}
+        {/* Trust — the four pillars converge into the brand */}
         <section className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6">
-          <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-4">
-            {trustPoints.map((tp) => (
-              <div key={tp.label}>
-                <tp.icon className="h-5 w-5" style={{ color: GOLD }} />
-                <p className="mt-3 font-body text-sm font-semibold text-foreground">{tp.label}</p>
-                <p className="mt-1 font-body text-xs leading-relaxed text-muted-foreground">{tp.text}</p>
-              </div>
-            ))}
+          <div className="grid items-center gap-4 lg:grid-cols-[minmax(0,1fr)_170px_minmax(0,22rem)]">
+            {/* Left: the four pillars */}
+            <div className="flex flex-col gap-3">
+              {trustPoints.map((tp) => (
+                <div
+                  key={tp.label}
+                  className="flex items-start gap-3 rounded-xl border border-border bg-card/60 p-3.5"
+                >
+                  <span
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#F4C430]/30 bg-[#F4C430]/10"
+                    style={{ boxShadow: "0 0 18px -6px rgba(244,196,48,0.5)" }}
+                  >
+                    <tp.icon className="h-4 w-4" style={{ color: GOLD }} />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-body text-sm font-semibold text-foreground">{tp.label}</p>
+                    <p className="mt-0.5 font-body text-xs leading-relaxed text-muted-foreground">{tp.text}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Middle: converging light beams (desktop only) */}
+            <svg
+              className="hidden h-64 w-full lg:block"
+              viewBox="0 0 170 260"
+              fill="none"
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            >
+              <defs>
+                <linearGradient id="trustBeam" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#F4C430" stopOpacity="0.05" />
+                  <stop offset="60%" stopColor="#F4C430" stopOpacity="0.35" />
+                  <stop offset="100%" stopColor="#F4C430" stopOpacity="0.9" />
+                </linearGradient>
+              </defs>
+              <path d="M0 28 C 105 28, 70 130, 164 130" stroke="url(#trustBeam)" strokeWidth="1.5" />
+              <path d="M0 96 C 105 96, 95 130, 164 130" stroke="url(#trustBeam)" strokeWidth="1.5" />
+              <path d="M0 164 C 105 164, 95 130, 164 130" stroke="url(#trustBeam)" strokeWidth="1.5" />
+              <path d="M0 232 C 105 232, 70 130, 164 130" stroke="url(#trustBeam)" strokeWidth="1.5" />
+              <circle cx="164" cy="130" r="8" fill="#F4C430" opacity="0.18">
+                <animate attributeName="r" values="6;11;6" dur="2.4s" repeatCount="indefinite" />
+                <animate attributeName="opacity" values="0.25;0.08;0.25" dur="2.4s" repeatCount="indefinite" />
+              </circle>
+              <circle cx="164" cy="130" r="3.5" fill="#F4C430" />
+            </svg>
+
+            {/* Right: the brand node */}
+            <div
+              className="relative overflow-hidden rounded-2xl border border-[#F4C430]/25 bg-card/70 p-8 text-center"
+              style={{ boxShadow: "0 0 60px -20px rgba(244,196,48,0.45)" }}
+            >
+              <p className="font-display text-2xl font-semibold tracking-wide text-foreground md:text-3xl">
+                TV MUSIC STORE
+              </p>
+              <div
+                className="mx-auto mt-3 h-1 w-28 rounded-full"
+                style={{ background: "linear-gradient(90deg,#7c3aed,#F4C430,#22d3ee)" }}
+              />
+              <p className="mt-4 font-body text-xs text-muted-foreground">Cinematic music, licensed clean.</p>
+            </div>
           </div>
           <div className="mt-14 max-w-3xl">
             <h2 className="text-xl text-foreground">What is TV Music Store?</h2>

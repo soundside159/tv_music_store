@@ -1150,3 +1150,13 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   email + stored 'out' message) appear back in the customer's Support thread, so it's a two-way
   internal chat + email notification. NOTE: reverted an accidental "Unlimited MP3 → Unlimited" Pro edit
   (WAV stays Max-only). Owner: mail worker deploy already covers the schema (priority ALTER self-heals).
+- **2026-07-07 (PDF-license gating + homepage convergence hero):** (1) The "Include PDF License"
+  checkbox in DownloadOptionsModal is now shown/honored only for **Pro/Max** (plan !== "free") — free
+  plan doesn't get a subscription license cert (one-time solo licenses still get their own cert via
+  Account → Licenses). (2) HOMEPAGE "Trust" section redesigned from a flat 4-column grid into a
+  **convergence graphic** (Gyanaguru-style): the four pillars (Content ID protected / Real composers /
+  Versions included / License instantly) sit as cards on the left, four gold gradient light-beams
+  (inline SVG, `#trustBeam` gradient, a pulsing SMIL convergence node) fan into a bright point, and
+  flow into a right-side **TV MUSIC STORE** brand node (glow + a purple→gold→cyan gradient bar +
+  "Cinematic music, licensed clean."). Beams are desktop-only (`hidden lg:block`); on mobile the cards
+  stack above the brand node. Pure CSS/SVG, no deps. `Index.tsx` trust section only.
