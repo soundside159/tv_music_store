@@ -47,14 +47,16 @@ const Collections = () => {
           <div key={c.id} {...dragProps(c.id)} className={dragClass(c.id)}>
             <Link
               to={`/collection/${c.id}`}
-              className="group block overflow-hidden rounded-xl border border-border bg-card transition-colors hover:border-[#F4C430]/60"
+              className="group block overflow-hidden rounded-xl border border-border bg-card"
             >
+              {/* transform-gpu + hidden backface + will-change kill the sub-pixel
+                  "jump" at the start/end of the hover zoom. */}
               <div className="aspect-[4/3] w-full overflow-hidden">
                 <img
                   src={c.image}
                   alt={c.shortTitle}
                   loading="lazy"
-                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  className="h-full w-full transform-gpu object-cover transition-transform duration-700 ease-out will-change-transform [backface-visibility:hidden] group-hover:scale-[1.06]"
                 />
               </div>
               <div className="p-3">

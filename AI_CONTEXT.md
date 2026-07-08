@@ -1393,3 +1393,14 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   Page bottom: admin-only "+ New theme" button → adds a client-side draft section (empty sections
   persist only once a playlist is created in them; drafts list in page state). Collections page
   keeps AdminAddItem (no themes there). Verified via host reads; lint/build = deploy.bat.
+- **2026-07-08 (card hover feng-shui + playlist preview play):** (1) Playlist cards got a HOVER
+  PREVIEW: soft black/45 overlay fades in with a centered gold play button — clicking it plays the
+  playlist's FIRST playable track via the global player WITHOUT navigating (preventDefault/
+  stopPropagation inside the Link); while that track plays the overlay stays visible with a Pause.
+  `useTracks` is called ONCE in Playlists and passed into PlaylistCard as a prop (per-card hook
+  instances would each refetch /api/tracks). Bottom title block is pointer-events-none so it
+  doesn't block the button. (2) Removed the gold hover BORDER highlight from playlist (skewed
+  edges looked aliased/"low-poly") and collection cards. (3) Collections hover zoom de-jittered:
+  img now `transform-gpu will-change-transform [backface-visibility:hidden] duration-700 ease-out
+  group-hover:scale-[1.06]` (GPU compositing kills the sub-pixel jump at animation start/end).
+  Verified via host reads; lint/build = deploy.bat.

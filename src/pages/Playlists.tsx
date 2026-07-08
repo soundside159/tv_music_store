@@ -1,9 +1,12 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Check, Plus, X } from "lucide-react";
+import { Check, Pause, Play, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
+import { usePlayer } from "@/components/playerContext";
+import { useTracks } from "@/hooks/useTracks";
+import type { CatalogTrack } from "@/data/catalogTracks";
 import { refreshContent, useContentReady, usePlaylists, type LivePlaylist } from "@/hooks/useContent";
 import {
   AdminItemBar,
@@ -17,42 +20,81 @@ import {
 // ends with a ghost "+" card that creates a playlist in that theme, and the
 // page ends with "+ New theme". Visitors see none of the admin controls.
 
-const PlaylistCard = ({ playlist }: { playlist: LivePlaylist }) => (
-  <Link to={`/playlist/${playlist.slug}`} className="group block">
-    <div
-      style={{ transform: "skewX(-9deg)" }}
-      className="relative h-64 w-full overflow-hidden rounded-lg border border-white/15 bg-white/[0.04] shadow-[inset_0_0_16px_-8px_rgba(255,255,255,0.3)] transition-[border-color] duration-300 group-hover:border-[#F4C430]/60"
-    >
-      <img
-        src={playlist.image}
-        alt=""
-        loading="lazy"
-        decoding="async"
-        onLoad={(event) => {
-          event.currentTarget.style.opacity = "1";
-        }}
-        style={{
-          transform: "skewX(9deg) scale(1.32) translateZ(0)",
-          backfaceVisibility: "hidden",
-          opacity: 0,
-          transition: "opacity 0.5s ease",
-        }}
-        className="absolute inset-0 h-full w-full object-cover"
-      />
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent" />
-      <div style={{ transform: "skewX(9deg)" }} className="absolute inset-x-0 bottom-0 p-4">
-        <h3 className="font-display text-lg font-semibold leading-tight text-white transition-colors group-hover:text-[#F4C430]">
-          {playlist.title}
-        </h3>
-        <p className="mt-1 font-body text-xs text-white/60">{playlist.trackIds.length} tracks</p>
-        <div className="mt-2.5 flex items-center justify-between">
-          <span className="block h-px w-[70px] bg-gradient-to-r from-[#F4C430]/80 to-[#F4C430]/0" />
-          <span className="font-body text-white/50 transition-colors group-hover:text-[#F4C430]">→</span>
+const PlaylistCard = ({ playlist, tracks }: { playlist: LivePlaylist; tracks: CatalogTrack[] }) => {
+  const { activePlayer, isPlaying, playVersion } = usePlayer();
+  // First playable track of the playlist — powers the hover preview play.
+  const firstTrack = playlist.trackIds
+    .map((id) => tracks.find((t) => t.id === id))
+    .find((t) => t && t.audioVersions.length > 0);
+  const version = firstTrack?.audioVersions[0];
+  const active =
+    !!firstTrack && !!version &&
+    activePlayer?.trackId === firstTrack.id &&
+    activePlayer.versionId === version.id;
+
+  return (
+    <Link to={`/playlist/${playlist.slug}`} className="group block">
+      <div
+        style={{ transform: "skewX(-9deg)" }}
+        className="relative h-64 w-full overflow-hidden rounded-lg border border-white/15 bg-white/[0.04] shadow-[inset_0_0_16px_-8px_rgba(255,255,255,0.3)]"
+      >
+        <img
+          src={playlist.image}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onLoad={(event) => {
+            event.currentTarget.style.opacity = "1";
+          }}
+          style={{
+            transform: "skewX(9deg) scale(1.32) translateZ(0)",
+            backfaceVisibility: "hidden",
+            opacity: 0,
+            transition: "opacity 0.5s ease",
+          }}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent" />
+        {/* Hover preview: soft darkening + centered play (first track of the list). */}
+        {firstTrack && version && (
+          <div
+            className={`absolute inset-0 flex items-center justify-center bg-black/45 transition-opacity duration-300 ${
+              active ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+            }`}
+          >
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                playVersion(firstTrack, version);
+              }}
+              aria-label={active && isPlaying ? `Pause ${playlist.title}` : `Preview ${playlist.title}`}
+              style={{ transform: "skewX(9deg)" }}
+              className="flex h-14 w-14 items-center justify-center rounded-full bg-[#F4C430] text-background shadow-xl transition-transform duration-200 hover:scale-110"
+            >
+              {active && isPlaying ? (
+                <Pause className="h-5 w-5" />
+              ) : (
+                <Play className="ml-0.5 h-5 w-5" />
+              )}
+            </button>
+          </div>
+        )}
+        <div style={{ transform: "skewX(9deg)" }} className="pointer-events-none absolute inset-x-0 bottom-0 p-4">
+          <h3 className="font-display text-lg font-semibold leading-tight text-white transition-colors group-hover:text-[#F4C430]">
+            {playlist.title}
+          </h3>
+          <p className="mt-1 font-body text-xs text-white/60">{playlist.trackIds.length} tracks</p>
+          <div className="mt-2.5 flex items-center justify-between">
+            <span className="block h-px w-[70px] bg-gradient-to-r from-[#F4C430]/80 to-[#F4C430]/0" />
+            <span className="font-body text-white/50 transition-colors group-hover:text-[#F4C430]">→</span>
+          </div>
         </div>
       </div>
-    </div>
-  </Link>
-);
+    </Link>
+  );
+};
 
 /** Pulsing parallelogram placeholder shown while /api/content loads. */
 const SkeletonCard = () => (
@@ -209,6 +251,7 @@ const NewThemeButton = ({
 const Playlists = () => {
   const playlists = usePlaylists();
   const ready = useContentReady();
+  const { tracks } = useTracks();
   const admin = useContentAdmin();
   const { dragProps, dragClass } = useAdminDragReorder("playlist", admin);
   // Freshly created (still empty) theme sections — they live in the DB only
@@ -264,7 +307,7 @@ const Playlists = () => {
                 <div className="grid grid-cols-2 gap-x-6 gap-y-4 px-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
                   {section.items.map((p) => (
                     <div key={p.id} {...dragProps(p.id)} className={dragClass(p.id)}>
-                      <PlaylistCard playlist={p} />
+                      <PlaylistCard playlist={p} tracks={tracks} />
                       <AdminItemBar kind="playlist" id={p.id} admin={admin} />
                     </div>
                   ))}
