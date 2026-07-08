@@ -1456,3 +1456,23 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   (queued/working/done/error, errors don't stop the queue, re-Start retries failed, "Stop after
   current", "Clear done"); advice in UI: batches of ~20-30, keep the tab open. NEXT (stage 3):
   CSV export/import of track metadata (fixed column format), then stage 4 composers.
+- **2026-07-08 (link-preview og:image fix):** owner: Telegram preview of tvmusicstore.com showed
+  the Epic Adventure collection photo (it was hardcoded as og:image in index.html; crawlers don't
+  run JS so per-route useSeo doesn't matter to them). index.html now points og:image +
+  twitter:image at the square gold logo `/images/icons/web-app-manifest-512x512.png`
+  (+og:image:width/height 512) and twitter:card switched summary_large_image → **summary**
+  (compact logo card, like tunetank/vicate previews). UPGRADE PATH (commented in index.html):
+  when the owner makes a bold 1200x630 branded banner (dark graphite bg + big gold logo +
+  wordmark, e.g. in Canva), drop it as public/images/og-cover.png, point both image tags at it
+  and switch back to summary_large_image. NOTE: Telegram caches previews — after deploy, paste
+  the URL to @WebpageBot in Telegram to force-refresh. Track pages keep their per-track og:image
+  via useSeo (only matters for JS-running crawlers).
+- **2026-07-08 (London correspondence address LIVE):** owner bought Ghost Mail's Sole Trader
+  package (order ROG003227); assigned mailing address = **TV Music Store, 5 Brayford Square,
+  London, E1 0SG, United Kingdom**. Filled the ADDRESS constants in `LicenseTerms.tsx` (+
+  "Correspondence address:" prefix in §15 Contact) and `Privacy.tsx`; EFFECTIVE bumped to
+  8 July 2026 on both. OWNER STEPS PENDING: (1) reply to the Ghost Mail order email confirming
+  the business name "TV Music Store"; (2) complete the TrustID identity check when their email
+  arrives (mail forwarding is blocked until then). This address is also what goes to Paddle if
+  they ask for a business address. NOTE: it's a mail-forwarding address for a sole-trader/
+  partnership — NOT usable as a Companies House registered office if a Ltd is ever formed.

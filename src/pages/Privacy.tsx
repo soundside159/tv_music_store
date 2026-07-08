@@ -2,8 +2,8 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 
 // Public Privacy Policy page. Content mirrors docs/PRIVACY_POLICY_DRAFT.md.
-const EFFECTIVE = "6 July 2026";
-const ADDRESS = "United Kingdom"; // TODO(owner): replace with correspondence address
+const EFFECTIVE = "8 July 2026";
+const ADDRESS = "TV Music Store, 5 Brayford Square, London, E1 0SG, United Kingdom";
 
 const H2 = ({ children }: { children: React.ReactNode }) => (
   <h2 className="mt-10 text-xl text-foreground">{children}</h2>

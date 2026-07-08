@@ -4,8 +4,9 @@ import Footer from "@/components/Footer";
 // Public License Terms page. Content mirrors docs/LICENSE_TERMS_DRAFT.md.
 // Owner: update EFFECTIVE + ADDRESS once finalised; keep this in sync with the
 // draft and the certificate wording.
-const EFFECTIVE = "6 July 2026";
-const ADDRESS = "United Kingdom"; // TODO(owner): replace with correspondence address
+const EFFECTIVE = "8 July 2026";
+const ADDRESS =
+  "Correspondence address: TV Music Store, 5 Brayford Square, London, E1 0SG, United Kingdom";
 
 const H2 = ({ children }: { children: React.ReactNode }) => (
   <h2 className="mt-10 text-xl text-foreground">{children}</h2>
