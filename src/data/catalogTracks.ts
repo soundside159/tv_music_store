@@ -56,6 +56,8 @@ export interface CatalogTrack {
   createdAt?: string;
   /** All-time download count from download_log (live API only; drives "Popular"). */
   downloads?: number;
+  /** draft | published — drafts are only visible on admin pages (?drafts=1). */
+  status?: string;
 }
 
 export const categoryLabels: Record<TrackCategory, string> = {

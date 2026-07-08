@@ -46,8 +46,10 @@ export interface DownloadArgs {
   src: string;
   title: string;
   label: string;
-  format?: "mp3" | "wav";
+  format?: "mp3" | "wav" | "stems";
   quality?: 128 | 320;
+  /** Enables the STEMS option in the download dialog (stems zip uploaded). */
+  hasStems?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -132,9 +134,11 @@ export const downloadTrackVersion = async (args: DownloadArgs): Promise<boolean>
       // WAV downloads arrive as a zip of every version.
       const code = codeFromSlug(args.slug);
       a.download =
-        format === "wav"
-          ? wavZipFileName(args.title, code)
-          : downloadFileName(args.title, args.label, format, code);
+        format === "stems"
+          ? wavZipFileName(`${args.title} STEMS`, code)
+          : format === "wav"
+            ? wavZipFileName(args.title, code)
+            : downloadFileName(args.title, args.label, format, code);
       document.body.appendChild(a);
       a.click();
       a.remove();

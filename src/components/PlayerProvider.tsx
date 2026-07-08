@@ -118,6 +118,7 @@ export const PlayerProvider = ({ children }: { children: ReactNode }) => {
                       src: currentVersion.src,
                       title: currentTrack.title,
                       label: currentVersion.label,
+                      hasStems: currentTrack.hasStems,
                     })
                   }
                 >

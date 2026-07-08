@@ -238,6 +238,7 @@ const TrackDetail = () => {
                   src: mainVersion.src,
                   title: track.title,
                   label: mainVersion.label,
+                  hasStems: track.hasStems,
                 })
               }
               className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#F4C430] py-2.5 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85"

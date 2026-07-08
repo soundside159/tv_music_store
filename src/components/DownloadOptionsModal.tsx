@@ -90,7 +90,11 @@ const DownloadOptionsModal = () => {
   if (!args) return null;
 
   const plan = status === "authed" ? (subscription?.plan ?? "free") : "free";
-  const option = options.find((o) => o.id === selected) ?? options[0];
+  // STEMS unlocks per track once a stems zip is uploaded; otherwise stays SOON.
+  const availableOptions = options.map((o) =>
+    o.id === "stems" ? { ...o, soon: !args.hasStems } : o,
+  );
+  const option = availableOptions.find((o) => o.id === selected) ?? availableOptions[0];
   // A purchased one-time license unlocks every available format for its track.
   const locked = planRank[plan] < planRank[option.need] && !license;
   const freeLeft = Math.max(0, 3 - downloadsUsedThisMonth);
@@ -107,7 +111,7 @@ const DownloadOptionsModal = () => {
     try {
       const dl: DownloadArgs = {
         ...args,
-        format: option.id === "wav" ? "wav" : "mp3",
+        format: option.id === "wav" ? "wav" : option.id === "stems" ? "stems" : "mp3",
         quality: option.id === "mp3-128" ? 128 : 320,
       };
       const ok = await downloadTrackVersion(dl);
@@ -171,7 +175,7 @@ const DownloadOptionsModal = () => {
         </p>
 
         <div className="mt-5 flex flex-col gap-2.5">
-          {options.map((o) => {
+          {availableOptions.map((o) => {
             const isActive = o.id === selected;
             return (
               <button

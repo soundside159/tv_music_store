@@ -118,7 +118,8 @@ const tabLabels: Record<Tab, string> = {
 };
 
 const AdminContent = ({ tab }: { tab: Tab }) => {
-  const { tracks, source: trackSource, reload: reloadTracks } = useTracks();
+  // drafts:true — the admin manager must also see bulk-uploaded (unpublished) tracks.
+  const { tracks, source: trackSource, reload: reloadTracks } = useTracks({ drafts: true });
   const [data, setData] = useState<ContentData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<typeof emptyDraft | null>(null);
@@ -145,6 +146,40 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
       setSelResetKey((k) => k + 1);
       reload();
       void reloadTracks();
+    }
+  };
+
+  const publishSelectedTracks = async () => {
+    if (selectedTrackIds.length === 0) return;
+    const n = selectedTrackIds.length;
+    const ok = await run(
+      { action: "bulk_update_tracks", trackIds: selectedTrackIds, fields: { status: "published" } },
+      `${n} track${n > 1 ? "s" : ""} published`,
+    );
+    if (ok) {
+      setSelectedTrackIds([]);
+      setSelResetKey((k) => k + 1);
+      void reloadTracks();
+    }
+  };
+
+  // Stems zip for ONE track: upload to R2 (private), then store the key —
+  // this also switches has_stems on, unlocking STEMS in the download dialog.
+  const uploadStems = async (file: File, trackId: string): Promise<boolean> => {
+    setUploading(true);
+    try {
+      const up = await uploadAudio(file, "stems", file.name);
+      if (!up) return false;
+      const ok = await run(
+        { action: "bulk_update_tracks", trackIds: [trackId], fields: { stemsKey: up.key } },
+        "Stems uploaded",
+      );
+      if (ok) {
+        setTrackOverrides((o) => ({ ...o, [trackId]: { ...o[trackId], hasStems: true } }));
+      }
+      return ok;
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -180,7 +215,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
 
   const uploadAudio = async (
     file: File | Blob,
-    kind: "preview" | "preview128" | "master" | "wavzip",
+    kind: "preview" | "preview128" | "master" | "wavzip" | "stems",
     filename?: string,
   ): Promise<{ key: string; path: string | null } | null> => {
     const raw = filename ?? (file instanceof File ? file.name : kind);
@@ -263,14 +298,24 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
           </button>
         )}
         {tab === "tracks" && trackSource === "api" && selectedTrackIds.length > 0 && (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void deleteSelectedTracks()}
-            className="rounded-lg bg-red-600 px-4 py-2 font-body text-sm font-semibold text-white transition-colors hover:bg-red-500 disabled:opacity-50"
-          >
-            Delete ({selectedTrackIds.length})
-          </button>
+          <>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void publishSelectedTracks()}
+              className={goldBtnCls}
+            >
+              Publish ({selectedTrackIds.length})
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void deleteSelectedTracks()}
+              className="rounded-lg bg-red-600 px-4 py-2 font-body text-sm font-semibold text-white transition-colors hover:bg-red-500 disabled:opacity-50"
+            >
+              Delete ({selectedTrackIds.length})
+            </button>
+          </>
         )}
         {tab === "tracks" && trackSource === "api" && (
           <button type="button" onClick={() => setAddOpen(true)} className={goldBtnCls}>
@@ -672,6 +717,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
           uploading={uploading}
           run={run}
           uploadCover={uploadCover}
+          uploadStems={uploadStems}
           onApplyOverrides={(overrides) =>
             setTrackOverrides((prev) => {
               const next = { ...prev };

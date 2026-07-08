@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Tags,
+  UploadCloud,
   UserRound,
   Users,
   Youtube,
@@ -71,6 +72,7 @@ export const adminNavGroups: { label: string; items: NavItem[] }[] = [
     label: "Catalog",
     items: [
       { id: "tracksedit", label: "Tracks", icon: SlidersHorizontal },
+      { id: "bulkupload", label: "Bulk Upload", icon: UploadCloud },
       { id: "collections", label: "Collections", icon: Library },
       { id: "playlists", label: "Playlists", icon: ListMusic },
       { id: "categories", label: "Categories", icon: Tags },

@@ -24,6 +24,7 @@ type ApiTrack = {
   has_stems?: number;
   created_at?: string | null;
   downloads?: number;
+  status?: string;
 };
 
 const mapTrack = (t: ApiTrack): CatalogTrack => ({
@@ -49,6 +50,7 @@ const mapTrack = (t: ApiTrack): CatalogTrack => ({
   hasStems: !!t.has_stems,
   createdAt: t.created_at ?? undefined,
   downloads: t.downloads ?? 0,
+  status: t.status ?? undefined,
   audioVersions: (t.versions ?? []).map((v) => ({
     id: v.version_id as TrackVersion,
     label: v.label,
@@ -60,8 +62,11 @@ const mapTrack = (t: ApiTrack): CatalogTrack => ({
 /**
  * Live catalog data from /api/tracks (Cloudflare D1), with a safe fallback to the
  * bundled mock data when the API is unavailable or the DB has no tracks yet.
+ * `drafts: true` (admin pages) also loads draft tracks — the server only honors
+ * it for admin sessions.
  */
-export const useTracks = () => {
+export const useTracks = (opts?: { drafts?: boolean }) => {
+  const wantDrafts = !!opts?.drafts;
   const [tracks, setTracks] = useState<CatalogTrack[]>(catalogTracks);
   const [source, setSource] = useState<"mock" | "api">("mock");
   // True until the API answers (or fails) — lets pages show skeletons instead
@@ -70,7 +75,7 @@ export const useTracks = () => {
 
   const load = useCallback(() => {
     setIsLoading(true);
-    return fetch("/api/tracks", { credentials: "include" })
+    return fetch(wantDrafts ? "/api/tracks?drafts=1" : "/api/tracks", { credentials: "include" })
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
       .then((data: { tracks?: ApiTrack[] }) => {
         const list = (data.tracks ?? []).map(mapTrack).filter((t) => t.audioVersions.length > 0);
@@ -83,7 +88,7 @@ export const useTracks = () => {
         // API unavailable / DB empty -> keep mock fallback
       })
       .finally(() => setIsLoading(false));
-  }, []);
+  }, [wantDrafts]);
 
   useEffect(() => {
     void load();

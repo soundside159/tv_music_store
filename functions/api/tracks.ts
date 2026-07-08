@@ -1,4 +1,4 @@
-import { json, type Ctx } from "./_utils";
+import { getSessionUser, json, OWNER_EMAIL, type Ctx } from "./_utils";
 import { ensureTrackCodes } from "./_codes";
 
 interface TrackRow {
@@ -19,6 +19,7 @@ interface TrackRow {
   code: number | null;
   has_stems: number;
   created_at: string | null;
+  status?: string;
 }
 
 interface VersionRow {
@@ -35,25 +36,35 @@ export const onRequestGet = async (ctx: Ctx) => {
   // Assign public codes to any track missing one (idempotent — no-op once set).
   await ensureTrackCodes(ctx.env.DB);
 
+  // Admins can request drafts too (?drafts=1) — the admin Tracks manager needs
+  // to see bulk-uploaded tracks before they're published.
+  let includeDrafts = false;
+  if (new URL(ctx.request.url).searchParams.get("drafts") === "1") {
+    const user = await getSessionUser(ctx);
+    includeDrafts = !!user && (user.role === "admin" || user.email === OWNER_EMAIL);
+  }
+
   // `cover` / `cover_thumb` are added lazily by the admin editor; older DBs may
   // not have them yet, so degrade gracefully in two steps.
-  const WHERE = `WHERE status = 'published' AND moderation_status = 'approved' ORDER BY created_at DESC`;
+  const WHERE = includeDrafts
+    ? `WHERE moderation_status = 'approved' ORDER BY created_at DESC`
+    : `WHERE status = 'published' AND moderation_status = 'approved' ORDER BY created_at DESC`;
   let tracks: { results: TrackRow[] };
   try {
     tracks = await ctx.env.DB.prepare(
-      `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, cover, cover_thumb, code, has_stems, created_at
+      `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, cover, cover_thumb, code, has_stems, created_at, status
          FROM tracks ${WHERE}`,
     ).all<TrackRow>();
   } catch {
     try {
       const withCover = await ctx.env.DB.prepare(
-        `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, cover, code, has_stems, created_at
+        `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, cover, code, has_stems, created_at, status
            FROM tracks ${WHERE}`,
       ).all<Omit<TrackRow, "cover_thumb">>();
       tracks = { results: withCover.results.map((t) => ({ ...t, cover_thumb: null })) };
     } catch {
       const legacy = await ctx.env.DB.prepare(
-        `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, has_stems, created_at
+        `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, has_stems, created_at, status
            FROM tracks ${WHERE}`,
       ).all<Omit<TrackRow, "cover" | "cover_thumb" | "code">>();
       tracks = { results: legacy.results.map((t) => ({ ...t, cover: null, cover_thumb: null, code: null })) };

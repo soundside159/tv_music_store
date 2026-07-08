@@ -1432,3 +1432,27 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   "X new · Y handled"; and **"Channels"** = the original table (its expander now strikes handled
   videos too). No new owner steps (YOUTUBE_API_KEY already set; wl_handled self-creates).
   Verified via host reads; lint/build = deploy.bat.
+- **2026-07-08 (STEMS upload + BULK UPLOAD with drafts — mass-import plan stages 1+2):** owner's
+  bulk-import plan agreed (4 stages, owner-approved): 1) stems, 2) bulk WAV upload as drafts,
+  3) metadata via CSV export→match→import (unified column format; AI merges the composers' own
+  spreadsheets), 4) composer accounts/panel + admin uploads with a composer picker + nicknames.
+  STAGES 1+2 BUILT THIS SESSION:
+  **STEMS:** upload-audio.ts gained kind=stems (private masters/stems-*.zip); lazy
+  `tracks.r2_key_stems` column; bulk_update_tracks `fields.stemsKey` (sets key + has_stems=1) and
+  `fields.status`; download.ts serves format=stems (Max/licensed gate like WAV, filename
+  `tvmusicstore.com_<code>_<Title> STEMS.zip`); DownloadArgs gained `hasStems` — all four
+  openDownloadOptions call sites pass track.hasStems and the modal's STEMS option is enabled
+  per-track (SOON only when no stems uploaded); AdminTracksEdit single-track panel got an
+  "Upload stems ZIP" button (AdminContent.uploadStems: upload → fields.stemsKey → override).
+  **DRAFTS:** create_track accepts status:"draft" (bulk uploads hidden from customers);
+  /api/tracks honors ?drafts=1 for ADMIN sessions only (returns `status` too);
+  useTracks({drafts:true}) used by AdminContent; DRAFT amber badge in the AdminTracksEdit table;
+  gold **Publish (N)** button next to Delete (bulk_update_tracks fields.status=published).
+  **BULK UPLOAD:** NEW `src/components/AdminBulkUpload.tsx` + admin nav item "Bulk Upload"
+  (Catalog group, UploadCloud icon) + Admin.tsx section `bulkupload`. Drop/browse many WAVs →
+  grouped by filename base ("Epic Battle (short).wav" → suffix "short"); LONGEST version becomes
+  Main (owner's choice); sequential queue (encode 320/128 via the existing audioEncoding.ts
+  pipeline → upload previews → zip WAVs → create_track as draft), per-track status line
+  (queued/working/done/error, errors don't stop the queue, re-Start retries failed, "Stop after
+  current", "Clear done"); advice in UI: batches of ~20-30, keep the tab open. NEXT (stage 3):
+  CSV export/import of track metadata (fixed column format), then stage 4 composers.

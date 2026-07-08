@@ -7,6 +7,7 @@ import { getSessionUser, json, OWNER_EMAIL, type Ctx } from "../_utils";
 //   master      -> masters/<base>-<uuid>.<ext>  (PRIVATE single WAV/MP3 master — legacy)
 //   wavzip      -> masters/<base>-<uuid>.zip    (PRIVATE zip of all WAV versions, Max/licensed
 //                  download only; only /api/download serves the masters/ prefix)
+//   stems       -> masters/stems-<base>-<uuid>.zip (PRIVATE stems bundle, Max/licensed download)
 
 const PREVIEW_MAX = 25 * 1024 * 1024; // 25 MB
 const MASTER_MAX = 95 * 1024 * 1024; // 95 MB (stay under Cloudflare's ~100 MB body limit)
@@ -21,7 +22,7 @@ const EXT_BY_TYPE: Record<string, string> = {
   "application/x-zip-compressed": "zip",
 };
 
-type Kind = "preview" | "preview128" | "master" | "wavzip";
+type Kind = "preview" | "preview128" | "master" | "wavzip" | "stems";
 const PUBLIC_KINDS: Kind[] = ["preview", "preview128"];
 
 export const onRequestPost = async (ctx: Ctx) => {
@@ -42,7 +43,7 @@ export const onRequestPost = async (ctx: Ctx) => {
   const url = new URL(ctx.request.url);
   const kindParam = url.searchParams.get("kind");
   const kind: Kind =
-    kindParam === "master" || kindParam === "wavzip" || kindParam === "preview128"
+    kindParam === "master" || kindParam === "wavzip" || kindParam === "preview128" || kindParam === "stems"
       ? kindParam
       : "preview";
   const isPublic = PUBLIC_KINDS.includes(kind);
@@ -53,8 +54,8 @@ export const onRequestPost = async (ctx: Ctx) => {
   if (isPublic && ext !== "mp3") {
     return json({ error: "Previews must be MP3" }, 415);
   }
-  if (kind === "wavzip" && ext !== "zip") {
-    return json({ error: "The WAV bundle must be a .zip" }, 415);
+  if ((kind === "wavzip" || kind === "stems") && ext !== "zip") {
+    return json({ error: kind === "stems" ? "Stems must be a .zip" : "The WAV bundle must be a .zip" }, 415);
   }
 
   const bytes = await ctx.request.arrayBuffer();
@@ -74,7 +75,8 @@ export const onRequestPost = async (ctx: Ctx) => {
       .slice(0, 40) || kind;
 
   const prefix = isPublic ? "previews" : "masters";
-  const key = `${prefix}/${base}-${crypto.randomUUID().slice(0, 8)}.${ext}`;
+  const stemsTag = kind === "stems" ? "stems-" : "";
+  const key = `${prefix}/${stemsTag}${base}-${crypto.randomUUID().slice(0, 8)}.${ext}`;
   await ctx.env.R2.put(key, bytes, { httpMetadata: { contentType } });
 
   // Public kinds return a servable path; private kinds return the key only.

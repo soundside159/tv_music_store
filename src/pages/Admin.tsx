@@ -19,6 +19,7 @@ import {
   PLATFORM_SHARE,
 } from "@/mocks";
 import AdminContent from "@/components/AdminContent";
+import AdminBulkUpload from "@/components/AdminBulkUpload";
 import AdminWhitelist from "@/components/AdminWhitelist";
 import AdminCampaign from "@/components/AdminCampaign";
 import AdminInbox from "@/components/AdminInbox";
@@ -36,6 +37,7 @@ type SectionId =
   | "vocabulary"
   | "trending"
   | "tracksedit"
+  | "bulkupload"
   | "customers"
   | "licenses"
   | "whitelist"
@@ -53,6 +55,7 @@ const SECTION_IDS: SectionId[] = [
   "vocabulary",
   "trending",
   "tracksedit",
+  "bulkupload",
   "customers",
   "licenses",
   "whitelist",
@@ -491,6 +494,8 @@ const Admin = () => {
             )}
 
             {CONTENT_TAB[section] && <AdminContent tab={CONTENT_TAB[section]!} />}
+
+            {section === "bulkupload" && <AdminBulkUpload />}
 
             {section === "customers" && (
               <Card title={`Customers${liveUsers ? ` (${liveUsers.length})` : ""}`}>

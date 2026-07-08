@@ -52,7 +52,7 @@ export const onRequestPost = async (ctx: Ctx) => {
   })();
   const slug = body?.slug?.trim();
   const versionId = body?.versionId?.trim();
-  const format = body?.format === "wav" ? "wav" : "mp3";
+  const format = body?.format === "wav" ? "wav" : body?.format === "stems" ? "stems" : "mp3";
   const quality = String(body?.quality) === "128" ? 128 : 320;
   if (!slug || !versionId) return json({ error: "slug and versionId required" }, 400);
 
@@ -70,17 +70,23 @@ export const onRequestPost = async (ctx: Ctx) => {
   const track = await (async () => {
     try {
       return await ctx.env.DB.prepare(
-        `SELECT id, title, composer_id, r2_key_wav_zip FROM tracks WHERE slug = ?1`,
+        `SELECT id, title, composer_id, r2_key_wav_zip, r2_key_stems FROM tracks WHERE slug = ?1`,
       )
         .bind(slug)
-        .first<{ id: string; title: string; composer_id: string | null; r2_key_wav_zip: string | null }>();
+        .first<{
+          id: string;
+          title: string;
+          composer_id: string | null;
+          r2_key_wav_zip: string | null;
+          r2_key_stems: string | null;
+        }>();
     } catch {
       const legacy = await ctx.env.DB.prepare(
         `SELECT id, title, composer_id FROM tracks WHERE slug = ?1`,
       )
         .bind(slug)
         .first<{ id: string; title: string; composer_id: string | null }>();
-      return legacy ? { ...legacy, r2_key_wav_zip: null } : null;
+      return legacy ? { ...legacy, r2_key_wav_zip: null, r2_key_stems: null } : null;
     }
   })();
 
@@ -101,9 +107,12 @@ export const onRequestPost = async (ctx: Ctx) => {
   })();
 
   // Plan gates (a purchased one-time license bypasses them for its track)
-  if (format === "wav" && plan !== "max" && !hasLicense) {
+  if ((format === "wav" || format === "stems") && plan !== "max" && !hasLicense) {
     return json(
-      { error: "WAV files come with the Max plan or a one-time license for this track", code: "plan" },
+      {
+        error: `${format === "stems" ? "Stems" : "WAV files"} come with the Max plan or a one-time license for this track`,
+        code: "plan",
+      },
       403,
     );
   }
@@ -148,7 +157,13 @@ export const onRequestPost = async (ctx: Ctx) => {
       }
     })();
     if (!version) return json({ error: "Version not found", code: "nofile" }, 404);
-    if (format === "wav") {
+    if (format === "stems") {
+      if (!track.r2_key_stems || !ctx.env.R2) {
+        return json({ error: "Stems are not uploaded yet for this track", code: "nofile" }, 404);
+      }
+      r2Key = track.r2_key_stems;
+      isZip = true;
+    } else if (format === "wav") {
       // Preferred: one zip of all WAV versions (track-level). Legacy: single WAV.
       const wavKey = track.r2_key_wav_zip ?? version.r2_key_wav;
       if (!wavKey || !ctx.env.R2) {
@@ -170,7 +185,7 @@ export const onRequestPost = async (ctx: Ctx) => {
 
   // Fetch the audio
   let audioBody: ReadableStream;
-  let contentType = format === "wav" ? "audio/wav" : "audio/mpeg";
+  let contentType = isZip ? "application/zip" : format === "wav" ? "audio/wav" : "audio/mpeg";
   if (r2Key && ctx.env.R2) {
     const obj = await ctx.env.R2.get(r2Key);
     if (!obj) return json({ error: "File missing in storage", code: "nofile" }, 404);
@@ -199,7 +214,8 @@ export const onRequestPost = async (ctx: Ctx) => {
   // Strip the track title out of the version label so it isn't duplicated, then
   // prefix the site (tunetank-style): "tvmusicstore.com_Title (short version).mp3".
   const suffix = isZip ? "" : cleanVersionSuffix(body?.label ?? versionId, rawTitle);
-  const base = suffix ? `${title} (${sanitizeFilename(suffix)})` : title;
+  const stemsTag = format === "stems" ? " STEMS" : "";
+  const base = (suffix ? `${title} (${sanitizeFilename(suffix)})` : title) + stemsTag;
   const code = slug.match(/^(\d+)/)?.[1] ?? "";
   const filename = code ? `tvmusicstore.com_${code}_${base}.${ext}` : `tvmusicstore.com_${base}.${ext}`;
 

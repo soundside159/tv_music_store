@@ -317,6 +317,7 @@ export const TrackRow = ({
               src: selectedVersion.src,
               title: track.title,
               label: selectedVersion.label,
+              hasStems: track.hasStems,
             })
           }
         >
@@ -387,6 +388,7 @@ export const TrackRow = ({
                           src: version.src,
                           title: track.title,
                           label: version.label,
+                          hasStems: track.hasStems,
                         })
                       }
                     >

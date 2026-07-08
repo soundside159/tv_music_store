@@ -116,6 +116,7 @@ const AdminTracksEdit = ({
   uploading,
   run,
   uploadCover,
+  uploadStems,
   onApplyOverrides,
   onSelectionChange,
   selectionResetKey,
@@ -131,6 +132,8 @@ const AdminTracksEdit = ({
   uploading: boolean;
   run: (payload: Record<string, unknown>, okMsg: string) => Promise<boolean>;
   uploadCover: (file: File, apply: (path: string) => void) => Promise<void> | void;
+  /** Uploads a stems .zip for one track (stores key + flips has_stems on). */
+  uploadStems?: (file: File, trackId: string) => Promise<boolean>;
   onApplyOverrides: (overrides: Record<string, Partial<CatalogTrack>>) => void;
   onSelectionChange?: (ids: string[]) => void;
   selectionResetKey?: number;
@@ -538,6 +541,11 @@ const AdminTracksEdit = ({
                         }`}
                       >
                         <span className="truncate">{t.title}</span>
+                        {t.status === "draft" && (
+                          <span className="shrink-0 rounded border border-amber-400/50 bg-amber-400/10 px-1 py-px font-body text-[9px] font-bold uppercase tracking-wide text-amber-400">
+                            Draft
+                          </span>
+                        )}
                         <ExternalLink className="h-3 w-3 shrink-0 opacity-0 transition-opacity group-hover/title:opacity-70" />
                       </Link>
                       {version && (
@@ -736,6 +744,33 @@ const AdminTracksEdit = ({
                     state={fields.hasStems ? "all" : "none"}
                     onToggle={() => setFields({ ...fields, hasStems: !fields.hasStems })}
                   />
+                  {uploadStems && (
+                    <label className="flex cursor-pointer items-center gap-2">
+                      <span className="rounded-lg border border-border px-3 py-1.5 font-body text-xs text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]">
+                        {uploading ? "Uploading…" : "Upload stems ZIP"}
+                      </span>
+                      <span className="font-body text-[11px] text-muted-foreground">
+                        {selTracks[0].hasStems
+                          ? "Stems on — uploading replaces the bundle"
+                          : "One .zip with the separated layers"}
+                      </span>
+                      <input
+                        type="file"
+                        accept=".zip,application/zip,application/x-zip-compressed"
+                        className="hidden"
+                        disabled={uploading}
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) {
+                            void uploadStems(f, selTracks[0].id).then((ok) => {
+                              if (ok) setFields((prev) => (prev ? { ...prev, hasStems: true } : prev));
+                            });
+                          }
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                  )}
                 </div>
               )}
 

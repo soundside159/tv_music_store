@@ -35,6 +35,7 @@ const ensureTrackCoverColumn = async (db: D1Database) => {
     `ALTER TABLE tracks ADD COLUMN cover TEXT`,
     `ALTER TABLE tracks ADD COLUMN cover_thumb TEXT`,
     `ALTER TABLE tracks ADD COLUMN r2_key_wav_zip TEXT`,
+    `ALTER TABLE tracks ADD COLUMN r2_key_stems TEXT`,
     `ALTER TABLE track_versions ADD COLUMN preview_128 TEXT`,
   ];
   for (const sql of alters) {
@@ -310,7 +311,13 @@ export const onRequestPost = async (ctx: Ctx) => {
       cover?: string;
       tags?: string[];
       hasStems?: boolean;
+      /** R2 masters/ key of the stems zip; setting it also flips has_stems on. */
+      stemsKey?: string;
+      /** draft | published — bulk publish/unpublish. */
+      status?: string;
     };
+    /** create_track: "draft" keeps the track off the public catalog. */
+    status?: string;
   }>(ctx.request);
   if (!body?.action) return json({ error: "action required" }, 400);
 
@@ -520,6 +527,12 @@ export const onRequestPost = async (ctx: Ctx) => {
           if (typeof f.cover === "string") next.cover = f.cover;
           if (Array.isArray(f.tags)) next.tags = JSON.stringify(f.tags.slice(0, 12));
           if (typeof f.hasStems === "boolean") next.has_stems = f.hasStems ? 1 : 0;
+          // Stems bundle: storing the key also switches the STEMS badge on.
+          if (typeof f.stemsKey === "string" && /^masters\//.test(f.stemsKey)) {
+            next.r2_key_stems = f.stemsKey;
+            next.has_stems = 1;
+          }
+          if (f.status === "draft" || f.status === "published") next.status = f.status;
         }
         const keys = Object.keys(next);
         if (keys.length > 0) {
@@ -620,12 +633,16 @@ export const onRequestPost = async (ctx: Ctx) => {
           ? body.wavZipKey
           : null;
       const mainDuration = versions[0].duration ?? body.duration ?? "";
+      // Bulk uploads create DRAFTS (hidden from the public catalog until the
+      // owner tags them and presses Publish); the single Add-Track form
+      // publishes immediately as before.
+      const status = body.status === "draft" ? "draft" : "published";
       await db
         .prepare(
           `INSERT INTO tracks
              (id, slug, title, composer_id, category, genre, mood, use_case, style_of,
-              bpm, duration, description, tags, has_stems, cover, cover_thumb, r2_key_wav_zip, code)
-           VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7, '', ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)`,
+              bpm, duration, description, tags, has_stems, cover, cover_thumb, r2_key_wav_zip, code, status)
+           VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7, '', ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)`,
         )
         .bind(
           trackId,
@@ -644,6 +661,7 @@ export const onRequestPost = async (ctx: Ctx) => {
           body.coverThumb ?? "",
           wavZipKey,
           code,
+          status,
         )
         .run();
 
