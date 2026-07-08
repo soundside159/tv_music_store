@@ -1404,3 +1404,15 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   img now `transform-gpu will-change-transform [backface-visibility:hidden] duration-700 ease-out
   group-hover:scale-[1.06]` (GPU compositing kills the sub-pixel jump at animation start/end).
   Verified via host reads; lint/build = deploy.bat.
+- **2026-07-08 (track-row tag pills clipping):** the third Use Case/Genre/Mood pill could get
+  hard-clipped under the "+N versions" button — the pills container got `pr-4` + a right-edge
+  fade via CSS mask (`[mask-image:linear-gradient(to_right,#000_calc(100%-1.25rem),transparent)]`)
+  so an overflowing pill fades out instead of cutting. PADDLE STATUS (owner): after the copy
+  repositioning the domain was resubmitted; owner also ADDED the domain a second time in
+  Checkout → Website Approval — now one row "Unapproved" (the old verdict) + one "Pending"
+  (stuck ~4h; the first automated review had answered in minutes, manual re-reviews take days).
+  Advice given: delete the duplicate row, keep ONE, wait 1-2 business days, then contact Paddle
+  support via the dashboard Help widget / sellers@paddle.com referencing the review email and
+  stating the catalog is original first-party music licensed directly (not third-party stock
+  resale). Billing stays paused (BILLING_ENABLED=false) until Paddle approves or the
+  Stripe/PayPal fallback is chosen.

@@ -237,7 +237,9 @@ export const TrackRow = ({
         <span className="min-w-0 truncate whitespace-nowrap">{track.title}</span>
       </Link>
 
-      <div className="hidden min-w-0 items-center gap-2 overflow-hidden xl:flex">
+      {/* pr keeps the last pill clear of the versions button; the mask fades a
+          clipped pill out softly instead of a hard cut. */}
+      <div className="hidden min-w-0 items-center gap-2 overflow-hidden pr-4 [mask-image:linear-gradient(to_right,#000_calc(100%-1.25rem),transparent)] xl:flex">
         {rowTags.map((tag) => (
           <Link
             key={tag.to}
