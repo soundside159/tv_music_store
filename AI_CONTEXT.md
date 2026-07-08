@@ -1296,3 +1296,20 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   filtering preserves it, pagination unaffected. Sandbox VM still down — verified via host reads;
   lint/build = deploy.bat. LATER: anti-gamed popularity (weight by unique users/time window),
   star-rating "newness" staging after the bulk import.
+- **2026-07-08 (admin side panels on the public track page):** owner request (was told to a
+  previous AI but never built; not in docs before now): as ADMIN, opening /track/:slug shows two
+  extra sticky side columns so a track can be curated while listening, without going to /admin.
+  NEW `src/components/AdminTrackPanel.tsx`: `useAdminTrackContent(enabled)` (GET /api/admin/content
+  once + `run()` POST helper), LEFT `AdminTrackTagsPanel` = collapsible Use Case / Genre / Mood
+  checkbox groups from live vocabularies (toggle → bulk_update_tracks facets add/remove for this
+  track, then reloads /api/tracks so the page pills refresh) + a **Trending tracks box** (ordered
+  list with titles, current track highlighted gold, ↑/↓ arrows + X per row, "+ Add this track"
+  button — all via set_trending with optimistic local state; same list drives the homepage block);
+  RIGHT `AdminTrackCollectionsPanel` = Collections + Playlists lists (cover thumb + title + button:
+  grey PLUS when not a member → adds; green CHECK when member → hover red, removes; via
+  bulk_update_tracks collectionChanges/playlistChanges, optimistic trackIds update). TrackDetail.tsx:
+  `useCurrentUser` + `useTracks().source`; panels render ONLY for role=admin AND source==="api"
+  (mock-fallback edits would no-op against D1); admin layout = main widens max-w-7xl→max-w-[110rem],
+  content wrapped in `xl:grid-cols-[17rem_minmax(0,1fr)_19rem]` (panels stack above/below content
+  under xl); customers see the unchanged centered page. No new backend — reuses the admin content
+  API as-is. Verified via host reads (sandbox VM still down); lint/build = deploy.bat on the host.

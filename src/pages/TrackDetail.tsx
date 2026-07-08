@@ -19,6 +19,12 @@ import WaveformPreview from "@/components/WaveformPreview";
 import type { CatalogTrack, TrackAudioVersion, TrackVersion } from "@/data/catalogTracks";
 import { useTracks } from "@/hooks/useTracks";
 import { useSeo } from "@/hooks/useSeo";
+import { useCurrentUser } from "@/hooks/useMockData";
+import {
+  AdminTrackCollectionsPanel,
+  AdminTrackTagsPanel,
+  useAdminTrackContent,
+} from "@/components/AdminTrackPanel";
 import { splitFilterValues } from "@/components/TrackRowPlayer";
 import { toggleFavourite, useFavourites } from "@/lib/favourites";
 import { usePlayer } from "@/components/playerContext";
@@ -32,7 +38,12 @@ type DetailTab = "versions" | "similar";
 
 const TrackDetail = () => {
   const { slug } = useParams();
-  const { tracks: catalogTracks } = useTracks();
+  const { tracks: catalogTracks, reload: reloadTracks, source } = useTracks();
+  // Admin-only side panels (tags/trending left, collections/playlists right).
+  // Only when the catalog is DB-backed — edits against mock ids would no-op.
+  const user = useCurrentUser();
+  const isAdmin = user?.role === "admin" && source === "api";
+  const admin = useAdminTrackContent(isAdmin);
   // Resolve by the leading code (/track/1042-anything) so the text part can
   // change without breaking the link; fall back to an exact slug match.
   const codeParam = slug?.match(/^(\d+)/)?.[1];
@@ -142,10 +153,31 @@ const TrackDetail = () => {
   return (
     <div className="min-h-screen bg-background pb-16">
       <Navigation />
-      <main className="mx-auto w-full max-w-7xl px-4 pt-24 sm:px-6">
+      <main className={`mx-auto w-full px-4 pt-24 sm:px-6 ${isAdmin ? "max-w-[110rem]" : "max-w-7xl"}`}>
         <TrackBreadcrumb trackTitle={track.title} />
 
-        <section className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
+        {/* Admin gets two extra side columns (tags/trending left, collections/
+            playlists right); customers see the normal centered page. */}
+        <div
+          className={
+            isAdmin
+              ? "mt-8 flex flex-col gap-8 xl:grid xl:grid-cols-[17rem_minmax(0,1fr)_19rem]"
+              : "mt-8"
+          }
+        >
+          {isAdmin && (
+            <AdminTrackTagsPanel
+              track={track}
+              data={admin.data}
+              setData={admin.setData}
+              run={admin.run}
+              tracks={catalogTracks}
+              onTracksChanged={() => void reloadTracks()}
+            />
+          )}
+
+          <div className="min-w-0">
+        <section className="grid gap-8 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
           {/* Left: cover + info */}
           <div className="h-fit rounded-xl border border-border bg-card p-6">
             {/* Square cover — real artwork from Admin -> Content -> Tracks; placeholder otherwise. */}
@@ -419,6 +451,17 @@ const TrackDetail = () => {
             </div>
           </div>
         </section>
+          </div>
+
+          {isAdmin && (
+            <AdminTrackCollectionsPanel
+              track={track}
+              data={admin.data}
+              setData={admin.setData}
+              run={admin.run}
+            />
+          )}
+        </div>
       </main>
     </div>
   );
