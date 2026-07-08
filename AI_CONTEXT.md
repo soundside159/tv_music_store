@@ -1676,3 +1676,24 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   too — set his pseudonym there so he appears in upload pickers and gets his own composer studio);
   changing a role INTO or OUT OF admin asks window.confirm first. NOTE: sandbox VM still down —
   lint/tsc not run here; verified by read-through, deploy.bat validates on the host.
+- **2026-07-08 (Users manager v2 — composer is a FLAG, ⋯ row menu, owner round):** owner: "how do
+  I make MYSELF a composer while staying admin?" — the single role select couldn't express that,
+  and the grouped tables + native select looked "Windows 98". REWORK:
+  **Model:** being a composer = having a `composers` profile row (pseudonym), INDEPENDENT of the
+  role; role is now effectively admin|customer ('composer' role = legacy, still honored).
+  Permissions updated: /api/admin/upload-audio + /api/composer/tracks allow anyone with a
+  composer profile (or admin/legacy role); /account shows the Composer menu group when a profile
+  exists (Account probes /api/composer/tracks for plain customers; admins/composer-role always
+  see it). PATCH /api/admin/users gained `removeComposer: true` — deletes the profile but
+  REFUSES while the composer still has tracks (no orphans), and downgrades legacy role composer
+  → customer.
+  **UI (Admin → "Users", renamed from Customers):** filter tabs All / Users / Composers / Admins
+  (counts; composers = has pseudonym or legacy role), ONE table with role PILLS (gold Admin,
+  outlined "Composer · pseudonym", grey Customer), and a ⋯ button per row opening a
+  position:fixed dropdown (can't be clipped by the table scrollbox): checkbox **Admin** (locked
+  with a note for OWNER_EMAIL so the owner can't demote himself; both directions still
+  window.confirm via changeRole) + checkbox **Composer** (ON reveals the pseudonym input —
+  profile is created when it's saved on Enter/blur; OFF = confirm → removeComposer). The old
+  role select + grouped tables are gone. OWNER HOW-TO: Admin → Users → your row → ⋯ → tick
+  Composer → type your pseudonym → Enter; the Composer studio appears in your account menu and
+  you appear in the upload composer pickers. Sandbox still down — validate via deploy.bat.

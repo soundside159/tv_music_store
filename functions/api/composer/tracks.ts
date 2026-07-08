@@ -16,9 +16,8 @@ interface ComposerRow {
 const getComposer = async (ctx: Ctx) => {
   const user = await getSessionUser(ctx);
   if (!user) return { error: json({ error: "Not signed in" }, 401) };
-  if (user.role !== "composer" && user.role !== "admin") {
-    return { error: json({ error: "Composer account required" }, 403) };
-  }
+  // Being a composer = having a `composers` profile linked to the user — the
+  // role no longer matters (the owner is admin AND composer at the same time).
   const composer = await ctx.env.DB.prepare(
     `SELECT id, display_name FROM composers WHERE user_id = ?1 LIMIT 1`,
   )
@@ -27,7 +26,7 @@ const getComposer = async (ctx: Ctx) => {
   if (!composer) {
     return {
       error: json(
-        { error: "No composer profile yet — ask the site owner to set your pseudonym." },
+        { error: "No composer profile yet — ask the site owner to enable Composer on your account." },
         403,
       ),
     };

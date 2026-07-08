@@ -2,9 +2,13 @@ import { getSessionUser, json, newId, OWNER_EMAIL, readJson, type Ctx, type D1Da
 
 // Admin-only user management.
 // GET  -> latest 200 users with plan info (+ composer pseudonym when one exists).
-// PATCH { userId, role?, pseudonym? } -> change a user's role (customer | composer |
-// admin) and/or set the composer display pseudonym (upserts a `composers` row
-// linked via user_id; the pseudonym is shown as the track artist site-wide).
+// PATCH { userId, role?, pseudonym?, removeComposer? }
+//   role           — customer | composer | admin (admin/customer is the main switch now)
+//   pseudonym      — upserts a `composers` row linked via user_id; being a composer
+//                    is a PROFILE FLAG independent of the role (an admin can compose).
+//                    The pseudonym is shown as the track artist site-wide.
+//   removeComposer — deletes the composer profile (refused while the composer still
+//                    has tracks); legacy role 'composer' downgrades to 'customer'.
 
 const requireAdmin = async (ctx: Ctx) => {
   const user = await getSessionUser(ctx);
@@ -87,12 +91,18 @@ export const onRequestPatch = async (ctx: Ctx) => {
   const gate = await requireAdmin(ctx);
   if (gate.error) return gate.error;
 
-  const body = await readJson<{ userId?: string; role?: string; pseudonym?: string }>(ctx.request);
+  const body = await readJson<{
+    userId?: string;
+    role?: string;
+    pseudonym?: string;
+    removeComposer?: boolean;
+  }>(ctx.request);
   const userId = body?.userId;
   const role = body?.role;
+  const removeComposer = body?.removeComposer === true;
   const pseudonym = typeof body?.pseudonym === "string" ? body.pseudonym.trim() : undefined;
-  if (!userId || (!role && pseudonym === undefined)) {
-    return json({ error: "userId and role or pseudonym required" }, 400);
+  if (!userId || (!role && pseudonym === undefined && !removeComposer)) {
+    return json({ error: "userId and role, pseudonym or removeComposer required" }, 400);
   }
   if (role && !["customer", "composer", "admin"].includes(role)) {
     return json({ error: "Invalid role" }, 400);
@@ -116,6 +126,28 @@ export const onRequestPatch = async (ctx: Ctx) => {
   }
   if (pseudonym !== undefined) {
     await upsertComposer(ctx.env.DB, userId, pseudonym.slice(0, 60));
+  }
+  if (removeComposer) {
+    const cmp = await ctx.env.DB.prepare(`SELECT id FROM composers WHERE user_id = ?1 LIMIT 1`)
+      .bind(userId)
+      .first<{ id: string }>();
+    if (cmp) {
+      // Never orphan tracks: the profile can only go when it owns none.
+      const n = await ctx.env.DB.prepare(`SELECT COUNT(*) AS n FROM tracks WHERE composer_id = ?1`)
+        .bind(cmp.id)
+        .first<{ n: number }>();
+      if ((n?.n ?? 0) > 0) {
+        return json(
+          { error: `This composer still has ${n!.n} track(s) — delete or reassign them first` },
+          400,
+        );
+      }
+      await ctx.env.DB.prepare(`DELETE FROM composers WHERE id = ?1`).bind(cmp.id).run();
+    }
+    // Legacy pure-composer role loses its meaning without a profile.
+    await ctx.env.DB.prepare(`UPDATE users SET role = 'customer' WHERE id = ?1 AND role = 'composer'`)
+      .bind(userId)
+      .run();
   }
   return json({ ok: true });
 };

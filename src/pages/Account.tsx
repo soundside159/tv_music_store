@@ -4,6 +4,7 @@ import { ArrowUpRight } from "lucide-react";
 import { accountNavGroups, adminNavGroups, composerNavItems } from "@/lib/adminNav";
 import MenuGroupHeader from "@/components/MenuGroupHeader";
 import ComposerPanel, { type ComposerSectionId } from "@/components/ComposerPanel";
+import { useComposerTracks } from "@/components/ComposerUpload";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { catalogTracks } from "@/data/catalogTracks";
@@ -100,6 +101,13 @@ const Account = () => {
   const [menu, setMenu] = useState<"main" | "composer" | "admin">(
     sectionParam?.startsWith("composer-") ? "composer" : "main",
   );
+  // Composer = has a profile (independent flag). Roles admin/composer always
+  // see the menu; plain customers get it once their profile is confirmed.
+  const composerProbe = useComposerTracks(
+    !!user && user.role !== "admin" && user.role !== "composer",
+  );
+  const showComposerMenu =
+    !!user && (user.role === "admin" || user.role === "composer" || !!composerProbe.composer);
 
   // Header account dropdown links to /account?section=... — keep the active
   // section in sync when the query param changes while already mounted.
@@ -194,7 +202,7 @@ const Account = () => {
                   </div>
                 ))}
               </div>
-              {(user.role === "composer" || user.role === "admin") && (
+              {showComposerMenu && (
                 /* Composer studio — sections render INSIDE this page. Composers
                    see it as a plain group under a separator; admins get a
                    Main/Composer/Admin toggle header like the other menus. */

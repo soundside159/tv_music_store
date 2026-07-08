@@ -49,8 +49,9 @@ const ComposerPanel = ({ section }: { section: ComposerSectionId }) => {
   const user = useCurrentUser();
   const navigate = useNavigate();
   const mockComposer = useComposer();
-  const isComposerRole = !!user && (user.role === "composer" || user.role === "admin");
-  const live = useComposerTracks(isComposerRole);
+  // Composer = has a profile (pseudonym) — role no longer decides; the server
+  // answers 403 for non-composers, which just leaves `composer` empty here.
+  const live = useComposerTracks(!!user);
   // Live profile first (real pseudonym), mock personas as a dev fallback.
   const composer = live.composer
     ? {
@@ -105,11 +106,11 @@ const ComposerPanel = ({ section }: { section: ComposerSectionId }) => {
     return (
       <Card title="Composer studio">
         <p className="font-body text-sm text-muted-foreground">
-          {user && isComposerRole
+          {user
             ? live.loading
               ? "Loading your composer profile…"
               : live.error ??
-                "No composer profile yet — the site owner sets your pseudonym in Admin → Customers."
+                "No composer profile yet — the site owner enables Composer in Admin → Users."
             : "This area is for catalog composers. Sign in with a composer account."}
         </p>
       </Card>

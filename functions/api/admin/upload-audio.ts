@@ -33,8 +33,16 @@ export const onRequestPost = async (ctx: Ctx) => {
   const isAdmin = user.role === "admin" || user.email === OWNER_EMAIL;
   // Composers may upload track material too (their Add-track flow encodes
   // previews client-side and zips WAVs/stems, same as the admin pipeline).
-  if (!isAdmin && user.role !== "composer") {
-    return json({ error: "Admin only" }, 403);
+  // Being a composer = having a `composers` profile (independent of role).
+  let allowed = isAdmin || user.role === "composer";
+  if (!allowed) {
+    const cmp = await ctx.env.DB.prepare(`SELECT id FROM composers WHERE user_id = ?1 LIMIT 1`)
+      .bind(user.id)
+      .first();
+    allowed = !!cmp;
+  }
+  if (!allowed) {
+    return json({ error: "Composer or admin account required" }, 403);
   }
   if (!ctx.env.R2) {
     return json(

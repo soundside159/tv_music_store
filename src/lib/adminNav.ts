@@ -84,7 +84,7 @@ export const adminNavGroups: { label: string; items: NavItem[] }[] = [
   {
     label: "Customers",
     items: [
-      { id: "customers", label: "Customers", icon: Users },
+      { id: "customers", label: "Users", icon: Users },
       { id: "mail", label: "Inbox", icon: Mail },
       { id: "licenses", label: "Licenses", icon: FileText },
       { id: "campaigns", label: "Campaigns", icon: Send },

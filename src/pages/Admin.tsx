@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { MoreHorizontal } from "lucide-react";
 import { accountNavGroups, adminNavGroups, composerNavItems } from "@/lib/adminNav";
 import MenuGroupHeader from "@/components/MenuGroupHeader";
 import Navigation from "@/components/Navigation";
@@ -103,7 +104,13 @@ interface AdminLicense {
   trackTitle: string;
 }
 
-const ROLES = ["customer", "composer", "admin"] as const;
+/** The owner account — its Admin checkbox is locked so he can't demote himself. */
+const OWNER_EMAIL = "soundside159@gmail.com";
+
+type UserTab = "all" | "users" | "composers" | "admins";
+
+/** Composer = has a pseudonym profile (or the legacy composer role). */
+const isComposerUser = (u: LiveUser) => !!u.pseudonym || u.role === "composer";
 
 const Card = ({ title, children, className = "" }: { title?: string; children: React.ReactNode; className?: string }) => (
   <div className={`rounded-xl border border-border bg-card p-6 ${className}`}>
@@ -142,6 +149,14 @@ const Admin = () => {
   const [liveUsers, setLiveUsers] = useState<LiveUser[] | null>(null);
   const [usersError, setUsersError] = useState<string | null>(null);
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
+  // Users section: filter tab, the row whose ⋯ menu is open (+ its screen
+  // position — the menu renders position:fixed so the table scrollbox can't
+  // clip it), and the row whose Composer checkbox was just ticked (pseudonym
+  // not saved yet).
+  const [userTab, setUserTab] = useState<UserTab>("all");
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
+  const [pseudonymDraftFor, setPseudonymDraftFor] = useState<string | null>(null);
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
   const [licenses, setLicenses] = useState<AdminLicense[] | null>(null);
   const [licensesError, setLicensesError] = useState<string | null>(null);
@@ -239,6 +254,44 @@ const Admin = () => {
       const data = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Update failed");
       setLiveUsers((us) => (us ?? []).map((u) => (u.id === userId ? { ...u, pseudonym: next } : u)));
+      setPseudonymDraftFor(null);
+    } catch (e) {
+      setUsersError(e instanceof Error ? e.message : "Update failed");
+    } finally {
+      setSavingUserId(null);
+    }
+  };
+
+  // Composer OFF: removes the pseudonym profile (server refuses while the
+  // composer still has tracks, so nothing can be orphaned by accident).
+  const removeComposer = async (userId: string) => {
+    const target = liveUsers?.find((u) => u.id === userId);
+    if (!target) return;
+    if (
+      !window.confirm(
+        `Remove the composer profile from ${target.email}?\nThey lose the composer studio. Only possible while they have no tracks.`,
+      )
+    )
+      return;
+    setSavingUserId(userId);
+    setUsersError(null);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ userId, removeComposer: true }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Update failed");
+      setLiveUsers((us) =>
+        (us ?? []).map((u) =>
+          u.id === userId
+            ? { ...u, pseudonym: null, role: u.role === "composer" ? "customer" : u.role }
+            : u,
+        ),
+      );
+      setPseudonymDraftFor(null);
     } catch (e) {
       setUsersError(e instanceof Error ? e.message : "Update failed");
     } finally {
@@ -561,7 +614,7 @@ const Admin = () => {
             {section === "bulkupload" && <AdminBulkUpload />}
 
             {section === "customers" && (
-              <Card title={`Customers${liveUsers ? ` (${liveUsers.length})` : ""}`}>
+              <Card title={`Users${liveUsers ? ` (${liveUsers.length})` : ""}`}>
                 {usersError && (
                   <p className="mb-3 font-body text-xs text-red-400">{usersError}</p>
                 )}
@@ -571,90 +624,201 @@ const Admin = () => {
                 {liveUsers && liveUsers.length === 0 && (
                   <p className="font-body text-sm text-muted-foreground">No registered users yet.</p>
                 )}
-                {liveUsers && liveUsers.length > 0 && (
-                  /* Grouped by role: Admins / Composers / Customers (owner request).
-                     Admins get the pseudonym field too — the owner composes as well. */
-                  <div className="flex flex-col gap-7">
-                    {(
-                      [
-                        ["Admins", liveUsers.filter((u) => u.role === "admin")],
-                        ["Composers", liveUsers.filter((u) => u.role === "composer")],
-                        ["Customers", liveUsers.filter((u) => u.role === "customer")],
-                      ] as const
-                    ).map(([label, list]) =>
-                      list.length === 0 ? null : (
-                        <div key={label}>
-                          <p className="mb-2 font-body text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground/80">
-                            {label} <span className="text-muted-foreground/50">({list.length})</span>
-                          </p>
-                          <div className="overflow-x-auto">
-                            <table className="w-full min-w-[640px] font-body text-sm">
-                              <thead>
-                                <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                                  <th className="py-2 pr-4">User</th>
-                                  <th className="py-2 pr-4">Role</th>
-                                  <th className="py-2 pr-4">Plan</th>
-                                  <th className="py-2 pr-4">Downloads</th>
-                                  <th className="py-2">Joined</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {list.map((u) => (
-                                  <tr key={u.id} className="border-b border-border/50 last:border-0">
-                                    <td className="py-2.5 pr-4">
-                                      <button
-                                        type="button"
-                                        onClick={() => setProfileUserId(u.id)}
-                                        className="block text-left text-foreground hover:text-[#F4C430]"
-                                      >
-                                        {u.name ?? u.email.split("@")[0]}
-                                      </button>
-                                      <span className="block text-xs text-muted-foreground">{u.email}</span>
-                                    </td>
-                                    <td className="py-2.5 pr-4">
-                                      <select
-                                        value={u.role}
-                                        disabled={savingUserId === u.id}
-                                        onChange={(e) => void changeRole(u.id, e.target.value)}
-                                        className="rounded-md border border-border bg-background px-2 py-1 font-body text-xs text-foreground focus:border-[#F4C430] focus:outline-none disabled:opacity-50"
-                                      >
-                                        {ROLES.map((r) => (
-                                          <option key={r} value={r}>{r}</option>
-                                        ))}
-                                      </select>
-                                      {(u.role === "composer" || u.role === "admin") && (
-                                        <input
-                                          defaultValue={u.pseudonym ?? ""}
-                                          placeholder="Pseudonym…"
-                                          title="Composer pseudonym — shown as the track artist on the site (saves on Enter / focus out)"
-                                          disabled={savingUserId === u.id}
-                                          onBlur={(e) => void savePseudonym(u.id, e.target.value)}
-                                          onKeyDown={(e) => {
-                                            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                                          }}
-                                          className="mt-1.5 block w-32 rounded-md border border-border bg-background px-2 py-1 font-body text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none disabled:opacity-50"
-                                        />
-                                      )}
-                                    </td>
-                                    <td className="py-2.5 pr-4">
-                                      <StatusPill text={u.plan ?? "free"} active={!!u.plan && u.plan !== "free"} />
-                                    </td>
-                                    <td className="py-2.5 pr-4 text-muted-foreground">{u.downloads}</td>
-                                    <td className="py-2.5 text-muted-foreground">
-                                      {u.created_at ? u.created_at.slice(0, 10) : "—"}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      ),
-                    )}
-                  </div>
-                )}
+                {liveUsers && liveUsers.length > 0 && (() => {
+                  /* Filter tabs + per-row ⋯ menu (owner request). Admin and
+                     Composer are independent flags now — the owner is both. */
+                  const admins = liveUsers.filter((u) => u.role === "admin");
+                  const composers = liveUsers.filter(isComposerUser);
+                  const plain = liveUsers.filter((u) => u.role !== "admin" && !isComposerUser(u));
+                  const list =
+                    userTab === "admins"
+                      ? admins
+                      : userTab === "composers"
+                        ? composers
+                        : userTab === "users"
+                          ? plain
+                          : liveUsers;
+                  const tabs: [UserTab, string, number][] = [
+                    ["all", "All", liveUsers.length],
+                    ["users", "Users", plain.length],
+                    ["composers", "Composers", composers.length],
+                    ["admins", "Admins", admins.length],
+                  ];
+                  return (
+                    <>
+                      <div className="mb-4 flex w-fit gap-1 rounded-lg border border-border/60 bg-background/40 p-1">
+                        {tabs.map(([id, label, n]) => (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => setUserTab(id)}
+                            className={`rounded-md px-3 py-1.5 font-body text-xs font-semibold transition-colors ${
+                              userTab === id
+                                ? "bg-secondary text-[#F4C430]"
+                                : "text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            {label} <span className="opacity-60">({n})</span>
+                          </button>
+                        ))}
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[640px] font-body text-sm">
+                          <thead>
+                            <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                              <th className="py-2 pr-4">User</th>
+                              <th className="py-2 pr-4">Roles</th>
+                              <th className="py-2 pr-4">Plan</th>
+                              <th className="py-2 pr-4">Downloads</th>
+                              <th className="py-2 pr-4">Joined</th>
+                              <th className="py-2" />
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {list.map((u) => (
+                              <tr key={u.id} className="border-b border-border/50 last:border-0">
+                                <td className="py-2.5 pr-4">
+                                  <button
+                                    type="button"
+                                    onClick={() => setProfileUserId(u.id)}
+                                    className="block text-left text-foreground hover:text-[#F4C430]"
+                                  >
+                                    {u.name ?? u.email.split("@")[0]}
+                                  </button>
+                                  <span className="block text-xs text-muted-foreground">{u.email}</span>
+                                </td>
+                                <td className="py-2.5 pr-4">
+                                  <span className="flex flex-wrap items-center gap-1.5">
+                                    {u.role === "admin" && (
+                                      <span className="rounded-full bg-[#F4C430]/15 px-2.5 py-0.5 text-xs font-semibold text-[#F4C430]">
+                                        Admin
+                                      </span>
+                                    )}
+                                    {isComposerUser(u) && (
+                                      <span className="rounded-full border border-[#F4C430]/40 px-2.5 py-0.5 text-xs text-[#F4C430]/90">
+                                        Composer{u.pseudonym ? ` · ${u.pseudonym}` : ""}
+                                      </span>
+                                    )}
+                                    {u.role !== "admin" && !isComposerUser(u) && (
+                                      <span className="rounded-full bg-secondary px-2.5 py-0.5 text-xs text-muted-foreground">
+                                        Customer
+                                      </span>
+                                    )}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 pr-4">
+                                  <StatusPill text={u.plan ?? "free"} active={!!u.plan && u.plan !== "free"} />
+                                </td>
+                                <td className="py-2.5 pr-4 text-muted-foreground">{u.downloads}</td>
+                                <td className="py-2.5 pr-4 text-muted-foreground">
+                                  {u.created_at ? u.created_at.slice(0, 10) : "—"}
+                                </td>
+                                <td className="py-2.5 text-right">
+                                  <button
+                                    type="button"
+                                    aria-label={`Manage ${u.email}`}
+                                    onClick={(e) => {
+                                      if (openMenuId === u.id) {
+                                        setOpenMenuId(null);
+                                        return;
+                                      }
+                                      const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                                      setMenuPos({
+                                        top: r.bottom + 6,
+                                        right: Math.max(8, window.innerWidth - r.right),
+                                      });
+                                      setOpenMenuId(u.id);
+                                      setPseudonymDraftFor(null);
+                                    }}
+                                    className={`rounded-md border px-2 py-1 transition-colors ${
+                                      openMenuId === u.id
+                                        ? "border-[#F4C430] text-[#F4C430]"
+                                        : "border-border/60 text-muted-foreground hover:border-[#F4C430] hover:text-[#F4C430]"
+                                    }`}
+                                  >
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  );
+                })()}
               </Card>
             )}
+
+            {/* ⋯ menu — position:fixed so the table's scrollbox can't clip it. */}
+            {section === "customers" && openMenuId && menuPos && (() => {
+              const u = liveUsers?.find((x) => x.id === openMenuId);
+              if (!u) return null;
+              const composerOn = isComposerUser(u);
+              const showPseudonym = composerOn || pseudonymDraftFor === u.id;
+              const ownerLocked = u.email === OWNER_EMAIL;
+              return (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setOpenMenuId(null)} />
+                  <div
+                    className="fixed z-50 w-72 rounded-xl border border-border bg-card p-4 shadow-2xl"
+                    style={{ top: menuPos.top, right: menuPos.right }}
+                  >
+                    <p className="mb-3 truncate font-body text-xs text-muted-foreground">{u.email}</p>
+                    <label
+                      className={`flex items-center gap-2.5 font-body text-sm text-foreground ${
+                        ownerLocked ? "opacity-50" : "cursor-pointer"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-[#F4C430]"
+                        checked={u.role === "admin"}
+                        disabled={ownerLocked || savingUserId === u.id}
+                        onChange={() => void changeRole(u.id, u.role === "admin" ? "customer" : "admin")}
+                      />
+                      Admin
+                    </label>
+                    {ownerLocked && (
+                      <p className="mt-1 pl-[26px] font-body text-[11px] text-muted-foreground">
+                        The owner account always stays admin.
+                      </p>
+                    )}
+                    <label className="mt-3 flex cursor-pointer items-center gap-2.5 font-body text-sm text-foreground">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-[#F4C430]"
+                        checked={composerOn || pseudonymDraftFor === u.id}
+                        disabled={savingUserId === u.id}
+                        onChange={() => {
+                          if (composerOn) void removeComposer(u.id);
+                          else setPseudonymDraftFor((p) => (p === u.id ? null : u.id));
+                        }}
+                      />
+                      Composer
+                    </label>
+                    {showPseudonym && (
+                      <div className="mt-2 pl-[26px]">
+                        <input
+                          defaultValue={u.pseudonym ?? ""}
+                          placeholder="Pseudonym (artist name)…"
+                          autoFocus={pseudonymDraftFor === u.id}
+                          disabled={savingUserId === u.id}
+                          onBlur={(e) => void savePseudonym(u.id, e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                          }}
+                          className="w-full rounded-md border border-border bg-background px-2 py-1.5 font-body text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none disabled:opacity-50"
+                        />
+                        <p className="mt-1 font-body text-[11px] text-muted-foreground">
+                          Shown as the track artist site-wide. Saves on Enter / click away.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
 
             {section === "whitelist" && <AdminWhitelist />}
 
