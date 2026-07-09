@@ -1771,4 +1771,15 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   `/api/admin/upload` (images) also opened to composers — their thumbs/branded covers go
   through it. NEXT (owner asked): AI description generation — same OPENAI_API_KEY, just a text
   endpoint (e.g. /v1/responses or chat.completions with a small model) + a button next to the
-  Description fields; no new accounts/keys needed.
+  Description fields; no new accounts/keys needed. [DONE — next entry.]
+- **2026-07-09 (AI descriptions):** NEW `functions/api/admin/generate-description.ts` (admins +
+  composers, same profile gate as covers): the owner's fixed SEO prompt (60–90-word paragraph,
+  "royalty-free music" once, Artlist/PremiumBeat tone; embedded verbatim in that file) with
+  Genre / Mood / Use Case substituted; accepts { trackId } (saved facets) OR { genre[], mood[],
+  useCase[] } (upload forms). Calls chat.completions, MODEL const = `gpt-4o-mini` (bump there
+  if OpenAI retires it — the error toast surfaces the API message). Client helper
+  `generateDescriptionApi` in coverArt.ts. UI: a small gold ✨ Generate button INSIDE the
+  Description textarea (bottom-right) in all three forms — AddTrackModal + ComposerUpload
+  (enabled once ≥1 Use Case + Genre + Mood are picked; uses the picked lists) and the
+  AdminTracksEdit single-track panel (uses the track's SAVED facets via trackId). Generated
+  text lands in the field for review/edit — saving still goes through the normal Apply/Upload.

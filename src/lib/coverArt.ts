@@ -78,6 +78,29 @@ export const generateCoverApi = async (args: {
   return d.path;
 };
 
+/** Calls the description-generation endpoint (same OPENAI_API_KEY, text model).
+ *  Either a trackId (saved facets) or explicit lists from an upload form. */
+export const generateDescriptionApi = async (args: {
+  trackId?: string;
+  genre?: string[];
+  mood?: string[];
+  useCase?: string[];
+}): Promise<string> => {
+  const res = await fetch("/api/admin/generate-description", {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(args),
+  });
+  const d = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    description?: string;
+    error?: string;
+  };
+  if (!res.ok || !d.ok || !d.description) throw new Error(d.error ?? "Generation failed");
+  return d.description;
+};
+
 /** Uploads an image blob to the covers store; returns the public path. */
 export const uploadCoverImage = async (file: Blob, filename: string): Promise<string> => {
   const base = filename.replace(/\.[^.]+$/, "");

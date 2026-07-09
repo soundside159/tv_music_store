@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, Music, Sparkles, Star, Trash2, UploadCloud, X } from "lucide-react";
 import { toast } from "sonner";
 import { decodeAudio, detectBpm, formatDuration, makeThumbnail, wavToMp3Pair, zipWavs } from "@/lib/audioEncoding";
-import { brandCover, generateCoverApi, uploadCoverImage } from "@/lib/coverArt";
+import { brandCover, generateCoverApi, generateDescriptionApi, uploadCoverImage } from "@/lib/coverArt";
 import { cleanVersionLabel } from "@/lib/downloadTrack";
 import { defaultVocabularies, type Vocabularies } from "@/lib/tagOptions";
 
@@ -192,8 +192,26 @@ const ComposerUpload = ({
     })();
   }, [wavs, mainId, bpm]);
 
-  const canGenerate =
-    sel.useCase.length > 0 && sel.genre.length > 0 && sel.mood.length > 0 && !coverBusy && !busy;
+  const facetsPicked = sel.useCase.length > 0 && sel.genre.length > 0 && sel.mood.length > 0;
+  const canGenerate = facetsPicked && !coverBusy && !busy;
+
+  // AI description from the picked tags (owner's fixed SEO prompt server-side).
+  const [descBusy, setDescBusy] = useState(false);
+  const generateDescription = async () => {
+    setDescBusy(true);
+    try {
+      const text = await generateDescriptionApi({
+        genre: sel.genre,
+        mood: sel.mood,
+        useCase: sel.useCase,
+      });
+      setDescription(text);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Generation failed");
+    } finally {
+      setDescBusy(false);
+    }
+  };
 
   // Same pipeline as the admin track page: generate → brand the full cover →
   // clean thumbnail for the rows. Paths go into the track on Upload.
@@ -476,13 +494,29 @@ const ComposerUpload = ({
           className={inputCls}
         />
       </div>
-      <textarea
-        placeholder="Description"
-        rows={3}
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        className={inputCls}
-      />
+      <div className="relative">
+        <textarea
+          placeholder="Description"
+          rows={4}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          className={`${inputCls} w-full`}
+        />
+        <button
+          type="button"
+          disabled={!facetsPicked || descBusy || busy}
+          onClick={() => void generateDescription()}
+          title={
+            facetsPicked
+              ? "Generate an SEO description from your tags"
+              : "Pick at least one Use Case, Genre and Mood first"
+          }
+          className="absolute bottom-2.5 right-2 inline-flex items-center gap-1 rounded-md border border-[#F4C430]/50 bg-card px-2 py-1 font-body text-[11px] font-semibold text-[#F4C430] transition-colors hover:bg-[#F4C430] hover:text-background disabled:opacity-40"
+        >
+          <Sparkles className={`h-3 w-3 ${descBusy ? "animate-pulse" : ""}`} />
+          {descBusy ? "Writing…" : "Generate"}
+        </button>
+      </div>
       <input
         placeholder="Extra tags, comma separated"
         value={tags}

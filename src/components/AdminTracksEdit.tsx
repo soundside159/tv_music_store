@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, ChevronLeft, ChevronRight, ExternalLink, Minus, Music, Pause, Play, Search, Star, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, ExternalLink, Minus, Music, Pause, Play, Search, Sparkles, Star, X } from "lucide-react";
+import { toast } from "sonner";
 import WaveformPreview from "@/components/WaveformPreview";
+import { generateDescriptionApi } from "@/lib/coverArt";
 import { usePlayer } from "@/components/playerContext";
 import { splitFilterValues } from "@/components/TrackRowPlayer";
 import type { Vocabularies } from "@/lib/tagOptions";
@@ -175,6 +177,19 @@ const AdminTracksEdit = ({
   const [trendingChange, setTrendingChange] = useState<"add" | "remove" | "none">("none");
   const [fields, setFields] = useState<SingleFields | null>(null);
   const [playlistSearch, setPlaylistSearch] = useState("");
+  // AI description for the single selected track (uses its SAVED facets).
+  const [descBusy, setDescBusy] = useState(false);
+  const generateDescription = async (trackId: string) => {
+    setDescBusy(true);
+    try {
+      const text = await generateDescriptionApi({ trackId });
+      setFields((f) => (f ? { ...f, description: text } : f));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Generation failed");
+    } finally {
+      setDescBusy(false);
+    }
+  };
 
   const composers = useMemo(
     () => [...new Set(tracks.map((t) => t.artist).filter(Boolean))].sort(),
@@ -941,13 +956,26 @@ const AdminTracksEdit = ({
                       className={`${inputCls} w-24`}
                     />
                   </label>
-                  <textarea
-                    placeholder="Description"
-                    rows={5}
-                    value={fields.description}
-                    onChange={(e) => setFields({ ...fields, description: e.target.value })}
-                    className={inputCls}
-                  />
+                  <div className="relative">
+                    <textarea
+                      placeholder="Description"
+                      rows={5}
+                      value={fields.description}
+                      onChange={(e) => setFields({ ...fields, description: e.target.value })}
+                      className={`${inputCls} w-full`}
+                    />
+                    {/* AI description from the track's SAVED facets (owner's SEO prompt). */}
+                    <button
+                      type="button"
+                      disabled={descBusy || busy}
+                      onClick={() => void generateDescription(selTracks[0].id)}
+                      title="Generate an SEO description from this track's saved Use Case / Genre / Mood"
+                      className="absolute bottom-2.5 right-2 inline-flex items-center gap-1 rounded-md border border-[#F4C430]/50 bg-card px-2 py-1 font-body text-[11px] font-semibold text-[#F4C430] transition-colors hover:bg-[#F4C430] hover:text-background disabled:opacity-40"
+                    >
+                      <Sparkles className={`h-3 w-3 ${descBusy ? "animate-pulse" : ""}`} />
+                      {descBusy ? "Writing…" : "Generate"}
+                    </button>
+                  </div>
                   <textarea
                     placeholder="Extra tags, comma separated (epic, hybrid, rise…)"
                     rows={4}

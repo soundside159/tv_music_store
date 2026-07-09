@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Check, GripVertical, Music, Star, Trash2, X } from "lucide-react";
+import { Check, GripVertical, Music, Sparkles, Star, Trash2, X } from "lucide-react";
 import type { Vocabularies } from "@/lib/tagOptions";
 import { decodeAudio, detectBpm, formatDuration, makeThumbnail, wavToMp3Pair, zipWavs } from "@/lib/audioEncoding";
+import { generateDescriptionApi } from "@/lib/coverArt";
 import { cleanVersionLabel } from "@/lib/downloadTrack";
 
 // Admin "Add Track" flow. The owner uploads WAV files and picks the main one;
@@ -77,6 +78,22 @@ const AddTrackModal = ({
       ...s,
       [facet]: s[facet].includes(v) ? s[facet].filter((x) => x !== v) : [...s[facet], v],
     }));
+
+  // AI description from the ticked facets (owner's fixed SEO prompt).
+  const [descBusy, setDescBusy] = useState(false);
+  const facetsPicked = sel.useCase.length > 0 && sel.genre.length > 0 && sel.mood.length > 0;
+  const generateDescription = async () => {
+    setDescBusy(true);
+    try {
+      setDescription(
+        await generateDescriptionApi({ genre: sel.genre, mood: sel.mood, useCase: sel.useCase }),
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Generation failed");
+    } finally {
+      setDescBusy(false);
+    }
+  };
 
   // Auto-detect the tempo of the Main WAV and prefill BPM (only while empty —
   // manual input always wins).
@@ -314,13 +331,29 @@ const AddTrackModal = ({
               ))}
             </select>
           </div>
-          <textarea
-            placeholder="Description"
-            rows={3}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className={inputCls}
-          />
+          <div className="relative">
+            <textarea
+              placeholder="Description"
+              rows={3}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className={`${inputCls} w-full`}
+            />
+            <button
+              type="button"
+              disabled={!facetsPicked || descBusy || busy}
+              onClick={() => void generateDescription()}
+              title={
+                facetsPicked
+                  ? "Generate an SEO description from the ticked tags"
+                  : "Tick at least one Use Case, Genre and Mood first"
+              }
+              className="absolute bottom-2.5 right-2 inline-flex items-center gap-1 rounded-md border border-[#F4C430]/50 bg-card px-2 py-1 font-body text-[11px] font-semibold text-[#F4C430] transition-colors hover:bg-[#F4C430] hover:text-background disabled:opacity-40"
+            >
+              <Sparkles className={`h-3 w-3 ${descBusy ? "animate-pulse" : ""}`} />
+              {descBusy ? "Writing…" : "Generate"}
+            </button>
+          </div>
           <input
             placeholder="Extra tags, comma separated"
             value={tags}
