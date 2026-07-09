@@ -128,14 +128,15 @@
      1280–1535px: + tags, versions, BPM — full row, tight gaps
      1536px+:     same, roomier */
   .music-track-grid {
-    grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+    /* 3.75rem play/cover column: the 56px (h-14) cover art + a small gap. */
+    grid-template-columns: 3.75rem minmax(0, 1fr) auto;
     align-items: center;
   }
 
   @media (min-width: 768px) {
     .music-track-grid {
       grid-template-columns:
-        3.5rem
+        3.75rem
         minmax(8rem, 14rem)
         minmax(6rem, 1fr)
         3rem
@@ -148,7 +149,7 @@
       /* Fixed widths everywhere except the waveform (the only flex column) —
          otherwise each row (its own grid) resolves columns differently and
          the columns stop lining up between rows. */
-      --track-play-col: 3.5rem;
+      --track-play-col: 3.75rem;
       --track-title-col: minmax(9rem, 13rem);
       --track-version-wave-inset: 6rem;
       --track-tags-col: minmax(8rem, 18rem);

@@ -1821,6 +1821,9 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   Review (review = moderation pending; drafts = unpublished non-pending), each with counts.
   (4) Track-row cover thumbs (homepage/catalog/collections rows): 48px → 52px
   (h-[3.25rem], play column is 56px so it still fits; progress-ring svg scales via viewBox).
+  [SAME DAY follow-up: owner couldn't see the 4px bump — art enlarged properly: cover h-14
+  (56px), play/cover column 3.5rem → 3.75rem at ALL breakpoints, row padding py-3 → py-2.5 so
+  rows don't grow. Progress ring scales via viewBox.]
 - **BACKLOG (owner-approved, do when time allows):** SEO structured data on track pages —
   add schema.org JSON-LD (MusicRecording / MusicComposition: name, byArtist = composer
   pseudonym, duration, genre, description, image) injected per-track (crawlers that run JS

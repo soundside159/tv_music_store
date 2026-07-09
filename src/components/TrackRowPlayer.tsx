@@ -183,11 +183,11 @@ export const TrackRow = ({
     }}
     className="border-b border-border/30 last:border-b-0"
   >
-    <div className="music-track-grid grid gap-2.5 rounded-lg px-4 py-3 transition-colors duration-150 hover:bg-foreground/[0.04] xl:items-center">
+    <div className="music-track-grid grid gap-2.5 rounded-lg px-4 py-2.5 transition-colors duration-150 hover:bg-foreground/[0.04] xl:items-center">
       <button
         type="button"
         onClick={() => onPlayVersion(track, selectedVersion)}
-        className="group/cover relative h-[3.25rem] w-[3.25rem] shrink-0"
+        className="group/cover relative h-14 w-14 shrink-0"
         aria-label={mainIsPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
       >
         <span className="absolute inset-0 overflow-hidden rounded-md border border-border/60">
