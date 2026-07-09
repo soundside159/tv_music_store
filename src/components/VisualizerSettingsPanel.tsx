@@ -23,6 +23,7 @@ const SLIDERS: Array<[keyof VisualizerSettings, string, number, number]> = [
   ["trail", "Fall smooth", 0, 100],
   ["sparkle", "Peak caps", 0, 100],
   ["fade", "Cap fall", 0, 100],
+  ["glow", "Border light", 0, 100],
   ["gold", "Gold %", 0, 100],
   ["smoothing", "Smoothing", 0, 100],
   ["threshold", "Sensitivity", 0, 100],

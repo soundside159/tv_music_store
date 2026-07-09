@@ -35,24 +35,24 @@ export interface VisualizerSettings {
   fade: number;
 }
 
-// Owner-approved defaults (tuned live on 2026-07-09).
+// Owner-approved defaults (bar-EQ round, tuned live on 2026-07-09).
 export const DEFAULT_VISUALIZER: VisualizerSettings = {
   enabled: true,
-  density: 29,
-  reactivity: 50,
-  maxRise: 55,
-  size: 22,
-  trail: 29,
-  glow: 45,
-  chaos: 22,
-  sparkle: 42,
+  density: 100, // Bars
+  reactivity: 37,
+  maxRise: 49,
+  size: 100, // Bar width
+  trail: 0, // Fall smooth (0 = snappy)
+  glow: 55, // Border light
+  chaos: 22, // unused (particle era)
+  sparkle: 33, // Peak caps
   gold: 100,
-  smoothing: 31,
-  bass: 68,
-  mid: 62,
-  high: 48,
-  threshold: 18,
-  fade: 55,
+  smoothing: 76,
+  bass: 73,
+  mid: 70,
+  high: 66,
+  threshold: 82, // Sensitivity
+  fade: 0, // Cap fall (0 = caps linger — owner's pick)
 };
 
 const KEY = "tvms_visualizer_v1";

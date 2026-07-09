@@ -47,7 +47,7 @@ const AudioVisualizer = () => {
     resize();
     window.addEventListener("resize", resize);
 
-    const freq = new Uint8Array(1024);
+    const freq = new Uint8Array(2048); // fftSize 4096 → 2048 bins
     const MAX_BARS = 128;
     const values = new Float32Array(MAX_BARS); // current bar heights (0..1)
     const peaks = new Float32Array(MAX_BARS); // floating peak caps (0..1)
@@ -82,11 +82,24 @@ const AudioVisualizer = () => {
       for (let i = 0; i < barCount; i++) {
         let target = 0;
         if (usable > 0) {
-          const b0 = Math.floor(Math.pow(usable, i / barCount));
-          const b1 = Math.max(b0 + 1, Math.floor(Math.pow(usable, (i + 1) / barCount)));
-          let sum = 0;
-          for (let b = b0; b < b1 && b < usable; b++) sum += freq[b];
-          let e = sum / ((b1 - b0) * 255);
+          // Fractional log-spaced bin range per bar. Narrow ranges (low end)
+          // INTERPOLATE between neighbouring bins so every bar tracks its own
+          // frequency — no more groups of identical bars.
+          const f0 = Math.pow(usable, i / barCount);
+          const f1 = Math.pow(usable, (i + 1) / barCount);
+          let e: number;
+          if (f1 - f0 >= 1.5) {
+            const b0 = Math.floor(f0);
+            const b1 = Math.min(usable, Math.max(b0 + 1, Math.floor(f1)));
+            let sum = 0;
+            for (let b = b0; b < b1; b++) sum += freq[b];
+            e = sum / ((b1 - b0) * 255);
+          } else {
+            const c = Math.min(usable - 1.001, (f0 + f1) / 2);
+            const b = Math.floor(c);
+            const frac = c - b;
+            e = (freq[b] + (freq[Math.min(b + 1, usable - 1)] - freq[b]) * frac) / 255;
+          }
           const pos = i / (barCount - 1);
           const bassW = Math.max(0, 1 - pos * 2.2);
           const highW = Math.max(0, pos * 2.2 - 1.2);
@@ -115,15 +128,22 @@ const AudioVisualizer = () => {
       const slot = width / barCount;
       const barW = Math.max(1, slot * (0.35 + (s.size / 100) * 0.55));
       const inset = (slot - barW) / 2;
-      const rise = Math.min(height - 2, s.maxRise);
+      const rise = Math.min(height - 4, s.maxRise);
       const goldShare = s.gold / 100;
       const capOn = s.sparkle > 5;
+      const borderLight = s.glow / 100; // lights the bar's top border under active bars
 
       for (let i = 0; i < barCount; i++) {
         const v = values[i];
         if (v <= 0.008) continue;
         const h = Math.max(1, v * rise);
         const x = i * slot + inset;
+        // Border glow: the player's top edge lights up right where the bars
+        // are jumping (full slot width so segments merge into a glowing line).
+        if (borderLight > 0.02) {
+          ctx.fillStyle = `rgba(${GOLD},${(borderLight * (0.25 + v * 0.75)).toFixed(3)})`;
+          ctx.fillRect(i * slot, height - 2, slot, 2);
+        }
         // color: gold↔white mix, brighter when taller
         const a = 0.28 + v * 0.6;
         ctx.fillStyle =
@@ -132,10 +152,10 @@ const AudioVisualizer = () => {
             : `rgba(${Math.round(244 + (255 - 244) * (1 - goldShare))},${Math.round(
                 196 + (255 - 196) * (1 - goldShare),
               )},${Math.round(48 + (255 - 48) * (1 - goldShare))},${a.toFixed(3)})`;
-        ctx.fillRect(x, height - h, barW, h);
+        ctx.fillRect(x, height - 2 - h, barW, h);
         // floating peak cap (classic EQ), brightness via Sparkle
         if (capOn && peaks[i] > v + 0.015) {
-          const py = height - Math.max(2, peaks[i] * rise);
+          const py = height - 2 - Math.max(2, peaks[i] * rise);
           ctx.fillStyle = `rgba(${GOLD},${(0.35 + (s.sparkle / 100) * 0.55).toFixed(3)})`;
           ctx.fillRect(x, py, barW, 1.5);
         }

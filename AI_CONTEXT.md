@@ -1886,7 +1886,16 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   Perf: plain fillRect only — no shadows/trails/particles, dpr≤1.5, canvas h-24, skips
   drawing when silent/hidden tab. No desync possible: the analyser sits in the same Web Audio
   graph as the speakers. Panel labels updated (chaos/glow sliders removed from the panel;
-  fields remain in storage).] NEXT AI: when the
+  fields remain in storage).]
+  [V4 same day — owner feedback: (1) his tuned numbers are the DEFAULTS now (density 100,
+  reactivity 37, maxRise 49, size 100, trail 0, sparkle 33, gold 100, smoothing 76, bass 73,
+  mid 70, high 66, threshold 82, fade 0 — caps linger per his pick, glow 55); (2) "groups of
+  4 identical bars" fixed: analyser fftSize 2048→4096 (2048 bins, ~10.8 Hz) + fractional
+  log-bin sampling with LINEAR INTERPOLATION for narrow (low-end) ranges — every bar tracks
+  its own frequency now; (3) NEW "Border light" (reuses the stored `glow` field, slider is
+  back on the panel): the player's top border lights up gold exactly under active bars
+  (full-slot 2px segments at the canvas base; bars/caps draw 2px higher). NOTE: the owner's
+  browser has old values in localStorage — Reset on the panel loads the new defaults.] NEXT AI: when the
   owner settles on numbers, hardcode them into DEFAULT_VISUALIZER and DELETE the panel (and
   its Index.tsx mount); if he dislikes the whole thing, remove AudioVisualizer from
   PlayerProvider + the settings lib + panel (analyser can stay, it's harmless).

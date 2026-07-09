@@ -468,7 +468,9 @@ export const useTrackAudioEngine = () => {
         // source → gain → analyser → speakers; the analyser feeds the
         // bottom-bar particle visualizer (zero audible effect).
         const analyser = ctx.createAnalyser();
-        analyser.fftSize = 2048;
+        // 4096 → 2048 bins (~10.8 Hz each): enough low-end resolution that
+        // every equalizer bar tracks its own frequency (no twin bars).
+        analyser.fftSize = 4096;
         analyser.smoothingTimeConstant = 0.8;
         sharedAnalyser = analyser;
         mediaSourceRef.current.connect(gainNodeRef.current);
