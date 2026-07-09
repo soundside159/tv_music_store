@@ -19,6 +19,7 @@ import {
 } from "@/mocks";
 import AdminContent from "@/components/AdminContent";
 import AdminBulkUpload from "@/components/AdminBulkUpload";
+import AdminImport from "@/components/AdminImport";
 import AdminWhitelist from "@/components/AdminWhitelist";
 import AdminCampaign from "@/components/AdminCampaign";
 import AdminInbox from "@/components/AdminInbox";
@@ -37,6 +38,7 @@ type SectionId =
   | "trending"
   | "tracksedit"
   | "bulkupload"
+  | "import"
   | "customers"
   | "licenses"
   | "whitelist"
@@ -55,6 +57,7 @@ const SECTION_IDS: SectionId[] = [
   "trending",
   "tracksedit",
   "bulkupload",
+  "import",
   "customers",
   "licenses",
   "whitelist",
@@ -643,6 +646,8 @@ const Admin = () => {
             {CONTENT_TAB[section] && <AdminContent tab={CONTENT_TAB[section]!} />}
 
             {section === "bulkupload" && <AdminBulkUpload />}
+
+            {section === "import" && <AdminImport />}
 
             {section === "customers" && (
               <Card title={`Users${liveUsers ? ` (${liveUsers.length})` : ""}`}>

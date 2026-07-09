@@ -3,6 +3,7 @@ import {
   CreditCard,
   DollarSign,
   Download,
+  FileSpreadsheet,
   FileText,
   Heart,
   Inbox,
@@ -75,6 +76,7 @@ export const adminNavGroups: { label: string; items: NavItem[] }[] = [
     items: [
       { id: "tracksedit", label: "Tracks", icon: SlidersHorizontal },
       { id: "bulkupload", label: "Bulk Upload", icon: UploadCloud },
+      { id: "import", label: "Import (CSV)", icon: FileSpreadsheet },
       { id: "collections", label: "Collections", icon: Library },
       { id: "playlists", label: "Playlists", icon: ListMusic },
       { id: "categories", label: "Categories", icon: Tags },

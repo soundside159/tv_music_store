@@ -4,11 +4,10 @@ import type { BillingInterval, PlanId } from "@/types/domain";
 // Frontend helpers for Stripe subscription billing.
 // Both endpoints return { url } and we redirect the whole page to Stripe.
 //
-// Subscriptions are TEMPORARILY DISABLED while we migrate off Stripe onto
-// Paddle. Flip BILLING_ENABLED back to true (and restore the Paddle/Stripe
-// backend) to re-enable plan checkout + the billing portal. One-time PayPal
-// track licenses (/cart) are unaffected by this flag.
-export const BILLING_ENABLED: boolean = false;
+// 2026-07-09: Paddle rejected the domain — we're staying on STRIPE (checkout +
+// webhook were verified end-to-end in test mode earlier). Flag kept in case
+// billing ever needs an emergency pause.
+export const BILLING_ENABLED: boolean = true;
 
 export interface PlanModalContext {
   /** Custom heading (default "Pick a plan"). */

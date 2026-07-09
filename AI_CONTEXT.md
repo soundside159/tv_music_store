@@ -1921,7 +1921,31 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   (import + admin-only render removed). `VisualizerSettingsPanel.tsx` is kept on disk as dead
   code on purpose — if the owner ever wants to re-tune, remount it on Index for a session.
   Live behavior now runs entirely on DEFAULT_VISUALIZER; visitors have no controls. NOTE: the
-  owner's own browser still carries tvms_visualizer_v1 in localStorage (equals the defaults).] NEXT AI: when the
+  owner's own browser still carries tvms_visualizer_v1 in localStorage (equals the defaults).]
+- **2026-07-09 (PADDLE REJECTED → back on STRIPE):** Paddle turned the domain down after
+  review; the owner decided to stay with Stripe. `BILLING_ENABLED` flipped back to TRUE in
+  src/lib/billing.ts — plan checkout, billing portal and all Pricing/Account buttons are live
+  again (the whole Stripe backend was never removed). REMINDER: Stripe was last verified in
+  TEST mode (4242 card, webhook OK). Before real sales the owner must switch the Cloudflare
+  secrets STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET to LIVE-mode values and re-create the
+  webhook endpoint in the live Stripe dashboard. NEXT UP: STAGE 5 — spreadsheet metadata
+  import (plan being discussed with the owner).
+- **2026-07-09 (STAGE 5 BUILT — spreadsheet metadata import):** owner's decisions: fuzzy
+  AI-assisted title matching; his tables carry title/description/search-tags (+sometimes BPM)
+  and the AI derives Use Case/Genre/Mood from description+tags. NEW admin section
+  **Import (CSV)** (nav id `import`, Catalog group) = `src/components/AdminImport.tsx`:
+  (1) "Export catalog CSV" (client-side, BOM for Excel: code/title/composer/bpm/status/
+  facets/tags/description); (2) "Load a table…" — tiny built-in CSV/TSV parser (quotes,
+  sniffs , ; or tab), header auto-detect for Title/Description/Tags/BPM with remap dropdowns;
+  (3) "Analyze with AI": client fuzzy-matches titles (normalized token similarity; exact
+  matches auto-lock) and sends chunks of 15 rows + top-6 candidates each to NEW
+  `functions/api/admin/import-map.ts` (gpt-4o-mini, JSON mode) which confirms the match and
+  picks facets STRICTLY from the live vocabularies (server canonicalizes/filters, hallucinated
+  values impossible); (4) preview table — per-row include checkbox, match dropdown
+  (green=exact, gold=AI, red=none), AI facets, BPM, description; (5) Apply — sequential
+  bulk_update_tracks per row: facets ADDED, description/tags/BPM overwritten. Suggested
+  pipeline after import: select in Tracks → AI Art & Text → Publish. NOTE: import-map uses
+  the same OPENAI_API_KEY. NEXT AI: when the
   owner settles on numbers, hardcode them into DEFAULT_VISUALIZER and DELETE the panel (and
   its Index.tsx mount); if he dislikes the whole thing, remove AudioVisualizer from
   PlayerProvider + the settings lib + panel (analyser can stay, it's harmless).
