@@ -155,6 +155,38 @@ export const ensurePasswordColumn = async (db: D1Database): Promise<void> => {
   }
 };
 
+/**
+ * Deletes a user account SAFELY. Tracks are NEVER touched: a composer profile
+ * is DETACHED (user_id -> NULL), so its tracks keep their artist name and the
+ * profile can later be re-attached by giving another user the same pseudonym.
+ * Tracks are only ever deleted manually by an admin (Tracks manager / track
+ * page). History rows (download_log, plan_licenses, sync_orders, claim
+ * requests, support tickets) are kept for records/stats.
+ */
+export const deleteUserAccount = async (
+  db: D1Database,
+  userId: string,
+  email: string,
+): Promise<void> => {
+  const cleanups: Array<[string, string]> = [
+    [`UPDATE composers SET user_id = NULL WHERE user_id = ?1`, userId],
+    [`DELETE FROM sessions WHERE user_id = ?1`, userId],
+    [`DELETE FROM subscriptions WHERE user_id = ?1`, userId],
+    [`DELETE FROM wl_channels WHERE user_id = ?1`, userId],
+    [`DELETE FROM whitelist_channels WHERE user_id = ?1`, userId],
+    [`DELETE FROM favourites WHERE user_id = ?1`, userId],
+    [`DELETE FROM auth_codes WHERE email = ?1`, email],
+  ];
+  for (const [sql, bind] of cleanups) {
+    try {
+      await db.prepare(sql).bind(bind).run();
+    } catch {
+      // lazily-created table may not exist yet — fine
+    }
+  }
+  await db.prepare(`DELETE FROM users WHERE id = ?1`).bind(userId).run();
+};
+
 /** Creates a session row and returns the Set-Cookie header value. */
 export const openSession = async (db: D1Database, userId: string): Promise<string> => {
   const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");

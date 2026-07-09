@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowUpRight } from "lucide-react";
 import { accountNavGroups, adminNavGroups, composerNavItems } from "@/lib/adminNav";
 import MenuGroupHeader from "@/components/MenuGroupHeader";
@@ -20,7 +20,7 @@ import MyChannels from "@/components/MyChannels";
 import NotificationsSettings from "@/components/NotificationsSettings";
 import SupportSection from "@/components/SupportSection";
 import FavouritesSection from "@/components/FavouritesSection";
-import { updateProfile } from "@/hooks/useAuth";
+import { logout, updateProfile } from "@/hooks/useAuth";
 import { BILLING_ENABLED, openBillingPortal, openPlanModal } from "@/lib/billing";
 import { downloadTrackVersion } from "@/lib/downloadTrack";
 
@@ -88,6 +88,7 @@ const EmptyNote = ({ text }: { text: string }) => (
 );
 
 const Account = () => {
+  const navigate = useNavigate();
   const user = useCurrentUser();
   const subscription = useSubscription();
   const plans = usePlans();
@@ -122,6 +123,31 @@ const Account = () => {
   const [draftName, setDraftName] = useState("");
   const [profileBusy, setProfileBusy] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
+  // Self-delete (customers only — the button is hidden for admins/composers
+  // and the server refuses them too). Composer tracks can never be lost here.
+  const deleteOwnAccount = async () => {
+    if (
+      !window.confirm(
+        "Delete your account permanently?\nYour subscription and settings are removed. This cannot be undone.",
+      )
+    )
+      return;
+    setDeletingAccount(true);
+    setProfileError(null);
+    try {
+      const res = await fetch("/api/me", { method: "DELETE", credentials: "include" });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Delete failed");
+      await logout();
+      navigate("/");
+    } catch (e) {
+      setProfileError(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setDeletingAccount(false);
+    }
+  };
 
   const plan = plans.find((p) => p.id === subscription?.plan);
   const claims = user ? mockClaimRequests.filter((c) => c.userId === user.id) : [];
@@ -399,6 +425,25 @@ const Account = () => {
                 <p className="mt-3 font-body text-xs text-muted-foreground">
                   Need to change your email? Contact us at contact@tvmusicstore.com.
                 </p>
+
+                {/* Self-delete — customers only. Admin and composer accounts
+                    are removed by the owner (composer tracks must never be
+                    endangered by a one-click self-delete). */}
+                {user.role === "customer" && !composerProbe.loading && !composerProbe.composer && (
+                  <div className="mt-6 border-t border-border/60 pt-4">
+                    <button
+                      type="button"
+                      disabled={deletingAccount}
+                      onClick={() => void deleteOwnAccount()}
+                      className="rounded-lg border border-red-400/40 px-4 py-2 font-body text-sm font-semibold text-red-400 transition-colors hover:bg-red-400/10 disabled:opacity-50"
+                    >
+                      {deletingAccount ? "Deleting…" : "Delete account"}
+                    </button>
+                    <p className="mt-2 font-body text-xs text-muted-foreground">
+                      Permanently removes your account, subscription and settings.
+                    </p>
+                  </div>
+                )}
               </SectionCard>
             )}
 

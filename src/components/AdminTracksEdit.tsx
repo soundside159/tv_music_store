@@ -147,6 +147,9 @@ const AdminTracksEdit = ({
   const [search, setSearch] = useState("");
   const [composer, setComposer] = useState("all");
   const [sort, setSort] = useState<SortMode>("default");
+  // Status tabs: Live (published & approved) vs Drafts & Review (bulk-upload
+  // drafts + composer uploads awaiting moderation).
+  const [statusTab, setStatusTab] = useState<"live" | "drafts">("live");
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(20);
   const [selected, setSelected] = useState<string[]>([]);
@@ -178,10 +181,15 @@ const AdminTracksEdit = ({
     [tracks],
   );
 
+  const isDraftish = (t: CatalogTrack) => t.status === "draft" || t.moderation === "pending";
+  const liveCount = useMemo(() => tracks.filter((t) => !isDraftish(t)).length, [tracks]);
+  const draftCount = tracks.length - liveCount;
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = tracks.filter(
       (t) =>
+        (statusTab === "drafts" ? isDraftish(t) : !isDraftish(t)) &&
         (composer === "all" || t.artist === composer) &&
         (!q || t.title.toLowerCase().includes(q)),
     );
@@ -190,7 +198,7 @@ const AdminTracksEdit = ({
       list = [...list].sort((a, b) => (set.has(b.id) ? 1 : 0) - (set.has(a.id) ? 1 : 0));
     }
     return list;
-  }, [tracks, search, composer, sort, trending]);
+  }, [tracks, search, composer, sort, trending, statusTab]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / perPage));
   const safePage = Math.min(page, pageCount);
@@ -482,10 +490,35 @@ const AdminTracksEdit = ({
   const dimIf = (active: boolean) => (active ? "" : "pointer-events-none opacity-40");
 
   return (
-    <div className="mt-5 items-start gap-5 xl:grid xl:grid-cols-[minmax(0,1fr)_21rem_16rem_16rem]">
-      {/* ===== Left: toolbar + table + pagination ===== */}
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-3">
+    <>
+      {/* ===== Toolbar (above the grid so the table header row lines up with
+          the top edge of the side panels) ===== */}
+      <div className="mt-5 flex flex-wrap items-center gap-3">
+        {/* Status tabs: Live / Drafts & Review (with totals) */}
+        <div className="flex w-fit gap-1 rounded-lg border border-border/60 bg-background/40 p-1">
+          {(
+            [
+              ["live", "Live", liveCount],
+              ["drafts", "Drafts & Review", draftCount],
+            ] as const
+          ).map(([id, label, n]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => {
+                setStatusTab(id);
+                setPage(1);
+              }}
+              className={`rounded-md px-3 py-1.5 font-body text-xs font-semibold transition-colors ${
+                statusTab === id
+                  ? "bg-secondary text-[#F4C430]"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {label} <span className="opacity-60">({n})</span>
+            </button>
+          ))}
+        </div>
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -539,16 +572,19 @@ const AdminTracksEdit = ({
               </button>
             </div>
           )}
-        </div>
+      </div>
 
-        {disabled && (
-          <p className="mt-3 font-body text-sm text-amber-400/90">
-            The catalog is still served from bundled mock data — load the demo catalog into the
-            database first, then edits here will stick.
-          </p>
-        )}
+      {disabled && (
+        <p className="mt-3 font-body text-sm text-amber-400/90">
+          The catalog is still served from bundled mock data — load the demo catalog into the
+          database first, then edits here will stick.
+        </p>
+      )}
 
-        <div className="mt-4 overflow-x-auto rounded-lg border border-border/60">
+    <div className="mt-4 items-start gap-5 xl:grid xl:grid-cols-[minmax(0,1fr)_21rem_16rem_16rem]">
+      {/* ===== Left: table + pagination ===== */}
+      <div className="min-w-0">
+        <div className="overflow-x-auto rounded-lg border border-border/60">
           <div className="min-w-[44rem]">
             <div className="grid grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_4.5rem_7rem_4.5rem_5rem] items-center gap-2 border-b border-border/60 bg-secondary/40 px-3 py-2.5">
               <span className="flex justify-center">
@@ -1027,6 +1063,7 @@ const AdminTracksEdit = ({
         {membershipSection("Categories", categories, categoryDelta, setCategoryDelta)}
       </aside>
     </div>
+    </>
   );
 };
 

@@ -1,7 +1,18 @@
-import { getSessionUser, json, OWNER_EMAIL, readJson, type Ctx } from "./_utils";
+import {
+  deleteUserAccount,
+  getSessionUser,
+  json,
+  OWNER_EMAIL,
+  readJson,
+  SESSION_COOKIE,
+  type Ctx,
+} from "./_utils";
 
-// GET -> current user + subscription + downloads used this month (Free limit).
-// PATCH { name } -> update display name.
+// GET    -> current user + subscription + downloads used this month (Free limit).
+// PATCH  { name } -> update display name.
+// DELETE -> self-delete the account (customers only: admins and composer
+//           accounts are removed by the owner from Admin → Users; tracks are
+//           never touched — see deleteUserAccount).
 
 export const onRequestGet = async (ctx: Ctx) => {
   if (!ctx.env.DB) return json({ error: "DB not bound. See docs/SETUP_BACKEND.md" }, 503);
@@ -54,4 +65,33 @@ export const onRequestPatch = async (ctx: Ctx) => {
 
   await ctx.env.DB.prepare(`UPDATE users SET name = ?1 WHERE id = ?2`).bind(name, user.id).run();
   return json({ ok: true });
+};
+
+export const onRequestDelete = async (ctx: Ctx) => {
+  if (!ctx.env.DB) return json({ error: "DB not bound. See docs/SETUP_BACKEND.md" }, 503);
+
+  const user = await getSessionUser(ctx);
+  if (!user) return json({ error: "Not signed in" }, 401);
+  if (user.role === "admin" || user.email === OWNER_EMAIL) {
+    return json({ error: "Admin accounts cannot self-delete" }, 403);
+  }
+  const composer = await ctx.env.DB.prepare(
+    `SELECT id FROM composers WHERE user_id = ?1 LIMIT 1`,
+  )
+    .bind(user.id)
+    .first();
+  if (composer) {
+    return json(
+      { error: "Composer accounts are removed by the site owner — contact us" },
+      403,
+    );
+  }
+
+  await deleteUserAccount(ctx.env.DB, user.id, user.email);
+  // Expire the session cookie.
+  return json(
+    { ok: true },
+    200,
+    { "set-cookie": `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0` },
+  );
 };

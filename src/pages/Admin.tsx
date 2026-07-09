@@ -262,6 +262,37 @@ const Admin = () => {
     }
   };
 
+  // Deletes a user account. Composer profiles get DETACHED server-side —
+  // tracks always survive; only manual admin actions can delete tracks.
+  const deleteUser = async (userId: string) => {
+    const target = liveUsers?.find((u) => u.id === userId);
+    if (!target) return;
+    if (
+      !window.confirm(
+        `DELETE the account ${target.email}?\nTheir subscription and settings are removed. Any composer tracks stay on the site. This cannot be undone.`,
+      )
+    )
+      return;
+    setSavingUserId(userId);
+    setUsersError(null);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ userId }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Delete failed");
+      setLiveUsers((us) => (us ?? []).filter((u) => u.id !== userId));
+      setOpenMenuId(null);
+    } catch (e) {
+      setUsersError(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setSavingUserId(null);
+    }
+  };
+
   // Composer OFF: removes the pseudonym profile (server refuses while the
   // composer still has tracks, so nothing can be orphaned by accident).
   const removeComposer = async (userId: string) => {
@@ -814,6 +845,17 @@ const Admin = () => {
                           Shown as the track artist site-wide. Saves on Enter / click away.
                         </p>
                       </div>
+                    )}
+                    {/* Danger zone: delete the account (owner + yourself are protected). */}
+                    {!ownerLocked && u.email !== user.email && (
+                      <button
+                        type="button"
+                        disabled={savingUserId === u.id}
+                        onClick={() => void deleteUser(u.id)}
+                        className="mt-4 w-full rounded-lg border border-red-400/40 px-3 py-1.5 font-body text-xs font-semibold text-red-400 transition-colors hover:bg-red-400/10 disabled:opacity-50"
+                      >
+                        Delete user…
+                      </button>
                     )}
                   </div>
                 </>

@@ -72,14 +72,14 @@ interface EntryLike {
   };
 }
 
-const filesFromEntry = async (entry: EntryLike, topFolder: string | null): Promise<Incoming[]> => {
+const filesFromEntry = async (entry: EntryLike, parentFolder: string | null): Promise<Incoming[]> => {
   if (entry.isFile) {
     const file = await new Promise<File>((ok, err) => entry.file(ok, err));
-    return /\.wav$/i.test(file.name) ? [{ file, folder: topFolder }] : [];
+    return /\.wav$/i.test(file.name) ? [{ file, folder: parentFolder }] : [];
   }
   if (entry.isDirectory) {
-    // The TOP folder names the track; nested folders keep the top name.
-    const folderName = topFolder ?? entry.name;
+    // The CLOSEST folder around a WAV names its track — so a wrapper folder
+    // full of track folders imports each subfolder as its own track.
     const reader = entry.createReader();
     const entries: EntryLike[] = [];
     for (;;) {
@@ -87,7 +87,7 @@ const filesFromEntry = async (entry: EntryLike, topFolder: string | null): Promi
       if (chunk.length === 0) break;
       entries.push(...chunk);
     }
-    const nested = await Promise.all(entries.map((e) => filesFromEntry(e, folderName)));
+    const nested = await Promise.all(entries.map((e) => filesFromEntry(e, entry.name)));
     return nested.flat();
   }
   return [];
@@ -196,11 +196,14 @@ const AdminBulkUpload = () => {
   };
 
   const addFileList = (list: FileList) => {
-    // Folder-picker files carry webkitRelativePath ("Folder/file.wav").
+    // Folder-picker files carry webkitRelativePath ("Wrapper/Track A/file.wav")
+    // — the CLOSEST folder names the track, so nested folders import as
+    // separate tracks.
     addIncoming(
       [...list].map((file) => {
         const rel = (file as File & { webkitRelativePath?: string }).webkitRelativePath ?? "";
-        const folder = rel.includes("/") ? rel.split("/")[0] : null;
+        const parts = rel.split("/");
+        const folder = parts.length > 1 ? parts[parts.length - 2] : null;
         return { file, folder };
       }),
     );
@@ -214,9 +217,7 @@ const AdminBulkUpload = () => {
       .filter((x): x is EntryLike => !!x);
     if (entries.length > 0) {
       try {
-        const collected = await Promise.all(
-          entries.map((entry) => filesFromEntry(entry, entry.isDirectory ? entry.name : null)),
-        );
+        const collected = await Promise.all(entries.map((entry) => filesFromEntry(entry, null)));
         addIncoming(collected.flat());
         return;
       } catch {

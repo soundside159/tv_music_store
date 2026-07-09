@@ -1697,3 +1697,29 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   role select + grouped tables are gone. OWNER HOW-TO: Admin → Users → your row → ⋯ → tick
   Composer → type your pseudonym → Enter; the Composer studio appears in your account menu and
   you appear in the upload composer pickers. Sandbox still down — validate via deploy.bat.
+- **2026-07-08 (owner polish round: nested bulk folders, auto-Main, Tracks tabs, account
+  deletion, tag pills):**
+  (1) BULK UPLOAD nested folders: the CLOSEST folder around a WAV names its track (was: top
+  folder) — dropping a wrapper folder full of track folders imports each subfolder as its own
+  track (drag&drop entry traversal + webkitRelativePath now take the last dir segment).
+  (2) COMPOSER UPLOAD: the Main star is placed AUTOMATICALLY on the longest file (duration
+  probed via audio metadata right after adding; file size tiebreaker) until the composer stars
+  one manually; the "main: longest (auto)" hint line removed.
+  (3) TRACKS EDIT: status tabs "Live (N)" / "Drafts & Review (M)" above the table (drafts tab =
+  status draft OR moderation pending); the whole toolbar (tabs/search/composer filter/Apply
+  cluster) moved ABOVE the 4-column grid so the table header row aligns with the top of the
+  side panels.
+  (4) ACCOUNT DELETION — tracks are bulletproof: new `deleteUserAccount()` in _utils.ts DETACHES
+  the composer profile (composers.user_id -> NULL; tracks keep their artist and stay published),
+  deletes sessions/subscription/whitelist/favourites/auth codes, keeps history rows
+  (download_log, plan_licenses, sync_orders). Admin → Users ⋯ menu got a red "Delete user…"
+  (confirm; owner + your own account are server-protected). Self-delete: DELETE /api/me +
+  red "Delete account" in Account → Profile — CUSTOMERS ONLY (admins & composer accounts are
+  refused server-side AND the button is hidden). PSEUDONYM RULES: unique case-insensitively
+  (400 "already taken" if another user has it); giving a user the pseudonym of a DETACHED
+  profile RE-ATTACHES that profile — the new user inherits the old composer's tracks (owner's
+  requested recovery path after deleting a composer's user by mistake). Tracks are deleted ONLY
+  by explicit admin actions (Tracks manager bulk Delete / track-page Delete).
+  (5) TAG PILLS on track rows: tags column widened 17→18rem (xl) / 19→20rem (2xl) + pills pulled
+  `xl:-ml-2` into the column gap, so the third pill fits instead of fading out.
+  Sandbox still down — lint/build via deploy.bat on the host.

@@ -1,4 +1,13 @@
-import { getSessionUser, json, newId, OWNER_EMAIL, readJson, type Ctx, type D1Database } from "../_utils";
+import {
+  deleteUserAccount,
+  getSessionUser,
+  json,
+  newId,
+  OWNER_EMAIL,
+  readJson,
+  type Ctx,
+  type D1Database,
+} from "../_utils";
 
 // Admin-only user management.
 // GET  -> latest 200 users with plan info (+ composer pseudonym when one exists).
@@ -55,18 +64,46 @@ const slugify = (s: string) =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
 
-/** Creates or renames the composer profile (pseudonym) linked to a user. */
-const upsertComposer = async (db: D1Database, userId: string, pseudonym: string) => {
+/**
+ * Creates or renames the composer profile (pseudonym) linked to a user.
+ * Pseudonyms are UNIQUE (case-insensitive). If the pseudonym belongs to a
+ * DETACHED profile (its user was deleted), the profile — with all its tracks —
+ * is re-attached to this user. Returns an error string or null on success.
+ */
+const upsertComposer = async (
+  db: D1Database,
+  userId: string,
+  pseudonym: string,
+): Promise<string | null> => {
+  // Who else carries this name?
+  const sameName = await db
+    .prepare(`SELECT id, user_id FROM composers WHERE lower(display_name) = lower(?1) LIMIT 1`)
+    .bind(pseudonym)
+    .first<{ id: string; user_id: string | null }>();
+  if (sameName && sameName.user_id && sameName.user_id !== userId) {
+    return "This pseudonym is already taken by another composer";
+  }
+
   const existing = await db
     .prepare(`SELECT id FROM composers WHERE user_id = ?1 LIMIT 1`)
     .bind(userId)
     .first<{ id: string }>();
+
+  // Same name exists but is detached (its user was deleted) — re-attach it so
+  // the new user inherits that composer's tracks. If this user already had
+  // another profile without tracks, it would just linger; keep it simple and
+  // only re-attach when the user has no profile yet.
+  if (sameName && !sameName.user_id && !existing) {
+    await db.prepare(`UPDATE composers SET user_id = ?2 WHERE id = ?1`).bind(sameName.id, userId).run();
+    return null;
+  }
+
   if (existing) {
     await db
       .prepare(`UPDATE composers SET display_name = ?2 WHERE id = ?1`)
       .bind(existing.id, pseudonym)
       .run();
-    return existing.id;
+    return null;
   }
   // New composer row — slug must be unique; suffix on collision.
   let slug = slugify(pseudonym) || newId("cmp");
@@ -83,7 +120,7 @@ const upsertComposer = async (db: D1Database, userId: string, pseudonym: string)
     )
     .bind(id, userId, slug, pseudonym)
     .run();
-  return id;
+  return null;
 };
 
 export const onRequestPatch = async (ctx: Ctx) => {
@@ -125,7 +162,8 @@ export const onRequestPatch = async (ctx: Ctx) => {
     await ctx.env.DB.prepare(`UPDATE users SET role = ?1 WHERE id = ?2`).bind(role, userId).run();
   }
   if (pseudonym !== undefined) {
-    await upsertComposer(ctx.env.DB, userId, pseudonym.slice(0, 60));
+    const err = await upsertComposer(ctx.env.DB, userId, pseudonym.slice(0, 60));
+    if (err) return json({ error: err }, 400);
   }
   if (removeComposer) {
     const cmp = await ctx.env.DB.prepare(`SELECT id FROM composers WHERE user_id = ?1 LIMIT 1`)
@@ -149,5 +187,31 @@ export const onRequestPatch = async (ctx: Ctx) => {
       .bind(userId)
       .run();
   }
+  return json({ ok: true });
+};
+
+// DELETE { userId } — remove a user account. Composer profiles are DETACHED
+// (tracks are never touched); the owner and your own account are protected.
+export const onRequestDelete = async (ctx: Ctx) => {
+  if (!ctx.env.DB) return json({ error: "DB not bound" }, 503);
+  const gate = await requireAdmin(ctx);
+  if (gate.error) return gate.error;
+
+  const body = await readJson<{ userId?: string }>(ctx.request);
+  const userId = body?.userId;
+  if (!userId) return json({ error: "userId required" }, 400);
+
+  const target = await ctx.env.DB.prepare(`SELECT id, email FROM users WHERE id = ?1`)
+    .bind(userId)
+    .first<{ id: string; email: string }>();
+  if (!target) return json({ error: "User not found" }, 404);
+  if (target.email === OWNER_EMAIL) {
+    return json({ error: "The owner account cannot be deleted" }, 400);
+  }
+  if (gate.user && target.id === gate.user.id) {
+    return json({ error: "You cannot delete the account you are signed in with" }, 400);
+  }
+
+  await deleteUserAccount(ctx.env.DB, target.id, target.email);
   return json({ ok: true });
 };

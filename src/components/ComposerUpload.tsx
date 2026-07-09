@@ -104,16 +104,37 @@ const uploadAudio = async (
 interface WavRow {
   id: string;
   file: File;
+  /** Seconds, read from audio metadata right after the file is added. */
+  duration?: number;
 }
 
 const baseName = (file: File) => file.name.replace(/\.[^.]+$/, "");
 
 const yieldToUi = () => new Promise((r) => setTimeout(r, 0));
 
+/** Cheap duration probe (metadata only — no decode). 0 when unreadable. */
+const probeDuration = (file: File): Promise<number> =>
+  new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const a = new Audio();
+    a.preload = "metadata";
+    a.onloadedmetadata = () => {
+      URL.revokeObjectURL(url);
+      resolve(Number.isFinite(a.duration) ? a.duration : 0);
+    };
+    a.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(0);
+    };
+    a.src = url;
+  });
+
 const ComposerUpload = ({ onCreated }: { onCreated: () => void }) => {
   const [wavs, setWavs] = useState<WavRow[]>([]);
-  /** file id starred as Main; null = auto (longest — resolved during encode). */
+  /** file id starred as Main — auto-set to the LONGEST file until the
+      composer stars one manually. */
   const [mainId, setMainId] = useState<string | null>(null);
+  const [mainManual, setMainManual] = useState(false);
   const [title, setTitle] = useState("");
   const [bpm, setBpm] = useState("");
   const [description, setDescription] = useState("");
@@ -133,7 +154,13 @@ const ComposerUpload = ({ onCreated }: { onCreated: () => void }) => {
       const next = [...prev];
       for (const file of incoming) {
         if (!next.some((w) => w.file.name === file.name && w.file.size === file.size)) {
-          next.push({ id: `${file.name}-${file.size}`, file });
+          const id = `${file.name}-${file.size}`;
+          next.push({ id, file });
+          // Probe the duration in the background; the auto-Main effect below
+          // re-stars the longest file as results arrive.
+          void probeDuration(file).then((d) =>
+            setWavs((cur) => cur.map((w) => (w.id === id ? { ...w, duration: d } : w))),
+          );
         }
       }
       return next.slice(0, 12);
@@ -148,8 +175,24 @@ const ComposerUpload = ({ onCreated }: { onCreated: () => void }) => {
 
   const removeWav = (id: string) => {
     setWavs((prev) => prev.filter((w) => w.id !== id));
-    setMainId((m) => (m === id ? null : m));
+    if (mainId === id) {
+      setMainId(null);
+      setMainManual(false); // auto-star kicks back in
+    }
   };
+
+  // Auto-star the longest file (by probed duration, file size as tiebreaker)
+  // until the composer picks one by hand.
+  useEffect(() => {
+    if (mainManual || wavs.length === 0) return;
+    const longest = wavs.reduce((best, w) => {
+      const a = w.duration ?? 0;
+      const b = best.duration ?? 0;
+      if (a !== b) return a > b ? w : best;
+      return w.file.size > best.file.size ? w : best;
+    });
+    if (longest.id !== mainId) setMainId(longest.id);
+  }, [wavs, mainManual, mainId]);
 
   const labelOf = (w: WavRow) => cleanVersionLabel(baseName(w.file), title) || "Main";
 
@@ -285,8 +328,11 @@ const ComposerUpload = ({ onCreated }: { onCreated: () => void }) => {
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => setMainId((m) => (m === w.id ? null : w.id))}
-                  title={isMain ? "Main version (click for auto: longest)" : "Make this the Main version"}
+                  onClick={() => {
+                    setMainId(w.id);
+                    setMainManual(true);
+                  }}
+                  title={isMain ? "Main version" : "Make this the Main version"}
                   aria-label={`Set ${w.file.name} as main`}
                   className="shrink-0 disabled:opacity-40"
                 >
@@ -312,11 +358,6 @@ const ComposerUpload = ({ onCreated }: { onCreated: () => void }) => {
               </li>
             );
           })}
-          {!mainId && wavs.length > 1 && (
-            <li className="pl-6 font-body text-[11px] text-muted-foreground">
-              main: longest (auto) — star a file to override
-            </li>
-          )}
         </ul>
 
       {/* Fields — exactly Title / BPM / Description / Extra tags / Stems ZIP. */}
