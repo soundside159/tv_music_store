@@ -1,34 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { getSharedAnalyser } from "@/components/TrackRowPlayer";
 import { usePlayer } from "@/components/playerContext";
-import {
-  getVisualizerSettings,
-  subscribeVisualizer,
-} from "@/lib/visualizerSettings";
+import { getVisualizerSettings, subscribeVisualizer } from "@/lib/visualizerSettings";
 
-// Particle equalizer above the bottom mini-player (owner's experiment,
-// inspired by his Python particle sphere): particles jump UP from the
-// player's top border while music plays — LEFT columns follow the lows,
-// RIGHT columns follow the highs. Soft physics, twinkle, trails and glow;
-// everything tunable via the temporary panel on the homepage footer
-// (src/lib/visualizerSettings.ts, localStorage).
+// Classic bar equalizer on the mini-player's top border: LEFT bars follow the
+// lows, RIGHT bars follow the highs. Bars jump up instantly with the music
+// (the analyser reads the SAME audio graph that feeds the speakers — no
+// desync by construction) and fall right back down. Deliberately cheap:
+// ≤128 fillRect calls per frame, no shadows, no trails, no particles;
+// drawing is skipped entirely while nothing is audible.
 
-const GOLD = "255, 196, 48"; // #F4C430-ish rgb for canvas colors
-const COLUMNS = 96;
-const MAX_PARTICLES = 900;
-
-interface Particle {
-  x: number;
-  y: number; // px above the baseline (positive = higher)
-  vx: number;
-  vy: number;
-  life: number; // 1 → 0
-  decay: number;
-  size: number;
-  gold: boolean;
-  phase: number; // twinkle phase
-  spin: number; // twinkle speed
-}
+const GOLD = "244, 196, 48"; // #F4C430
 
 const AudioVisualizer = () => {
   const { isPlaying } = usePlayer();
@@ -53,10 +35,9 @@ const AudioVisualizer = () => {
     let disposed = false;
     let width = 0;
     let height = 0;
-    let dpr = 1;
 
     const resize = () => {
-      dpr = Math.min(2, window.devicePixelRatio || 1);
+      const dpr = Math.min(1.5, window.devicePixelRatio || 1);
       width = canvas.clientWidth;
       height = canvas.clientHeight;
       canvas.width = Math.max(1, Math.round(width * dpr));
@@ -66,139 +47,99 @@ const AudioVisualizer = () => {
     resize();
     window.addEventListener("resize", resize);
 
-    const particles: Particle[] = [];
     const freq = new Uint8Array(1024);
-    // Per-column smoothed energy (extra envelope on top of the analyser).
-    const columnEnergy = new Float32Array(COLUMNS);
+    const MAX_BARS = 128;
+    const values = new Float32Array(MAX_BARS); // current bar heights (0..1)
+    const peaks = new Float32Array(MAX_BARS); // floating peak caps (0..1)
+    let cleared = true;
     let last = performance.now();
-    let idleFade = 1; // lets particles finish after pause instead of vanishing
 
     const loop = (now: number) => {
       if (disposed) return;
       raf = requestAnimationFrame(loop);
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
+      if (document.hidden) return;
+
       const s = getVisualizerSettings();
       const analyser = getSharedAnalyser();
+      const barCount = Math.max(32, Math.min(MAX_BARS, Math.round(32 + (s.density / 100) * 96)));
 
-      // --- read spectrum -----------------------------------------------------
+      // --- read the spectrum only while playing -------------------------------
       let bins = 0;
       if (analyser && isPlayingRef.current) {
-        analyser.smoothingTimeConstant = 0.5 + (s.smoothing / 100) * 0.45;
+        analyser.smoothingTimeConstant = 0.35 + (s.smoothing / 100) * 0.5;
         bins = Math.min(analyser.frequencyBinCount, freq.length);
         analyser.getByteFrequencyData(freq);
-        idleFade = 1;
-      } else {
-        idleFade = Math.max(0, idleFade - dt * 1.4);
       }
 
-      // --- per-column energy: log-spaced bins, left = lows, right = highs ----
-      if (bins > 0) {
-        // Use bins up to ~14 kHz (≈ bin 650 of 1024 @ 44.1k) — the top octave
-        // is mostly empty and would flatten the right side.
-        const usable = Math.floor(bins * 0.62);
-        for (let c = 0; c < COLUMNS; c++) {
-          const t0 = c / COLUMNS;
-          const t1 = (c + 1) / COLUMNS;
-          // log mapping: column → bin range
-          const b0 = Math.floor(Math.pow(usable, t0));
-          const b1 = Math.max(b0 + 1, Math.floor(Math.pow(usable, t1)));
+      // --- update bars: instant attack, smooth release ------------------------
+      const gate = (s.threshold / 100) * 0.35;
+      const release = 1.6 + (1 - s.trail / 100) * 6.5; // trail↑ = slower fall
+      const capFall = 0.25 + (s.fade / 100) * 1.6; // fade↑ = caps drop faster
+      let energyLeft = 0;
+      const usable = bins > 0 ? Math.floor(bins * 0.62) : 0;
+      for (let i = 0; i < barCount; i++) {
+        let target = 0;
+        if (usable > 0) {
+          const b0 = Math.floor(Math.pow(usable, i / barCount));
+          const b1 = Math.max(b0 + 1, Math.floor(Math.pow(usable, (i + 1) / barCount)));
           let sum = 0;
           for (let b = b0; b < b1 && b < usable; b++) sum += freq[b];
           let e = sum / ((b1 - b0) * 255);
-          // band gains: crossfade bass → mid → high across the width
-          const pos = c / (COLUMNS - 1);
+          const pos = i / (barCount - 1);
           const bassW = Math.max(0, 1 - pos * 2.2);
           const highW = Math.max(0, pos * 2.2 - 1.2);
           const midW = Math.max(0, 1 - bassW - highW);
-          const gain =
-            (bassW * s.bass + midW * s.mid + highW * s.high) / 100;
-          e = Math.min(1, e * gain * 1.35) * idleFade;
-          // envelope: fast attack, slow release (the "floaty" feel)
-          columnEnergy[c] +=
-            (e - columnEnergy[c]) * (e > columnEnergy[c] ? 0.55 : 0.08);
+          e *= (bassW * s.bass + midW * s.mid + highW * s.high) / 100;
+          e = Math.max(0, e - gate) / Math.max(0.15, 1 - gate);
+          target = Math.min(1, e * (0.5 + (s.reactivity / 100) * 1.5));
         }
-      } else if (idleFade <= 0) {
-        columnEnergy.fill(0);
+        // Bars jump straight to the beat, then glide down.
+        values[i] = target >= values[i] ? target : Math.max(target, values[i] - release * dt);
+        peaks[i] = Math.max(values[i], peaks[i] - capFall * dt);
+        energyLeft = Math.max(energyLeft, values[i]);
       }
 
-      // --- spawn particles ----------------------------------------------------
-      // Pure 2D equalizer: a particle is born ON the bar's top border, flies
-      // STRAIGHT UP (slight chaos drift only), slows down and dissolves.
-      if (idleFade > 0 && particles.length < MAX_PARTICLES) {
-        const rate = (s.density / 100) * 340; // particles/sec across the bar
-        const colW = width / COLUMNS;
-        const cutoff = 0.02 + (s.threshold / 100) * 0.45; // sensitivity gate
-        for (let c = 0; c < COLUMNS; c++) {
-          const e = columnEnergy[c];
-          if (e < cutoff) continue;
-          // Energy above the gate drives everything (0..1 again).
-          const drive = Math.min(1, (e - cutoff) / Math.max(0.08, 1 - cutoff));
-          const p = rate * (0.15 + drive) * dt;
-          if (Math.random() < p) {
-            const react = 0.25 + (s.reactivity / 100) * drive * 1.6;
-            particles.push({
-              x: (c + 0.15 + Math.random() * 0.7) * colW,
-              y: 0,
-              vx: (Math.random() - 0.5) * (s.chaos / 100) * 46,
-              // Initial climb speed; exponential drag below makes the total
-              // rise land around maxRise * drive px.
-              vy: react * s.maxRise * (2.4 + Math.random() * 1.0),
-              life: 1,
-              decay: (0.35 + (s.fade / 100) * 2.2) * (0.75 + Math.random() * 0.5),
-              size: 0.7 + (s.size / 100) * 2.1 * (0.6 + Math.random() * 0.8),
-              gold: Math.random() * 100 < s.gold,
-              phase: Math.random() * Math.PI * 2,
-              spin: 5 + Math.random() * 9,
-            });
-          }
+      // --- draw ----------------------------------------------------------------
+      if (energyLeft < 0.004) {
+        if (!cleared) {
+          ctx.clearRect(0, 0, width, height);
+          cleared = true;
+        }
+        return;
+      }
+      cleared = false;
+      ctx.clearRect(0, 0, width, height);
+
+      const slot = width / barCount;
+      const barW = Math.max(1, slot * (0.35 + (s.size / 100) * 0.55));
+      const inset = (slot - barW) / 2;
+      const rise = Math.min(height - 2, s.maxRise);
+      const goldShare = s.gold / 100;
+      const capOn = s.sparkle > 5;
+
+      for (let i = 0; i < barCount; i++) {
+        const v = values[i];
+        if (v <= 0.008) continue;
+        const h = Math.max(1, v * rise);
+        const x = i * slot + inset;
+        // color: gold↔white mix, brighter when taller
+        const a = 0.28 + v * 0.6;
+        ctx.fillStyle =
+          goldShare >= 0.999
+            ? `rgba(${GOLD},${a.toFixed(3)})`
+            : `rgba(${Math.round(244 + (255 - 244) * (1 - goldShare))},${Math.round(
+                196 + (255 - 196) * (1 - goldShare),
+              )},${Math.round(48 + (255 - 48) * (1 - goldShare))},${a.toFixed(3)})`;
+        ctx.fillRect(x, height - h, barW, h);
+        // floating peak cap (classic EQ), brightness via Sparkle
+        if (capOn && peaks[i] > v + 0.015) {
+          const py = height - Math.max(2, peaks[i] * rise);
+          ctx.fillStyle = `rgba(${GOLD},${(0.35 + (s.sparkle / 100) * 0.55).toFixed(3)})`;
+          ctx.fillRect(x, py, barW, 1.5);
         }
       }
-
-      // --- fade previous frame (trails on a transparent canvas) --------------
-      ctx.globalCompositeOperation = "destination-out";
-      const fade = 1 - Math.pow(s.trail / 100, 0.6) * 0.82; // 1 = instant clear
-      ctx.fillStyle = `rgba(0,0,0,${Math.max(0.12, fade)})`;
-      ctx.fillRect(0, 0, width, height);
-      ctx.globalCompositeOperation = "lighter";
-
-      // --- physics + draw -----------------------------------------------------
-      // No gravity, no falling back: rise, decelerate (drag), dissolve.
-      const glow = (s.glow / 100) * 9;
-      const tSec = now / 1000;
-      for (let i = particles.length - 1; i >= 0; i--) {
-        const p = particles[i];
-        p.vy *= Math.max(0, 1 - 2.0 * dt); // exponential slow-down while climbing
-        p.x += p.vx * dt;
-        p.y += p.vy * dt;
-        p.life -= p.decay * dt;
-        if (p.life <= 0 || p.y > height + 4) {
-          particles.splice(i, 1);
-          continue;
-        }
-        // twinkle: highs make everything shimmer harder (the sphere feel)
-        const tw =
-          0.55 +
-          0.45 *
-            Math.sin(p.phase + tSec * p.spin * (0.4 + (s.sparkle / 100) * 1.2));
-        // Dissolve: ease-out fade as life runs out.
-        const alpha = Math.pow(Math.max(0, p.life), 1.4) * (0.35 + tw * 0.65);
-        const px = p.x;
-        const py = height - 1 - Math.min(height - 2, p.y);
-        ctx.shadowBlur = glow;
-        if (p.gold) {
-          ctx.shadowColor = `rgba(${GOLD},0.9)`;
-          ctx.fillStyle = `rgba(${GOLD},${alpha.toFixed(3)})`;
-        } else {
-          ctx.shadowColor = "rgba(255,255,255,0.8)";
-          ctx.fillStyle = `rgba(255,255,255,${alpha.toFixed(3)})`;
-        }
-        ctx.beginPath();
-        ctx.arc(px, py, p.size * (0.75 + tw * 0.35), 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.shadowBlur = 0;
-      ctx.globalCompositeOperation = "source-over";
     };
 
     raf = requestAnimationFrame(loop);
@@ -214,7 +155,7 @@ const AudioVisualizer = () => {
     <canvas
       ref={canvasRef}
       aria-hidden
-      className="pointer-events-none absolute inset-x-0 bottom-full h-32 w-full"
+      className="pointer-events-none absolute inset-x-0 bottom-full h-24 w-full"
     />
   );
 };

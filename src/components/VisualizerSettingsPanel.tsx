@@ -12,22 +12,23 @@ import {
 // on the homepage above the footer, ADMIN ONLY. Remove once the owner has
 // dialed the numbers in (then hardcode them as DEFAULT_VISUALIZER).
 
+// Bar-equalizer semantics (v3): density = bar count, trail = how slowly bars
+// fall, sparkle = floating peak caps, fade = cap fall speed. Chaos/glow from
+// the particle era are unused (glow kept in storage for a possible comeback).
 const SLIDERS: Array<[keyof VisualizerSettings, string, number, number]> = [
-  ["density", "Density", 0, 100],
+  ["density", "Bars", 0, 100],
   ["reactivity", "Reactivity", 0, 100],
-  ["maxRise", "Max rise (px)", 20, 200],
-  ["size", "Size", 0, 100],
-  ["trail", "Trail", 0, 100],
-  ["glow", "Glow", 0, 100],
-  ["chaos", "Chaos", 0, 100],
-  ["sparkle", "Sparkle", 0, 100],
+  ["maxRise", "Max rise (px)", 20, 96],
+  ["size", "Bar width", 0, 100],
+  ["trail", "Fall smooth", 0, 100],
+  ["sparkle", "Peak caps", 0, 100],
+  ["fade", "Cap fall", 0, 100],
   ["gold", "Gold %", 0, 100],
   ["smoothing", "Smoothing", 0, 100],
+  ["threshold", "Sensitivity", 0, 100],
   ["bass", "Bass", 0, 100],
   ["mid", "Mid", 0, 100],
   ["high", "High", 0, 100],
-  ["threshold", "Sensitivity", 0, 100],
-  ["fade", "Fade speed", 0, 100],
 ];
 
 const VisualizerSettingsPanel = () => {

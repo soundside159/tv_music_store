@@ -1878,7 +1878,15 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   (spawn sensitivity gate — energy below it emits nothing; drive rescaled above the gate) and
   `fade` (dissolve speed), both on the panel. Owner's tuned values are now the DEFAULTS:
   density 29, reactivity 50, maxRise 55, size 22, trail 29, glow 45, chaos 22, sparkle 42,
-  gold 100, smoothing 31, bass 68, mid 62, high 48 (+ threshold 18, fade 55).] NEXT AI: when the
+  gold 100, smoothing 31, bass 68, mid 62, high 48 (+ threshold 18, fade 55).]
+  [V3 same day — particles LAGGED the site (shadowBlur × hundreds of arcs). AudioVisualizer
+  REWRITTEN as a classic BAR equalizer: 32–128 bars (density slider), log-spaced spectrum
+  (left lows → right highs), INSTANT attack + smooth release (trail = fall speed), floating
+  peak caps (sparkle = cap brightness/on, fade = cap fall), gold/white mix, sensitivity gate.
+  Perf: plain fillRect only — no shadows/trails/particles, dpr≤1.5, canvas h-24, skips
+  drawing when silent/hidden tab. No desync possible: the analyser sits in the same Web Audio
+  graph as the speakers. Panel labels updated (chaos/glow sliders removed from the panel;
+  fields remain in storage).] NEXT AI: when the
   owner settles on numbers, hardcode them into DEFAULT_VISUALIZER and DELETE the panel (and
   its Index.tsx mount); if he dislikes the whole thing, remove AudioVisualizer from
   PlayerProvider + the settings lib + panel (analyser can stay, it's harmless).
