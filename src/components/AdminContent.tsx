@@ -171,6 +171,51 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
   // failures don't stop the queue.
   const [aiBusy, setAiBusy] = useState(false);
   const [aiNote, setAiNote] = useState("");
+  // Track ids currently being generated — drives the sparkle animation on the
+  // row thumbnails and the description field in AdminTracksEdit.
+  const [aiTrackIds, setAiTrackIds] = useState<string[]>([]);
+  // Bumped after each finished track so the single-track fields panel re-reads
+  // the fresh description/cover without waiting for a reselect.
+  const [fieldsRefreshKey, setFieldsRefreshKey] = useState(0);
+  const aiStart = (id: string) => setAiTrackIds((ids) => (ids.includes(id) ? ids : [...ids, id]));
+  const aiStop = (id: string) => setAiTrackIds((ids) => ids.filter((x) => x !== id));
+
+  // Generate + brand + thumbnail for ONE track's cover (per-row hover button).
+  const generateCoverForTrack = async (trackId: string) => {
+    const t = mergedTracks.find((x) => x.id === trackId);
+    if (!t) return;
+    if (!(t.useCase.trim() && t.genre.trim() && t.mood.trim())) {
+      toast.error("Set at least one Usage, Genre and Mood on this track first.");
+      return;
+    }
+    aiStart(trackId);
+    try {
+      const coverPath = await generateCoverApi({ trackId });
+      const blob = await (await fetch(coverPath)).blob();
+      const original = new File([blob], "ai-cover.png", { type: blob.type || "image/png" });
+      let cover = coverPath;
+      try {
+        cover = await uploadCoverImage(await brandCover(original), "ai-cover-branded.jpg");
+      } catch {
+        // unbranded original stays
+      }
+      let coverThumb = "";
+      try {
+        coverThumb = await uploadCoverImage(await makeThumbnail(original), "ai-cover-thumb.jpg");
+      } catch {
+        // rows fall back to the full cover
+      }
+      await api({ action: "bulk_update_tracks", trackIds: [trackId], fields: { cover, coverThumb } });
+      setTrackOverrides((o) => ({ ...o, [trackId]: { ...o[trackId], cover, coverThumb } }));
+      setFieldsRefreshKey((k) => k + 1);
+      toast.success(`Cover generated — ${t.title}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Generation failed");
+    } finally {
+      aiStop(trackId);
+    }
+  };
+
   const aiFillSelectedTracks = async () => {
     const selected = selectedTrackIds
       .map((id) => mergedTracks.find((t) => t.id === id))
@@ -191,6 +236,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
     )
       return;
     setAiBusy(true);
+    setAiTrackIds(eligible.map((t) => t.id));
     let done = 0;
     let failed = 0;
     for (const t of eligible) {
@@ -223,14 +269,18 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
           ...o,
           [t.id]: { ...o[t.id], cover, coverThumb, description },
         }));
+        setFieldsRefreshKey((k) => k + 1);
         done += 1;
       } catch (e) {
         failed += 1;
         toast.error(`${t.title}: ${e instanceof Error ? e.message : "failed"}`);
+      } finally {
+        aiStop(t.id);
       }
     }
     setAiBusy(false);
     setAiNote("");
+    setAiTrackIds([]);
     if (done > 0) {
       toast.success(
         `AI art & text ready for ${done} track(s)` + (failed > 0 ? ` · ${failed} failed` : ""),
@@ -1050,6 +1100,9 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
           }
           onSelectionChange={setSelectedTrackIds}
           selectionResetKey={selResetKey}
+          aiTrackIds={aiTrackIds}
+          fieldsRefreshKey={fieldsRefreshKey}
+          onGenerateCover={(id) => void generateCoverForTrack(id)}
         />
       )}
 

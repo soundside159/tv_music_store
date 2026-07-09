@@ -123,6 +123,9 @@ const AdminTracksEdit = ({
   onApplyOverrides,
   onSelectionChange,
   selectionResetKey,
+  aiTrackIds = [],
+  fieldsRefreshKey,
+  onGenerateCover,
 }: {
   tracks: CatalogTrack[];
   vocabularies: Vocabularies;
@@ -142,6 +145,12 @@ const AdminTracksEdit = ({
   onApplyOverrides: (overrides: Record<string, Partial<CatalogTrack>>) => void;
   onSelectionChange?: (ids: string[]) => void;
   selectionResetKey?: number;
+  /** Track ids with AI generation in flight (sparkle animation on rows). */
+  aiTrackIds?: string[];
+  /** Bumped by the parent after AI writes a track — re-reads the fields panel. */
+  fieldsRefreshKey?: number;
+  /** Generate a cover for ONE track (hover button on the row thumbnail). */
+  onGenerateCover?: (trackId: string) => void;
 }) => {
   const player = usePlayer();
 
@@ -177,6 +186,20 @@ const AdminTracksEdit = ({
   const [trendingChange, setTrendingChange] = useState<"add" | "remove" | "none">("none");
   const [fields, setFields] = useState<SingleFields | null>(null);
   const [playlistSearch, setPlaylistSearch] = useState("");
+  const aiSet = useMemo(() => new Set(aiTrackIds), [aiTrackIds]);
+
+  // After AI writes cover/description into a track, re-read the fields panel
+  // so the fresh text shows up immediately (no reselect needed).
+  useEffect(() => {
+    if (fieldsRefreshKey === undefined) return;
+    setFields((prev) => {
+      if (!prev || selected.length !== 1) return prev;
+      const t = tracks.find((x) => x.id === selected[0]);
+      return t ? fieldsOf(t) : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fieldsRefreshKey]);
+
   // AI description for the single selected track (uses its SAVED facets).
   const [descBusy, setDescBusy] = useState(false);
   const generateDescription = async (trackId: string) => {
@@ -658,11 +681,29 @@ const AdminTracksEdit = ({
                   </button>
 
                   <div className="flex min-w-0 items-center gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/50 bg-secondary">
+                    <span className="group/aithumb relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/50 bg-secondary">
                       {t.cover ? (
                         <img src={t.cover} alt="" loading="lazy" className="h-full w-full object-cover" />
                       ) : (
                         <Music className="h-4 w-4 text-muted-foreground/70" />
+                      )}
+                      {aiSet.has(t.id) ? (
+                        /* AI in flight for this row — sparkle over the thumb. */
+                        <span className="absolute inset-0 flex items-center justify-center bg-background/70">
+                          <Sparkles className="h-4 w-4 animate-pulse text-[#F4C430]" />
+                        </span>
+                      ) : (
+                        onGenerateCover && (
+                          <button
+                            type="button"
+                            onClick={() => onGenerateCover(t.id)}
+                            title="Generate AI cover for this track (needs Usage, Genre & Mood)"
+                            aria-label={`Generate cover for ${t.title}`}
+                            className="absolute inset-0 flex items-center justify-center bg-background/70 opacity-0 transition-opacity hover:opacity-100 group-hover/aithumb:opacity-100"
+                          >
+                            <Sparkles className="h-4 w-4 text-[#F4C430]" />
+                          </button>
+                        )
                       )}
                     </span>
                     <div className="min-w-0 flex-1">
@@ -956,26 +997,36 @@ const AdminTracksEdit = ({
                       className={`${inputCls} w-24`}
                     />
                   </label>
-                  <div className="relative">
-                    <textarea
-                      placeholder="Description"
-                      rows={5}
-                      value={fields.description}
-                      onChange={(e) => setFields({ ...fields, description: e.target.value })}
-                      className={`${inputCls} w-full`}
-                    />
-                    {/* AI description from the track's SAVED facets (owner's SEO prompt). */}
-                    <button
-                      type="button"
-                      disabled={descBusy || busy}
-                      onClick={() => void generateDescription(selTracks[0].id)}
-                      title="Generate an SEO description from this track's saved Use Case / Genre / Mood"
-                      className="absolute bottom-2.5 right-2 inline-flex items-center gap-1 rounded-md border border-[#F4C430]/50 bg-card px-2 py-1 font-body text-[11px] font-semibold text-[#F4C430] transition-colors hover:bg-[#F4C430] hover:text-background disabled:opacity-40"
-                    >
-                      <Sparkles className={`h-3 w-3 ${descBusy ? "animate-pulse" : ""}`} />
-                      {descBusy ? "Writing…" : "Generate"}
-                    </button>
-                  </div>
+                  {(() => {
+                    const aiWriting = aiSet.has(selTracks[0].id);
+                    return (
+                      <div className="relative">
+                        <textarea
+                          placeholder="Description"
+                          rows={5}
+                          value={fields.description}
+                          disabled={aiWriting}
+                          onChange={(e) => setFields({ ...fields, description: e.target.value })}
+                          className={`${inputCls} w-full ${
+                            aiWriting ? "animate-pulse border-[#F4C430]/60" : ""
+                          }`}
+                        />
+                        {/* AI description from the track's SAVED facets (owner's SEO prompt). */}
+                        <button
+                          type="button"
+                          disabled={descBusy || busy || aiWriting}
+                          onClick={() => void generateDescription(selTracks[0].id)}
+                          title="Generate an SEO description from this track's saved Use Case / Genre / Mood"
+                          className="absolute bottom-2.5 right-2 inline-flex items-center gap-1 rounded-md border border-[#F4C430]/50 bg-card px-2 py-1 font-body text-[11px] font-semibold text-[#F4C430] transition-colors hover:bg-[#F4C430] hover:text-background disabled:opacity-40"
+                        >
+                          <Sparkles
+                            className={`h-3 w-3 ${descBusy || aiWriting ? "animate-pulse" : ""}`}
+                          />
+                          {descBusy || aiWriting ? "Writing…" : "Generate"}
+                        </button>
+                      </div>
+                    );
+                  })()}
                   <textarea
                     placeholder="Extra tags, comma separated (epic, hybrid, rise…)"
                     rows={4}

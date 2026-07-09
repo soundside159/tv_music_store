@@ -23,6 +23,8 @@ The image must tell a completely new visual story every time. Never repeat previ
 
 Choose the most compelling subject based on the provided Use Case and Mood. The subject can be a person, creature, vehicle, architecture, environment, technology, abstract phenomenon, or dramatic event—whatever best represents the emotion of the music.
 
+IMPORTANT: do NOT default to a human figure as the focal subject. Deliberately vary the dominant subject between generations. Non-human focal subjects are strongly encouraged whenever they fit the tags — for example: a speeding ambulance or an interrogation room for suspense, an ancient glowing tree or a floating castle for fantasy, a weathered suitcase on a station platform for travel, a lone race car for sports, a satellite or server hall for technology, a storm front, a lighthouse, a chess piece, an animal, a machine. A human silhouette is allowed only when it clearly tells the story better than any object or environment could.
+
 The scene should feel like a single unforgettable frame captured from a $200 million Hollywood film.
 
 Ultra cinematic. AAA blockbuster concept art. Premium production quality. Strong visual storytelling. One dominant focal subject. Powerful silhouette. Dynamic composition. Dramatic perspective. Low-angle or immersive camera whenever appropriate. Rich foreground, midground and background layers. Atmospheric perspective. Volumetric lighting. Dense cinematic atmosphere. Smoke, dust, rain, snow, fog, sparks, embers, debris or particles whenever appropriate. Subtle motion blur. Deep sense of scale. Realistic materials. Beautiful textures. Extremely high detail. Perfect visual hierarchy.

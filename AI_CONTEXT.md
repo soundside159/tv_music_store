@@ -1797,3 +1797,17 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   tracks are skipped (count shown in the confirm), per-track failures toast and don't stop
   the queue, button shows "AI k/n…" progress. NOTE: each track = 1 image + 1 text call —
   mind OpenAI credits on big selections.
+- **2026-07-09 (AI round 3 — 360-char cap, row animations, per-row cover button, prompt
+  diversity):** (1) DESCRIPTIONS: prompt now demands ≤360 characters (~45-55 words) and the
+  server hard-caps at 360 (trims to the last full sentence). (2) IMAGE PROMPT: added an
+  anti-human-bias paragraph — the focal subject must VARY (ambulance for suspense, glowing
+  tree for fantasy, suitcase for travel, race car, satellite, lighthouse, animal…); a human
+  silhouette only when it truly fits best. Model STAYS gpt-image-1 for now (owner testing).
+  (3) TRACKS EDIT feedback: AdminContent keeps `aiTrackIds` (in-flight ids) + bumps
+  `fieldsRefreshKey` after each finished track; AdminTracksEdit shows a pulsing sparkle over
+  the row THUMBNAIL of any in-flight track, the single-panel Description textarea pulses gold
+  + disables while its track is being written, and the fields panel RE-READS the fresh
+  description/cover the moment a track finishes (no reselect). (4) PER-ROW cover generation:
+  hovering a row thumbnail shows a sparkle button → `generateCoverForTrack` in AdminContent
+  (cover+brand+thumb only, no text; guards on missing facets) — so cover and text can be
+  generated separately (panel Generate = text only) or together (bulk AI Art & Text).

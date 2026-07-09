@@ -10,7 +10,7 @@ import { getSessionUser, json, OWNER_EMAIL, readJson, type Ctx } from "../_utils
 // Bump here if OpenAI retires the model (the error toast will say so).
 const MODEL = "gpt-4o-mini";
 
-const PROMPT_TEMPLATE = `You are writing SEO-friendly music descriptions for a premium music library. Generate ONE short, natural English paragraph (60–90 words). Base the description ONLY on the provided Genre, Mood and Use Case. The description should: • immediately describe the feeling and atmosphere of the music • naturally mention suitable projects and use cases • sound like it was written by a professional music publisher • use clear, modern English • avoid exaggerated marketing language • avoid repeating the same adjective twice • never mention instruments unless they are strongly implied by the Genre • never invent a story or scene that contradicts the tags • never mention track names • never mention BPM, key or technical details • never use bullet points • never use quotation marks • never mention licensing terms such as "royalty-free", "license" or "copyright" Include 3–6 natural use examples whenever appropriate, such as: film trailers movies TV documentaries commercials advertising sports technology video games cinematic intros YouTube podcasts presentations background music social media corporate videos The result should sound similar to premium music libraries such as Artlist, PremiumBeat or Musicbed. Genre: <GENRE> Mood: <MOOD> Use Case: <USE_CASE>`;
+const PROMPT_TEMPLATE = `You are writing SEO-friendly music descriptions for a premium music library. Generate ONE short, natural English paragraph of AT MOST 360 characters (roughly 45–55 words) — never exceed 360 characters. Base the description ONLY on the provided Genre, Mood and Use Case. The description should: • immediately describe the feeling and atmosphere of the music • naturally mention suitable projects and use cases • sound like it was written by a professional music publisher • use clear, modern English • avoid exaggerated marketing language • avoid repeating the same adjective twice • never mention instruments unless they are strongly implied by the Genre • never invent a story or scene that contradicts the tags • never mention track names • never mention BPM, key or technical details • never use bullet points • never use quotation marks • never mention licensing terms such as "royalty-free", "license" or "copyright" Include 3–6 natural use examples whenever appropriate, such as: film trailers movies TV documentaries commercials advertising sports technology video games cinematic intros YouTube podcasts presentations background music social media corporate videos The result should sound similar to premium music libraries such as Artlist, PremiumBeat or Musicbed. Genre: <GENRE> Mood: <MOOD> Use Case: <USE_CASE>`;
 
 export const onRequestPost = async (ctx: Ctx) => {
   if (!ctx.env.DB) return json({ error: "DB not bound" }, 503);
@@ -86,8 +86,14 @@ export const onRequestPost = async (ctx: Ctx) => {
   if (!res.ok) {
     return json({ error: data.error?.message ?? `Text generation failed (${res.status})` }, 502);
   }
-  const description = data.choices?.[0]?.message?.content?.trim().replace(/^"|"$/g, "");
+  let description = data.choices?.[0]?.message?.content?.trim().replace(/^"|"$/g, "");
   if (!description) return json({ error: "The text API returned nothing" }, 502);
+  // Hard cap at 360 chars (owner rule) — trim to the last full sentence if needed.
+  if (description.length > 360) {
+    const cut = description.slice(0, 360);
+    const lastStop = Math.max(cut.lastIndexOf("."), cut.lastIndexOf("!"), cut.lastIndexOf("?"));
+    description = lastStop > 120 ? cut.slice(0, lastStop + 1) : cut.trimEnd();
+  }
 
   return json({ ok: true, description });
 };
