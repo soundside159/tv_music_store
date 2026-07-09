@@ -1902,7 +1902,13 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   (3) Fall smooth got much more headroom (release 0.35–8.1/s — at 100 a full bar sinks ~3 s);
   (4) pause/stop die-off: bar heights are snapshotted, HELD briefly, then plunge via
   1-easeInExpo over 1.5 s (the normal update loop is skipped while bins===0 so it can't
-  fight the animation); peak caps keep falling at their own Cap fall rate.] NEXT AI: when the
+  fight the animation); peak caps keep falling at their own Cap fall rate.]
+  [V6 same day — (1) frequency range is now explicit 50 Hz (left) → 17 kHz (right) computed
+  from the analyser's real sampleRate (below 50 Hz tracks carry ~nothing, the left edge sat
+  dead); (2) stop die-off REDONE per owner: the MAIN bars fade fast+smooth (exponential,
+  ~0.3 s), while the PEAK caps are snapshotted, lie still ~450 ms, then plunge down over
+  ~1 s via 1-easeInExpo — the previous version froze the bars then dropped everything in one
+  frame. energyLeft now tracks caps too so the canvas isn't cleared mid-animation.] NEXT AI: when the
   owner settles on numbers, hardcode them into DEFAULT_VISUALIZER and DELETE the panel (and
   its Index.tsx mount); if he dislikes the whole thing, remove AudioVisualizer from
   PlayerProvider + the settings lib + panel (analyser can stay, it's harmless).

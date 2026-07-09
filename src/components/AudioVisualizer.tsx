@@ -82,20 +82,30 @@ const AudioVisualizer = () => {
       const release = 0.35 + (1 - s.trail / 100) * 7.75;
       const capFall = 0.25 + (s.fade / 100) * 1.6; // fade↑ = caps drop faster
       let energyLeft = 0;
-      const usable = bins > 0 ? Math.floor(bins * 0.62) : 0;
+      // Visible range 50 Hz (left) … 17 kHz (right) — below 50 Hz almost no
+      // track carries energy, so the left edge would just sit dead.
+      const sampleRate = analyser?.context?.sampleRate ?? 44100;
+      const binHz = sampleRate / 2 / Math.max(1, bins || 2048);
+      const binLow = Math.max(1, 50 / binHz);
+      const binHigh = Math.min(bins > 0 ? bins - 1 : 2047, 17000 / binHz);
+      const binRatio = binHigh / binLow;
 
       if (bins === 0) {
-        // Track paused/stopped: hold for a beat, then plunge — easeInExpo.
+        // Track paused/stopped — the proper die-off: the MAIN bars sink fast
+        // and smooth; the PEAK caps rest on top, wait a beat, then plunge
+        // after them (easeInExpo: linger → accelerate down).
         if (!stopSnap) {
-          stopSnap = values.slice(0, MAX_BARS);
+          stopSnap = peaks.slice(0, MAX_BARS);
           stopStart = now;
         }
-        const tt = Math.min(1, (now - stopStart) / 1500);
+        const HOLD = 450; // ms the caps lie still while the bars sink
+        const DUR = 1050; // ms of the easeInExpo plunge afterwards
+        const tt = Math.min(1, Math.max(0, (now - stopStart - HOLD) / DUR));
         const k = 1 - (tt <= 0 ? 0 : Math.pow(2, 10 * (tt - 1))); // 1 - easeInExpo
         for (let i = 0; i < barCount; i++) {
-          values[i] = stopSnap[i] * Math.max(0, k);
-          peaks[i] = Math.max(values[i], peaks[i] - capFall * dt);
-          energyLeft = Math.max(energyLeft, values[i], peaks[i] * 0.5);
+          values[i] = Math.max(0, values[i] * (1 - 3.2 * dt)); // fast smooth fade
+          peaks[i] = Math.max(values[i], stopSnap[i] * Math.max(0, k));
+          energyLeft = Math.max(energyLeft, values[i], peaks[i]);
         }
       } else {
         stopSnap = null;
@@ -104,24 +114,24 @@ const AudioVisualizer = () => {
       if (bins > 0)
       for (let i = 0; i < barCount; i++) {
         let target = 0;
-        if (usable > 0) {
-          // Fractional log-spaced bin range per bar. Narrow ranges (low end)
-          // INTERPOLATE between neighbouring bins so every bar tracks its own
-          // frequency — no more groups of identical bars.
-          const f0 = Math.pow(usable, i / barCount);
-          const f1 = Math.pow(usable, (i + 1) / barCount);
+        {
+          // Fractional log-spaced bin range per bar (50 Hz → 17 kHz). Narrow
+          // ranges (low end) INTERPOLATE between neighbouring bins so every
+          // bar tracks its own frequency — no groups of identical bars.
+          const f0 = binLow * Math.pow(binRatio, i / barCount);
+          const f1 = binLow * Math.pow(binRatio, (i + 1) / barCount);
           let e: number;
           if (f1 - f0 >= 1.5) {
             const b0 = Math.floor(f0);
-            const b1 = Math.min(usable, Math.max(b0 + 1, Math.floor(f1)));
+            const b1 = Math.min(Math.ceil(binHigh), Math.max(b0 + 1, Math.floor(f1)));
             let sum = 0;
             for (let b = b0; b < b1; b++) sum += freq[b];
             e = sum / ((b1 - b0) * 255);
           } else {
-            const c = Math.min(usable - 1.001, (f0 + f1) / 2);
+            const c = Math.min(binHigh - 1.001, (f0 + f1) / 2);
             const b = Math.floor(c);
             const frac = c - b;
-            e = (freq[b] + (freq[Math.min(b + 1, usable - 1)] - freq[b]) * frac) / 255;
+            e = (freq[b] + (freq[b + 1] - freq[b]) * frac) / 255;
           }
           const pos = i / (barCount - 1);
           const bassW = Math.max(0, 1 - pos * 2.2);
