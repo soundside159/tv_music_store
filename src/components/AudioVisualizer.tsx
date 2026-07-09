@@ -51,9 +51,9 @@ const AudioVisualizer = () => {
     const MAX_BARS = 256;
     const values = new Float32Array(MAX_BARS); // current bar heights (0..1)
     const peaks = new Float32Array(MAX_BARS); // floating peak caps (0..1)
-    // Pause/stop: bars hold for a beat, then plunge (easeInExpo) — natural die-off.
-    let stopSnap: Float32Array | null = null;
-    let stopStart = 0;
+    const peakVel = new Float32Array(MAX_BARS); // cap fall velocity (units/s)
+    const peakRest = new Float32Array(MAX_BARS); // seconds resting on the border
+    const FLOOR = 0.012; // cap height when it lies on the border line
     let cleared = true;
     let last = performance.now();
 
@@ -76,11 +76,15 @@ const AudioVisualizer = () => {
         analyser.getByteFrequencyData(freq);
       }
 
-      // --- update bars: instant attack, smooth release ------------------------
+      // --- update: ONE physics for everything -------------------------------
+      // Play, in-track silence, pause, stop — the bars don't care: targets go
+      // to 0 and everything simply falls by its own rules.
       const gate = (s.threshold / 100) * 0.35;
       // trail↑ = slower fall; at 100 a full bar takes ~3 s to sink.
       const release = 0.35 + (1 - s.trail / 100) * 7.75;
-      const capFall = 0.25 + (s.fade / 100) * 1.6; // fade↑ = caps drop faster
+      // Caps FREE-FALL with gravity (natural linger → accelerate): fade↑ = heavier.
+      const gravity = 0.5 + (s.fade / 100) * 4.5; // units/s²
+      const REST_FADE = 0.5; // s of gentle fade once a cap lands on the border
       let energyLeft = 0;
       // Visible range 50 Hz (left) … 17 kHz (right) — below 50 Hz almost no
       // track carries energy, so the left edge would just sit dead.
@@ -90,31 +94,9 @@ const AudioVisualizer = () => {
       const binHigh = Math.min(bins > 0 ? bins - 1 : 2047, 17000 / binHz);
       const binRatio = binHigh / binLow;
 
-      if (bins === 0) {
-        // Track paused/stopped — the proper die-off: the MAIN bars sink fast
-        // and smooth; the PEAK caps rest on top, wait a beat, then plunge
-        // after them (easeInExpo: linger → accelerate down).
-        if (!stopSnap) {
-          stopSnap = peaks.slice(0, MAX_BARS);
-          stopStart = now;
-        }
-        const HOLD = 450; // ms the caps lie still while the bars sink
-        const DUR = 1050; // ms of the easeInExpo plunge afterwards
-        const tt = Math.min(1, Math.max(0, (now - stopStart - HOLD) / DUR));
-        const k = 1 - (tt <= 0 ? 0 : Math.pow(2, 10 * (tt - 1))); // 1 - easeInExpo
-        for (let i = 0; i < barCount; i++) {
-          values[i] = Math.max(0, values[i] * (1 - 3.2 * dt)); // fast smooth fade
-          peaks[i] = Math.max(values[i], stopSnap[i] * Math.max(0, k));
-          energyLeft = Math.max(energyLeft, values[i], peaks[i]);
-        }
-      } else {
-        stopSnap = null;
-      }
-
-      if (bins > 0)
       for (let i = 0; i < barCount; i++) {
         let target = 0;
-        {
+        if (bins > 0) {
           // Fractional log-spaced bin range per bar (50 Hz → 17 kHz). Narrow
           // ranges (low end) INTERPOLATE between neighbouring bins so every
           // bar tracks its own frequency — no groups of identical bars.
@@ -141,10 +123,35 @@ const AudioVisualizer = () => {
           e = Math.max(0, e - gate) / Math.max(0.15, 1 - gate);
           target = Math.min(1, e * (0.5 + (s.reactivity / 100) * 1.5));
         }
+
         // Bars jump straight to the beat, then glide down.
         values[i] = target >= values[i] ? target : Math.max(target, values[i] - release * dt);
-        peaks[i] = Math.max(values[i], peaks[i] - capFall * dt);
-        energyLeft = Math.max(energyLeft, values[i]);
+
+        // Cap physics: sits on its bar while supported; once the bar drops
+        // away it free-falls (accelerating), LANDS on the border and fades out.
+        if (values[i] >= peaks[i] - 0.002) {
+          peaks[i] = Math.max(values[i], peaks[i]);
+          peakVel[i] = 0;
+          peakRest[i] = 0;
+        } else if (peaks[i] > 0) {
+          peakVel[i] += gravity * dt;
+          peaks[i] -= peakVel[i] * dt;
+          if (peaks[i] <= values[i]) {
+            peaks[i] = values[i];
+            peakVel[i] = 0;
+          }
+          if (peaks[i] <= FLOOR) {
+            // Landed on the border: rest there and fade out gently.
+            peaks[i] = FLOOR;
+            peakVel[i] = 0;
+            peakRest[i] += dt;
+            if (peakRest[i] >= REST_FADE) {
+              peaks[i] = 0;
+              peakRest[i] = 0;
+            }
+          }
+        }
+        energyLeft = Math.max(energyLeft, values[i], peaks[i]);
       }
 
       // --- draw ----------------------------------------------------------------
@@ -168,29 +175,35 @@ const AudioVisualizer = () => {
 
       for (let i = 0; i < barCount; i++) {
         const v = values[i];
-        if (v <= 0.008) continue;
-        const h = Math.max(1, v * rise);
         const x = i * slot + inset;
-        // Border glow: the player's top edge lights up right where the bars
-        // are jumping (full slot width so segments merge into a glowing line).
-        if (borderLight > 0.02) {
-          ctx.fillStyle = `rgba(${GOLD},${(borderLight * (0.25 + v * 0.75)).toFixed(3)})`;
-          ctx.fillRect(i * slot, height - 2, slot, 2);
+        if (v > 0.008) {
+          const h = Math.max(1, v * rise);
+          // Border glow: the player's top edge lights up right where the bars
+          // are jumping (full slot width so segments merge into a glowing line).
+          if (borderLight > 0.02) {
+            ctx.fillStyle = `rgba(${GOLD},${(borderLight * (0.25 + v * 0.75)).toFixed(3)})`;
+            ctx.fillRect(i * slot, height - 2, slot, 2);
+          }
+          // color: gold↔white mix, brighter when taller
+          const a = 0.28 + v * 0.6;
+          ctx.fillStyle =
+            goldShare >= 0.999
+              ? `rgba(${GOLD},${a.toFixed(3)})`
+              : `rgba(${Math.round(244 + (255 - 244) * (1 - goldShare))},${Math.round(
+                  196 + (255 - 196) * (1 - goldShare),
+                )},${Math.round(48 + (255 - 48) * (1 - goldShare))},${a.toFixed(3)})`;
+          ctx.fillRect(x, height - 2 - h, barW, h);
         }
-        // color: gold↔white mix, brighter when taller
-        const a = 0.28 + v * 0.6;
-        ctx.fillStyle =
-          goldShare >= 0.999
-            ? `rgba(${GOLD},${a.toFixed(3)})`
-            : `rgba(${Math.round(244 + (255 - 244) * (1 - goldShare))},${Math.round(
-                196 + (255 - 196) * (1 - goldShare),
-              )},${Math.round(48 + (255 - 48) * (1 - goldShare))},${a.toFixed(3)})`;
-        ctx.fillRect(x, height - 2 - h, barW, h);
-        // floating peak cap (classic EQ), brightness via Sparkle
-        if (capOn && peaks[i] > v + 0.015) {
-          const py = height - 2 - Math.max(2, peaks[i] * rise);
-          ctx.fillStyle = `rgba(${GOLD},${(0.35 + (s.sparkle / 100) * 0.55).toFixed(3)})`;
-          ctx.fillRect(x, py, barW, 1.5);
+        // Floating peak cap — drawn independently of the bar so it keeps
+        // falling (and fading on the border) after the bar is long gone.
+        const pk = peaks[i];
+        if (capOn && pk > 0.006 && pk > v + 0.01) {
+          const restFade = peakRest[i] > 0 ? Math.max(0, 1 - peakRest[i] / REST_FADE) : 1;
+          if (restFade > 0.01) {
+            const py = height - 2 - Math.max(1.5, pk * rise);
+            ctx.fillStyle = `rgba(${GOLD},${((0.35 + (s.sparkle / 100) * 0.55) * restFade).toFixed(3)})`;
+            ctx.fillRect(x, py, barW, 1.5);
+          }
         }
       }
     };

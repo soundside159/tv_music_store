@@ -1908,7 +1908,15 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   dead); (2) stop die-off REDONE per owner: the MAIN bars fade fast+smooth (exponential,
   ~0.3 s), while the PEAK caps are snapshotted, lie still ~450 ms, then plunge down over
   ~1 s via 1-easeInExpo — the previous version froze the bars then dropped everything in one
-  frame. energyLeft now tracks caps too so the canvas isn't cleared mid-animation.] NEXT AI: when the
+  frame. energyLeft now tracks caps too so the canvas isn't cleared mid-animation.]
+  [V7 same day — UNIFIED PHYSICS (owner: bars shouldn't care WHY it went quiet). The special
+  stop branch is gone; play / in-track silence / pause / stop all behave identically: targets
+  drop to 0 and everything falls by its own rules. Caps got REAL physics: peakVel/peakRest
+  arrays — a cap sits on its bar while supported, free-falls with GRAVITY once the bar drops
+  away (Cap fall slider = gravity, 0 = light float), LANDS on the border line (FLOOR 0.012)
+  and fades out there over 0.5 s. Caps draw independently of bars (previously the draw loop
+  `continue`d on empty bars, which is why caps vanished mid-air during quiet passages).
+  Bars keep the release glide from the trail slider in every state.] NEXT AI: when the
   owner settles on numbers, hardcode them into DEFAULT_VISUALIZER and DELETE the panel (and
   its Index.tsx mount); if he dislikes the whole thing, remove AudioVisualizer from
   PlayerProvider + the settings lib + panel (analyser can stay, it's harmless).
