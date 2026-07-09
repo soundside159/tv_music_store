@@ -24,6 +24,7 @@ import WaveformPreview from "@/components/WaveformPreview";
 import { usePlayer } from "@/components/playerContext";
 import { refreshContent } from "@/hooks/useContent";
 import { formatDuration, makeThumbnail, unzipBlob, wavToMp3Pair, zipEntries } from "@/lib/audioEncoding";
+import { brandCover } from "@/lib/coverArt";
 import { cleanVersionLabel } from "@/lib/downloadTrack";
 import type { Vocabularies } from "@/lib/tagOptions";
 
@@ -218,65 +219,6 @@ export const AdminTrackTopBar = ({
 // COVER OVERLAY: hover the track cover → upload a new one (with an auto thumb
 // for the row lists) or remove it. Render inside a `group/cover` container.
 // ---------------------------------------------------------------------------
-
-/**
- * Stamps the brand into the bottom-left corner of a generated cover — the
- * header logo + "TV MUSIC STORE" in the header's style (Inter semibold,
- * wide tracking). Only the FULL cover gets the stamp; the row thumbnail is
- * made from the unbranded original (too small to read anyway).
- */
-const brandCover = async (source: Blob): Promise<Blob> => {
-  const img = await createImageBitmap(source);
-  const canvas = document.createElement("canvas");
-  canvas.width = img.width;
-  canvas.height = img.height;
-  const c = canvas.getContext("2d");
-  if (!c) throw new Error("Canvas unavailable");
-  c.drawImage(img, 0, 0);
-
-  const s = img.width / 1024; // scale everything relative to a 1024px cover
-  const pad = 34 * s;
-
-  // Soft dark gradient along the bottom so the mark reads on bright art.
-  const gradH = 190 * s;
-  const grad = c.createLinearGradient(0, img.height - gradH, 0, img.height);
-  grad.addColorStop(0, "rgba(0,0,0,0)");
-  grad.addColorStop(1, "rgba(0,0,0,0.55)");
-  c.fillStyle = grad;
-  c.fillRect(0, img.height - gradH, img.width, gradH);
-
-  const logo = new Image();
-  logo.src = "/images/icons/logo-header.png";
-  await logo.decode();
-  const logoH = 44 * s;
-  const logoW = logo.width * (logoH / logo.height);
-  const y = img.height - pad - logoH;
-
-  c.save();
-  c.shadowColor = "rgba(0,0,0,0.6)";
-  c.shadowBlur = 10 * s;
-  c.shadowOffsetY = 2 * s;
-  c.drawImage(logo, pad, y, logoW, logoH);
-  c.font = `600 ${Math.round(24 * s)}px Inter, sans-serif`;
-  try {
-    // Match the header's tracking where supported (Chromium).
-    (c as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing = `${Math.round(5 * s)}px`;
-  } catch {
-    // older browsers just render without the tracking
-  }
-  c.fillStyle = "#ffffff";
-  c.textBaseline = "middle";
-  c.fillText("TV MUSIC STORE", pad + logoW + 16 * s, y + logoH / 2 + 1 * s);
-  c.restore();
-
-  return new Promise((resolve, reject) =>
-    canvas.toBlob(
-      (b) => (b ? resolve(b) : reject(new Error("Branding failed"))),
-      "image/jpeg",
-      0.92,
-    ),
-  );
-};
 
 const uploadImageApi = async (file: Blob, filename: string): Promise<string> => {
   const base = filename.replace(/\.[^.]+$/, "");

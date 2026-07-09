@@ -1750,3 +1750,25 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   the wait is event-driven, art appears the moment OpenAI responds. FYI recorded for the owner:
   MP3 320/128 previews are encoded from EVERY WAV version separately; the Main star only decides
   which version fronts the track (catalog playback + shown duration).
+- **2026-07-09 (AI covers v3: bigger brand, auto-BPM, composer-upload tags + generation):**
+  (1) BRAND STAMP moved to shared `src/lib/coverArt.ts` (brandCover + generateCoverApi +
+  uploadCoverImage) and enlarged per owner: logo 44→62px, wordmark 24→33px, tracking 5→7px,
+  bottom gradient 190→230px (all ×cover-scale); AdminTrackPanel now imports it.
+  (2) AUTO-BPM: new `detectBpm(AudioBuffer)` in audioEncoding.ts (lowpass 150 Hz on the first
+  60 s via OfflineAudioContext → threshold-sweep peak picking → interval histogram folded into
+  70–180 BPM; null for beatless material). Wired: ComposerUpload + AddTrackModal prefill the
+  BPM field from the MAIN file (only while the field is empty — typing wins; one decode per
+  main, tracked by ref); AdminBulkUpload detects per group ("Detecting BPM…" status) and sends
+  bpm into create_track so drafts arrive with tempo filled.
+  (3) COMPOSER UPLOAD v2: after files are added the form becomes 2 columns — right panel =
+  Use Case / Genre / Mood chip pickers (options come from /api/composer/tracks GET, which now
+  returns `vocabularies`) + a Cover block: 80px preview square, optional one-word input and a
+  gold "Generate cover" button that UNLOCKS only when at least one value is picked in EACH of
+  the three groups. Generation reuses the same pipeline (generate → brandCover → clean thumb);
+  POST /api/composer/tracks now accepts useCase/genre/mood (joined " / ") + cover/coverThumb
+  (only /api/file/covers/ or /images/ paths accepted). `/api/admin/generate-cover` now allows
+  COMPOSERS (profile check) and accepts {useCase[], mood[]} INSTEAD of trackId (upload flow);
+  `/api/admin/upload` (images) also opened to composers — their thumbs/branded covers go
+  through it. NEXT (owner asked): AI description generation — same OPENAI_API_KEY, just a text
+  endpoint (e.g. /v1/responses or chat.completions with a small model) + a button next to the
+  Description fields; no new accounts/keys needed.

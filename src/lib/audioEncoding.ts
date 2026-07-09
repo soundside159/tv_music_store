@@ -65,6 +65,76 @@ export const wavToMp3Pair = async (
   return { mp3_320, mp3_128, duration: buffer.duration };
 };
 
+/**
+ * Rough tempo detection (the classic lowpass + peak-interval histogram):
+ * lowpass the first ~60s at 150 Hz, find strong beats, count the intervals
+ * between them and pick the most common tempo, folded into 70–180 BPM.
+ * Returns null when the signal has no usable beat (ambient pads etc.).
+ */
+export const detectBpm = async (buffer: AudioBuffer): Promise<number | null> => {
+  try {
+    const sr = buffer.sampleRate;
+    const length = Math.min(buffer.length, sr * 60);
+    const offline = new OfflineAudioContext(1, length, sr);
+    const src = offline.createBufferSource();
+    src.buffer = buffer;
+    const filter = offline.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = 150;
+    src.connect(filter);
+    filter.connect(offline.destination);
+    src.start(0);
+    const rendered = await offline.startRendering();
+    const data = rendered.getChannelData(0);
+
+    // Global peak for the threshold sweep.
+    let max = 0;
+    for (let i = 0; i < data.length; i += 32) {
+      const v = Math.abs(data[i]);
+      if (v > max) max = v;
+    }
+    if (max < 0.01) return null;
+
+    // Lower the threshold until we collect enough beats.
+    const minGap = Math.round(sr * 0.25); // >= 240 BPM apart
+    let peaks: number[] = [];
+    for (let thr = 0.9; thr >= 0.3 && peaks.length < 24; thr -= 0.1) {
+      peaks = [];
+      const level = max * thr;
+      for (let i = 0; i < data.length; i++) {
+        if (Math.abs(data[i]) > level) {
+          peaks.push(i);
+          i += minGap;
+        }
+      }
+    }
+    if (peaks.length < 8) return null;
+
+    // Histogram of tempos implied by the gaps between nearby beats.
+    const counts = new Map<number, number>();
+    for (let i = 0; i < peaks.length - 1; i++) {
+      for (let j = i + 1; j < Math.min(peaks.length, i + 10); j++) {
+        let tempo = (60 * sr) / (peaks[j] - peaks[i]);
+        while (tempo < 70) tempo *= 2;
+        while (tempo > 180) tempo /= 2;
+        const rounded = Math.round(tempo);
+        counts.set(rounded, (counts.get(rounded) ?? 0) + 1);
+      }
+    }
+    let best = 0;
+    let bestCount = 0;
+    for (const [tempo, n] of counts) {
+      if (n > bestCount) {
+        best = tempo;
+        bestCount = n;
+      }
+    }
+    return best >= 40 && best <= 220 ? best : null;
+  } catch {
+    return null;
+  }
+};
+
 /** Pack the original WAV files (stored, uncompressed) into one .zip Blob. */
 export const zipWavs = (files: { name: string; file: File }[]): Promise<Blob> =>
   new Promise((resolve, reject) => {

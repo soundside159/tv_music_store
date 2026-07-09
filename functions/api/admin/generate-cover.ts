@@ -1,13 +1,14 @@
 import { getSessionUser, json, OWNER_EMAIL, readJson, type Ctx } from "../_utils";
 
-// POST /api/admin/generate-cover { trackId, hint? } — admin only.
-// Generates cinematic key-art for a track via the OpenAI Images API
-// (model gpt-image-1.5, quality medium, 1024x1024). The track's SAVED
-// Use Case / Mood checkboxes are substituted into the fixed prompt below;
-// `hint` is the optional one-word featured element the owner can type
-// (e.g. "violin"). The PNG is stored in R2 under covers/ and the public
-// /api/file path is returned — the client then makes the row thumbnail
-// and saves both via bulk_update_tracks (same flow as a manual upload).
+// POST /api/admin/generate-cover — admins AND composers.
+//   { trackId, hint? }                — track page: the track's SAVED Use
+//                                       Case / Mood checkboxes drive the prompt
+//   { useCase: [], mood: [], hint? }  — composer upload: facets are picked in
+//                                       the form before the track exists
+// Generates cinematic key-art via the OpenAI Images API (model gpt-image-1.5,
+// quality medium, 1024x1024). The PNG is stored in R2 under covers/ and the
+// public /api/file path is returned — the client then brands it, makes the
+// row thumbnail and saves everything (same tail as a manual upload).
 //
 // OWNER SETUP: add the OPENAI_API_KEY secret in Cloudflare Pages
 // (Settings → Variables and Secrets). NEVER commit the key.
@@ -45,9 +46,14 @@ export const onRequestPost = async (ctx: Ctx) => {
   if (!ctx.env.DB) return json({ error: "DB not bound" }, 503);
   const user = await getSessionUser(ctx);
   if (!user) return json({ error: "Not signed in" }, 401);
-  if (user.role !== "admin" && user.email !== OWNER_EMAIL) {
-    return json({ error: "Admin only" }, 403);
+  let allowed = user.role === "admin" || user.email === OWNER_EMAIL || user.role === "composer";
+  if (!allowed) {
+    const cmp = await ctx.env.DB.prepare(`SELECT id FROM composers WHERE user_id = ?1 LIMIT 1`)
+      .bind(user.id)
+      .first();
+    allowed = !!cmp;
   }
+  if (!allowed) return json({ error: "Composer or admin account required" }, 403);
   if (!ctx.env.OPENAI_API_KEY) {
     return json(
       { error: "OPENAI_API_KEY is not set — add it in Pages → Settings → Variables and Secrets" },
@@ -58,22 +64,36 @@ export const onRequestPost = async (ctx: Ctx) => {
     return json({ error: "R2 bucket is not bound" }, 503);
   }
 
-  const body = await readJson<{ trackId?: string; hint?: string }>(ctx.request);
-  const trackId = body?.trackId;
-  if (!trackId) return json({ error: "trackId required" }, 400);
+  const body = await readJson<{
+    trackId?: string;
+    useCase?: string[];
+    mood?: string[];
+    hint?: string;
+  }>(ctx.request);
 
-  const track = await ctx.env.DB.prepare(
-    `SELECT slug, title, use_case, mood FROM tracks WHERE id = ?1`,
-  )
-    .bind(trackId)
-    .first<{ slug: string; title: string; use_case: string | null; mood: string | null }>();
-  if (!track) return json({ error: "Track not found" }, 404);
-
-  // The SAVED checkboxes drive the prompt (values are stored "A / B / C").
   const split = (v: string | null) =>
     (v ?? "").split("/").map((s) => s.trim()).filter(Boolean);
-  const useCase = split(track.use_case);
-  const mood = split(track.mood);
+  const asList = (v: unknown) =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && !!x.trim()).slice(0, 8) : [];
+
+  let useCase: string[] = asList(body?.useCase);
+  let mood: string[] = asList(body?.mood);
+  let slugBase = "cover";
+
+  if (body?.trackId) {
+    // Track page: the SAVED checkboxes drive the prompt ("A / B / C" columns).
+    const track = await ctx.env.DB.prepare(
+      `SELECT slug, title, use_case, mood FROM tracks WHERE id = ?1`,
+    )
+      .bind(body.trackId)
+      .first<{ slug: string; title: string; use_case: string | null; mood: string | null }>();
+    if (!track) return json({ error: "Track not found" }, 404);
+    useCase = split(track.use_case);
+    mood = split(track.mood);
+    slugBase = track.slug || "track";
+  } else if (useCase.length === 0 && mood.length === 0) {
+    return json({ error: "trackId or useCase/mood required" }, 400);
+  }
 
   let prompt = PROMPT_TEMPLATE.replace(
     "<USE_CASE>",
@@ -115,7 +135,7 @@ export const onRequestPost = async (ctx: Ctx) => {
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
 
-  const base = (track.slug || "track").toLowerCase().replace(/[^a-z0-9-]+/g, "-").slice(0, 40);
+  const base = slugBase.toLowerCase().replace(/[^a-z0-9-]+/g, "-").slice(0, 40) || "cover";
   const key = `covers/${base}-ai-${crypto.randomUUID().slice(0, 8)}.png`;
   await ctx.env.R2.put(key, bytes.buffer, { httpMetadata: { contentType: "image/png" } });
 

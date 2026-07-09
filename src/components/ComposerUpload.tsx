@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
-import { Check, Music, Star, Trash2, UploadCloud, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Check, Music, Sparkles, Star, Trash2, UploadCloud, X } from "lucide-react";
 import { toast } from "sonner";
-import { formatDuration, wavToMp3Pair, zipWavs } from "@/lib/audioEncoding";
+import { decodeAudio, detectBpm, formatDuration, makeThumbnail, wavToMp3Pair, zipWavs } from "@/lib/audioEncoding";
+import { brandCover, generateCoverApi, uploadCoverImage } from "@/lib/coverArt";
 import { cleanVersionLabel } from "@/lib/downloadTrack";
+import { defaultVocabularies, type Vocabularies } from "@/lib/tagOptions";
 
 // Composer panel "Add track" (owner-approved UX, stage 4): a Bulk-style drop
 // zone where several WAVs = versions of ONE track, then ONLY Title / BPM /
@@ -34,6 +36,8 @@ export interface ComposerTrackRow {
 export interface ComposerTracksData {
   composer: { id: string; displayName: string } | null;
   tracks: ComposerTrackRow[];
+  /** Use Case / Genre / Mood options for the upload form. */
+  vocabularies: Vocabularies;
   /** null while loading; message when the API refused (no profile / not composer). */
   error: string | null;
   loading: boolean;
@@ -44,6 +48,7 @@ export interface ComposerTracksData {
 export const useComposerTracks = (enabled: boolean): ComposerTracksData => {
   const [composer, setComposer] = useState<{ id: string; displayName: string } | null>(null);
   const [tracks, setTracks] = useState<ComposerTrackRow[]>([]);
+  const [vocabularies, setVocabularies] = useState<Vocabularies>(defaultVocabularies);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -55,11 +60,13 @@ export const useComposerTracks = (enabled: boolean): ComposerTracksData => {
         const d = (await res.json()) as {
           composer?: { id: string; displayName: string };
           tracks?: ComposerTrackRow[];
+          vocabularies?: Vocabularies;
           error?: string;
         };
         if (!res.ok) throw new Error(d.error ?? "Failed to load");
         setComposer(d.composer ?? null);
         setTracks(d.tracks ?? []);
+        if (d.vocabularies) setVocabularies(d.vocabularies);
         setError(null);
       })
       .catch((e: Error) => setError(e.message))
@@ -129,7 +136,13 @@ const probeDuration = (file: File): Promise<number> =>
     a.src = url;
   });
 
-const ComposerUpload = ({ onCreated }: { onCreated: () => void }) => {
+const ComposerUpload = ({
+  onCreated,
+  vocabularies = defaultVocabularies,
+}: {
+  onCreated: () => void;
+  vocabularies?: Vocabularies;
+}) => {
   const [wavs, setWavs] = useState<WavRow[]>([]);
   /** file id starred as Main — auto-set to the LONGEST file until the
       composer stars one manually. */
@@ -142,6 +155,79 @@ const ComposerUpload = ({ onCreated }: { onCreated: () => void }) => {
   const [stemsFile, setStemsFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
+  // Use Case / Genre / Mood chips (same options as the admin panels).
+  const [sel, setSel] = useState<Record<keyof Vocabularies, string[]>>({
+    useCase: [],
+    genre: [],
+    mood: [],
+  });
+  // AI cover: generated+branded cover path, its clean thumb, optional word.
+  const [cover, setCover] = useState("");
+  const [coverThumb, setCoverThumb] = useState("");
+  const [coverHint, setCoverHint] = useState("");
+  const [coverBusy, setCoverBusy] = useState(false);
+  // BPM auto-detect: which file id we already analysed (one decode per Main).
+  const bpmProbedRef = useRef<string | null>(null);
+
+  const toggleFacet = (facet: keyof Vocabularies, v: string) =>
+    setSel((s) => ({
+      ...s,
+      [facet]: s[facet].includes(v) ? s[facet].filter((x) => x !== v) : [...s[facet], v],
+    }));
+
+  // Detect the tempo of the Main file and prefill the BPM field (only while
+  // it's still empty — the composer's own typing always wins).
+  useEffect(() => {
+    if (wavs.length === 0 || bpm) return;
+    const target = wavs.find((w) => w.id === mainId) ?? wavs[0];
+    if (!target || bpmProbedRef.current === target.id) return;
+    bpmProbedRef.current = target.id;
+    void (async () => {
+      try {
+        const detected = await detectBpm(await decodeAudio(target.file));
+        if (detected) setBpm((prev) => prev || String(detected));
+      } catch {
+        // no beat found — field just stays empty
+      }
+    })();
+  }, [wavs, mainId, bpm]);
+
+  const canGenerate =
+    sel.useCase.length > 0 && sel.genre.length > 0 && sel.mood.length > 0 && !coverBusy && !busy;
+
+  // Same pipeline as the admin track page: generate → brand the full cover →
+  // clean thumbnail for the rows. Paths go into the track on Upload.
+  const generateCover = async () => {
+    setCoverBusy(true);
+    try {
+      const path = await generateCoverApi({
+        useCase: sel.useCase,
+        mood: sel.mood,
+        hint: coverHint.trim() || undefined,
+      });
+      const blob = await (await fetch(path)).blob();
+      const original = new File([blob], "ai-cover.png", { type: blob.type || "image/png" });
+      let branded = path;
+      try {
+        branded = await uploadCoverImage(await brandCover(original), "ai-cover-branded.jpg");
+      } catch {
+        // unbranded original stays
+      }
+      let thumb = "";
+      try {
+        thumb = await uploadCoverImage(await makeThumbnail(original), "ai-cover-thumb.jpg");
+      } catch {
+        // rows fall back to the full cover
+      }
+      setCover(branded);
+      setCoverThumb(thumb);
+      toast.success("Cover generated");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Generation failed");
+    } finally {
+      setCoverBusy(false);
+    }
+  };
 
   const addFiles = (list: FileList | File[] | null) => {
     if (!list) return;
@@ -257,6 +343,11 @@ const ComposerUpload = ({ onCreated }: { onCreated: () => void }) => {
           bpm: bpm ? Number(bpm) : undefined,
           description: description.trim(),
           tags: tags.split(",").map((s) => s.trim()).filter(Boolean),
+          useCase: sel.useCase.join(" / "),
+          genre: sel.genre.join(" / "),
+          mood: sel.mood.join(" / "),
+          cover: cover || undefined,
+          coverThumb: coverThumb || undefined,
           versions,
           wavZipKey: zipUp.key,
           stemsKey,
@@ -270,11 +361,17 @@ const ComposerUpload = ({ onCreated }: { onCreated: () => void }) => {
       });
       setWavs([]);
       setMainId(null);
+      setMainManual(false);
       setTitle("");
       setBpm("");
       setDescription("");
       setTags("");
       setStemsFile(null);
+      setSel({ useCase: [], genre: [], mood: [] });
+      setCover("");
+      setCoverThumb("");
+      setCoverHint("");
+      bpmProbedRef.current = null;
       onCreated();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Upload failed");
@@ -319,6 +416,9 @@ const ComposerUpload = ({ onCreated }: { onCreated: () => void }) => {
           the empty form was just noise (owner request). */}
       {wavs.length > 0 && (
         <>
+        {/* Two columns on desktop: files + fields LEFT, tags + AI cover RIGHT. */}
+        <div className="items-start gap-5 lg:grid lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <div className="flex min-w-0 flex-col gap-4">
         {/* Version list: star = Main override (default longest). */}
         <ul className="flex flex-col gap-1 rounded-lg border border-border/60 bg-background/40 p-3">
           {wavs.map((w) => {
@@ -416,6 +516,92 @@ const ComposerUpload = ({ onCreated }: { onCreated: () => void }) => {
             </button>
           </span>
         )}
+      </div>
+      </div>
+
+      {/* ===== Right: tags + AI cover generation ===== */}
+      <div className="mt-5 flex flex-col gap-4 rounded-xl border border-[#F4C430]/25 bg-background/30 p-4 lg:mt-0">
+        {(
+          [
+            ["useCase", "Use Case"],
+            ["genre", "Genre"],
+            ["mood", "Mood"],
+          ] as const
+        ).map(([facet, label]) => (
+          <div key={facet}>
+            <p className="mb-1.5 font-body text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {label}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {vocabularies[facet].map((v) => {
+                const on = sel[facet].includes(v);
+                return (
+                  <button
+                    key={v}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => toggleFacet(facet, v)}
+                    className={`rounded-full border px-2.5 py-1 font-body text-xs transition-colors disabled:opacity-50 ${
+                      on
+                        ? "border-[#F4C430] bg-[#F4C430]/15 text-[#F4C430]"
+                        : "border-border text-muted-foreground hover:border-[#F4C430]/50"
+                    }`}
+                  >
+                    {v}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+
+        {/* AI cover — needs at least one pick in EACH group. */}
+        <div className="border-t border-border/60 pt-4">
+          <p className="mb-2 font-body text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Cover
+          </p>
+          <div className="flex items-start gap-3">
+            <span className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-secondary">
+              {cover ? (
+                <img src={cover} alt="" className="h-full w-full object-cover" />
+              ) : coverBusy ? (
+                <Sparkles className="h-5 w-5 animate-pulse text-[#F4C430]" />
+              ) : (
+                <Music className="h-5 w-5 text-muted-foreground/60" />
+              )}
+              {coverBusy && <span className="absolute inset-0 animate-pulse bg-[#F4C430]/10" />}
+            </span>
+            <div className="min-w-0 flex-1">
+              <input
+                value={coverHint}
+                onChange={(e) => setCoverHint(e.target.value)}
+                maxLength={60}
+                placeholder="Optional: one element (violin…)"
+                className="w-full rounded-md border border-border bg-background px-2 py-1.5 font-body text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
+              />
+              <button
+                type="button"
+                disabled={!canGenerate}
+                onClick={() => void generateCover()}
+                title={
+                  canGenerate || coverBusy
+                    ? "Generate cinematic cover art from your tags"
+                    : "Pick at least one Use Case, Genre and Mood first"
+                }
+                className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-[#F4C430] px-3 py-1.5 font-body text-xs font-bold text-background transition-colors hover:bg-[#F4C430]/85 disabled:opacity-40"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                {coverBusy ? "Generating…" : cover ? "Regenerate" : "Generate cover"}
+              </button>
+            </div>
+          </div>
+          {!canGenerate && !coverBusy && !cover && (
+            <p className="mt-2 font-body text-[11px] text-muted-foreground">
+              Pick at least one Use Case, one Genre and one Mood to unlock generation.
+            </p>
+          )}
+        </div>
+      </div>
       </div>
 
       {progress && (

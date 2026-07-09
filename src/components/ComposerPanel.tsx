@@ -287,6 +287,7 @@ const ComposerPanel = ({ section }: { section: ComposerSectionId }) => {
         <Card title="Add track">
           {live.composer ? (
             <ComposerUpload
+              vocabularies={live.vocabularies}
               onCreated={() => {
                 live.reload();
                 navigate("/account?section=composer-tracks");

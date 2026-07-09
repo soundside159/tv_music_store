@@ -1,6 +1,7 @@
 import { getSessionUser, json, OWNER_EMAIL, type Ctx } from "../_utils";
 
-// POST /api/admin/upload?filename=<base-name> — admin only.
+// POST /api/admin/upload?filename=<base-name> — admins AND composers (their
+// upload flow stores generated cover art + thumbnails here too).
 // Body = raw image bytes, content-type header decides the extension.
 // Stores to R2 under covers/... and returns { path } for /api/file/covers/...
 
@@ -19,8 +20,15 @@ export const onRequestPost = async (ctx: Ctx) => {
 
   const user = await getSessionUser(ctx);
   if (!user) return json({ error: "Not signed in" }, 401);
-  if (user.role !== "admin" && user.email !== OWNER_EMAIL) {
-    return json({ error: "Admin only" }, 403);
+  let allowed = user.role === "admin" || user.email === OWNER_EMAIL || user.role === "composer";
+  if (!allowed) {
+    const cmp = await ctx.env.DB.prepare(`SELECT id FROM composers WHERE user_id = ?1 LIMIT 1`)
+      .bind(user.id)
+      .first();
+    allowed = !!cmp;
+  }
+  if (!allowed) {
+    return json({ error: "Composer or admin account required" }, 403);
   }
   if (!ctx.env.R2) {
     return json(

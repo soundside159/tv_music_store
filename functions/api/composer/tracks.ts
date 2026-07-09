@@ -1,4 +1,4 @@
-import { getSessionUser, json, newId, readJson, type Ctx, type D1Database } from "../_utils";
+import { getSessionUser, getVocabularies, json, newId, readJson, type Ctx, type D1Database } from "../_utils";
 import { ensureTrackCodes, generateTrackCode } from "../_codes";
 
 // Composer panel API (stage 4 of the mass-import plan).
@@ -91,6 +91,8 @@ export const onRequestGet = async (ctx: Ctx) => {
   return json({
     composer: { id: gate.composer.id, displayName: gate.composer.display_name },
     tracks: rows.results,
+    // Tag options for the upload form (Use Case / Genre / Mood chips).
+    vocabularies: await getVocabularies(db),
   });
 };
 
@@ -105,6 +107,11 @@ export const onRequestPost = async (ctx: Ctx) => {
     bpm?: number;
     description?: string;
     tags?: string[];
+    useCase?: string;
+    genre?: string;
+    mood?: string;
+    cover?: string;
+    coverThumb?: string;
     versions?: { label?: string; previewSrc?: string; preview128?: string; duration?: string }[];
     wavZipKey?: string;
     stemsKey?: string;
@@ -135,25 +142,38 @@ export const onRequestPost = async (ctx: Ctx) => {
   const stemsKey =
     typeof body?.stemsKey === "string" && /^masters\//.test(body.stemsKey) ? body.stemsKey : null;
 
+  // Facets picked in the upload form (already "A / B / C" strings) and the
+  // generated/branded cover — only our own served paths are accepted.
+  const facet = (v: unknown) => (typeof v === "string" ? v.slice(0, 200) : "");
+  const isCoverPath = (p: unknown): p is string =>
+    typeof p === "string" && /^\/(api\/file\/covers\/|images\/)/.test(p);
+  const cover = isCoverPath(body?.cover) ? body!.cover : "";
+  const coverThumb = isCoverPath(body?.coverThumb) ? body!.coverThumb : "";
+
   await db
     .prepare(
       `INSERT INTO tracks
          (id, slug, title, composer_id, category, genre, mood, use_case, style_of,
           bpm, duration, description, tags, has_stems, cover, cover_thumb,
           r2_key_wav_zip, r2_key_stems, code, status, moderation_status)
-       VALUES (?1, ?2, ?3, ?4, 'production', '', '', '', '',
-               ?5, ?6, ?7, ?8, ?9, '', '', ?10, ?11, ?12, 'draft', 'pending')`,
+       VALUES (?1, ?2, ?3, ?4, 'production', ?5, ?6, ?7, '',
+               ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, 'draft', 'pending')`,
     )
     .bind(
       trackId,
       slug,
       title,
       gate.composer.id,
+      facet(body?.genre),
+      facet(body?.mood),
+      facet(body?.useCase),
       bpm,
       versions[0].duration ?? "",
       body?.description ?? "",
       JSON.stringify(tags),
       stemsKey ? 1 : 0,
+      cover,
+      coverThumb,
       wavZipKey,
       stemsKey,
       code,

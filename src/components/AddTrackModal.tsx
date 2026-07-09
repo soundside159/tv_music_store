@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Check, GripVertical, Music, Star, Trash2, X } from "lucide-react";
 import type { Vocabularies } from "@/lib/tagOptions";
-import { formatDuration, makeThumbnail, wavToMp3Pair, zipWavs } from "@/lib/audioEncoding";
+import { decodeAudio, detectBpm, formatDuration, makeThumbnail, wavToMp3Pair, zipWavs } from "@/lib/audioEncoding";
 import { cleanVersionLabel } from "@/lib/downloadTrack";
 
 // Admin "Add Track" flow. The owner uploads WAV files and picks the main one;
@@ -77,6 +77,24 @@ const AddTrackModal = ({
       ...s,
       [facet]: s[facet].includes(v) ? s[facet].filter((x) => x !== v) : [...s[facet], v],
     }));
+
+  // Auto-detect the tempo of the Main WAV and prefill BPM (only while empty —
+  // manual input always wins).
+  const bpmProbedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (versions.length === 0 || bpm) return;
+    const target = versions[mainIdx] ?? versions[0];
+    if (!target || bpmProbedRef.current === target.id) return;
+    bpmProbedRef.current = target.id;
+    void (async () => {
+      try {
+        const detected = await detectBpm(await decodeAudio(target.file));
+        if (detected) setBpm((prev) => prev || String(detected));
+      } catch {
+        // no beat found — field stays empty
+      }
+    })();
+  }, [versions, mainIdx, bpm]);
 
   const addWavs = (files: FileList | null) => {
     if (!files) return;

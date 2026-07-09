@@ -12,7 +12,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { formatDuration, wavToMp3Pair, zipWavs } from "@/lib/audioEncoding";
+import { decodeAudio, detectBpm, formatDuration, wavToMp3Pair, zipWavs } from "@/lib/audioEncoding";
 import { cleanVersionLabel } from "@/lib/downloadTrack";
 
 // Admin → Bulk Upload: the first big catalog import.
@@ -273,6 +273,16 @@ const AdminBulkUpload = () => {
     }
     const ordered = [encoded[mainIdx], ...encoded.filter((_, i) => i !== mainIdx)];
 
+    // 2b. Tempo of the Main version — saved into the draft so the owner
+    // doesn't have to type it during tagging.
+    patch(group.key, { note: "Detecting BPM…" });
+    let bpmDetected: number | null = null;
+    try {
+      bpmDetected = await detectBpm(await decodeAudio(ordered[0].qf.file));
+    } catch {
+      // no beat found — BPM stays empty
+    }
+
     // 3. Upload previews (320 + 128) per version.
     const versions: { label: string; previewSrc: string; preview128?: string; duration: string }[] = [];
     for (let i = 0; i < ordered.length; i++) {
@@ -299,6 +309,7 @@ const AdminBulkUpload = () => {
     await createTrack({
       title: group.title,
       duration: versions[0].duration,
+      bpm: bpmDetected ?? undefined,
       versions,
       wavZipKey: zipUp.key,
       composerId: composerId || undefined,
