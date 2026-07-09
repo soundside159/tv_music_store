@@ -1723,3 +1723,19 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   (5) TAG PILLS on track rows: tags column widened 17→18rem (xl) / 19→20rem (2xl) + pills pulled
   `xl:-ml-2` into the column gap, so the third pill fits instead of fading out.
   Sandbox still down — lint/build via deploy.bat on the host.
+- **2026-07-09 (AI cover generation — OpenAI Images):** track-page cover overlay (admin hover)
+  got a gold ✨ Generate button next to Upload/Remove. Flow: popover with ONE optional
+  "featured element" word (e.g. violin) → POST NEW `functions/api/admin/generate-cover.ts`
+  (admin only) → OpenAI `/v1/images/generations`, model **gpt-image-1.5**, quality medium,
+  1024x1024; the owner's fixed cinematic key-art prompt is EMBEDDED in that file with
+  `<USE_CASE>` / `<MOOD>` placeholders filled from the track's SAVED use_case/mood columns
+  (fallbacks "Film & TV" / "Cinematic, Emotional"), + optional featured-element line. Result
+  PNG (b64) → R2 `covers/<slug>-ai-<uuid>.png` → returns /api/file path → client builds the
+  row thumbnail (makeThumbnail) and saves cover+coverThumb via bulk_update_tracks — identical
+  tail to a manual upload, so the art shows up instantly on the track page + row thumbs.
+  Env: `OPENAI_API_KEY` added to _utils Env + /api/health reports `openai:
+  configured|missing`. SECURITY NOTE: the owner pasted an OpenAI key IN CHAT — he was told to
+  REVOKE it and create a fresh one, then add it as the OPENAI_API_KEY secret in Pages →
+  Settings → Variables and Secrets (never commit keys; never echo them in chat).
+  OWNER STEPS: (1) revoke pasted key, create new; (2) add OPENAI_API_KEY secret; (3) deploy;
+  (4) check /api/health says openai: configured.

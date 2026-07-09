@@ -12,6 +12,7 @@ import {
   Pencil,
   Play,
   Plus,
+  Sparkles,
   Star,
   Trash2,
   X,
@@ -242,6 +243,53 @@ export const AdminTrackCoverOverlay = ({
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  // AI cover generation (OpenAI Images): optional one-word featured element.
+  const [genOpen, setGenOpen] = useState(false);
+  const [genHint, setGenHint] = useState("");
+  const [genBusy, setGenBusy] = useState(false);
+
+  // Generates the key art server-side (prompt uses the track's SAVED Use Case
+  // and Mood), then builds the row thumbnail in the browser and saves both —
+  // same tail end as a manual upload.
+  const generateCover = async () => {
+    setGenBusy(true);
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/generate-cover", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ trackId: track.id, hint: genHint.trim() || undefined }),
+      });
+      const d = (await res.json().catch(() => ({}))) as { ok?: boolean; path?: string; error?: string };
+      if (!res.ok || !d.ok || !d.path) throw new Error(d.error ?? "Generation failed");
+
+      let coverThumb = "";
+      try {
+        const blob = await (await fetch(d.path)).blob();
+        const file = new File([blob], "ai-cover.png", { type: blob.type || "image/png" });
+        coverThumb = await uploadImageApi(await makeThumbnail(file), "ai-cover-thumb.jpg");
+      } catch {
+        // keep coverThumb empty — rows fall back to the full cover
+      }
+      const ok = await run({
+        action: "bulk_update_tracks",
+        trackIds: [track.id],
+        fields: { cover: d.path, coverThumb },
+      });
+      if (ok) {
+        toast.success("Cover generated");
+        setGenOpen(false);
+        setGenHint("");
+        onTracksChanged();
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Generation failed");
+    } finally {
+      setGenBusy(false);
+      setBusy(false);
+    }
+  };
 
   const onFile = async (file: File) => {
     setBusy(true);
@@ -289,7 +337,7 @@ export const AdminTrackCoverOverlay = ({
     <>
       <div
         className={`absolute inset-0 z-10 flex items-center justify-center gap-2 bg-background/70 transition-opacity ${
-          busy ? "opacity-100" : "opacity-0 group-hover/cover:opacity-100"
+          busy || genOpen ? "opacity-100" : "opacity-0 group-hover/cover:opacity-100"
         }`}
       >
         <button
@@ -300,6 +348,19 @@ export const AdminTrackCoverOverlay = ({
           className="flex h-10 w-10 items-center justify-center rounded-full border border-[#F4C430]/60 bg-card text-[#F4C430] transition-colors hover:bg-[#F4C430] hover:text-background disabled:opacity-50"
         >
           <ImageUp className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => setGenOpen((v) => !v)}
+          title="Generate cover with AI (uses the track's Use Case & Mood)"
+          className={`flex h-10 w-10 items-center justify-center rounded-full border bg-card transition-colors disabled:opacity-50 ${
+            genOpen
+              ? "border-[#F4C430] bg-[#F4C430] text-background"
+              : "border-[#F4C430]/60 text-[#F4C430] hover:bg-[#F4C430] hover:text-background"
+          }`}
+        >
+          <Sparkles className="h-4 w-4" />
         </button>
         {track.cover && (
           <button
@@ -312,7 +373,48 @@ export const AdminTrackCoverOverlay = ({
             <Trash2 className="h-4 w-4" />
           </button>
         )}
-        {busy && <span className="font-body text-[10px] text-muted-foreground">Uploading…</span>}
+        {busy && (
+          <span className="font-body text-[10px] text-muted-foreground">
+            {genBusy ? "Generating… ~30 sec" : "Uploading…"}
+          </span>
+        )}
+
+        {/* AI generation popover: optional featured element + Go. */}
+        {genOpen && !genBusy && (
+          <div
+            className="absolute inset-x-3 bottom-3 z-20 rounded-lg border border-[#F4C430]/40 bg-card/95 p-2.5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="mb-1.5 font-body text-[11px] text-muted-foreground">
+              Optional: one featured element (e.g. violin, guitar)
+            </p>
+            <div className="flex gap-1.5">
+              <input
+                value={genHint}
+                onChange={(e) => setGenHint(e.target.value)}
+                maxLength={60}
+                placeholder="Leave empty for auto"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void generateCover();
+                  if (e.key === "Escape") setGenOpen(false);
+                }}
+                className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1.5 font-body text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
+              />
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void generateCover()}
+                className="rounded-md bg-[#F4C430] px-3 py-1.5 font-body text-xs font-bold text-background transition-colors hover:bg-[#F4C430]/85 disabled:opacity-50"
+              >
+                Generate
+              </button>
+            </div>
+            <p className="mt-1.5 font-body text-[10px] text-muted-foreground">
+              Prompt uses this track's saved Use Case &amp; Mood.
+            </p>
+          </div>
+        )}
       </div>
       <input
         ref={inputRef}

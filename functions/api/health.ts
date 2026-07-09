@@ -22,5 +22,6 @@ export const onRequestGet = async (ctx: Ctx) => {
         ? `configured (${ctx.env.PAYPAL_ENV === "sandbox" ? "sandbox" : "live"})`
         : "missing",
     r2: ctx.env.R2 ? "bound" : "not bound",
+    openai: ctx.env.OPENAI_API_KEY ? "configured" : "missing",
   });
 };
