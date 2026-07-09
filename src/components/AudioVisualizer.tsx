@@ -123,22 +123,29 @@ const AudioVisualizer = () => {
       }
 
       // --- spawn particles ----------------------------------------------------
+      // Pure 2D equalizer: a particle is born ON the bar's top border, flies
+      // STRAIGHT UP (slight chaos drift only), slows down and dissolves.
       if (idleFade > 0 && particles.length < MAX_PARTICLES) {
         const rate = (s.density / 100) * 340; // particles/sec across the bar
         const colW = width / COLUMNS;
+        const cutoff = 0.02 + (s.threshold / 100) * 0.45; // sensitivity gate
         for (let c = 0; c < COLUMNS; c++) {
           const e = columnEnergy[c];
-          if (e < 0.04) continue;
-          const p = rate * e * dt * 0.9;
+          if (e < cutoff) continue;
+          // Energy above the gate drives everything (0..1 again).
+          const drive = Math.min(1, (e - cutoff) / Math.max(0.08, 1 - cutoff));
+          const p = rate * (0.15 + drive) * dt;
           if (Math.random() < p) {
-            const react = (s.reactivity / 100) * e;
+            const react = 0.25 + (s.reactivity / 100) * drive * 1.6;
             particles.push({
               x: (c + 0.15 + Math.random() * 0.7) * colW,
               y: 0,
-              vx: (Math.random() - 0.5) * (s.chaos / 100) * 60,
-              vy: 60 + react * s.maxRise * (2.2 + Math.random() * 1.4),
+              vx: (Math.random() - 0.5) * (s.chaos / 100) * 46,
+              // Initial climb speed; exponential drag below makes the total
+              // rise land around maxRise * drive px.
+              vy: react * s.maxRise * (2.4 + Math.random() * 1.0),
               life: 1,
-              decay: 0.9 + Math.random() * 0.9,
+              decay: (0.35 + (s.fade / 100) * 2.2) * (0.75 + Math.random() * 0.5),
               size: 0.7 + (s.size / 100) * 2.1 * (0.6 + Math.random() * 0.8),
               gold: Math.random() * 100 < s.gold,
               phase: Math.random() * Math.PI * 2,
@@ -156,16 +163,16 @@ const AudioVisualizer = () => {
       ctx.globalCompositeOperation = "lighter";
 
       // --- physics + draw -----------------------------------------------------
-      const gravity = 190 + s.maxRise * 1.1;
+      // No gravity, no falling back: rise, decelerate (drag), dissolve.
       const glow = (s.glow / 100) * 9;
       const tSec = now / 1000;
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
-        p.vy -= gravity * dt;
+        p.vy *= Math.max(0, 1 - 2.0 * dt); // exponential slow-down while climbing
         p.x += p.vx * dt;
         p.y += p.vy * dt;
         p.life -= p.decay * dt;
-        if (p.life <= 0 || p.y < -4) {
+        if (p.life <= 0 || p.y > height + 4) {
           particles.splice(i, 1);
           continue;
         }
@@ -174,7 +181,8 @@ const AudioVisualizer = () => {
           0.55 +
           0.45 *
             Math.sin(p.phase + tSec * p.spin * (0.4 + (s.sparkle / 100) * 1.2));
-        const alpha = Math.min(1, p.life * 1.2) * (0.35 + tw * 0.65);
+        // Dissolve: ease-out fade as life runs out.
+        const alpha = Math.pow(Math.max(0, p.life), 1.4) * (0.35 + tw * 0.65);
         const px = p.x;
         const py = height - 1 - Math.min(height - 2, p.y);
         ctx.shadowBlur = glow;

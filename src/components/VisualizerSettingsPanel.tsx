@@ -26,6 +26,8 @@ const SLIDERS: Array<[keyof VisualizerSettings, string, number, number]> = [
   ["bass", "Bass", 0, 100],
   ["mid", "Mid", 0, 100],
   ["high", "High", 0, 100],
+  ["threshold", "Sensitivity", 0, 100],
+  ["fade", "Fade speed", 0, 100],
 ];
 
 const VisualizerSettingsPanel = () => {

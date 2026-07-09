@@ -1871,7 +1871,14 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   localStorage (tvms_visualizer_v1), enabled + density/reactivity/maxRise/size/trail/glow/
   chaos/sparkle/gold/smoothing/bass/mid/high (0-100 scales like his Python app).
   TEMP TUNING PANEL: `VisualizerSettingsPanel.tsx` on the HOMEPAGE above the footer, ADMIN
-  ONLY — live sliders + Enabled toggle + Reset; values persist per-browser. NEXT AI: when the
+  ONLY — live sliders + Enabled toggle + Reset; values persist per-browser.
+  [V2 same day — owner: the gravity parabolas + trails read as a ROTATING OVAL/sphere, not an
+  equalizer. Rework: pure 2D — particles spawn on the border, fly STRAIGHT UP with exponential
+  drag (no gravity, never fall back) and DISSOLVE via ease-out fade; new settings `threshold`
+  (spawn sensitivity gate — energy below it emits nothing; drive rescaled above the gate) and
+  `fade` (dissolve speed), both on the panel. Owner's tuned values are now the DEFAULTS:
+  density 29, reactivity 50, maxRise 55, size 22, trail 29, glow 45, chaos 22, sparkle 42,
+  gold 100, smoothing 31, bass 68, mid 62, high 48 (+ threshold 18, fade 55).] NEXT AI: when the
   owner settles on numbers, hardcode them into DEFAULT_VISUALIZER and DELETE the panel (and
   its Index.tsx mount); if he dislikes the whole thing, remove AudioVisualizer from
   PlayerProvider + the settings lib + panel (analyser can stay, it's harmless).

@@ -29,23 +29,30 @@ export interface VisualizerSettings {
   bass: number;
   mid: number;
   high: number;
+  /** Spawn sensitivity threshold — higher = only louder moments emit particles. */
+  threshold: number;
+  /** How fast a particle dissolves while rising (higher = shorter life). */
+  fade: number;
 }
 
+// Owner-approved defaults (tuned live on 2026-07-09).
 export const DEFAULT_VISUALIZER: VisualizerSettings = {
   enabled: true,
-  density: 60,
-  reactivity: 70,
-  maxRise: 90,
-  size: 40,
-  trail: 45,
-  glow: 55,
-  chaos: 30,
-  sparkle: 60,
-  gold: 35,
-  smoothing: 70,
-  bass: 85,
-  mid: 55,
-  high: 65,
+  density: 29,
+  reactivity: 50,
+  maxRise: 55,
+  size: 22,
+  trail: 29,
+  glow: 45,
+  chaos: 22,
+  sparkle: 42,
+  gold: 100,
+  smoothing: 31,
+  bass: 68,
+  mid: 62,
+  high: 48,
+  threshold: 18,
+  fade: 55,
 };
 
 const KEY = "tvms_visualizer_v1";
