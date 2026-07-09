@@ -35,23 +35,23 @@ export interface VisualizerSettings {
   fade: number;
 }
 
-// Owner-approved defaults (bar-EQ round, tuned live on 2026-07-09).
+// Owner-approved defaults (bar-EQ round 2, tuned live on 2026-07-09).
 export const DEFAULT_VISUALIZER: VisualizerSettings = {
   enabled: true,
   density: 100, // Bars
-  reactivity: 37,
-  maxRise: 49,
+  reactivity: 7,
+  maxRise: 56,
   size: 100, // Bar width
-  trail: 0, // Fall smooth (0 = snappy)
-  glow: 55, // Border light
+  trail: 17, // Fall smooth
+  glow: 49, // Border light
   chaos: 22, // unused (particle era)
-  sparkle: 33, // Peak caps
+  sparkle: 90, // Peak caps
   gold: 100,
-  smoothing: 76,
-  bass: 73,
-  mid: 70,
-  high: 66,
-  threshold: 82, // Sensitivity
+  smoothing: 43,
+  bass: 100,
+  mid: 79,
+  high: 86,
+  threshold: 53, // Sensitivity
   fade: 0, // Cap fall (0 = caps linger — owner's pick)
 };
 

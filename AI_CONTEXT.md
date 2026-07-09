@@ -1895,7 +1895,14 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   its own frequency now; (3) NEW "Border light" (reuses the stored `glow` field, slider is
   back on the panel): the player's top border lights up gold exactly under active bars
   (full-slot 2px segments at the canvas base; bars/caps draw 2px higher). NOTE: the owner's
-  browser has old values in localStorage — Reset on the panel loads the new defaults.] NEXT AI: when the
+  browser has old values in localStorage — Reset on the panel loads the new defaults.]
+  [V5 same day — (1) new owner defaults: reactivity 7, maxRise 56, trail 17, glow 49,
+  sparkle 90, smoothing 43, bass 100, mid 79, high 86, threshold 53, fade 0 (rest unchanged);
+  (2) Bars ceiling raised 128 → 256 (density maps 32–256) for finer visual resolution;
+  (3) Fall smooth got much more headroom (release 0.35–8.1/s — at 100 a full bar sinks ~3 s);
+  (4) pause/stop die-off: bar heights are snapshotted, HELD briefly, then plunge via
+  1-easeInExpo over 1.5 s (the normal update loop is skipped while bins===0 so it can't
+  fight the animation); peak caps keep falling at their own Cap fall rate.] NEXT AI: when the
   owner settles on numbers, hardcode them into DEFAULT_VISUALIZER and DELETE the panel (and
   its Index.tsx mount); if he dislikes the whole thing, remove AudioVisualizer from
   PlayerProvider + the settings lib + panel (analyser can stay, it's harmless).

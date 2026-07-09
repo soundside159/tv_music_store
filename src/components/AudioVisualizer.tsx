@@ -48,9 +48,12 @@ const AudioVisualizer = () => {
     window.addEventListener("resize", resize);
 
     const freq = new Uint8Array(2048); // fftSize 4096 → 2048 bins
-    const MAX_BARS = 128;
+    const MAX_BARS = 256;
     const values = new Float32Array(MAX_BARS); // current bar heights (0..1)
     const peaks = new Float32Array(MAX_BARS); // floating peak caps (0..1)
+    // Pause/stop: bars hold for a beat, then plunge (easeInExpo) — natural die-off.
+    let stopSnap: Float32Array | null = null;
+    let stopStart = 0;
     let cleared = true;
     let last = performance.now();
 
@@ -63,7 +66,7 @@ const AudioVisualizer = () => {
 
       const s = getVisualizerSettings();
       const analyser = getSharedAnalyser();
-      const barCount = Math.max(32, Math.min(MAX_BARS, Math.round(32 + (s.density / 100) * 96)));
+      const barCount = Math.max(32, Math.min(MAX_BARS, Math.round(32 + (s.density / 100) * 224)));
 
       // --- read the spectrum only while playing -------------------------------
       let bins = 0;
@@ -75,10 +78,30 @@ const AudioVisualizer = () => {
 
       // --- update bars: instant attack, smooth release ------------------------
       const gate = (s.threshold / 100) * 0.35;
-      const release = 1.6 + (1 - s.trail / 100) * 6.5; // trail↑ = slower fall
+      // trail↑ = slower fall; at 100 a full bar takes ~3 s to sink.
+      const release = 0.35 + (1 - s.trail / 100) * 7.75;
       const capFall = 0.25 + (s.fade / 100) * 1.6; // fade↑ = caps drop faster
       let energyLeft = 0;
       const usable = bins > 0 ? Math.floor(bins * 0.62) : 0;
+
+      if (bins === 0) {
+        // Track paused/stopped: hold for a beat, then plunge — easeInExpo.
+        if (!stopSnap) {
+          stopSnap = values.slice(0, MAX_BARS);
+          stopStart = now;
+        }
+        const tt = Math.min(1, (now - stopStart) / 1500);
+        const k = 1 - (tt <= 0 ? 0 : Math.pow(2, 10 * (tt - 1))); // 1 - easeInExpo
+        for (let i = 0; i < barCount; i++) {
+          values[i] = stopSnap[i] * Math.max(0, k);
+          peaks[i] = Math.max(values[i], peaks[i] - capFall * dt);
+          energyLeft = Math.max(energyLeft, values[i], peaks[i] * 0.5);
+        }
+      } else {
+        stopSnap = null;
+      }
+
+      if (bins > 0)
       for (let i = 0; i < barCount; i++) {
         let target = 0;
         if (usable > 0) {
