@@ -1824,6 +1824,10 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   [SAME DAY follow-up: owner couldn't see the 4px bump — art enlarged properly: cover h-14
   (56px), play/cover column 3.5rem → 3.75rem at ALL breakpoints, row padding py-3 → py-2.5 so
   rows don't grow. Progress ring scales via viewBox.]
+  [ROUND 3 same day — owner marked the gaps on a screenshot and asked to HALVE them: row
+  padding now px-2 py-1.5 (was px-4 py-3); the alt-versions expander row padding matched
+  (px-2) so its columns stay aligned. Cover stays h-14/56px — with the tight padding it now
+  visually dominates the row.]
 - **BACKLOG (owner-approved, do when time allows):** SEO structured data on track pages —
   add schema.org JSON-LD (MusicRecording / MusicComposition: name, byArtist = composer
   pseudonym, duration, genre, description, image) injected per-track (crawlers that run JS
