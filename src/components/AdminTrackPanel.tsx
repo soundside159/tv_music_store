@@ -25,6 +25,7 @@ import { usePlayer } from "@/components/playerContext";
 import { refreshContent } from "@/hooks/useContent";
 import { formatDuration, makeThumbnail, unzipBlob, wavToMp3Pair, zipEntries } from "@/lib/audioEncoding";
 import { brandCover } from "@/lib/coverArt";
+import { renameWavInBundle } from "@/lib/wavBundle";
 import { cleanVersionLabel } from "@/lib/downloadTrack";
 import type { Vocabularies } from "@/lib/tagOptions";
 
@@ -613,8 +614,23 @@ const VersionsBlock = ({
     const t = draft.trim();
     setRenamingId(null);
     if (!t || t === v.label) return;
-    const ok = await run({ action: "rename_version", id: track.id, versionId: v.id, label: t });
-    if (ok) onTracksChanged();
+    setPendingId(v.id);
+    try {
+      // Rename the matching WAV inside the master bundle too, so customer WAV
+      // downloads carry the new name (previews get the new label from the DB).
+      let wavZipKey: string | undefined;
+      try {
+        wavZipKey = (await renameWavInBundle(track.id, track.title, v.label, t)) ?? undefined;
+      } catch {
+        toast("WAV bundle unchanged", {
+          description: "Couldn't rename this version's file inside the zip.",
+        });
+      }
+      const ok = await run({ action: "rename_version", id: track.id, versionId: v.id, label: t, wavZipKey });
+      if (ok) onTracksChanged();
+    } finally {
+      setPendingId(null);
+    }
   };
 
   return (

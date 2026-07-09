@@ -4,6 +4,7 @@ import { Check, ChevronLeft, ChevronRight, ExternalLink, Minus, Music, Pause, Pl
 import { toast } from "sonner";
 import WaveformPreview from "@/components/WaveformPreview";
 import { generateDescriptionApi } from "@/lib/coverArt";
+import { renameWavInBundle } from "@/lib/wavBundle";
 import { usePlayer } from "@/components/playerContext";
 import { splitFilterValues } from "@/components/TrackRowPlayer";
 import type { Vocabularies } from "@/lib/tagOptions";
@@ -419,8 +420,26 @@ const AdminTracksEdit = ({
     const label = versionDraft.trim();
     setVersionRenaming(null);
     if (!label || label === oldLabel) return;
-    const ok = await run({ action: "rename_version", id: t.id, versionId, label }, "Version renamed");
-    if (ok) onTracksReload?.();
+    setVersionBusy(`${t.id}:${versionId}`);
+    try {
+      // Rename the matching WAV inside the master bundle too — customer WAV
+      // downloads must carry the new name, not just the MP3 previews.
+      let wavZipKey: string | undefined;
+      try {
+        wavZipKey = (await renameWavInBundle(t.id, t.title, oldLabel, label)) ?? undefined;
+      } catch {
+        toast("WAV bundle unchanged", {
+          description: "Couldn't rename this version's file inside the zip.",
+        });
+      }
+      const ok = await run(
+        { action: "rename_version", id: t.id, versionId, label, wavZipKey },
+        "Version renamed",
+      );
+      if (ok) onTracksReload?.();
+    } finally {
+      setVersionBusy(null);
+    }
   };
 
   const setMainVersion = async (t: CatalogTrack, versionId: string, label: string) => {

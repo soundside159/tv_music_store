@@ -123,18 +123,29 @@ const Navigation = () => {
                 className="h-9 w-44 rounded-full border border-border bg-card/60 pl-10 pr-4 font-body text-sm text-foreground placeholder:text-muted-foreground/70 transition-all duration-300 focus:w-64 focus:border-[#F4C430]/70 focus:outline-none lg:w-56"
               />
             </form>
-            <div className="relative" ref={acctRef}>
+            <div className="relative flex items-center" ref={acctRef}>
               <button
                 type="button"
                 onClick={onAccountClick}
                 aria-label="Account"
                 aria-haspopup={user ? "menu" : undefined}
                 aria-expanded={user ? acctOpen : undefined}
-                className={`transition-colors duration-300 hover:text-[#F4C430] ${
+                className={`flex items-center justify-center transition-colors duration-300 hover:text-[#F4C430] ${
                   acctOpen ? "text-[#F4C430]" : "text-muted-foreground"
                 }`}
               >
-                <User className="h-5 w-5" />
+                {user ? (
+                  /* Signed in: gold initial avatar instead of the generic icon. */
+                  <span
+                    className={`flex h-7 w-7 items-center justify-center rounded-full bg-[#F4C430] font-body text-xs font-bold text-background ring-2 transition-shadow ${
+                      acctOpen ? "ring-[#F4C430]/50" : "ring-transparent hover:ring-[#F4C430]/40"
+                    }`}
+                  >
+                    {(user.name || user.email).charAt(0).toUpperCase()}
+                  </span>
+                ) : (
+                  <User className="h-5 w-5" />
+                )}
               </button>
               {user && acctOpen && (
                 <div
@@ -195,7 +206,7 @@ const Navigation = () => {
             <Link
               to="/cart"
               aria-label="Cart"
-              className="relative text-muted-foreground transition-colors duration-300 hover:text-[#F4C430]"
+              className="relative flex items-center text-muted-foreground transition-colors duration-300 hover:text-[#F4C430]"
             >
               <ShoppingCart className="h-5 w-5" />
               {cartCount > 0 && (

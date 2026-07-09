@@ -1844,6 +1844,18 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   returns tracksUpdated. UI: double-click a value in Admin → Vocabulary → inline input
   (Enter/blur saves, Esc cancels) → success toast + refreshContent so catalog filters follow.
   Owner's motive: retag for better sales without re-ticking every track.
+- **2026-07-09 (version rename renames the WAV in the bundle + header avatar):**
+  (1) Renaming a version now also renames the matching WAV inside the private master zip —
+  NEW `src/lib/wavBundle.ts` `renameWavInBundle(trackId, title, oldLabel, newLabel)`
+  (downloads /api/admin/master, matches the entry via cleanVersionLabel — Main matches the
+  bare "<Title>.wav" file — renames to "<Title> (<label>).wav", re-zips, uploads, returns the
+  new key); `rename_version` server action now accepts `wavZipKey` (same as delete_version).
+  Wired in BOTH rename spots: track-page VersionsBlock and the Tracks Edit expander
+  (double-click). No match / no bundle → small toast, label rename proceeds anyway.
+  (2) HEADER: account button and cart icon aligned (both flex items-center — the account
+  wrapper was baseline-shifted); signed-in users now see a GOLD INITIAL AVATAR (first letter
+  of name/email, 28px circle, gold ring when the menu is open) instead of the generic user
+  icon; guests keep the icon.
 - **BACKLOG (owner-approved, do when time allows):** SEO structured data on track pages —
   add schema.org JSON-LD (MusicRecording / MusicComposition: name, byArtist = composer
   pseudonym, duration, genre, description, image) injected per-track (crawlers that run JS

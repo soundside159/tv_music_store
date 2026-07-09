@@ -834,6 +834,9 @@ export const onRequestPost = async (ctx: Ctx) => {
     }
 
     case "rename_version": {
+      // { id, versionId, label, wavZipKey? } — the client also renames the
+      // matching WAV inside the master bundle and re-uploads it, so customer
+      // WAV downloads carry the new name too.
       const trackId = body.id;
       const versionId = body.versionId;
       const label = body.label?.trim();
@@ -842,6 +845,9 @@ export const onRequestPost = async (ctx: Ctx) => {
         .prepare(`UPDATE track_versions SET label = ?3 WHERE track_id = ?1 AND version_id = ?2`)
         .bind(trackId, versionId, label.slice(0, 60))
         .run();
+      if (typeof body.wavZipKey === "string" && /^masters\//.test(body.wavZipKey)) {
+        await db.prepare(`UPDATE tracks SET r2_key_wav_zip = ?2 WHERE id = ?1`).bind(trackId, body.wavZipKey).run();
+      }
       return json({ ok: true });
     }
 
