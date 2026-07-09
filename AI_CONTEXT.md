@@ -1739,3 +1739,14 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   Settings → Variables and Secrets (never commit keys; never echo them in chat).
   OWNER STEPS: (1) revoke pasted key, create new; (2) add OPENAI_API_KEY secret; (3) deploy;
   (4) check /api/health says openai: configured.
+- **2026-07-09 (AI cover polish: brand stamp + thinking animation):** (1) generated covers now
+  get the BRAND stamped client-side before saving: new `brandCover()` in AdminTrackPanel.tsx —
+  canvas composite of a soft bottom gradient + `/images/icons/logo-header.png` + "TV MUSIC
+  STORE" (Inter semibold, wide tracking — mirrors the header wordmark; canvas `letterSpacing`
+  where supported) in the bottom-left, exported as JPEG q0.92 and uploaded via /api/admin/upload;
+  the row THUMBNAIL is made from the clean unbranded original (owner: unreadable at that size);
+  if branding fails the unbranded AI original is used. (2) The "Generating… ~30 sec" text was
+  replaced by a pulsing gold sparkles animation (ping + pulse rings) centered on the cover —
+  the wait is event-driven, art appears the moment OpenAI responds. FYI recorded for the owner:
+  MP3 320/128 previews are encoded from EVERY WAV version separately; the Main star only decides
+  which version fronts the track (catalog playback + shown duration).

@@ -219,6 +219,65 @@ export const AdminTrackTopBar = ({
 // for the row lists) or remove it. Render inside a `group/cover` container.
 // ---------------------------------------------------------------------------
 
+/**
+ * Stamps the brand into the bottom-left corner of a generated cover — the
+ * header logo + "TV MUSIC STORE" in the header's style (Inter semibold,
+ * wide tracking). Only the FULL cover gets the stamp; the row thumbnail is
+ * made from the unbranded original (too small to read anyway).
+ */
+const brandCover = async (source: Blob): Promise<Blob> => {
+  const img = await createImageBitmap(source);
+  const canvas = document.createElement("canvas");
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const c = canvas.getContext("2d");
+  if (!c) throw new Error("Canvas unavailable");
+  c.drawImage(img, 0, 0);
+
+  const s = img.width / 1024; // scale everything relative to a 1024px cover
+  const pad = 34 * s;
+
+  // Soft dark gradient along the bottom so the mark reads on bright art.
+  const gradH = 190 * s;
+  const grad = c.createLinearGradient(0, img.height - gradH, 0, img.height);
+  grad.addColorStop(0, "rgba(0,0,0,0)");
+  grad.addColorStop(1, "rgba(0,0,0,0.55)");
+  c.fillStyle = grad;
+  c.fillRect(0, img.height - gradH, img.width, gradH);
+
+  const logo = new Image();
+  logo.src = "/images/icons/logo-header.png";
+  await logo.decode();
+  const logoH = 44 * s;
+  const logoW = logo.width * (logoH / logo.height);
+  const y = img.height - pad - logoH;
+
+  c.save();
+  c.shadowColor = "rgba(0,0,0,0.6)";
+  c.shadowBlur = 10 * s;
+  c.shadowOffsetY = 2 * s;
+  c.drawImage(logo, pad, y, logoW, logoH);
+  c.font = `600 ${Math.round(24 * s)}px Inter, sans-serif`;
+  try {
+    // Match the header's tracking where supported (Chromium).
+    (c as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing = `${Math.round(5 * s)}px`;
+  } catch {
+    // older browsers just render without the tracking
+  }
+  c.fillStyle = "#ffffff";
+  c.textBaseline = "middle";
+  c.fillText("TV MUSIC STORE", pad + logoW + 16 * s, y + logoH / 2 + 1 * s);
+  c.restore();
+
+  return new Promise((resolve, reject) =>
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("Branding failed"))),
+      "image/jpeg",
+      0.92,
+    ),
+  );
+};
+
 const uploadImageApi = async (file: Blob, filename: string): Promise<string> => {
   const base = filename.replace(/\.[^.]+$/, "");
   const res = await fetch(`/api/admin/upload?filename=${encodeURIComponent(base)}`, {
@@ -264,18 +323,26 @@ export const AdminTrackCoverOverlay = ({
       const d = (await res.json().catch(() => ({}))) as { ok?: boolean; path?: string; error?: string };
       if (!res.ok || !d.ok || !d.path) throw new Error(d.error ?? "Generation failed");
 
+      // Brand the full cover (logo + wordmark, bottom-left); the row thumbnail
+      // comes from the clean original. If branding fails, use the original.
+      const blob = await (await fetch(d.path)).blob();
+      const original = new File([blob], "ai-cover.png", { type: blob.type || "image/png" });
+      let cover = d.path;
+      try {
+        cover = await uploadImageApi(await brandCover(original), "ai-cover-branded.jpg");
+      } catch {
+        // unbranded original stays
+      }
       let coverThumb = "";
       try {
-        const blob = await (await fetch(d.path)).blob();
-        const file = new File([blob], "ai-cover.png", { type: blob.type || "image/png" });
-        coverThumb = await uploadImageApi(await makeThumbnail(file), "ai-cover-thumb.jpg");
+        coverThumb = await uploadImageApi(await makeThumbnail(original), "ai-cover-thumb.jpg");
       } catch {
         // keep coverThumb empty — rows fall back to the full cover
       }
       const ok = await run({
         action: "bulk_update_tracks",
         trackIds: [track.id],
-        fields: { cover: d.path, coverThumb },
+        fields: { cover, coverThumb },
       });
       if (ok) {
         toast.success("Cover generated");
@@ -340,43 +407,56 @@ export const AdminTrackCoverOverlay = ({
           busy || genOpen ? "opacity-100" : "opacity-0 group-hover/cover:opacity-100"
         }`}
       >
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => inputRef.current?.click()}
-          title="Upload a new cover (1000x1000 recommended)"
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-[#F4C430]/60 bg-card text-[#F4C430] transition-colors hover:bg-[#F4C430] hover:text-background disabled:opacity-50"
-        >
-          <ImageUp className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => setGenOpen((v) => !v)}
-          title="Generate cover with AI (uses the track's Use Case & Mood)"
-          className={`flex h-10 w-10 items-center justify-center rounded-full border bg-card transition-colors disabled:opacity-50 ${
-            genOpen
-              ? "border-[#F4C430] bg-[#F4C430] text-background"
-              : "border-[#F4C430]/60 text-[#F4C430] hover:bg-[#F4C430] hover:text-background"
-          }`}
-        >
-          <Sparkles className="h-4 w-4" />
-        </button>
-        {track.cover && (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void removeCover()}
-            title="Remove cover"
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:border-red-400 hover:text-red-400 disabled:opacity-50"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
-        )}
-        {busy && (
-          <span className="font-body text-[10px] text-muted-foreground">
-            {genBusy ? "Generating… ~30 sec" : "Uploading…"}
+        {genBusy ? (
+          /* "Thinking" animation while OpenAI paints — the art pops in the
+             moment the response lands (no fixed wait). */
+          <span className="flex flex-col items-center gap-2.5">
+            <span className="relative flex h-14 w-14 items-center justify-center">
+              <span className="absolute inset-0 animate-ping rounded-full bg-[#F4C430]/20" />
+              <span className="absolute inset-1.5 animate-pulse rounded-full bg-[#F4C430]/15" />
+              <Sparkles className="relative h-6 w-6 animate-pulse text-[#F4C430]" />
+            </span>
+            <span className="animate-pulse font-body text-[11px] text-muted-foreground">
+              Generating…
+            </span>
           </span>
+        ) : (
+          <>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => inputRef.current?.click()}
+              title="Upload a new cover (1000x1000 recommended)"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-[#F4C430]/60 bg-card text-[#F4C430] transition-colors hover:bg-[#F4C430] hover:text-background disabled:opacity-50"
+            >
+              <ImageUp className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setGenOpen((v) => !v)}
+              title="Generate cover with AI (uses the track's Use Case & Mood)"
+              className={`flex h-10 w-10 items-center justify-center rounded-full border bg-card transition-colors disabled:opacity-50 ${
+                genOpen
+                  ? "border-[#F4C430] bg-[#F4C430] text-background"
+                  : "border-[#F4C430]/60 text-[#F4C430] hover:bg-[#F4C430] hover:text-background"
+              }`}
+            >
+              <Sparkles className="h-4 w-4" />
+            </button>
+            {track.cover && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void removeCover()}
+                title="Remove cover"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:border-red-400 hover:text-red-400 disabled:opacity-50"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
+            {busy && <span className="font-body text-[10px] text-muted-foreground">Uploading…</span>}
+          </>
         )}
 
         {/* AI generation popover: optional featured element + Go. */}
