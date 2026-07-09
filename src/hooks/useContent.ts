@@ -31,13 +31,29 @@ let inflight: Promise<ApiContent | null> | null = null;
 // True once the FIRST /api/content attempt finished (ok or not). Pages use it
 // to show skeletons instead of flashing mock data / "not found".
 let settled = false;
+// Stale-while-revalidate: the cache renders instantly on SPA navigation, but
+// if it's older than this, a background refetch swaps fresh data in — so admin
+// edits (new vocab values, trending, playlists…) appear on the next page
+// visit without a hard reload.
+let fetchedAt = 0;
+const STALE_MS = 30_000;
+let revalidating = false;
 
 const fetchContent = (): Promise<ApiContent | null> => {
-  if (cache) return Promise.resolve(cache);
+  if (cache) {
+    if (Date.now() - fetchedAt > STALE_MS && !revalidating) {
+      revalidating = true;
+      void refreshContent().finally(() => {
+        revalidating = false;
+      });
+    }
+    return Promise.resolve(cache);
+  }
   inflight ??= fetch("/api/content")
     .then((res) => (res.ok ? (res.json() as Promise<ApiContent>) : null))
     .then((data) => {
       cache = data;
+      fetchedAt = Date.now();
       return data;
     })
     .catch(() => null)
@@ -75,7 +91,10 @@ export const refreshContent = (): Promise<void> =>
   fetch("/api/content")
     .then((res) => (res.ok ? (res.json() as Promise<ApiContent>) : null))
     .then((data) => {
-      if (data) cache = data;
+      if (data) {
+        cache = data;
+        fetchedAt = Date.now();
+      }
     })
     .catch(() => {
       // network hiccup — keep showing the stale content

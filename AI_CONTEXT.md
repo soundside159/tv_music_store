@@ -1828,6 +1828,15 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   padding now px-2 py-1.5 (was px-4 py-3); the alt-versions expander row padding matched
   (px-2) so its columns stay aligned. Cover stays h-14/56px — with the tight padding it now
   visually dominates the row.]
+- **2026-07-09 (stale content on SPA navigation fixed):** owner added Vocabulary values, went
+  to /catalog — nothing there until Ctrl+F5. Cause: the /api/content module cache in
+  useContent.ts was fetched ONCE per browser session and never revalidated on SPA navigation.
+  Fix: stale-while-revalidate in `fetchContent` — the cache still renders instantly, but when
+  it's older than 30 s (STALE_MS) a background `refreshContent()` runs and notifies every
+  mounted hook, so vocab/trending/collections/playlists refresh on the next page visit (data
+  swaps in a beat later, no flash, no hard reload). `fetchedAt` maintained by both fetch paths.
+  Tracks were never affected (useTracks refetches on every page mount), so new tracks +
+  admin-picked trending now both show up when a visitor simply navigates to the homepage.
 - **BACKLOG (owner-approved, do when time allows):** SEO structured data on track pages —
   add schema.org JSON-LD (MusicRecording / MusicComposition: name, byArtist = composer
   pseudonym, duration, genre, description, image) injected per-track (crawlers that run JS
