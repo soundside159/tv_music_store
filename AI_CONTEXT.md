@@ -1783,3 +1783,17 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   (enabled once ≥1 Use Case + Genre + Mood are picked; uses the picked lists) and the
   AdminTracksEdit single-track panel (uses the track's SAVED facets via trackId). Generated
   text lands in the field for review/edit — saving still goes through the normal Apply/Upload.
+- **2026-07-09 (AI round 2 — owner tweaks):** (1) description prompt: "royalty-free" phrasing
+  REMOVED (library is no longer described as royalty-free; added an explicit "never mention
+  licensing terms" rule) — owner: it confuses buyers. (2) image MODEL downgraded
+  gpt-image-1.5 → **gpt-image-1** to save credits (owner testing quality; revert = one line in
+  generate-cover.ts). (3) header avatar popup: after a separator, above Log out — "Composer
+  Dashboard" (roles composer/admin → /account?section=composer-dashboard) and "Admin
+  Dashboard" (admin → /admin); same links added to the mobile menu block. (4) TRACKS EDIT bulk
+  AI: outlined-gold "✨ AI Art & Text (N)" button next to Publish (AdminContent header
+  cluster, visible with a selection): confirms, then for every selected track that has ≥1
+  saved Usage + Genre + Mood generates cover (brand + thumb, same pipeline) AND description
+  in parallel per track, saves via bulk_update_tracks, updates rows locally; under-tagged
+  tracks are skipped (count shown in the confirm), per-track failures toast and don't stop
+  the queue, button shows "AI k/n…" progress. NOTE: each track = 1 image + 1 text call —
+  mind OpenAI credits on big selections.

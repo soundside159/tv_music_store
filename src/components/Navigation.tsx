@@ -155,6 +155,30 @@ const Navigation = () => {
                       {item.label}
                     </Link>
                   ))}
+                  {/* Role dashboards: quick jumps for composers and the admin. */}
+                  {(user.role === "composer" || user.role === "admin") && (
+                    <>
+                      <div className="my-1.5 h-px bg-border/60" />
+                      <Link
+                        to="/account?section=composer-dashboard"
+                        role="menuitem"
+                        onClick={() => setAcctOpen(false)}
+                        className="block px-4 py-2 font-body text-sm text-foreground/90 transition-colors hover:bg-white/5 hover:text-[#F4C430]"
+                      >
+                        Composer Dashboard
+                      </Link>
+                      {user.role === "admin" && (
+                        <Link
+                          to="/admin"
+                          role="menuitem"
+                          onClick={() => setAcctOpen(false)}
+                          className="block px-4 py-2 font-body text-sm text-foreground/90 transition-colors hover:bg-white/5 hover:text-[#F4C430]"
+                        >
+                          Admin Dashboard
+                        </Link>
+                      )}
+                    </>
+                  )}
                   <div className="my-1.5 h-px bg-border/60" />
                   <button
                     type="button"
@@ -229,6 +253,24 @@ const Navigation = () => {
                       {item.label}
                     </Link>
                   ))}
+                  {(user.role === "composer" || user.role === "admin") && (
+                    <Link
+                      to="/account?section=composer-dashboard"
+                      onClick={() => setIsOpen(false)}
+                      className="py-2 font-body text-base text-muted-foreground transition-colors duration-300 hover:text-[#F4C430]"
+                    >
+                      Composer Dashboard
+                    </Link>
+                  )}
+                  {user.role === "admin" && (
+                    <Link
+                      to="/admin"
+                      onClick={() => setIsOpen(false)}
+                      className="py-2 font-body text-base text-muted-foreground transition-colors duration-300 hover:text-[#F4C430]"
+                    >
+                      Admin Dashboard
+                    </Link>
+                  )}
                   <button
                     type="button"
                     onClick={onLogout}

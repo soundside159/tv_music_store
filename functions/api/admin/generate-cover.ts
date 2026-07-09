@@ -13,7 +13,9 @@ import { getSessionUser, json, OWNER_EMAIL, readJson, type Ctx } from "../_utils
 // OWNER SETUP: add the OPENAI_API_KEY secret in Cloudflare Pages
 // (Settings → Variables and Secrets). NEVER commit the key.
 
-const MODEL = "gpt-image-1.5";
+// Owner is testing the cheaper model — bump back to "gpt-image-1.5" if the
+// art quality drops (one-line change).
+const MODEL = "gpt-image-1";
 
 const PROMPT_TEMPLATE = `Create an original cinematic key art image for a premium royalty-free music library.
 

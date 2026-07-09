@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { ChevronDown, ChevronUp, GripVertical, Pause, Play, Plus, X } from "lucide-react";
+import { ChevronDown, ChevronUp, GripVertical, Pause, Play, Plus, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
+import { makeThumbnail } from "@/lib/audioEncoding";
+import { brandCover, generateCoverApi, generateDescriptionApi, uploadCoverImage } from "@/lib/coverArt";
 import { usePlayer } from "@/components/playerContext";
 import { useTracks } from "@/hooks/useTracks";
 import { refreshContent } from "@/hooks/useContent";
@@ -161,6 +163,78 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
       setSelResetKey((k) => k + 1);
       reload();
       void reloadTracks();
+    }
+  };
+
+  // Bulk AI: generate cover art + SEO description for every selected track
+  // that has at least one saved Usage, Genre AND Mood value. Runs one by one;
+  // failures don't stop the queue.
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiNote, setAiNote] = useState("");
+  const aiFillSelectedTracks = async () => {
+    const selected = selectedTrackIds
+      .map((id) => mergedTracks.find((t) => t.id === id))
+      .filter((t): t is CatalogTrack => !!t);
+    const eligible = selected.filter(
+      (t) => t.useCase.trim() && t.genre.trim() && t.mood.trim(),
+    );
+    const skipped = selected.length - eligible.length;
+    if (eligible.length === 0) {
+      toast.error("None of the selected tracks have Usage, Genre and Mood set — tag them first.");
+      return;
+    }
+    if (
+      !window.confirm(
+        `Generate AI cover + description for ${eligible.length} track(s)?` +
+          (skipped > 0 ? `\n${skipped} selected track(s) without full tags will be skipped.` : ""),
+      )
+    )
+      return;
+    setAiBusy(true);
+    let done = 0;
+    let failed = 0;
+    for (const t of eligible) {
+      setAiNote(`${done + failed + 1}/${eligible.length}`);
+      try {
+        const [coverPath, description] = await Promise.all([
+          generateCoverApi({ trackId: t.id }),
+          generateDescriptionApi({ trackId: t.id }),
+        ]);
+        const blob = await (await fetch(coverPath)).blob();
+        const original = new File([blob], "ai-cover.png", { type: blob.type || "image/png" });
+        let cover = coverPath;
+        try {
+          cover = await uploadCoverImage(await brandCover(original), "ai-cover-branded.jpg");
+        } catch {
+          // unbranded original stays
+        }
+        let coverThumb = "";
+        try {
+          coverThumb = await uploadCoverImage(await makeThumbnail(original), "ai-cover-thumb.jpg");
+        } catch {
+          // rows fall back to the full cover
+        }
+        await api({
+          action: "bulk_update_tracks",
+          trackIds: [t.id],
+          fields: { cover, coverThumb, description },
+        });
+        setTrackOverrides((o) => ({
+          ...o,
+          [t.id]: { ...o[t.id], cover, coverThumb, description },
+        }));
+        done += 1;
+      } catch (e) {
+        failed += 1;
+        toast.error(`${t.title}: ${e instanceof Error ? e.message : "failed"}`);
+      }
+    }
+    setAiBusy(false);
+    setAiNote("");
+    if (done > 0) {
+      toast.success(
+        `AI art & text ready for ${done} track(s)` + (failed > 0 ? ` · ${failed} failed` : ""),
+      );
     }
   };
 
@@ -402,7 +476,17 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
               <>
                 <button
                   type="button"
-                  disabled={busy}
+                  disabled={busy || aiBusy}
+                  onClick={() => void aiFillSelectedTracks()}
+                  title="Generate AI cover art + description for every selected track that has Usage, Genre and Mood set"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[#F4C430]/60 px-4 py-2 font-body text-sm font-semibold text-[#F4C430] transition-colors hover:bg-[#F4C430]/10 disabled:opacity-50"
+                >
+                  <Sparkles className={`h-4 w-4 ${aiBusy ? "animate-pulse" : ""}`} />
+                  {aiBusy ? `AI ${aiNote}…` : `AI Art & Text (${selectedTrackIds.length})`}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || aiBusy}
                   onClick={() => void publishSelectedTracks()}
                   className={goldBtnCls}
                 >
