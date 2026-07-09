@@ -319,10 +319,12 @@ export const onRequestPost = async (ctx: Ctx) => {
     collectionChanges?: { add?: string[]; remove?: string[] };
     categoryChanges?: { add?: string[]; remove?: string[] };
     trendingChange?: "add" | "remove";
-    // add_vocab / delete_vocab / set_vocab fields
+    // add_vocab / delete_vocab / set_vocab / rename_vocab fields
     facet?: string;
     value?: string;
     values?: string[];
+    /** rename_vocab: the new name for `value` (tracks are updated too). */
+    newValue?: string;
     fields?: {
       title?: string;
       bpm?: number;
@@ -979,6 +981,52 @@ export const onRequestPost = async (ctx: Ctx) => {
         }
       }
       return json({ ok: true, values: list });
+    }
+
+    case "rename_vocab": {
+      // Rename a value in place (keeps its position) AND rewrite every track
+      // that carries it — so retagging for better sales is one action, no
+      // manual re-ticking across the catalog.
+      const facet = body.facet as VocabFacet;
+      if (!VOCAB_KEY[facet]) return json({ error: "Unknown facet" }, 400);
+      const value = body.value?.trim();
+      const newValue = body.newValue?.trim();
+      if (!value || !newValue) return json({ error: "value and newValue required" }, 400);
+      if (value === newValue) return json({ ok: true });
+
+      const vocab = await getVocabularies(db);
+      const list = [...vocab[facet]];
+      const idx = list.findIndex((v) => v === value);
+      if (idx === -1) return json({ error: "Value not found" }, 404);
+      if (list.some((v, i) => i !== idx && v.toLowerCase() === newValue.toLowerCase())) {
+        return json({ error: `"${newValue}" already exists in this list` }, 400);
+      }
+      list[idx] = newValue;
+      await db
+        .prepare(
+          `INSERT INTO site_config (key, value) VALUES (?1, ?2)
+           ON CONFLICT(key) DO UPDATE SET value = ?2`,
+        )
+        .bind(VOCAB_KEY[facet], JSON.stringify(list))
+        .run();
+
+      const col = VOCAB_COL[facet];
+      const rows = await db
+        .prepare(`SELECT id, ${col} AS v FROM tracks WHERE ${col} LIKE ?1`)
+        .bind(`%${value}%`)
+        .all<{ id: string; v: string | null }>();
+      let updated = 0;
+      for (const r of rows.results) {
+        const vals = (r.v ?? "")
+          .split("/")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        if (!vals.includes(value)) continue; // LIKE matched a superstring only
+        const next = vals.map((s) => (s === value ? newValue : s));
+        await db.prepare(`UPDATE tracks SET ${col} = ?2 WHERE id = ?1`).bind(r.id, next.join(" / ")).run();
+        updated += 1;
+      }
+      return json({ ok: true, values: list, tracksUpdated: updated });
     }
 
     case "set_vocab": {

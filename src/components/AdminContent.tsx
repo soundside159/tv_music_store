@@ -150,8 +150,12 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
   const [selResetKey, setSelResetKey] = useState(0);
   // Playlists tab: id of the playlist being dragged between/within theme sections.
   const [dragPlaylistId, setDragPlaylistId] = useState<string | null>(null);
-  // Vocabulary tab: the value being dragged (per facet).
+  // Vocabulary tab: the value being dragged (per facet) and the value being
+  // renamed inline (double-click).
   const [dragVocab, setDragVocab] = useState<{ facet: string; value: string } | null>(null);
+  const [vocabEdit, setVocabEdit] = useState<{ facet: string; value: string; draft: string } | null>(
+    null,
+  );
 
   const deleteSelectedTracks = async () => {
     if (selectedTrackIds.length === 0) return;
@@ -943,7 +947,8 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
         <div className="mt-5 flex flex-col gap-6">
           <p className="font-body text-sm text-muted-foreground">
             The Use Case / Genre / Mood values shown in the catalog filters and the Tracks Edit
-            panel — in the same order they appear on the site. Drag a row to reorder; deleting a
+            panel — in the same order they appear on the site. Drag a row to reorder; double-click
+            a value to rename it (every track using it is retagged automatically); deleting a
             value also removes it from any track that uses it.
           </p>
           {(
@@ -998,12 +1003,46 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                         dragVocab?.facet === key && dragVocab.value === value ? "opacity-40" : ""
                       }`}
                     >
-                      <span className="flex min-w-0 items-center gap-2 font-body text-sm text-foreground">
+                      <span className="flex min-w-0 flex-1 items-center gap-2 font-body text-sm text-foreground">
                         <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
                         <span className="w-5 shrink-0 text-right font-body text-xs tabular-nums text-muted-foreground/60">
                           {i + 1}
                         </span>
-                        <span className="truncate">{value}</span>
+                        {vocabEdit && vocabEdit.facet === key && vocabEdit.value === value ? (
+                          /* Inline rename (double-click): Enter/blur saves —
+                             every track carrying the value is retagged too. */
+                          <input
+                            value={vocabEdit.draft}
+                            autoFocus
+                            disabled={busy}
+                            onChange={(e) =>
+                              setVocabEdit((prev) => (prev ? { ...prev, draft: e.target.value } : prev))
+                            }
+                            onBlur={async () => {
+                              const draft = vocabEdit.draft.trim();
+                              setVocabEdit(null);
+                              if (!draft || draft === value) return;
+                              await run(
+                                { action: "rename_vocab", facet: key, value, newValue: draft },
+                                `Renamed — tracks retagged to "${draft}"`,
+                              );
+                              void refreshContent();
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                              if (e.key === "Escape") setVocabEdit(null);
+                            }}
+                            className={`${inputCls} min-w-0 flex-1 px-2 py-1 text-sm`}
+                          />
+                        ) : (
+                          <span
+                            className="cursor-text truncate"
+                            title="Double-click to rename (tracks are retagged automatically)"
+                            onDoubleClick={() => setVocabEdit({ facet: key, value, draft: value })}
+                          >
+                            {value}
+                          </span>
+                        )}
                       </span>
                       <span className="flex shrink-0 items-center gap-0.5">
                         <button

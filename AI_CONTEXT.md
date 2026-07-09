@@ -1837,6 +1837,13 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   swaps in a beat later, no flash, no hard reload). `fetchedAt` maintained by both fetch paths.
   Tracks were never affected (useTracks refetches on every page mount), so new tracks +
   admin-picked trending now both show up when a visitor simply navigates to the homepage.
+- **2026-07-09 (Vocabulary rename):** new `rename_vocab` action in admin/content.ts
+  ({facet, value, newValue}): renames the value IN PLACE in the site_config list (position
+  kept; case-insensitive duplicate check → 400) AND rewrites every track carrying it (the
+  " / "-joined facet column; LIKE prefilter + exact-value check so substrings are safe),
+  returns tracksUpdated. UI: double-click a value in Admin → Vocabulary → inline input
+  (Enter/blur saves, Esc cancels) → success toast + refreshContent so catalog filters follow.
+  Owner's motive: retag for better sales without re-ticking every track.
 - **BACKLOG (owner-approved, do when time allows):** SEO structured data on track pages —
   add schema.org JSON-LD (MusicRecording / MusicComposition: name, byArtist = composer
   pseudonym, duration, genre, description, image) injected per-track (crawlers that run JS
