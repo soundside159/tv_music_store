@@ -13,6 +13,7 @@ import {
   useTrackAudioEngine,
 } from "@/components/TrackRowPlayer";
 import { PlayerContext } from "@/components/playerContext";
+import AudioVisualizer from "@/components/AudioVisualizer";
 
 export { usePlayer } from "@/components/playerContext";
 
@@ -29,6 +30,8 @@ export const PlayerProvider = ({ children }: { children: ReactNode }) => {
       {children}
       {currentTrack && currentVersion && (
         <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-card/95 shadow-[0_-10px_30px_-12px_rgba(0,0,0,0.7)] backdrop-blur-xl">
+          {/* Particle equalizer rising from the bar's top border (experiment). */}
+          <AudioVisualizer />
           <div className="mx-auto grid min-h-16 w-full max-w-7xl gap-3 px-4 py-3 sm:px-6 md:grid-cols-[minmax(12rem,20rem)_minmax(0,1fr)_auto] md:items-center">
             <div className="flex min-w-0 items-center gap-3">
               <button

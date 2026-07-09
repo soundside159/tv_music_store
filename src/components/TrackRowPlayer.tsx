@@ -413,6 +413,11 @@ export const TrackRow = ({
 // (homepage trending, artist pages). Mirrors the catalog playback behavior.
 // ---------------------------------------------------------------------------
 
+// Shared frequency analyser for the bottom-bar audio visualizer. Set when the
+// Web Audio graph spins up; null when Web Audio is unavailable.
+let sharedAnalyser: AnalyserNode | null = null;
+export const getSharedAnalyser = (): AnalyserNode | null => sharedAnalyser;
+
 export const useTrackAudioEngine = () => {
   const [activePlayer, setActivePlayer] = useState<ActivePlayer | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -460,7 +465,15 @@ export const useTrackAudioEngine = () => {
         mediaSourceRef.current = ctx.createMediaElementSource(audio);
         gainNodeRef.current = ctx.createGain();
         gainNodeRef.current.gain.value = sliderToGain(volume);
-        mediaSourceRef.current.connect(gainNodeRef.current).connect(ctx.destination);
+        // source → gain → analyser → speakers; the analyser feeds the
+        // bottom-bar particle visualizer (zero audible effect).
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 2048;
+        analyser.smoothingTimeConstant = 0.8;
+        sharedAnalyser = analyser;
+        mediaSourceRef.current.connect(gainNodeRef.current);
+        gainNodeRef.current.connect(analyser);
+        analyser.connect(ctx.destination);
       }
     } catch {
       // Web Audio unavailable; falls back to element volume

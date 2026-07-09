@@ -1856,6 +1856,25 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   wrapper was baseline-shifted); signed-in users now see a GOLD INITIAL AVATAR (first letter
   of name/email, 28px circle, gold ring when the menu is open) instead of the generic user
   icon; guests keep the icon.
+- **2026-07-09 (particle equalizer above the mini-player — owner EXPERIMENT, may be removed):**
+  inspired by the owner's Python particle-sphere app (he shared the code; its slider set —
+  density/reactivity/chaos/trail/glow/sparkle/band gains — became the parameter model).
+  ENGINE: `getSharedAnalyser()` exported from TrackRowPlayer — an AnalyserNode (fftSize 2048)
+  inserted source→gain→ANALYSER→destination in ensureAudioGraph (no audible change).
+  VISUAL: `src/components/AudioVisualizer.tsx` — transparent canvas absolutely positioned
+  `bottom-full` above the fixed mini-player bar (h-32, pointer-events-none), mounted in
+  PlayerProvider. rAF loop: 96 log-spaced spectrum columns (LEFT = lows … RIGHT = highs, top
+  octave dropped), per-column fast-attack/slow-release envelope, particles spawn from the
+  bar's top border and jump up with soft gravity, twinkle (sparkle), trails via
+  destination-out fade, additive glow, gold/white mix; caps: 900 particles, dpr≤2; particles
+  finish falling after pause (idleFade). SETTINGS: `src/lib/visualizerSettings.ts` —
+  localStorage (tvms_visualizer_v1), enabled + density/reactivity/maxRise/size/trail/glow/
+  chaos/sparkle/gold/smoothing/bass/mid/high (0-100 scales like his Python app).
+  TEMP TUNING PANEL: `VisualizerSettingsPanel.tsx` on the HOMEPAGE above the footer, ADMIN
+  ONLY — live sliders + Enabled toggle + Reset; values persist per-browser. NEXT AI: when the
+  owner settles on numbers, hardcode them into DEFAULT_VISUALIZER and DELETE the panel (and
+  its Index.tsx mount); if he dislikes the whole thing, remove AudioVisualizer from
+  PlayerProvider + the settings lib + panel (analyser can stay, it's harmless).
 - **BACKLOG (owner-approved, do when time allows):** SEO structured data on track pages —
   add schema.org JSON-LD (MusicRecording / MusicComposition: name, byArtist = composer
   pseudonym, duration, genre, description, image) injected per-track (crawlers that run JS
