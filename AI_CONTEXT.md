@@ -1811,3 +1811,18 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   hovering a row thumbnail shows a sparkle button → `generateCoverForTrack` in AdminContent
   (cover+brand+thumb only, no text; guards on missing facets) — so cover and text can be
   generated separately (panel Generate = text only) or together (bulk AI Art & Text).
+- **2026-07-09 (round 4: vocab DnD, AI model switcher, 3 tabs, bigger row art):**
+  (1) VOCABULARY: up/down arrows replaced with native drag&drop (grip icon, drop before a row
+  or at the list end; same set_vocab persistence). (2) AI MODEL SWITCHER: generate-cover now
+  takes `model: "standard" | "premium"` (whitelisted server-side → gpt-image-1 /
+  gpt-image-1.5); Tracks Edit toolbar got an "AI images: Standard/Premium" select next to All
+  Composers — applies to the bulk AI button AND per-row thumbnail generation (track page &
+  composer upload stay on standard). (3) Tracks Edit tabs split into THREE: Live / Drafts /
+  Review (review = moderation pending; drafts = unpublished non-pending), each with counts.
+  (4) Track-row cover thumbs (homepage/catalog/collections rows): 48px → 52px
+  (h-[3.25rem], play column is 56px so it still fits; progress-ring svg scales via viewBox).
+- **BACKLOG (owner-approved, do when time allows):** SEO structured data on track pages —
+  add schema.org JSON-LD (MusicRecording / MusicComposition: name, byArtist = composer
+  pseudonym, duration, genre, description, image) injected per-track (crawlers that run JS
+  see it via useSeo; consider prerendering later). Also consider BreadcrumbList and
+  MusicPlaylist markup on playlist/collection pages.

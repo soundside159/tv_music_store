@@ -150,6 +150,8 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
   const [selResetKey, setSelResetKey] = useState(0);
   // Playlists tab: id of the playlist being dragged between/within theme sections.
   const [dragPlaylistId, setDragPlaylistId] = useState<string | null>(null);
+  // Vocabulary tab: the value being dragged (per facet).
+  const [dragVocab, setDragVocab] = useState<{ facet: string; value: string } | null>(null);
 
   const deleteSelectedTracks = async () => {
     if (selectedTrackIds.length === 0) return;
@@ -174,6 +176,8 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
   // Track ids currently being generated — drives the sparkle animation on the
   // row thumbnails and the description field in AdminTracksEdit.
   const [aiTrackIds, setAiTrackIds] = useState<string[]>([]);
+  // Image model for the Tracks Edit generations (switcher in its toolbar).
+  const [aiModel, setAiModel] = useState<"standard" | "premium">("standard");
   // Bumped after each finished track so the single-track fields panel re-reads
   // the fresh description/cover without waiting for a reselect.
   const [fieldsRefreshKey, setFieldsRefreshKey] = useState(0);
@@ -190,7 +194,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
     }
     aiStart(trackId);
     try {
-      const coverPath = await generateCoverApi({ trackId });
+      const coverPath = await generateCoverApi({ trackId, model: aiModel });
       const blob = await (await fetch(coverPath)).blob();
       const original = new File([blob], "ai-cover.png", { type: blob.type || "image/png" });
       let cover = coverPath;
@@ -243,7 +247,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
       setAiNote(`${done + failed + 1}/${eligible.length}`);
       try {
         const [coverPath, description] = await Promise.all([
-          generateCoverApi({ trackId: t.id }),
+          generateCoverApi({ trackId: t.id, model: aiModel }),
           generateDescriptionApi({ trackId: t.id }),
         ]);
         const blob = await (await fetch(coverPath)).blob();
@@ -939,7 +943,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
         <div className="mt-5 flex flex-col gap-6">
           <p className="font-body text-sm text-muted-foreground">
             The Use Case / Genre / Mood values shown in the catalog filters and the Tracks Edit
-            panel — in the same order they appear on the site. Use the arrows to reorder; deleting a
+            panel — in the same order they appear on the site. Drag a row to reorder; deleting a
             value also removes it from any track that uses it.
           </p>
           {(
@@ -952,11 +956,15 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
             const list = vocab[key];
             const saveOrder = (next: string[]) =>
               void run({ action: "set_vocab", facet: key, values: next }, "Order updated");
-            const move = (index: number, dir: -1 | 1) => {
-              const j = index + dir;
-              if (j < 0 || j >= list.length) return;
-              const next = [...list];
-              [next[index], next[j]] = [next[j], next[index]];
+            /** Native DnD: drop the dragged value before `beforeValue` (null = end). */
+            const dropVocab = (beforeValue: string | null) => {
+              const drag = dragVocab;
+              setDragVocab(null);
+              if (!drag || drag.facet !== key || busy || drag.value === beforeValue) return;
+              const next = list.filter((v) => v !== drag.value);
+              let idx = beforeValue ? next.indexOf(beforeValue) : next.length;
+              if (idx < 0) idx = next.length;
+              next.splice(idx, 0, drag.value);
               saveOrder(next);
             };
             return (
@@ -964,37 +972,40 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                 <p className="mb-3 font-body text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   {label} <span className="text-muted-foreground/60">({list.length})</span>
                 </p>
-                <div className="flex flex-col divide-y divide-border/40 overflow-hidden rounded-lg border border-border/40">
+                <div
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    dropVocab(null);
+                  }}
+                  className={`flex flex-col divide-y divide-border/40 overflow-hidden rounded-lg border border-border/40 ${
+                    busy ? "opacity-60" : ""
+                  }`}
+                >
                   {list.map((value, i) => (
                     <div
                       key={value}
-                      className="flex items-center justify-between gap-3 bg-background/40 px-3 py-2"
+                      draggable={!busy}
+                      onDragStart={() => setDragVocab({ facet: key, value })}
+                      onDragEnd={() => setDragVocab(null)}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        dropVocab(value);
+                      }}
+                      className={`flex cursor-grab items-center justify-between gap-3 bg-background/40 px-3 py-2 active:cursor-grabbing ${
+                        dragVocab?.facet === key && dragVocab.value === value ? "opacity-40" : ""
+                      }`}
                     >
                       <span className="flex min-w-0 items-center gap-2 font-body text-sm text-foreground">
+                        <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
                         <span className="w-5 shrink-0 text-right font-body text-xs tabular-nums text-muted-foreground/60">
                           {i + 1}
                         </span>
                         <span className="truncate">{value}</span>
                       </span>
                       <span className="flex shrink-0 items-center gap-0.5">
-                        <button
-                          type="button"
-                          aria-label={`Move ${value} up`}
-                          disabled={busy || i === 0}
-                          onClick={() => move(i, -1)}
-                          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:text-[#F4C430] disabled:opacity-30 disabled:hover:text-muted-foreground"
-                        >
-                          <ChevronUp className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          aria-label={`Move ${value} down`}
-                          disabled={busy || i === list.length - 1}
-                          onClick={() => move(i, 1)}
-                          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:text-[#F4C430] disabled:opacity-30 disabled:hover:text-muted-foreground"
-                        >
-                          <ChevronDown className="h-4 w-4" />
-                        </button>
                         <button
                           type="button"
                           aria-label={`Delete ${value}`}
@@ -1103,6 +1114,8 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
           aiTrackIds={aiTrackIds}
           fieldsRefreshKey={fieldsRefreshKey}
           onGenerateCover={(id) => void generateCoverForTrack(id)}
+          aiModel={aiModel}
+          onAiModelChange={setAiModel}
         />
       )}
 

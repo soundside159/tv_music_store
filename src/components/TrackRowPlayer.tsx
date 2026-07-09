@@ -187,7 +187,7 @@ export const TrackRow = ({
       <button
         type="button"
         onClick={() => onPlayVersion(track, selectedVersion)}
-        className="group/cover relative h-12 w-12 shrink-0"
+        className="group/cover relative h-[3.25rem] w-[3.25rem] shrink-0"
         aria-label={mainIsPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
       >
         <span className="absolute inset-0 overflow-hidden rounded-md border border-border/60">

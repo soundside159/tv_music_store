@@ -13,9 +13,12 @@ import { getSessionUser, json, OWNER_EMAIL, readJson, type Ctx } from "../_utils
 // OWNER SETUP: add the OPENAI_API_KEY secret in Cloudflare Pages
 // (Settings → Variables and Secrets). NEVER commit the key.
 
-// Owner is testing the cheaper model — bump back to "gpt-image-1.5" if the
-// art quality drops (one-line change).
-const MODEL = "gpt-image-1";
+// Standard = cheaper default; Premium = better/pricier. The Tracks Edit
+// toolbar has a switcher; only these two values are accepted from the client.
+const MODELS = {
+  standard: "gpt-image-1",
+  premium: "gpt-image-1.5",
+} as const;
 
 const PROMPT_TEMPLATE = `Create an original cinematic key art image for a premium royalty-free music library.
 
@@ -73,7 +76,10 @@ export const onRequestPost = async (ctx: Ctx) => {
     useCase?: string[];
     mood?: string[];
     hint?: string;
+    /** "standard" (default) | "premium" — see MODELS. */
+    model?: string;
   }>(ctx.request);
+  const model = body?.model === "premium" ? MODELS.premium : MODELS.standard;
 
   const split = (v: string | null) =>
     (v ?? "").split("/").map((s) => s.trim()).filter(Boolean);
@@ -117,7 +123,7 @@ export const onRequestPost = async (ctx: Ctx) => {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      model: MODEL,
+      model,
       prompt,
       size: "1024x1024",
       quality: "medium",

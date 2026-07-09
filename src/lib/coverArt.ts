@@ -66,6 +66,8 @@ export const generateCoverApi = async (args: {
   useCase?: string[];
   mood?: string[];
   hint?: string;
+  /** "standard" (cheaper, default) | "premium" (better model). */
+  model?: "standard" | "premium";
 }): Promise<string> => {
   const res = await fetch("/api/admin/generate-cover", {
     method: "POST",

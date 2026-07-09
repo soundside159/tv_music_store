@@ -126,6 +126,8 @@ const AdminTracksEdit = ({
   aiTrackIds = [],
   fieldsRefreshKey,
   onGenerateCover,
+  aiModel = "standard",
+  onAiModelChange,
 }: {
   tracks: CatalogTrack[];
   vocabularies: Vocabularies;
@@ -151,6 +153,9 @@ const AdminTracksEdit = ({
   fieldsRefreshKey?: number;
   /** Generate a cover for ONE track (hover button on the row thumbnail). */
   onGenerateCover?: (trackId: string) => void;
+  /** Image model for AI covers: standard (cheap) | premium (better). */
+  aiModel?: "standard" | "premium";
+  onAiModelChange?: (m: "standard" | "premium") => void;
 }) => {
   const player = usePlayer();
 
@@ -158,9 +163,8 @@ const AdminTracksEdit = ({
   const [search, setSearch] = useState("");
   const [composer, setComposer] = useState("all");
   const [sort, setSort] = useState<SortMode>("default");
-  // Status tabs: Live (published & approved) vs Drafts & Review (bulk-upload
-  // drafts + composer uploads awaiting moderation).
-  const [statusTab, setStatusTab] = useState<"live" | "drafts">("live");
+  // Status tabs: Live / Drafts / Review (composer uploads awaiting moderation).
+  const [statusTab, setStatusTab] = useState<"live" | "drafts" | "review">("live");
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(20);
   const [selected, setSelected] = useState<string[]>([]);
@@ -219,15 +223,21 @@ const AdminTracksEdit = ({
     [tracks],
   );
 
-  const isDraftish = (t: CatalogTrack) => t.status === "draft" || t.moderation === "pending";
-  const liveCount = useMemo(() => tracks.filter((t) => !isDraftish(t)).length, [tracks]);
-  const draftCount = tracks.length - liveCount;
+  // Three buckets: Review = composer uploads awaiting moderation, Drafts =
+  // unpublished (bulk uploads etc.), Live = everything published & approved.
+  const bucketOf = (t: CatalogTrack): "live" | "drafts" | "review" =>
+    t.moderation === "pending" ? "review" : t.status === "draft" ? "drafts" : "live";
+  const counts = useMemo(() => {
+    const c = { live: 0, drafts: 0, review: 0 };
+    for (const t of tracks) c[bucketOf(t)] += 1;
+    return c;
+  }, [tracks]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = tracks.filter(
       (t) =>
-        (statusTab === "drafts" ? isDraftish(t) : !isDraftish(t)) &&
+        bucketOf(t) === statusTab &&
         (composer === "all" || t.artist === composer) &&
         (!q || t.title.toLowerCase().includes(q)),
     );
@@ -532,12 +542,13 @@ const AdminTracksEdit = ({
       {/* ===== Toolbar (above the grid so the table header row lines up with
           the top edge of the side panels) ===== */}
       <div className="mt-5 flex flex-wrap items-center gap-3">
-        {/* Status tabs: Live / Drafts & Review (with totals) */}
+        {/* Status tabs: Live / Drafts / Review (with totals) */}
         <div className="flex w-fit gap-1 rounded-lg border border-border/60 bg-background/40 p-1">
           {(
             [
-              ["live", "Live", liveCount],
-              ["drafts", "Drafts & Review", draftCount],
+              ["live", "Live", counts.live],
+              ["drafts", "Drafts", counts.drafts],
+              ["review", "Review", counts.review],
             ] as const
           ).map(([id, label, n]) => (
             <button
@@ -585,6 +596,18 @@ const AdminTracksEdit = ({
               </option>
             ))}
           </select>
+          {onAiModelChange && (
+            <select
+              value={aiModel}
+              onChange={(e) => onAiModelChange(e.target.value as "standard" | "premium")}
+              aria-label="AI image model"
+              title="Model used for AI cover generation: Standard is cheaper, Premium looks better"
+              className={inputCls}
+            >
+              <option value="standard">AI images: Standard</option>
+              <option value="premium">AI images: Premium</option>
+            </select>
+          )}
 
           {/* Selection cluster: one Apply saves the side panels + the fields panel. */}
           {hasSelection && (
