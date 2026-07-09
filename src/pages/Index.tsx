@@ -4,8 +4,7 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { TrackRowList } from "@/components/TrackRowPlayer";
 import { useCategories, useTrendingTracks, useVocabularies } from "@/hooks/useContent";
-import { useCurrentUser, usePlans } from "@/hooks/useMockData";
-import VisualizerSettingsPanel from "@/components/VisualizerSettingsPanel";
+import { usePlans } from "@/hooks/useMockData";
 
 const GOLD = "#F4C430";
 
@@ -17,7 +16,6 @@ const trustPoints = [
 ];
 
 const Index = () => {
-  const user = useCurrentUser();
   const plans = usePlans();
   const trendingTracks = useTrendingTracks(8);
   const categories = useCategories();
@@ -228,9 +226,6 @@ const Index = () => {
             </p>
           </div>
         </section>
-
-        {/* TEMP: particle-equalizer tuning panel (admin only — removed once dialed in). */}
-        {user?.role === "admin" && <VisualizerSettingsPanel />}
       </main>
       <Footer />
     </div>

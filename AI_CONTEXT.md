@@ -1916,7 +1916,12 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   away (Cap fall slider = gravity, 0 = light float), LANDS on the border line (FLOOR 0.012)
   and fades out there over 0.5 s. Caps draw independently of bars (previously the draw loop
   `continue`d on empty bars, which is why caps vanished mid-air during quiet passages).
-  Bars keep the release glide from the trail slider in every state.] NEXT AI: when the
+  Bars keep the release glide from the trail slider in every state.]
+  [V8 — visualizer APPROVED & finalized: the temp tuning panel is UNMOUNTED from Index.tsx
+  (import + admin-only render removed). `VisualizerSettingsPanel.tsx` is kept on disk as dead
+  code on purpose — if the owner ever wants to re-tune, remount it on Index for a session.
+  Live behavior now runs entirely on DEFAULT_VISUALIZER; visitors have no controls. NOTE: the
+  owner's own browser still carries tvms_visualizer_v1 in localStorage (equals the defaults).] NEXT AI: when the
   owner settles on numbers, hardcode them into DEFAULT_VISUALIZER and DELETE the panel (and
   its Index.tsx mount); if he dislikes the whole thing, remove AudioVisualizer from
   PlayerProvider + the settings lib + panel (analyser can stay, it's harmless).
