@@ -177,6 +177,14 @@ export const deleteUserAccount = async (
     [`DELETE FROM whitelist_channels WHERE user_id = ?1`, userId],
     [`DELETE FROM favourites WHERE user_id = ?1`, userId],
     [`DELETE FROM auth_codes WHERE email = ?1`, email],
+    // D1 enforces the foreign keys on these — a user with download history
+    // could not be deleted at all (the DELETE below threw, surfacing as an
+    // HTML 500 in the admin). NOT-NULL references go away with the account;
+    // nullable ones are detached so purchase records survive.
+    [`DELETE FROM download_log WHERE user_id = ?1`, userId],
+    [`DELETE FROM plan_licenses WHERE user_id = ?1`, userId],
+    [`UPDATE sync_orders SET user_id = NULL WHERE user_id = ?1`, userId],
+    [`UPDATE claim_requests SET user_id = NULL WHERE user_id = ?1`, userId],
   ];
   for (const [sql, bind] of cleanups) {
     try {

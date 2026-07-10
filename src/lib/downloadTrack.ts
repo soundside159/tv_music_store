@@ -50,6 +50,8 @@ export interface DownloadArgs {
   quality?: 128 | 320;
   /** Enables the STEMS option in the download dialog (stems zip uploaded). */
   hasStems?: boolean;
+  /** MP3 only: server packs the MP3 + license PDF into one zip. */
+  includeLicense?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -131,12 +133,14 @@ export const downloadTrackVersion = async (args: DownloadArgs): Promise<boolean>
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      // WAV downloads arrive as a zip of every version.
+      // WAV downloads arrive as a zip of every version; an MP3 with the
+      // license included arrives as a zip too (check the response type).
+      const gotZip = (res.headers.get("content-type") ?? "").includes("zip");
       const code = codeFromSlug(args.slug);
       a.download =
         format === "stems"
           ? wavZipFileName(`${args.title} STEMS`, code)
-          : format === "wav"
+          : format === "wav" || gotZip
             ? wavZipFileName(args.title, code)
             : downloadFileName(args.title, args.label, format, code);
       document.body.appendChild(a);

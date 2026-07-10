@@ -46,6 +46,8 @@ export const onRequestPost = async (ctx: Ctx) => {
         src?: string;
         title?: string;
         label?: string;
+        /** MP3 only: pack the file together with the license PDF into a zip. */
+        includeLicense?: boolean;
       };
     } catch {
       return null;
@@ -262,7 +264,48 @@ export const onRequestPost = async (ctx: Ctx) => {
     if (!fileRes.ok || !fileRes.body) {
       return json({ error: "File not found", code: "nofile" }, 404);
     }
-    audioBody = fileRes.body;
+    // "Include PDF License" on an MP3: deliver ONE zip with the MP3 + the
+    // certificate instead of two separate downloads (owner request).
+    if (
+      format === "mp3" &&
+      body?.includeLicense === true &&
+      track &&
+      (plan !== "free" || hasLicense)
+    ) {
+      try {
+        const mp3 = new Uint8Array(await fileRes.arrayBuffer());
+        const entries: ZipEntrySpec[] = [
+          {
+            name: `${sanitizeFilename(track.title)}.mp3`,
+            size: mp3.length,
+            crc: crc32(mp3),
+            body: mp3,
+          },
+        ];
+        const licPath = licenseOrder
+          ? `/api/license-pdf?order=${encodeURIComponent(licenseOrder.id)}`
+          : `/api/license-pdf?slug=${encodeURIComponent(slug)}`;
+        const licRes = await fetch(new URL(licPath, origin).toString(), {
+          headers: { cookie: ctx.request.headers.get("cookie") ?? "" },
+        });
+        if (licRes.ok) {
+          const pdf = new Uint8Array(await licRes.arrayBuffer());
+          entries.push({
+            name: `LICENSE - ${sanitizeFilename(track.title)}.pdf`,
+            size: pdf.length,
+            crc: crc32(pdf),
+            body: pdf,
+          });
+        }
+        audioBody = streamZip(entries);
+        contentType = "application/zip";
+        isZip = true;
+      } catch {
+        return json({ error: "Could not build the zip", code: "nofile" }, 500);
+      }
+    } else {
+      audioBody = fileRes.body;
+    }
   }
 
   // Log AFTER the file is resolved so failed attempts don't burn the limit.
