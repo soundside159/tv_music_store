@@ -41,6 +41,8 @@ const ensureTrackColumns = async (db: D1Database) => {
     `ALTER TABLE tracks ADD COLUMN cover_thumb TEXT`,
     `ALTER TABLE tracks ADD COLUMN r2_key_wav_zip TEXT`,
     `ALTER TABLE tracks ADD COLUMN r2_key_stems TEXT`,
+    `ALTER TABLE tracks ADD COLUMN wav_manifest TEXT`,
+    `ALTER TABLE tracks ADD COLUMN stems_manifest TEXT`,
     `ALTER TABLE track_versions ADD COLUMN preview_128 TEXT`,
   ];
   for (const sql of alters) {

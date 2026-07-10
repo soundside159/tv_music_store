@@ -12,7 +12,8 @@ import {
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { decodeAudio, detectBpm, encodeMp3, formatDuration, wavToMp3Pair, zipWavs } from "@/lib/audioEncoding";
+import { decodeAudio, detectBpm, encodeMp3, formatDuration, wavToMp3Pair } from "@/lib/audioEncoding";
+import { crc32File } from "@/lib/crc32";
 import { cleanVersionLabel } from "@/lib/downloadTrack";
 import { useCurrentUser } from "@/hooks/useMockData";
 
@@ -122,7 +123,7 @@ const filesFromEntry = async (entry: EntryLike, parentFolder: string | null): Pr
 
 const uploadAudio = (
   file: Blob,
-  kind: "preview" | "preview128" | "wavzip" | "stems",
+  kind: "preview" | "preview128" | "wavzip" | "stems" | "master",
   filename: string,
   onProgress?: (pct: number) => void,
 ): Promise<{ key: string; path: string | null }> => {
@@ -142,7 +143,12 @@ const uploadAudio = (
     xhr.withCredentials = true;
     xhr.setRequestHeader(
       "content-type",
-      file.type || (kind === "wavzip" || kind === "stems" ? "application/zip" : "audio/mpeg"),
+      file.type ||
+        (kind === "wavzip" || kind === "stems"
+          ? "application/zip"
+          : kind === "master"
+            ? "audio/wav"
+            : "audio/mpeg"),
     );
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
@@ -385,7 +391,8 @@ const AdminBulkUpload = () => {
       patch(group.key, { note: `Uploading version ${i + 1}/${ordered.length}…` });
       const p320 = await uploadAudio(e.mp3_320, "preview", e.qf.file.name);
       const p128 = await uploadAudio(e.mp3_128, "preview128", e.qf.file.name);
-      const clean = labelOf(group, e.qf);
+      // A "…_main…" filename shouldn't leak "main" into the site label.
+      const clean = isMainFile(e.qf.file.name) ? "" : labelOf(group, e.qf);
       versions.push({
         label: i === 0 ? clean || "Main" : clean || `Version ${i + 1}`,
         previewSrc: p320.path ?? "",
@@ -394,30 +401,35 @@ const AdminBulkUpload = () => {
       });
     }
 
-    // 4. One zip with the original WAVs (the paid WAV download). MP3 versions
-    // have no WAV master, so they stay out of the bundle; when EVERYTHING is
-    // MP3 there is nothing to bundle at all (no WAV download for that track).
-    let wavZipKey: string | undefined;
-    const wavFiles = group.files.filter(({ file }) => !isMp3(file.name));
-    if (wavFiles.length > 0) {
-      patch(group.key, { note: "Packing WAV zip…" });
-      const zipBlob = await zipWavs(wavFiles.map(({ file }) => ({ name: file.name, file })));
-      const zipUp = await uploadAudio(zipBlob, "wavzip", group.title, (pct) =>
-        patch(group.key, { note: `Uploading WAV zip (${mb(zipBlob.size)})… ${pct}%` }),
-      );
-      wavZipKey = zipUp.key;
-    }
+    // 4. Master files go up INDIVIDUALLY (v2 storage) — each stays under the
+    // ~95 MB per-upload cap no matter how many stems/versions a track has.
+    // The customer's zip is assembled ON DOWNLOAD from these files (with the
+    // license PDF dropped in), using the checksums computed here.
+    type ManifestEntry = { key: string; name: string; size: number; crc: number };
+    const uploadMasters = async (
+      files: QueuedFile[],
+      label: string,
+    ): Promise<ManifestEntry[]> => {
+      const manifest: ManifestEntry[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const { file } = files[i];
+        patch(group.key, { note: `Checksumming ${label} ${i + 1}/${files.length}…` });
+        const crc = await crc32File(file);
+        const up = await uploadAudio(file, "master", file.name, (pct) =>
+          patch(group.key, {
+            note: `Uploading ${label} ${i + 1}/${files.length} (${mb(file.size)})… ${pct}%`,
+          }),
+        );
+        manifest.push({ key: up.key, name: file.name, size: file.size, crc });
+      }
+      return manifest;
+    };
 
-    // 4b. Stems (…_stem(s)_… files) — their own private zip; has_stems flips on.
-    let stemsKey: string | undefined;
-    if (group.stems.length > 0) {
-      patch(group.key, { note: "Packing STEMS zip…" });
-      const stemsBlob = await zipWavs(group.stems.map(({ file }) => ({ name: file.name, file })));
-      const stemsUp = await uploadAudio(stemsBlob, "stems", `${group.title}-stems`, (pct) =>
-        patch(group.key, { note: `Uploading STEMS zip (${mb(stemsBlob.size)})… ${pct}%` }),
-      );
-      stemsKey = stemsUp.key;
-    }
+    // WAV versions only — MP3 versions have no master to sell.
+    const wavFiles = group.files.filter(({ file }) => !isMp3(file.name));
+    const wavManifest = wavFiles.length > 0 ? await uploadMasters(wavFiles, "WAV") : undefined;
+    const stemsManifest =
+      group.stems.length > 0 ? await uploadMasters(group.stems, "stem") : undefined;
 
     // 5. Create the draft track.
     patch(group.key, { note: "Creating track…" });
@@ -426,8 +438,8 @@ const AdminBulkUpload = () => {
       duration: versions[0].duration,
       bpm: bpmDetected ?? undefined,
       versions,
-      wavZipKey,
-      stemsKey,
+      wavManifest,
+      stemsManifest,
       composerId: composerId || undefined,
     });
 
@@ -479,11 +491,15 @@ const AdminBulkUpload = () => {
       <h2 className="text-lg text-foreground">Bulk Upload</h2>
       <p className="mt-1 font-body text-xs text-muted-foreground">
         <span className="text-foreground">One folder = one track</span>: the folder name becomes the
-        title, every WAV inside becomes a version. Loose files are grouped by name ("Epic
-        Battle (short).wav" joins "Epic Battle.wav"). The longest version becomes Main — star a
-        file to override. Tracks are created as <span className="text-amber-400">drafts</span> —
-        tag them in Catalog → Tracks, then select and press Publish. Keep this tab open; work in
-        batches of ~20-30 tracks.
+        title, every WAV/MP3 inside becomes a version (MP3s are used as-is, no re-encode). Files
+        named <span className="text-foreground">…_stem(s)_…</span> go into a separate STEMS zip.
+        Main = the starred file → a file named <span className="text-foreground">…_main…</span> →
+        else the longest. Loose files are grouped by name ("Epic Battle (short).wav" joins "Epic
+        Battle.wav"). Tracks are created as <span className="text-amber-400">drafts</span> — tag
+        them in Catalog → Tracks, then select and press Publish. Keep this tab open; work in
+        batches of ~20-30 tracks. Masters upload one by one (any number of stems/versions) —
+        the customer's zip is built at download time with the license PDF inside; only a
+        SINGLE file over ~95 MB would be rejected.
       </p>
 
       {/* Drop zone */}
@@ -493,7 +509,7 @@ const AdminBulkUpload = () => {
         className="mt-5 flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-[#F4C430]/35 bg-[#F4C430]/[0.03] px-6 py-10 text-center transition-colors hover:border-[#F4C430]/70"
       >
         <UploadCloud className="h-8 w-8" style={{ color: GOLD }} />
-        <p className="font-body text-sm text-foreground">Drop track FOLDERS (or WAV files) here</p>
+        <p className="font-body text-sm text-foreground">Drop track FOLDERS (or WAV/MP3 files) here</p>
         <div className="flex flex-wrap items-center justify-center gap-2">
           <button
             type="button"

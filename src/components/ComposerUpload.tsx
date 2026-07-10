@@ -285,17 +285,22 @@ const ComposerUpload = ({
     }
   };
 
-  // Auto-star the longest file (by probed duration, file size as tiebreaker)
-  // until the composer picks one by hand.
+  // Auto-star: a file named …_main… wins, else the longest (probed duration,
+  // file size as tiebreaker) — until the composer picks one by hand.
   useEffect(() => {
     if (mainManual || wavs.length === 0) return;
-    const longest = wavs.reduce((best, w) => {
-      const a = w.duration ?? 0;
-      const b = best.duration ?? 0;
-      if (a !== b) return a > b ? w : best;
-      return w.file.size > best.file.size ? w : best;
-    });
-    if (longest.id !== mainId) setMainId(longest.id);
+    const named = wavs.find((w) =>
+      /(^|[_\s(-])main([_\s).-]|$)/i.test(w.file.name.replace(/\.[^.]+$/, "")),
+    );
+    const pick =
+      named ??
+      wavs.reduce((best, w) => {
+        const a = w.duration ?? 0;
+        const b = best.duration ?? 0;
+        if (a !== b) return a > b ? w : best;
+        return w.file.size > best.file.size ? w : best;
+      });
+    if (pick.id !== mainId) setMainId(pick.id);
   }, [wavs, mainManual, mainId]);
 
   const labelOf = (w: WavRow) => cleanVersionLabel(baseName(w.file), title) || "Main";

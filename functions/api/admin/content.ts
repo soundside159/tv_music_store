@@ -36,6 +36,10 @@ const ensureTrackCoverColumn = async (db: D1Database) => {
     `ALTER TABLE tracks ADD COLUMN cover_thumb TEXT`,
     `ALTER TABLE tracks ADD COLUMN r2_key_wav_zip TEXT`,
     `ALTER TABLE tracks ADD COLUMN r2_key_stems TEXT`,
+    // Individual-file storage (v2): JSON manifests [{key,name,size,crc}] —
+    // the download endpoint streams a zip from these on the fly.
+    `ALTER TABLE tracks ADD COLUMN wav_manifest TEXT`,
+    `ALTER TABLE tracks ADD COLUMN stems_manifest TEXT`,
     `ALTER TABLE track_versions ADD COLUMN preview_128 TEXT`,
   ];
   for (const sql of alters) {
@@ -313,6 +317,9 @@ export const onRequestPost = async (ctx: Ctx) => {
     composerId?: string;
     /** create_track: private stems zip key (masters/stems-…) — flips has_stems. */
     stemsKey?: string;
+    /** create_track v2: individual master files (zip is streamed at download). */
+    wavManifest?: { key?: string; name?: string; size?: number; crc?: number }[];
+    stemsManifest?: { key?: string; name?: string; size?: number; crc?: number }[];
     // add_version / delete_version / rename_version / set_main_version
     versionId?: string;
     label?: string;
@@ -705,6 +712,31 @@ export const onRequestPost = async (ctx: Ctx) => {
         typeof body.stemsKey === "string" && /^masters\//.test(body.stemsKey)
           ? body.stemsKey
           : null;
+      // v2 storage: individual master files with client-computed CRCs; the
+      // download endpoint streams a zip from these manifests on the fly.
+      const cleanManifest = (raw: unknown) => {
+        if (!Array.isArray(raw)) return null;
+        const out: { key: string; name: string; size: number; crc: number }[] = [];
+        for (const e of raw.slice(0, 40) as { key?: string; name?: string; size?: number; crc?: number }[]) {
+          if (
+            typeof e?.key !== "string" ||
+            !/^masters\//.test(e.key) ||
+            typeof e.name !== "string" ||
+            !Number.isFinite(e.size) ||
+            !Number.isFinite(e.crc)
+          )
+            return null;
+          out.push({
+            key: e.key,
+            name: e.name.replace(/[^\w\s\-().]/g, "_").slice(0, 120),
+            size: Math.round(e.size!),
+            crc: e.crc! >>> 0,
+          });
+        }
+        return out.length > 0 ? out : null;
+      };
+      const wavManifest = cleanManifest(body.wavManifest);
+      const stemsManifest = cleanManifest(body.stemsManifest);
       // Composer picker: validate the profile exists (NULL = house/TVMUSICSTORE).
       let composerId: string | null = null;
       if (typeof body.composerId === "string" && body.composerId) {
@@ -723,8 +755,9 @@ export const onRequestPost = async (ctx: Ctx) => {
         .prepare(
           `INSERT INTO tracks
              (id, slug, title, composer_id, category, genre, mood, use_case, style_of,
-              bpm, duration, description, tags, has_stems, cover, cover_thumb, r2_key_wav_zip, r2_key_stems, code, status)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, '', ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)`,
+              bpm, duration, description, tags, has_stems, cover, cover_thumb,
+              r2_key_wav_zip, r2_key_stems, wav_manifest, stems_manifest, code, status)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, '', ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)`,
         )
         .bind(
           trackId,
@@ -739,11 +772,13 @@ export const onRequestPost = async (ctx: Ctx) => {
           mainDuration,
           body.description ?? "",
           JSON.stringify(tags),
-          stemsKey || body.hasStems ? 1 : 0,
+          stemsKey || stemsManifest || body.hasStems ? 1 : 0,
           body.cover ?? "",
           body.coverThumb ?? "",
           wavZipKey,
           stemsKey,
+          wavManifest ? JSON.stringify(wavManifest) : null,
+          stemsManifest ? JSON.stringify(stemsManifest) : null,
           code,
           status,
         )

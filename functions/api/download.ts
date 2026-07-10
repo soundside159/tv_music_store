@@ -1,4 +1,5 @@
 import { getSessionUser, json, type Ctx } from "./_utils";
+import { crc32, parseManifest, streamZip, type ZipEntrySpec } from "./_zipStream";
 
 // POST { slug, versionId, format, src, title, label } -> checks the plan,
 // enforces limits, logs to download_log and streams the audio file back.
@@ -70,7 +71,8 @@ export const onRequestPost = async (ctx: Ctx) => {
   const track = await (async () => {
     try {
       return await ctx.env.DB.prepare(
-        `SELECT id, title, composer_id, r2_key_wav_zip, r2_key_stems FROM tracks WHERE slug = ?1`,
+        `SELECT id, title, composer_id, r2_key_wav_zip, r2_key_stems, wav_manifest, stems_manifest
+           FROM tracks WHERE slug = ?1`,
       )
         .bind(slug)
         .first<{
@@ -79,32 +81,51 @@ export const onRequestPost = async (ctx: Ctx) => {
           composer_id: string | null;
           r2_key_wav_zip: string | null;
           r2_key_stems: string | null;
+          wav_manifest: string | null;
+          stems_manifest: string | null;
         }>();
     } catch {
-      const legacy = await ctx.env.DB.prepare(
-        `SELECT id, title, composer_id FROM tracks WHERE slug = ?1`,
-      )
-        .bind(slug)
-        .first<{ id: string; title: string; composer_id: string | null }>();
-      return legacy ? { ...legacy, r2_key_wav_zip: null, r2_key_stems: null } : null;
+      try {
+        const mid = await ctx.env.DB.prepare(
+          `SELECT id, title, composer_id, r2_key_wav_zip, r2_key_stems FROM tracks WHERE slug = ?1`,
+        )
+          .bind(slug)
+          .first<{
+            id: string;
+            title: string;
+            composer_id: string | null;
+            r2_key_wav_zip: string | null;
+            r2_key_stems: string | null;
+          }>();
+        return mid ? { ...mid, wav_manifest: null, stems_manifest: null } : null;
+      } catch {
+        const legacy = await ctx.env.DB.prepare(
+          `SELECT id, title, composer_id FROM tracks WHERE slug = ?1`,
+        )
+          .bind(slug)
+          .first<{ id: string; title: string; composer_id: string | null }>();
+        return legacy
+          ? { ...legacy, r2_key_wav_zip: null, r2_key_stems: null, wav_manifest: null, stems_manifest: null }
+          : null;
+      }
     }
   })();
 
   // One-time sync license for THIS track (any tier — all tiers include WAV).
   // sync_orders.track_id normally holds tracks.id, but the PayPal capture falls
   // back to the slug when the track row was missing at purchase time.
-  const hasLicense = await (async () => {
+  const licenseOrder = await (async () => {
     try {
-      const row = await ctx.env.DB.prepare(
-        `SELECT 1 AS ok FROM sync_orders WHERE user_id = ?1 AND track_id IN (?2, ?3) LIMIT 1`,
+      return await ctx.env.DB.prepare(
+        `SELECT id FROM sync_orders WHERE user_id = ?1 AND track_id IN (?2, ?3) LIMIT 1`,
       )
         .bind(user.id, track?.id ?? slug, slug)
-        .first<{ ok: number }>();
-      return !!row;
+        .first<{ id: string }>();
     } catch {
-      return false;
+      return null;
     }
   })();
+  const hasLicense = !!licenseOrder;
 
   // Plan gates (a purchased one-time license bypasses them for its track)
   if ((format === "wav" || format === "stems") && plan !== "max" && !hasLicense) {
@@ -136,6 +157,8 @@ export const onRequestPost = async (ctx: Ctx) => {
   let fileSrc: string | null = null;
   let r2Key: string | null = null;
   let isZip = false;
+  // v2 storage: individual master files — the zip is streamed at download time.
+  let manifestEntries: ReturnType<typeof parseManifest> = null;
 
   if (track) {
     const version = await (async () => {
@@ -158,19 +181,30 @@ export const onRequestPost = async (ctx: Ctx) => {
     })();
     if (!version) return json({ error: "Version not found", code: "nofile" }, 404);
     if (format === "stems") {
-      if (!track.r2_key_stems || !ctx.env.R2) {
+      const m = parseManifest(track.stems_manifest);
+      if (m && ctx.env.R2) {
+        manifestEntries = m;
+        isZip = true;
+      } else if (track.r2_key_stems && ctx.env.R2) {
+        r2Key = track.r2_key_stems;
+        isZip = true;
+      } else {
         return json({ error: "Stems are not uploaded yet for this track", code: "nofile" }, 404);
       }
-      r2Key = track.r2_key_stems;
-      isZip = true;
     } else if (format === "wav") {
-      // Preferred: one zip of all WAV versions (track-level). Legacy: single WAV.
+      // Preferred: v2 manifest (zip streamed on the fly, license PDF inside).
+      // Legacy: one pre-packed zip, or a single per-version WAV.
+      const m = parseManifest(track.wav_manifest);
       const wavKey = track.r2_key_wav_zip ?? version.r2_key_wav;
-      if (!wavKey || !ctx.env.R2) {
+      if (m && ctx.env.R2) {
+        manifestEntries = m;
+        isZip = true;
+      } else if (wavKey && ctx.env.R2) {
+        r2Key = wavKey;
+        isZip = /\.zip$/i.test(wavKey) || Boolean(track.r2_key_wav_zip);
+      } else {
         return json({ error: "WAV files are not uploaded yet for this track", code: "nofile" }, 404);
       }
-      r2Key = wavKey;
-      isZip = /\.zip$/i.test(wavKey) || Boolean(track.r2_key_wav_zip);
     } else {
       fileSrc = quality === 128 && version.preview_128 ? version.preview_128 : version.preview_src;
     }
@@ -186,7 +220,38 @@ export const onRequestPost = async (ctx: Ctx) => {
   // Fetch the audio
   let audioBody: ReadableStream;
   let contentType = isZip ? "application/zip" : format === "wav" ? "audio/wav" : "audio/mpeg";
-  if (r2Key && ctx.env.R2) {
+  if (manifestEntries && ctx.env.R2) {
+    // v2: stream a zip straight out of the individual master files.
+    const zipEntries: ZipEntrySpec[] = [];
+    for (const m of manifestEntries) {
+      const obj = await ctx.env.R2.get(m.key);
+      if (!obj) return json({ error: `File missing in storage (${m.name})`, code: "nofile" }, 404);
+      zipEntries.push({ name: m.name, size: m.size, crc: m.crc, body: obj.body });
+    }
+    // Drop the license certificate PDF into the bundle too (owner request) —
+    // best-effort: the zip still ships if the PDF endpoint hiccups.
+    try {
+      const licPath = licenseOrder
+        ? `/api/license-pdf?order=${encodeURIComponent(licenseOrder.id)}`
+        : `/api/license-pdf?slug=${encodeURIComponent(slug)}`;
+      const licRes = await fetch(new URL(licPath, new URL(ctx.request.url).origin).toString(), {
+        headers: { cookie: ctx.request.headers.get("cookie") ?? "" },
+      });
+      if (licRes.ok) {
+        const pdf = new Uint8Array(await licRes.arrayBuffer());
+        zipEntries.push({
+          name: `LICENSE - ${sanitizeFilename(track?.title ?? slug)}.pdf`,
+          size: pdf.length,
+          crc: crc32(pdf),
+          body: pdf,
+        });
+      }
+    } catch {
+      // no PDF — bundle still delivers
+    }
+    audioBody = streamZip(zipEntries);
+    contentType = "application/zip";
+  } else if (r2Key && ctx.env.R2) {
     const obj = await ctx.env.R2.get(r2Key);
     if (!obj) return json({ error: "File missing in storage", code: "nofile" }, 404);
     audioBody = obj.body;

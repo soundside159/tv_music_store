@@ -1970,7 +1970,39 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   (4) COMPOSER PICKER DEFAULTS: /api/admin/content composers (with userId) — Bulk Upload and
   AddTrackModal now PRESELECT the signed-in admin's own composer profile (e.g. Lumine Wave)
   instead of "TVMUSICSTORE (house)"; manual choice is never overridden.
-  [FOLLOW-UP same day: (a) the demo seed composers (Composer One/Two/Three from
+- **2026-07-10 (STORAGE V2 — individual masters + streamed zip + license PDF inside):**
+  owner-approved rework (catalog still empty, no migration worries; the ~95 MB per-UPLOAD
+  cap limited stems to ~4 files — downloads have NO such cap).
+  **Model:** masters (WAV versions + stems) upload INDIVIDUALLY (kind=master → masters/…,
+  each ≤95 MB, live % progress) with a browser-computed CRC32 (`src/lib/crc32.ts`,
+  chunked); the track stores JSON manifests in new lazy columns `wav_manifest` /
+  `stems_manifest` ([{key,name,size,crc}], validated server-side in create_track, ≤40
+  entries). **Download:** NEW `functions/api/_zipStream.ts` — STORE-method streaming zip
+  writer (local headers with known CRC/sizes → piped R2 bodies → central directory; tiny
+  CPU/memory, any total size) + parseManifest + server crc32. download.ts: wav/stems prefer
+  the manifest (streams the zip on the fly) and DROP THE LICENSE PDF INSIDE the bundle
+  (internal fetch to /api/license-pdf?order=<sync_order>|?slug=<slug> with the user's cookie;
+  best-effort — bundle ships even if the PDF fails; entry "LICENSE - <Title>.pdf"). Legacy
+  paths (r2_key_wav_zip / r2_key_stems / per-version r2_key_wav) still work for old flows
+  (AddTrackModal + ComposerUpload still upload single zips ≤95 MB; the track-page
+  VersionsBlock zip rebuild only applies to legacy-zip tracks — manifest-aware version ops
+  are a TODO). licenseOrder (sync_orders id) now fetched for the PDF link.
+  **Bulk Upload** is the v2 pipeline: checksum → upload each master with progress →
+  create_track with wavManifest/stemsManifest (wavZipKey/stemsKey no longer sent from Bulk).
+- **2026-07-10 (Bulk Upload v3 — _main, MP3 input, upload progress, size guard):** owner hit
+  an upload failure on a stems batch (almost certainly the STEMS zip exceeding Cloudflare's
+  ~100 MB request-body limit; our server cap is 95 MB — plain WAV-only batches worked).
+  Changes: (1) `uploadAudio` in AdminBulkUpload switched fetch → XMLHttpRequest with an
+  UPLOAD PROGRESS callback — big zips now show "Uploading WAV/STEMS zip (NN MB)… 42%" live,
+  plus a PRE-CHECK that rejects any blob over 95 MB with a clear "split it" message (no more
+  silent multi-minute waits into a mystery error). (2) MAIN PRIORITY: starred file →
+  filename containing `_main` (isMainFile) → longest; the "_main" marker never leaks into
+  the site label (forced "Main"); ComposerUpload's auto-star honors …_main… too.
+  (3) MP3 INPUT accepted alongside WAV (drop, folder picker, file picker): an MP3 version is
+  used AS-IS as the 320 preview (zero re-encode; only the 128 kbps free-tier copy is
+  rendered from it); MP3s stay OUT of the WAV bundle — tracks with no WAV files at all get
+  no wavZipKey (no WAV download). Help texts updated. FYI answered for the owner: R2 egress
+  is FREE, storage = 10 GB free then ~$0.015/GB-mo (his whole catalog ≈ <$1/mo).
   0001_init.sql, user_id NULL, 0 tracks) are FILTERED OUT of the picker list — admin content
   GET now counts tracks per profile and hides rows with no user AND no tracks (detached
   profiles that own tracks stay visible for recovery); (b) both pickers sort the signed-in
