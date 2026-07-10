@@ -56,9 +56,6 @@ const AudioVisualizer = () => {
     const FLOOR = 0.012; // cap height when it lies on the border line
     let cleared = true;
     let last = performance.now();
-    // Modal-freeze bookkeeping (see the check inside the loop).
-    let dialogCheck = 0;
-    let dialogOpen = false;
 
     const loop = (now: number) => {
       if (disposed) return;
@@ -66,15 +63,6 @@ const AudioVisualizer = () => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       if (document.hidden) return;
-      // Freeze while any modal dialog is open: the overlays use backdrop-blur,
-      // and an animating canvas underneath would force the browser to re-blur
-      // the whole page every frame (the Opera jank). Checked ~4x/second.
-      dialogCheck -= 1;
-      if (dialogCheck <= 0) {
-        dialogCheck = 15;
-        dialogOpen = !!document.querySelector('[role="dialog"]');
-      }
-      if (dialogOpen) return;
 
       const s = getVisualizerSettings();
       const analyser = getSharedAnalyser();

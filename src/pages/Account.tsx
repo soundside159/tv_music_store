@@ -138,7 +138,22 @@ const Account = () => {
     setProfileError(null);
     try {
       const res = await fetch("/api/me", { method: "DELETE", credentials: "include" });
-      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        code?: string;
+      };
+      if (data.code === "subscription") {
+        // Active paid plan — offer to open the billing portal to cancel first.
+        if (
+          window.confirm(
+            "You have an active subscription — cancel it first so you are not charged again.\nOpen subscription management now?",
+          )
+        ) {
+          await openBillingPortal();
+        }
+        return;
+      }
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Delete failed");
       await logout();
       navigate("/");
@@ -344,6 +359,16 @@ const Account = () => {
                         {user.name || user.email.split("@")[0]}
                       </p>
                       <p className="font-body text-xs text-muted-foreground">{user.email}</p>
+                      {/* Current plan at a glance (minimal gold chip). */}
+                      <span
+                        className={`mt-1.5 inline-flex items-center rounded-full border px-2.5 py-0.5 font-body text-[11px] font-semibold ${
+                          subscription?.plan && subscription.plan !== "free"
+                            ? "border-[#F4C430]/50 bg-[#F4C430]/10 text-[#F4C430]"
+                            : "border-border text-muted-foreground"
+                        }`}
+                      >
+                        {(plan?.name ?? "Free") + " plan"}
+                      </span>
                     </div>
                   </div>
                   {!editingName && (

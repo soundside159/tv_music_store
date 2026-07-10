@@ -187,6 +187,8 @@ export const onRequestPatch = async (ctx: Ctx) => {
     role?: string;
     pseudonym?: string;
     removeComposer?: boolean;
+    /** Change the user's login email (unique; the owner account is protected). */
+    email?: string;
     /** Sync / cue-sheet info for the composer profile (license PDFs). */
     cue?: {
       cueName?: string;
@@ -202,8 +204,12 @@ export const onRequestPatch = async (ctx: Ctx) => {
   const removeComposer = body?.removeComposer === true;
   const cue = body?.cue;
   const pseudonym = typeof body?.pseudonym === "string" ? body.pseudonym.trim() : undefined;
-  if (!userId || (!role && pseudonym === undefined && !removeComposer && !cue)) {
-    return json({ error: "userId and role, pseudonym, cue or removeComposer required" }, 400);
+  const newEmail = typeof body?.email === "string" ? body.email.trim().toLowerCase() : undefined;
+  if (!userId || (!role && pseudonym === undefined && !removeComposer && !cue && newEmail === undefined)) {
+    return json({ error: "userId and role, pseudonym, cue, email or removeComposer required" }, 400);
+  }
+  if (newEmail !== undefined && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+    return json({ error: "That doesn't look like a valid email" }, 400);
   }
   if (role && !["customer", "composer", "admin"].includes(role)) {
     return json({ error: "Invalid role" }, 400);
@@ -222,6 +228,16 @@ export const onRequestPatch = async (ctx: Ctx) => {
     return json({ error: "The owner account must stay admin" }, 400);
   }
 
+  if (newEmail !== undefined) {
+    if (target.email === OWNER_EMAIL) {
+      return json({ error: "The owner account's email cannot be changed here" }, 400);
+    }
+    const taken = await ctx.env.DB.prepare(`SELECT id FROM users WHERE email = ?1 AND id != ?2`)
+      .bind(newEmail, userId)
+      .first();
+    if (taken) return json({ error: "Another account already uses that email" }, 400);
+    await ctx.env.DB.prepare(`UPDATE users SET email = ?1 WHERE id = ?2`).bind(newEmail, userId).run();
+  }
   if (role) {
     await ctx.env.DB.prepare(`UPDATE users SET role = ?1 WHERE id = ?2`).bind(role, userId).run();
   }

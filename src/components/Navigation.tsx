@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { LogOut, Menu, Search, ShoppingCart, User, X } from "lucide-react";
 import AuthModal from "@/components/AuthModal";
-import { useCurrentUser } from "@/hooks/useMockData";
+import { useCurrentUser, useSubscription } from "@/hooks/useMockData";
 import { logout } from "@/hooks/useAuth";
 import { useCart } from "@/hooks/useCart";
 import { resumePendingDownload } from "@/lib/downloadTrack";
@@ -24,6 +24,7 @@ const Navigation = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const user = useCurrentUser();
+  const subscription = useSubscription();
   const { count: cartCount } = useCart();
   const acctRef = useRef<HTMLDivElement>(null);
 
@@ -152,8 +153,18 @@ const Navigation = () => {
                   role="menu"
                   className="absolute right-0 top-full z-50 mt-3 w-52 overflow-hidden rounded-xl border border-border/70 bg-card/95 py-1.5 shadow-[0_20px_40px_-16px_rgba(0,0,0,0.7)] backdrop-blur-xl animate-fade-in"
                 >
-                  <div className="truncate px-4 pb-2 pt-1 font-body text-xs text-muted-foreground">
-                    {user.email}
+                  <div className="px-4 pb-2 pt-1">
+                    <p className="truncate font-body text-xs text-muted-foreground">{user.email}</p>
+                    {/* Current plan at a glance (matches the Profile chip). */}
+                    <span
+                      className={`mt-1 inline-flex items-center rounded-full border px-2 py-px font-body text-[10px] font-semibold ${
+                        subscription?.plan && subscription.plan !== "free"
+                          ? "border-[#F4C430]/50 bg-[#F4C430]/10 text-[#F4C430]"
+                          : "border-border text-muted-foreground"
+                      }`}
+                    >
+                      {(subscription?.plan ?? "free").replace(/^\w/, (c) => c.toUpperCase())} plan
+                    </span>
                   </div>
                   {ACCOUNT_MENU.map((item) => (
                     <Link

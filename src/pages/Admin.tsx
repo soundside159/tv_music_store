@@ -357,6 +357,32 @@ const Admin = () => {
     }
   };
 
+  // Change a user's login email (owner account protected server-side too).
+  const saveEmail = async (userId: string, raw: string) => {
+    const target = liveUsers?.find((u) => u.id === userId);
+    const email = raw.trim().toLowerCase();
+    if (!target || !email || email === target.email) return;
+    setSavingUserId(userId);
+    setUsersError(null);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ userId, email }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Update failed");
+      setLiveUsers((us) => (us ?? []).map((u) => (u.id === userId ? { ...u, email } : u)));
+      toast.success(`Email changed to ${email}`);
+    } catch (e) {
+      setUsersError(e instanceof Error ? e.message : "Update failed");
+      toast.error(e instanceof Error ? e.message : "Update failed");
+    } finally {
+      setSavingUserId(null);
+    }
+  };
+
   // Save the cue-sheet info (printed on license PDFs for this composer's tracks).
   const saveCue = async (userId: string) => {
     setCueBusy(true);
@@ -965,6 +991,23 @@ const Admin = () => {
                       <p className="mt-1 pl-[26px] font-body text-[11px] text-muted-foreground">
                         The owner account always stays admin.
                       </p>
+                    )}
+                    {/* Login email (saves on Enter / click away; owner protected). */}
+                    {!ownerLocked && (
+                      <div className="mt-3">
+                        <p className="mb-1 font-body text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground/80">
+                          Login email
+                        </p>
+                        <input
+                          defaultValue={u.email}
+                          disabled={savingUserId === u.id}
+                          onBlur={(e) => void saveEmail(u.id, e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                          }}
+                          className="w-full rounded-md border border-border bg-background px-2 py-1.5 font-body text-xs text-foreground focus:border-[#F4C430] focus:outline-none disabled:opacity-50"
+                        />
+                      </div>
                     )}
                     <label className="mt-3 flex cursor-pointer items-center gap-2.5 font-body text-sm text-foreground">
                       <input

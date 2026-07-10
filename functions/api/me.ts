@@ -75,6 +75,24 @@ export const onRequestDelete = async (ctx: Ctx) => {
   if (user.role === "admin" || user.email === OWNER_EMAIL) {
     return json({ error: "Admin accounts cannot self-delete" }, 403);
   }
+  // An ACTIVE paid subscription must be canceled first — otherwise Stripe
+  // would keep charging a deleted account. Our subscriptions table mirrors
+  // Stripe via webhooks, so this check is reliable. "canceled" status means
+  // it already won't renew — deleting is fine then.
+  const activeSub = await ctx.env.DB.prepare(
+    `SELECT plan, status FROM subscriptions WHERE user_id = ?1 ORDER BY rowid DESC LIMIT 1`,
+  )
+    .bind(user.id)
+    .first<{ plan: string; status: string }>();
+  if (activeSub && activeSub.plan !== "free" && activeSub.status === "active") {
+    return json(
+      {
+        error: "You have an active subscription — cancel it first so you are not charged again",
+        code: "subscription",
+      },
+      409,
+    );
+  }
   const composer = await ctx.env.DB.prepare(
     `SELECT id FROM composers WHERE user_id = ?1 LIMIT 1`,
   )

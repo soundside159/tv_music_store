@@ -2095,6 +2095,18 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   FKs) and detaches sync_orders/claim_requests (user_id → NULL) so purchase records survive.
   Note: deleting a user now removes their download-history rows, which slightly lowers
   per-track download counts (Popular sort) — acceptable per the data model.
+- **2026-07-10 (owner round: EQ freeze reverted, self-delete sub-guard, admin email change,
+  plan chips):** (1) the modal-open freeze of the visualizer was REMOVED at the owner's
+  request — he wants to A/B the blur without it first (re-add the [role="dialog"] check in
+  AudioVisualizer's loop if Opera jank returns). (2) DELETE /api/me now returns 409
+  code="subscription" when the latest subscription is a paid plan with status='active'
+  (table mirrors Stripe via webhooks); Account's delete flow catches it and offers to open
+  the billing portal to cancel first — no deleting an account Stripe would keep charging.
+  (3) Admin → Users ⋯ menu got a "Login email" field (saves on Enter/blur): PATCH
+  /api/admin/users accepts `email` — format-validated, uniqueness-checked, owner account
+  refused. (4) CURRENT PLAN chips: gold minimal chip ("Max plan" / grey "Free plan") in
+  Account → Profile under the email AND in the header avatar popup under the email line
+  (Navigation now reads useSubscription).
 - **BACKLOG — PRO / performance royalties support (researched 2026-07-10, owner considering):**
   composers have IPI numbers and want cue-sheet income; industry does both models (AudioJungle
   lists PRO fields; Tunetank-style libraries sell "PRO-free"). Decision guidance given to the
