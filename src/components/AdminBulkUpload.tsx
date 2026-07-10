@@ -507,11 +507,18 @@ const AdminBulkUpload = () => {
               className="rounded-lg border border-border bg-background px-2.5 py-2 font-body text-xs text-foreground focus:border-[#F4C430] focus:outline-none disabled:opacity-50"
             >
               <option value="">Composer: TVMUSICSTORE (house)</option>
-              {composers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.displayName}
-                </option>
-              ))}
+              {[...composers]
+                .sort(
+                  (a, b) =>
+                    (b.userId === user?.id ? 1 : 0) - (a.userId === user?.id ? 1 : 0) ||
+                    a.displayName.localeCompare(b.displayName),
+                )
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.displayName}
+                    {c.userId === user?.id ? " (me)" : ""}
+                  </option>
+                ))}
             </select>
             <span className="font-body text-xs text-muted-foreground">
               {groups.length} track{groups.length > 1 ? "s" : ""} in the list · {doneCount} done

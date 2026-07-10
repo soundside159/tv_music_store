@@ -64,14 +64,20 @@ const AddTrackModal = ({
   const [coverThumb, setCoverThumb] = useState("");
   const [category, setCategory] = useState(categories[0]?.id ?? "");
   const [composerId, setComposerId] = useState("");
-  // Preselect the signed-in admin's OWN composer profile (owner request).
+  // Preselect the signed-in admin's OWN composer profile (owner request) and
+  // list it first in the dropdown.
   const user = useCurrentUser();
+  const sortedComposers = [...composers].sort(
+    (a, b) =>
+      (b.userId === user?.id ? 1 : 0) - (a.userId === user?.id ? 1 : 0) ||
+      a.displayName.localeCompare(b.displayName),
+  );
   useEffect(() => {
     const mine = composers.find((c) => c.userId && c.userId === user?.id);
     if (mine) setComposerId((cur) => cur || mine.id);
     // run once on open — later manual choice must not be overridden
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [user?.id]);
   // Stems ship as an optional zip — has_stems flips automatically when present
   // (the old manual checkbox was redundant and got removed).
   const [stemsFile, setStemsFile] = useState<File | null>(null);
@@ -333,9 +339,10 @@ const AddTrackModal = ({
               title="Composer pseudonym shown as the track artist"
             >
               <option value="">Composer: TVMUSICSTORE (house)</option>
-              {composers.map((c) => (
+              {sortedComposers.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.displayName}
+                  {c.userId === user?.id ? " (me)" : ""}
                 </option>
               ))}
             </select>

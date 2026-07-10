@@ -219,12 +219,22 @@ export const onRequestGet = async (ctx: Ctx) => {
   const trackCount = await db.prepare(`SELECT COUNT(*) AS n FROM tracks`).first<{ n: number }>();
   const vocabularies = await getVocabularies(db);
   // Composer profiles (pseudonyms) — the upload composer picker needs them.
+  // Dead rows (no linked user AND no tracks — e.g. the Composer One/Two/Three
+  // demo seeds from the first migration) are hidden: they only confused the
+  // owner. Detached profiles that still OWN tracks stay listed, so their
+  // tracks remain assignable/recoverable.
   let composers: { id: string; userId: string | null; displayName: string }[] = [];
   try {
     const cs = await db
-      .prepare(`SELECT id, user_id, display_name FROM composers ORDER BY display_name`)
-      .all<{ id: string; user_id: string | null; display_name: string }>();
-    composers = cs.results.map((c) => ({ id: c.id, userId: c.user_id, displayName: c.display_name }));
+      .prepare(
+        `SELECT c.id, c.user_id, c.display_name,
+                (SELECT COUNT(*) FROM tracks t WHERE t.composer_id = c.id) AS n
+           FROM composers c ORDER BY c.display_name`,
+      )
+      .all<{ id: string; user_id: string | null; display_name: string; n: number }>();
+    composers = cs.results
+      .filter((c) => c.user_id || c.n > 0)
+      .map((c) => ({ id: c.id, userId: c.user_id, displayName: c.display_name }));
   } catch {
     // composers table missing — picker stays empty
   }

@@ -1969,7 +1969,14 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   overrides update the panel instantly.
   (4) COMPOSER PICKER DEFAULTS: /api/admin/content composers (with userId) — Bulk Upload and
   AddTrackModal now PRESELECT the signed-in admin's own composer profile (e.g. Lumine Wave)
-  instead of "TVMUSICSTORE (house)"; manual choice is never overridden. NEXT AI: when the
+  instead of "TVMUSICSTORE (house)"; manual choice is never overridden.
+  [FOLLOW-UP same day: (a) the demo seed composers (Composer One/Two/Three from
+  0001_init.sql, user_id NULL, 0 tracks) are FILTERED OUT of the picker list — admin content
+  GET now counts tracks per profile and hides rows with no user AND no tracks (detached
+  profiles that own tracks stay visible for recovery); (b) both pickers sort the signed-in
+  admin's OWN profile FIRST and label it "(me)"; (c) "TVMUSICSTORE (house)" is NOT a
+  composer — it's the "no author" option (tracks without composer_id show the store brand as
+  artist); kept as the first option by design.] NEXT AI: when the
   owner settles on numbers, hardcode them into DEFAULT_VISUALIZER and DELETE the panel (and
   its Index.tsx mount); if he dislikes the whole thing, remove AudioVisualizer from
   PlayerProvider + the settings lib + panel (analyser can stay, it's harmless).
