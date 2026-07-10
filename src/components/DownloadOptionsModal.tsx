@@ -159,7 +159,7 @@ const DownloadOptionsModal = () => {
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-background/90 p-4"
       onClick={close}
       role="dialog"
       aria-modal="true"

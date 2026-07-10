@@ -2068,6 +2068,15 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   that MERGES only the AI-written fields into the panel — manual unsaved edits survive.
   Cover in the panel now also syncs after per-row generation, so a later Apply can't roll
   the new art back.
+- **2026-07-10 (modal lag in Opera — backdrop blur removed):** owner reported jank when the
+  Download options / License modals open (hover delays too). Cause: full-screen
+  `backdrop-blur-sm` overlays force the browser to re-blur the whole page every frame —
+  with the equalizer canvas animating underneath it's a constant repaint storm (hits Opera
+  hardest). Fix: blur removed from ALL full-screen modal overlays (DownloadOptions, License,
+  Attribution, Plan, AddTrack, Auth), compensated with slightly denser dimming
+  (bg-background/80→/90, AuthModal black/70→/80). The small fixed bars (header, mini-player)
+  keep their blur — tiny areas, not the bottleneck. If jank persists, next lever: pause the
+  visualizer's rAF while a dialog is open.
 - **BACKLOG — PRO / performance royalties support (researched 2026-07-10, owner considering):**
   composers have IPI numbers and want cue-sheet income; industry does both models (AudioJungle
   lists PRO fields; Tunetank-style libraries sell "PRO-free"). Decision guidance given to the

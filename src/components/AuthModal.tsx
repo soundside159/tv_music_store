@@ -89,7 +89,7 @@ const AuthModal = ({ open, onClose }: AuthModalProps) => {
   // this fixed overlay inside it and pin the dialog to the top of the screen.
   return createPortal(
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 px-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
