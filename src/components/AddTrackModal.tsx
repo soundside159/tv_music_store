@@ -280,7 +280,7 @@ const AddTrackModal = ({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-background/90 p-4"
+      className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-background/80 p-4 backdrop-blur-sm"
       onClick={busy ? undefined : onClose}
       role="dialog"
       aria-modal="true"

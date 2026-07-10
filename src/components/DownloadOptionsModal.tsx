@@ -124,6 +124,10 @@ const DownloadOptionsModal = () => {
         ...args,
         format: option.id === "wav" ? "wav" : option.id === "stems" ? "stems" : "mp3",
         quality: option.id === "mp3-128" ? 128 : 320,
+        // MP3 + the checkbox = the server packs ONE zip (mp3 + license PDF).
+        // WAV/stems bundles get the PDF inside automatically server-side.
+        includeLicense:
+          includePdf && option.id.startsWith("mp3") && status === "authed" && (plan !== "free" || !!license),
       };
       const ok = await downloadTrackVersion(dl);
       // Refresh the session so the free-downloads counter reflects this download.
@@ -132,18 +136,6 @@ const DownloadOptionsModal = () => {
       // popup (skipped when the user bought a license: no credit line needed).
       if (ok && status === "authed" && plan === "free" && !license && option.id === "mp3-128") {
         openAttribution({ title: args.title, slug: args.slug, download: dl });
-      }
-      if (includePdf && status === "authed" && (plan !== "free" || license)) {
-        // Attachment header makes this download the certificate without
-        // navigating. License owners get their purchase certificate (?order=),
-        // subscribers the plan certificate (?slug=).
-        const a = document.createElement("a");
-        a.href = license
-          ? `/api/license-pdf?order=${encodeURIComponent(license.id)}`
-          : `/api/license-pdf?slug=${encodeURIComponent(args.slug)}`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
       }
     } finally {
       setBusy(false);
@@ -159,7 +151,7 @@ const DownloadOptionsModal = () => {
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-background/90 p-4"
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm"
       onClick={close}
       role="dialog"
       aria-modal="true"
@@ -219,27 +211,35 @@ const DownloadOptionsModal = () => {
         </div>
 
         {status === "authed" && (plan !== "free" || license) && !option.soon && (
-          <button
-            type="button"
-            onClick={() => setIncludePdf((v) => !v)}
-            className="mt-4 flex w-full items-center gap-2.5 rounded-xl border border-border bg-background/40 p-3 text-left transition-colors hover:border-[#F4C430]/50"
-          >
-            <span
-              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                includePdf ? "border-[#F4C430] bg-[#F4C430]" : "border-border"
-              }`}
+          option.id === "wav" || option.id === "stems" ? (
+            /* Bundles always carry the certificate — nothing to tick. */
+            <p className="mt-4 rounded-xl border border-border/60 bg-background/40 p-3 font-body text-[11px] text-muted-foreground">
+              <Check className="mr-1 inline h-3.5 w-3.5" style={{ color: GOLD }} />
+              The license PDF is included in this archive automatically.
+            </p>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIncludePdf((v) => !v)}
+              className="mt-4 flex w-full items-center gap-2.5 rounded-xl border border-border bg-background/40 p-3 text-left transition-colors hover:border-[#F4C430]/50"
             >
-              {includePdf && <Check className="h-3 w-3 text-background" />}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block font-body text-xs font-semibold text-foreground">Include PDF License</span>
-              <span className="block font-body text-[11px] text-muted-foreground">
-                {license
-                  ? "The certificate for the license you purchased for this track."
-                  : "A license certificate for this track on your current plan."}
+              <span
+                className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                  includePdf ? "border-[#F4C430] bg-[#F4C430]" : "border-border"
+                }`}
+              >
+                {includePdf && <Check className="h-3 w-3 text-background" />}
               </span>
-            </span>
-          </button>
+              <span className="min-w-0 flex-1">
+                <span className="block font-body text-xs font-semibold text-foreground">Include PDF License</span>
+                <span className="block font-body text-[11px] text-muted-foreground">
+                  {license
+                    ? "Packs the MP3 + your purchase certificate into one zip."
+                    : "Packs the MP3 + your plan certificate into one zip."}
+                </span>
+              </span>
+            </button>
+          )
         )}
 
         {license ? (

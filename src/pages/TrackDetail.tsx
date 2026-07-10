@@ -33,6 +33,7 @@ import { usePlayer } from "@/components/playerContext";
 import { useLicenseTiers, type LicenseTierId } from "@/lib/licenses";
 import { addToCart } from "@/hooks/useCart";
 import { openDownloadOptions } from "@/lib/downloadTrack";
+import { openPlanModal } from "@/lib/billing";
 
 const GOLD = "#F4C430";
 
@@ -369,9 +370,13 @@ const TrackDetail = () => {
               </div>
               <p className="mt-3 font-body text-xs text-muted-foreground">
                 Unlimited downloads for subscribers —{" "}
-                <Link to="/pricing" className="font-semibold text-[#F4C430] hover:underline">
+                <button
+                  type="button"
+                  onClick={() => openPlanModal()}
+                  className="font-semibold text-[#F4C430] hover:underline"
+                >
                   see plans
-                </Link>
+                </button>
                 .
               </p>
             </div>

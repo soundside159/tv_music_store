@@ -54,7 +54,7 @@ const AttributionModal = () => {
 
   return (
     <div
-      className="fixed inset-0 z-[85] flex items-center justify-center overflow-y-auto bg-background/90 p-4"
+      className="fixed inset-0 z-[85] flex items-center justify-center overflow-y-auto bg-background/80 p-4 backdrop-blur-sm"
       onClick={close}
       role="dialog"
       aria-modal="true"

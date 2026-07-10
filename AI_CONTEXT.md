@@ -2077,6 +2077,24 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   (bg-background/80→/90, AuthModal black/70→/80). The small fixed bars (header, mini-player)
   keep their blur — tiny areas, not the bottleneck. If jank persists, next lever: pause the
   visualizer's rAF while a dialog is open.
+  [SAME DAY V2 — owner missed the "rich" look: blur is BACK on all six modals, and the
+  jank-source is fixed properly instead — AudioVisualizer FREEZES while any `[role="dialog"]`
+  is open (checked ~4×/s inside the loop, cheap): a static page under backdrop-blur costs
+  nothing after the first frame.]
+- **2026-07-10 (mp3+license one zip, See plans popup, user-delete FK fix):**
+  (1) "Include PDF License" on MP3 downloads now delivers ONE zip (mp3 + certificate) built
+  server-side: /api/download accepts `includeLicense` (mp3 branch buffers the preview ≤25 MB,
+  crc32s it + the PDF, streamZip); the modal passes it instead of triggering a second
+  download; client names the file .zip when the response is a zip. WAV/stems bundles carry
+  the PDF automatically — the modal shows an info line ("included automatically") instead of
+  the checkbox for those formats. (2) TrackDetail "see plans" link now opens the PlanModal
+  popup (openPlanModal) instead of navigating to /pricing. (3) USER DELETE BUG ("Unexpected
+  token '<'" on wildsound159): D1 enforces foreign keys — users WITH download history hit the
+  download_log/plan_licenses FK on DELETE users, the function threw and Cloudflare returned
+  an HTML 500. deleteUserAccount now also DELETEs download_log + plan_licenses rows (NOT NULL
+  FKs) and detaches sync_orders/claim_requests (user_id → NULL) so purchase records survive.
+  Note: deleting a user now removes their download-history rows, which slightly lowers
+  per-track download counts (Popular sort) — acceptable per the data model.
 - **BACKLOG — PRO / performance royalties support (researched 2026-07-10, owner considering):**
   composers have IPI numbers and want cue-sheet income; industry does both models (AudioJungle
   lists PRO fields; Tunetank-style libraries sell "PRO-free"). Decision guidance given to the
