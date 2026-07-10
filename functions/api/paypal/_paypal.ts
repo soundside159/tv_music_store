@@ -1,16 +1,12 @@
 // PayPal REST helpers for one-time track license purchases.
 // Files starting with "_" are not routed.
 
-import type { Env } from "../_utils";
+import { DEFAULT_LICENSE_PRICES, type Env } from "../_utils";
 
-// SERVER-SIDE prices — the client never decides what to pay.
-// Keep in sync with src/lib/licenses.ts.
-// LIVE PRICES (USD): Personal 15 / Commercial 79 / Professional 249.
-export const LICENSE_PRICES: Record<string, number> = {
-  personal: 15,
-  commercial: 79,
-  professional: 249,
-};
+// SERVER-SIDE prices — the client never decides what to pay. The LIVE values
+// come from site_config (admin dashboard → "License prices" card) via
+// getLicensePrices(db); this map is only the fallback when the DB is down.
+export const LICENSE_PRICES: Record<string, number> = { ...DEFAULT_LICENSE_PRICES };
 
 export const paypalBase = (env: Env): string =>
   env.PAYPAL_ENV === "sandbox" ? "https://api-m.sandbox.paypal.com" : "https://api-m.paypal.com";
@@ -59,9 +55,10 @@ export interface OrderItemInput {
   tier: string;
 }
 
-/** Validates client items and returns them with server-side prices. */
+/** Validates client items and prices them with the given server-side map. */
 export const validateItems = (
   raw: unknown,
+  prices: Record<string, number> = LICENSE_PRICES,
 ): { slug: string; tier: string; price: number }[] | null => {
   if (!Array.isArray(raw) || raw.length === 0 || raw.length > 20) return null;
   const out: { slug: string; tier: string; price: number }[] = [];
@@ -69,7 +66,7 @@ export const validateItems = (
   for (const it of raw as OrderItemInput[]) {
     const slug = typeof it?.slug === "string" ? it.slug.trim().slice(0, 80) : "";
     const tier = typeof it?.tier === "string" ? it.tier : "";
-    const price = LICENSE_PRICES[tier];
+    const price = prices[tier];
     if (!slug || !price || seen.has(slug)) return null;
     seen.add(slug);
     out.push({ slug, tier, price });

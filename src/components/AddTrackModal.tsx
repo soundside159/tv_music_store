@@ -4,6 +4,7 @@ import { Check, GripVertical, Music, Sparkles, Star, Trash2, X } from "lucide-re
 import type { Vocabularies } from "@/lib/tagOptions";
 import { decodeAudio, detectBpm, formatDuration, makeThumbnail, wavToMp3Pair, zipWavs } from "@/lib/audioEncoding";
 import { generateDescriptionApi } from "@/lib/coverArt";
+import { useCurrentUser } from "@/hooks/useMockData";
 import { cleanVersionLabel } from "@/lib/downloadTrack";
 
 // Admin "Add Track" flow. The owner uploads WAV files and picks the main one;
@@ -53,7 +54,7 @@ const AddTrackModal = ({
   vocabularies: Vocabularies;
   categories: { id: string; title: string }[];
   /** Composer profiles for the artist picker ("" = house / TVMUSICSTORE). */
-  composers?: { id: string; displayName: string }[];
+  composers?: { id: string; userId?: string | null; displayName: string }[];
 }) => {
   const [title, setTitle] = useState("");
   const [bpm, setBpm] = useState("");
@@ -63,6 +64,14 @@ const AddTrackModal = ({
   const [coverThumb, setCoverThumb] = useState("");
   const [category, setCategory] = useState(categories[0]?.id ?? "");
   const [composerId, setComposerId] = useState("");
+  // Preselect the signed-in admin's OWN composer profile (owner request).
+  const user = useCurrentUser();
+  useEffect(() => {
+    const mine = composers.find((c) => c.userId && c.userId === user?.id);
+    if (mine) setComposerId((cur) => cur || mine.id);
+    // run once on open — later manual choice must not be overridden
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Stems ship as an optional zip — has_stems flips automatically when present
   // (the old manual checkbox was redundant and got removed).
   const [stemsFile, setStemsFile] = useState<File | null>(null);

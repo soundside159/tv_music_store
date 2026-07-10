@@ -56,7 +56,9 @@ export const onRequestPost = async (ctx: Ctx) => {
   if ((existing?.n ?? 0) === 0) {
     for (const item of unit?.items ?? []) {
       const [slug = "", tier = ""] = (item.sku ?? "").split("|");
-      const price = LICENSE_PRICES[tier] ?? Number(item.unit_amount?.value ?? 0);
+      // Record what PayPal actually charged (the order was priced from the
+      // live site_config values); fallback to the static defaults.
+      const price = Number(item.unit_amount?.value ?? 0) || LICENSE_PRICES[tier] || 0;
       if (!slug || !tier) continue;
       const track = await ctx.env.DB.prepare(`SELECT id FROM tracks WHERE slug = ?1`)
         .bind(slug)

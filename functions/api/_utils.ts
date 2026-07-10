@@ -288,6 +288,38 @@ export const VOCAB_COL: Record<VocabFacet, "use_case" | "genre" | "mood"> = {
 
 export const VOCAB_FACETS: VocabFacet[] = ["useCase", "genre", "mood"];
 
+// ---------------------------------------------------------------------------
+// Single-track license prices (one-time purchases). Editable from the admin
+// dashboard; stored in site_config as JSON. These defaults are the fallback.
+// ---------------------------------------------------------------------------
+
+export type LicensePriceMap = { personal: number; commercial: number; professional: number };
+
+export const DEFAULT_LICENSE_PRICES: LicensePriceMap = {
+  personal: 15,
+  commercial: 79,
+  professional: 249,
+};
+
+export const getLicensePrices = async (db: D1Database): Promise<LicensePriceMap> => {
+  const out = { ...DEFAULT_LICENSE_PRICES };
+  try {
+    const row = await db
+      .prepare(`SELECT value FROM site_config WHERE key = 'license_prices'`)
+      .first<{ value: string }>();
+    if (row) {
+      const parsed = JSON.parse(row.value) as Partial<LicensePriceMap>;
+      for (const k of ["personal", "commercial", "professional"] as const) {
+        const v = Number(parsed[k]);
+        if (Number.isFinite(v) && v >= 1 && v <= 100000) out[k] = Math.round(v * 100) / 100;
+      }
+    }
+  } catch {
+    // table/row missing or bad JSON — defaults stand
+  }
+  return out;
+};
+
 /** Reads all three vocabularies from site_config, falling back to defaults. */
 export const getVocabularies = async (db: D1Database): Promise<Vocabularies> => {
   const out: Vocabularies = {

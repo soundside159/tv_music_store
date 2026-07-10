@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import WaveformPreview from "@/components/WaveformPreview";
 import { generateDescriptionApi } from "@/lib/coverArt";
 import { renameWavInBundle } from "@/lib/wavBundle";
+import { parseXlsx } from "@/lib/xlsxRead";
 import { usePlayer } from "@/components/playerContext";
 import { splitFilterValues } from "@/components/TrackRowPlayer";
 import type { Vocabularies } from "@/lib/tagOptions";
@@ -204,6 +205,99 @@ const AdminTracksEdit = ({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fieldsRefreshKey]);
+
+  // ---- "Read .xlsx" — fill the SELECTED tracks from the owner's spreadsheet.
+  // Fixed column layout: # / Title / BPM / Lengths / Alternative Title /
+  // Style / Description / Tags. Rows are matched to the selected tracks by
+  // Title OR Alternative Title; BPM / Description / Tags are written in.
+  const [xlsxBusy, setXlsxBusy] = useState(false);
+  const normTitle = (v: string) =>
+    v.toLowerCase().replace(/\(.*?\)/g, " ").replace(/[^a-z0-9а-яё]+/g, " ").trim();
+
+  const readXlsx = async (file: File) => {
+    const selectedTracks = tracks.filter((t) => selected.includes(t.id));
+    if (selectedTracks.length === 0) return;
+    setXlsxBusy(true);
+    try {
+      const grid = await parseXlsx(file);
+      if (grid.length < 2) throw new Error("The sheet needs a header row and data rows");
+      // Column detection by header name, falling back to the fixed layout.
+      const header = grid[0].map((h) => h.toLowerCase());
+      const col = (re: RegExp, fallback: number) => {
+        const i = header.findIndex((h) => re.test(h));
+        return i >= 0 ? i : fallback;
+      };
+      const cTitle = col(/^title/, 1);
+      const cBpm = col(/^bpm/, 2);
+      const cAlt = col(/alternative/, 4);
+      const cDesc = col(/^desc/, 6);
+      const cTags = col(/^tags?/, 7);
+
+      // Index the sheet by normalized Title AND Alternative Title.
+      const byName = new Map<string, string[]>();
+      for (const row of grid.slice(1)) {
+        for (const key of [normTitle(row[cTitle] ?? ""), normTitle(row[cAlt] ?? "")]) {
+          if (key && !byName.has(key)) byName.set(key, row);
+        }
+      }
+
+      const matches = selectedTracks
+        .map((t) => ({ t, row: byName.get(normTitle(t.title)) }))
+        .filter((m): m is { t: CatalogTrack; row: string[] } => !!m.row);
+      const missed = selectedTracks.length - matches.length;
+      if (matches.length === 0) {
+        throw new Error("No selected track matched a Title / Alternative Title in the sheet");
+      }
+      if (
+        !window.confirm(
+          `Fill ${matches.length} selected track(s) from "${file.name}"?` +
+            (missed > 0 ? `\n${missed} selected track(s) had no matching row and stay untouched.` : "") +
+            `\nWrites BPM, Description and Tags (extra tags).`,
+        )
+      )
+        return;
+
+      let done = 0;
+      const overrides: Record<string, Partial<CatalogTrack>> = {};
+      for (const { t, row } of matches) {
+        const fields: Record<string, unknown> = {};
+        const bpm = Math.round(Number((row[cBpm] ?? "").toString().replace(/[^0-9.]/g, "")));
+        if (bpm >= 20 && bpm <= 400) fields.bpm = bpm;
+        const desc = (row[cDesc] ?? "").trim();
+        if (desc) fields.description = desc;
+        const tags = (row[cTags] ?? "")
+          .split(/[,;]+/)
+          .map((s: string) => s.trim())
+          .filter(Boolean)
+          .slice(0, 12);
+        if (tags.length > 0) fields.tags = tags;
+        if (Object.keys(fields).length === 0) continue;
+        const res = await fetch("/api/admin/content", {
+          method: "POST",
+          credentials: "include",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "bulk_update_tracks", trackIds: [t.id], fields }),
+        });
+        const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+        if (!res.ok || !d.ok) {
+          toast.error(`${t.title}: ${d.error ?? "failed"}`);
+          continue;
+        }
+        overrides[t.id] = {
+          ...(fields.bpm !== undefined ? { bpm: fields.bpm as number } : {}),
+          ...(fields.description !== undefined ? { description: fields.description as string } : {}),
+          ...(fields.tags !== undefined ? { tags: fields.tags as string[] } : {}),
+        };
+        done += 1;
+      }
+      if (Object.keys(overrides).length > 0) onApplyOverrides(overrides);
+      toast.success(`Spreadsheet applied to ${done} track(s)` + (missed > 0 ? ` · ${missed} unmatched` : ""));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not read the .xlsx");
+    } finally {
+      setXlsxBusy(false);
+    }
+  };
 
   // AI description for the single selected track (uses its SAVED facets).
   const [descBusy, setDescBusy] = useState(false);
@@ -639,6 +733,24 @@ const AdminTracksEdit = ({
                 <X className="h-3.5 w-3.5" />
                 {selected.length} selected
               </button>
+              {/* Fill the selected tracks from the owner's spreadsheet
+                  (# / Title / BPM / Lengths / Alt Title / Style / Description / Tags). */}
+              <label
+                className={`${btnCls} cursor-pointer ${xlsxBusy || busy ? "pointer-events-none opacity-50" : ""}`}
+                title="Match the selected tracks by Title / Alternative Title and write BPM, Description and Tags from the sheet"
+              >
+                {xlsxBusy ? "Reading…" : "Read .xlsx"}
+                <input
+                  type="file"
+                  accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void readXlsx(f);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
               <button type="button" disabled={!dirty || busy} onClick={resetChanges} className={btnCls}>
                 Reset
               </button>

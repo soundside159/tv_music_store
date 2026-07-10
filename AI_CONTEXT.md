@@ -1945,7 +1945,31 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   (green=exact, gold=AI, red=none), AI facets, BPM, description; (5) Apply — sequential
   bulk_update_tracks per row: facets ADDED, description/tags/BPM overwritten. Suggested
   pipeline after import: select in Tracks → AI Art & Text → Publish. NOTE: import-map uses
-  the same OPENAI_API_KEY. NEXT AI: when the
+  the same OPENAI_API_KEY.
+- **2026-07-10 (owner round: editable license prices, bulk-upload stems, Read .xlsx,
+  composer default):**
+  (1) LICENSE PRICES are admin-editable: site_config key `license_prices` +
+  `getLicensePrices()` in _utils (defaults 15/79/249); new admin action `set_license_prices`;
+  public /api/content returns `licensePrices`; PayPal order.ts prices carts from the DB
+  (validateItems now takes a prices map; capture records what PayPal actually charged);
+  frontend `src/lib/licenses.ts` became a live store (`hydrateLicensePrices` called from
+  useContent fetch/refresh + `useLicenseTiers()` hook — TrackDetail/Cart/LicenseModal
+  subscribe). Admin → Dashboard got a "Single-track license prices (USD)" card (3 inputs +
+  Save).
+  (2) BULK UPLOAD STEMS: WAVs named …_stem_… / …_stems_… (isStemFile regex) are treated as
+  STEMS, not versions — listed with a gold Stem badge, packed into their OWN zip (kind=stems)
+  and passed as stemsKey to create_track (has_stems flips on). Loose stem files derive the
+  track title from the part before the stem marker; groups with only stems error clearly.
+  (3) TRACKS EDIT → "Read .xlsx" (button in the selection cluster): NEW dependency-free
+  `src/lib/xlsxRead.ts` (xlsx = zip → fflate unzipBlob → DOMParser over sheet1 +
+  sharedStrings). Owner's fixed sheet layout # / Title / BPM / Lengths / Alternative Title /
+  Style / Description / Tags (headers auto-detected with those fallbacks); SELECTED tracks are
+  matched by Title OR Alternative Title (normalized), then BPM / Description / Tags (extra
+  tags) are written via bulk_update_tracks; confirm shows matched/missed counts; local
+  overrides update the panel instantly.
+  (4) COMPOSER PICKER DEFAULTS: /api/admin/content composers (with userId) — Bulk Upload and
+  AddTrackModal now PRESELECT the signed-in admin's own composer profile (e.g. Lumine Wave)
+  instead of "TVMUSICSTORE (house)"; manual choice is never overridden. NEXT AI: when the
   owner settles on numbers, hardcode them into DEFAULT_VISUALIZER and DELETE the panel (and
   its Index.tsx mount); if he dislikes the whole thing, remove AudioVisualizer from
   PlayerProvider + the settings lib + panel (analyser can stay, it's harmless).

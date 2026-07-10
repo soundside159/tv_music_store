@@ -1170,7 +1170,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
           }}
           vocabularies={vocab}
           categories={(data.categories ?? []).map((c) => ({ id: c.id, title: c.title }))}
-          composers={(data.composers ?? []).map((c) => ({ id: c.id, displayName: c.displayName }))}
+          composers={data.composers ?? []}
         />
       )}
     </div>

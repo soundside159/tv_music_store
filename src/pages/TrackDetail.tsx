@@ -30,7 +30,7 @@ import {
 import { splitFilterValues } from "@/components/TrackRowPlayer";
 import { toggleFavourite, useFavourites } from "@/lib/favourites";
 import { usePlayer } from "@/components/playerContext";
-import { licenseTiers, type LicenseTierId } from "@/lib/licenses";
+import { useLicenseTiers, type LicenseTierId } from "@/lib/licenses";
 import { addToCart } from "@/hooks/useCart";
 import { openDownloadOptions } from "@/lib/downloadTrack";
 
@@ -59,6 +59,8 @@ const TrackDetail = () => {
   const [activeTab, setActiveTab] = useState<DetailTab>("versions");
   const [selectedVersions, setSelectedVersions] = useState<Record<string, TrackVersion>>({});
   const [selectedTier, setSelectedTier] = useState<LicenseTierId>("personal");
+  // Live tier prices (admin-editable) — re-renders when they hydrate/change.
+  const liveTiers = useLicenseTiers();
   const { activePlayer, isPlaying, progress, playVersion: playFromEngine } = usePlayer();
   const favIds = useFavourites();
   const liked = track ? favIds.has(track.id) : false;
@@ -136,7 +138,7 @@ const TrackDetail = () => {
 
   const mainVersion = getSelectedVersion(track);
   const mainIsPlaying = activePlayer?.trackId === track.id && activePlayer.versionId === mainVersion.id && isPlaying;
-  const tier = licenseTiers.find((t) => t.id === selectedTier) ?? licenseTiers[0];
+  const tier = liveTiers.find((t) => t.id === selectedTier) ?? liveTiers[0];
   // Each use-case / genre / mood value is its own clickable chip that jumps to
   // the catalog pre-filtered by that value (matching the Catalog ?usecase/genre/mood params).
   const filterChips = [
@@ -308,7 +310,7 @@ const TrackDetail = () => {
           <div className="flex flex-col gap-6">
             <div className="rounded-xl border border-border bg-card p-6">
               <div className="grid gap-3 sm:grid-cols-3">
-                {licenseTiers.map((t) => {
+                {liveTiers.map((t) => {
                   const active = t.id === selectedTier;
                   return (
                     <button

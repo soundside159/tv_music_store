@@ -1,4 +1,4 @@
-import { getSessionUser, json, readJson, type Ctx } from "../_utils";
+import { getLicensePrices, getSessionUser, json, readJson, type Ctx } from "../_utils";
 import { paypalCall, paypalConfigured, paypalToken, validateItems } from "./_paypal";
 
 // POST { items: [{ slug, tier }] } -> { id } PayPal order id.
@@ -12,7 +12,9 @@ export const onRequestPost = async (ctx: Ctx) => {
   if (!user) return json({ error: "Sign in to buy licenses", code: "auth" }, 401);
 
   const body = await readJson<{ items?: unknown }>(ctx.request);
-  const items = validateItems(body?.items);
+  // Live prices from the admin-editable site_config (fallback = defaults).
+  const prices = await getLicensePrices(ctx.env.DB);
+  const items = validateItems(body?.items, prices);
   if (!items) return json({ error: "Invalid cart items" }, 400);
 
   // Nice item names in the PayPal receipt when the track exists in D1.

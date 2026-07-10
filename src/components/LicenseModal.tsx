@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Check, ShoppingCart, X } from "lucide-react";
-import { licenseTiers, type LicenseTierId } from "@/lib/licenses";
+import { useLicenseTiers, type LicenseTierId } from "@/lib/licenses";
 import { addToCart, type BuyLicenseArgs } from "@/hooks/useCart";
 
 // Global "Buy a license" popup. Any Buy-License button dispatches
@@ -13,6 +13,8 @@ const GOLD = "#F4C430";
 const LicenseModal = () => {
   const [args, setArgs] = useState<BuyLicenseArgs | null>(null);
   const [selectedTier, setSelectedTier] = useState<LicenseTierId>("personal");
+  // Live tier prices (admin-editable).
+  const licenseTiers = useLicenseTiers();
 
   useEffect(() => {
     const open = (event: Event) => {

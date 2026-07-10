@@ -4,6 +4,7 @@ import { mockPlaylists } from "@/mocks";
 import type { CatalogTrack } from "@/data/catalogTracks";
 import { useTracks } from "@/hooks/useTracks";
 import { defaultVocabularies, type Vocabularies } from "@/lib/tagOptions";
+import { hydrateLicensePrices, type LicenseTierId } from "@/lib/licenses";
 
 // Live storefront content from /api/content (what the owner edits in
 // Admin -> Content), with graceful fallback to the bundled mock data.
@@ -24,6 +25,7 @@ interface ApiContent {
   collections?: ApiContentItem[];
   playlists?: ApiContentItem[];
   vocabularies?: Partial<Vocabularies>;
+  licensePrices?: Partial<Record<LicenseTierId, number>>;
 }
 
 let cache: ApiContent | null = null;
@@ -54,6 +56,7 @@ const fetchContent = (): Promise<ApiContent | null> => {
     .then((data) => {
       cache = data;
       fetchedAt = Date.now();
+      hydrateLicensePrices(data?.licensePrices);
       return data;
     })
     .catch(() => null)
@@ -94,6 +97,7 @@ export const refreshContent = (): Promise<void> =>
       if (data) {
         cache = data;
         fetchedAt = Date.now();
+        hydrateLicensePrices(data.licensePrices);
       }
     })
     .catch(() => {

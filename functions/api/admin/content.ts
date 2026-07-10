@@ -325,6 +325,8 @@ export const onRequestPost = async (ctx: Ctx) => {
     values?: string[];
     /** rename_vocab: the new name for `value` (tracks are updated too). */
     newValue?: string;
+    /** set_license_prices: one-time single-track license prices (USD). */
+    licensePrices?: { personal?: number; commercial?: number; professional?: number };
     fields?: {
       title?: string;
       bpm?: number;
@@ -987,6 +989,29 @@ export const onRequestPost = async (ctx: Ctx) => {
         }
       }
       return json({ ok: true, values: list });
+    }
+
+    case "set_license_prices": {
+      // Admin dashboard → "License prices" card. Stored in site_config; the
+      // PayPal order endpoint prices carts from here (client is never trusted).
+      const p = body.licensePrices;
+      const valid = (v: unknown) => Number.isFinite(Number(v)) && Number(v) >= 1 && Number(v) <= 100000;
+      if (!p || !valid(p.personal) || !valid(p.commercial) || !valid(p.professional)) {
+        return json({ error: "All three prices must be between 1 and 100000" }, 400);
+      }
+      const clean = {
+        personal: Math.round(Number(p.personal) * 100) / 100,
+        commercial: Math.round(Number(p.commercial) * 100) / 100,
+        professional: Math.round(Number(p.professional) * 100) / 100,
+      };
+      await db
+        .prepare(
+          `INSERT INTO site_config (key, value) VALUES ('license_prices', ?1)
+           ON CONFLICT(key) DO UPDATE SET value = ?1`,
+        )
+        .bind(JSON.stringify(clean))
+        .run();
+      return json({ ok: true, licensePrices: clean });
     }
 
     case "rename_vocab": {

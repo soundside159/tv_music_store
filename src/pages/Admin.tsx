@@ -157,6 +157,9 @@ const Admin = () => {
   // clip it), and the row whose Composer checkbox was just ticked (pseudonym
   // not saved yet).
   const [userTab, setUserTab] = useState<UserTab>("all");
+  // Dashboard → single-track license prices (site_config, server-priced carts).
+  const [licPrices, setLicPrices] = useState<{ personal: string; commercial: string; professional: string } | null>(null);
+  const [licBusy, setLicBusy] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
   const [pseudonymDraftFor, setPseudonymDraftFor] = useState<string | null>(null);
@@ -174,6 +177,51 @@ const Admin = () => {
   const totalDownloads = custUsers.reduce((a, u) => a + (u.downloads ?? 0), 0);
 
   const isAdmin = !!user && user.role === "admin";
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    fetch("/api/content")
+      .then(async (res) => {
+        const d = (await res.json()) as { licensePrices?: { personal: number; commercial: number; professional: number } };
+        if (d.licensePrices) {
+          setLicPrices({
+            personal: String(d.licensePrices.personal),
+            commercial: String(d.licensePrices.commercial),
+            professional: String(d.licensePrices.professional),
+          });
+        }
+      })
+      .catch(() => {
+        // card just stays hidden
+      });
+  }, [isAdmin]);
+
+  const saveLicPrices = async () => {
+    if (!licPrices) return;
+    setLicBusy(true);
+    try {
+      const res = await fetch("/api/admin/content", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          action: "set_license_prices",
+          licensePrices: {
+            personal: Number(licPrices.personal),
+            commercial: Number(licPrices.commercial),
+            professional: Number(licPrices.professional),
+          },
+        }),
+      });
+      const d = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !d.ok) throw new Error(d.error ?? "Save failed");
+      window.alert("License prices saved — the site and checkout use them immediately.");
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setLicBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -483,6 +531,45 @@ const Admin = () => {
                 {!liveUsers && !usersError && (
                   <Card>
                     <p className="font-body text-sm text-muted-foreground">Loading live stats…</p>
+                  </Card>
+                )}
+                {licPrices && (
+                  <Card title="Single-track license prices (USD)">
+                    <div className="flex flex-wrap items-end gap-4">
+                      {(
+                        [
+                          ["personal", "Personal"],
+                          ["commercial", "Commercial"],
+                          ["professional", "Professional"],
+                        ] as const
+                      ).map(([key, label]) => (
+                        <label key={key} className="flex flex-col gap-1 font-body text-xs text-muted-foreground">
+                          {label}
+                          <input
+                            inputMode="decimal"
+                            value={licPrices[key]}
+                            onChange={(e) =>
+                              setLicPrices((p) =>
+                                p ? { ...p, [key]: e.target.value.replace(/[^0-9.]/g, "") } : p,
+                              )
+                            }
+                            className="w-28 rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground focus:border-[#F4C430] focus:outline-none"
+                          />
+                        </label>
+                      ))}
+                      <button
+                        type="button"
+                        disabled={licBusy}
+                        onClick={() => void saveLicPrices()}
+                        className="rounded-lg bg-[#F4C430] px-5 py-2 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85 disabled:opacity-50"
+                      >
+                        {licBusy ? "Saving…" : "Save prices"}
+                      </button>
+                    </div>
+                    <p className="mt-3 font-body text-xs text-muted-foreground">
+                      Used on the track page, cart and checkout — carts are always priced
+                      server-side from these values.
+                    </p>
                   </Card>
                 )}
                 <Card>

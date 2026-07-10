@@ -4,7 +4,7 @@ import { Music, Tag, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import { licenseTiers, licenseTierById, type LicenseTierId } from "@/lib/licenses";
+import { licenseTierById, useLicenseTiers, type LicenseTierId } from "@/lib/licenses";
 import { clearCart, removeFromCart, setCartItemTier, useCart } from "@/hooks/useCart";
 
 const GOLD = "#F4C430";
@@ -140,6 +140,8 @@ const PayPalCheckout = ({ disabled }: { disabled: boolean }) => {
 
 const Cart = () => {
   const { items, count, total } = useCart();
+  // Live tier prices (admin-editable) — re-renders when they hydrate/change.
+  const liveTiers = useLicenseTiers();
 
   return (
     <div className="min-h-screen bg-background">
@@ -201,7 +203,7 @@ const Cart = () => {
                         className="mt-2 rounded-lg border border-border bg-background px-2.5 py-1.5 font-body text-xs text-foreground focus:border-[#F4C430] focus:outline-none"
                         aria-label="License tier"
                       >
-                        {licenseTiers.map((t) => (
+                        {liveTiers.map((t) => (
                           <option key={t.id} value={t.id}>
                             {t.name} license — ${t.price}
                           </option>

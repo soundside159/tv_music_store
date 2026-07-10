@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { decodeAudio, detectBpm, formatDuration, wavToMp3Pair, zipWavs } from "@/lib/audioEncoding";
 import { cleanVersionLabel } from "@/lib/downloadTrack";
+import { useCurrentUser } from "@/hooks/useMockData";
 
 // Admin → Bulk Upload: the first big catalog import.
 // GROUPING (owner's rule): a FOLDER = one track — folder name is the title and
@@ -38,6 +39,8 @@ interface Group {
   key: string;
   title: string;
   files: QueuedFile[];
+  /** WAVs named …_stem_… / …_stems_… — packed into a SEPARATE stems zip. */
+  stems: QueuedFile[];
   /** file.name of the version the owner starred as Main; null = auto (longest). */
   mainName: string | null;
   status: GroupStatus;
@@ -46,6 +49,16 @@ interface Group {
 }
 
 const baseName = (filename: string) => filename.replace(/\.[a-z0-9]+$/i, "").trim();
+
+/** "Epic Battle_Stems_Drums.wav" → a stem, not a version of the track. */
+const isStemFile = (filename: string) => /(^|[_\s(-])stems?([_\s).-]|$)/i.test(baseName(filename));
+
+/** Track title for a loose stem file: everything before the stem marker. */
+const stemTitle = (filename: string): string => {
+  const base = baseName(filename);
+  const m = base.match(/^(.*?)[_\s(-]+stems?([_\s).-]|$)/i);
+  return (m ? m[1] : base).replace(/[_\s-]+$/, "").trim();
+};
 
 /** "Epic Battle (short version)" -> { title: "Epic Battle", hasSuffix: true }. */
 const parseLooseName = (filename: string): { title: string } => {
@@ -129,9 +142,12 @@ const AdminBulkUpload = () => {
   const [groups, setGroups] = useState<Group[]>([]);
   const [running, setRunning] = useState(false);
   // Whole-batch composer: every track created in this run gets this profile
-  // ("" = house catalog / TVMUSICSTORE). List comes from the admin content API.
-  const [composers, setComposers] = useState<{ id: string; displayName: string }[]>([]);
+  // ("" = house catalog / TVMUSICSTORE). List comes from the admin content API;
+  // the signed-in admin's OWN composer profile is preselected when he has one.
+  const user = useCurrentUser();
+  const [composers, setComposers] = useState<{ id: string; userId: string | null; displayName: string }[]>([]);
   const [composerId, setComposerId] = useState("");
+  const composerTouchedRef = useRef(false);
   const filesRef = useRef<HTMLInputElement>(null);
   const folderRef = useRef<HTMLInputElement>(null);
   const stopRef = useRef(false);
@@ -142,7 +158,7 @@ const AdminBulkUpload = () => {
       .then(async (res) => {
         if (!res.ok) return;
         const d = (await res.json()) as {
-          composers?: { id: string; displayName: string }[];
+          composers?: { id: string; userId: string | null; displayName: string }[];
         };
         if (!cancelled && d.composers) setComposers(d.composers);
       })
@@ -153,6 +169,13 @@ const AdminBulkUpload = () => {
       cancelled = true;
     };
   }, []);
+
+  // Default the picker to the signed-in user's own composer profile.
+  useEffect(() => {
+    if (composerTouchedRef.current || composerId || !user) return;
+    const mine = composers.find((c) => c.userId === user.id);
+    if (mine) setComposerId(mine.id);
+  }, [composers, user, composerId]);
 
   const patch = (key: string, p: Partial<Group>) =>
     setGroups((gs) => gs.map((g) => (g.key === key ? { ...g, ...p } : g)));
@@ -167,7 +190,10 @@ const AdminBulkUpload = () => {
     setGroups((gs) => {
       const next = [...gs];
       for (const { file, folder } of wavs) {
-        const title = (folder ?? parseLooseName(file.name).title).trim();
+        // Files named …_stem(s)_… are STEMS of the track, not versions — they
+        // go into their own zip and unlock the STEMS download automatically.
+        const stem = isStemFile(file.name);
+        const title = (folder ?? (stem ? stemTitle(file.name) : parseLooseName(file.name).title)).trim();
         const key = title.toLowerCase();
         const existing = next.find((g) => g.key === key);
         const qf: QueuedFile = { file, base: baseName(file.name) };
@@ -178,14 +204,25 @@ const AdminBulkUpload = () => {
             continue;
           }
           if (existing.status === "working") continue; // can't change a running group
-          if (!existing.files.some((x) => x.file.name === file.name && x.file.size === file.size)) {
-            existing.files = [...existing.files, qf];
+          const list = stem ? existing.stems : existing.files;
+          if (!list.some((x) => x.file.name === file.name && x.file.size === file.size)) {
+            if (stem) existing.stems = [...existing.stems, qf];
+            else existing.files = [...existing.files, qf];
           }
           existing.status = "queued";
           existing.note = "";
           existing.error = undefined;
         } else {
-          next.push({ key, title, files: [qf], mainName: null, status: "queued", note: "", error: undefined });
+          next.push({
+            key,
+            title,
+            files: stem ? [] : [qf],
+            stems: stem ? [qf] : [],
+            mainName: null,
+            status: "queued",
+            note: "",
+            error: undefined,
+          });
         }
       }
       return [...next];
@@ -237,11 +274,12 @@ const AdminBulkUpload = () => {
             ? {
                 ...g,
                 files: g.files.filter((f) => f.file.name !== name),
+                stems: g.stems.filter((f) => f.file.name !== name),
                 mainName: g.mainName === name ? null : g.mainName,
               }
             : g,
         )
-        .filter((g) => g.files.length > 0),
+        .filter((g) => g.files.length > 0 || g.stems.length > 0),
     );
 
   const toggleMain = (key: string, name: string) =>
@@ -253,6 +291,9 @@ const AdminBulkUpload = () => {
   const labelOf = (g: Group, qf: QueuedFile) => cleanVersionLabel(qf.base, g.title);
 
   const processGroup = async (group: Group) => {
+    if (group.files.length === 0) {
+      throw new Error("Only stem files here — add at least one version WAV for this track");
+    }
     patch(group.key, { status: "working", note: "Decoding & encoding…", error: undefined });
 
     // 1. Encode every version (one at a time — keeps memory in check).
@@ -304,6 +345,15 @@ const AdminBulkUpload = () => {
     const zipBlob = await zipWavs(group.files.map(({ file }) => ({ name: file.name, file })));
     const zipUp = await uploadAudio(zipBlob, "wavzip", group.title);
 
+    // 4b. Stems (…_stem(s)_… files) — their own private zip; has_stems flips on.
+    let stemsKey: string | undefined;
+    if (group.stems.length > 0) {
+      patch(group.key, { note: "Packing & uploading STEMS zip…" });
+      const stemsBlob = await zipWavs(group.stems.map(({ file }) => ({ name: file.name, file })));
+      const stemsUp = await uploadAudio(stemsBlob, "stems", `${group.title}-stems`);
+      stemsKey = stemsUp.key;
+    }
+
     // 5. Create the draft track.
     patch(group.key, { note: "Creating track…" });
     await createTrack({
@@ -312,6 +362,7 @@ const AdminBulkUpload = () => {
       bpm: bpmDetected ?? undefined,
       versions,
       wavZipKey: zipUp.key,
+      stemsKey,
       composerId: composerId || undefined,
     });
 
@@ -447,7 +498,10 @@ const AdminBulkUpload = () => {
             <select
               value={composerId}
               disabled={running}
-              onChange={(e) => setComposerId(e.target.value)}
+              onChange={(e) => {
+                composerTouchedRef.current = true;
+                setComposerId(e.target.value);
+              }}
               aria-label="Composer for this batch"
               title="Every track created in this run is credited to this composer"
               className="rounded-lg border border-border bg-background px-2.5 py-2 font-body text-xs text-foreground focus:border-[#F4C430] focus:outline-none disabled:opacity-50"
@@ -495,7 +549,10 @@ const AdminBulkUpload = () => {
                       )}
                     </span>
                     <span className="shrink-0 font-body text-[11px] text-muted-foreground">
-                      {g.files.length} version{g.files.length > 1 ? "s" : ""}
+                      {g.files.length} version{g.files.length !== 1 ? "s" : ""}
+                      {g.stems.length > 0 && (
+                        <span className="text-[#F4C430]"> · {g.stems.length} stems</span>
+                      )}
                       {g.files.length > 1 && (autoMain ? " · main: longest (auto)" : "")}
                     </span>
                     {g.status !== "working" && (
@@ -548,6 +605,26 @@ const AdminBulkUpload = () => {
                           </li>
                         );
                       })}
+                      {g.stems.map((qf) => (
+                        <li key={qf.file.name} className="flex items-center gap-2 pl-6">
+                          <span className="shrink-0 rounded border border-[#F4C430]/60 bg-[#F4C430]/10 px-1 py-px font-body text-[9px] font-bold uppercase tracking-wide text-[#F4C430]">
+                            Stem
+                          </span>
+                          <span className="min-w-0 flex-1 truncate font-body text-xs text-muted-foreground">
+                            {qf.file.name}
+                          </span>
+                          {g.status !== "working" && (
+                            <button
+                              type="button"
+                              onClick={() => removeFile(g.key, qf.file.name)}
+                              aria-label={`Remove ${qf.file.name}`}
+                              className="shrink-0 text-muted-foreground/60 transition-colors hover:text-red-400"
+                            >
+                              <XCircle className="h-3 w-3" />
+                            </button>
+                          )}
+                        </li>
+                      ))}
                     </ul>
                   )}
                 </div>
