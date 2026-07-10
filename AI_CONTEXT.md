@@ -2107,6 +2107,25 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   refused. (4) CURRENT PLAN chips: gold minimal chip ("Max plan" / grey "Free plan") in
   Account → Profile under the email AND in the header avatar popup under the email line
   (Navigation now reads useSubscription).
+- **2026-07-10 (owner round: filename hygiene end-to-end):** Owner's friend delivers files
+  like "1685_As Light As A Feather" / "Oleksii-Romanenko_Title_30sec.wav" — cleanup pass:
+  (1) UPLOAD: Bulk Upload (`cleanTitle`) and ComposerUpload strip leading catalog numbers +
+  separators from derived track titles ("1685_X" → "X"). (2) DOWNLOAD ZIPS: download.ts
+  builds nice names for every audio file INSIDE streamed zips via `niceZipEntryName` —
+  "tvmusicstore.com_<code>_<composer cue_name || display_name>_<Title> (<suffix>).wav";
+  suffix comes from the improved `cleanVersionSuffix` (underscores→spaces, leading digits
+  dropped, keeps what FOLLOWS the title wherever it sits, so author-name prefixes fall away);
+  collision-safe via a usedZipNames Set; mp3-in-zip + LICENSE pdf names use the same
+  format; `tidyTitle` also cleans outer filenames server- (download.ts) and client-side
+  (downloadTrack.ts downloadFileName/wavZipFileName) for legacy titles still holding digits.
+  (3) READ .XLSX (AdminTracksEdit): normTitle now drops leading digits and a fuzzy
+  "contains" pass follows the exact match — "1685_As Light As A Feather" matches sheet row
+  "As Light As A Feather". (4) UI VERSION LABELS: new `displayVersionLabel` (cleaned label,
+  falls back to the raw label when nothing besides the title remains) used in
+  TrackRowPlayer expanded versions, TrackDetail Versions tab (index 0 = main keeps its full
+  label per owner's rule) and Similar list; main-version label on TrackDetail gets light
+  cosmetics only (underscores→spaces, leading digits). Labels in the DB are untouched —
+  visual only.
 - **BACKLOG — PRO / performance royalties support (researched 2026-07-10, owner considering):**
   composers have IPI numbers and want cue-sheet income; industry does both models (AudioJungle
   lists PRO fields; Tunetank-style libraries sell "PRO-free"). Decision guidance given to the

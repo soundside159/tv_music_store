@@ -51,6 +51,10 @@ interface Group {
 
 const baseName = (filename: string) => filename.replace(/\.[a-z0-9]+$/i, "").trim();
 
+/** Track titles lose leading catalog numbers: "1685_As Light As A Feather"
+ *  → "As Light As A Feather" (many stock libraries prefix files this way). */
+const cleanTitle = (s: string) => s.replace(/^\s*\d+[\s_-]*/, "").trim() || s.trim();
+
 /** "Epic Battle_Stems_Drums.wav" → a stem, not a version of the track. */
 const isStemFile = (filename: string) => /(^|[_\s(-])stems?([_\s).-]|$)/i.test(baseName(filename));
 
@@ -239,7 +243,7 @@ const AdminBulkUpload = () => {
         // Files named …_stem(s)_… are STEMS of the track, not versions — they
         // go into their own zip and unlock the STEMS download automatically.
         const stem = isStemFile(file.name);
-        const title = (folder ?? (stem ? stemTitle(file.name) : parseLooseName(file.name).title)).trim();
+        const title = cleanTitle(folder ?? (stem ? stemTitle(file.name) : parseLooseName(file.name).title));
         const key = title.toLowerCase();
         const existing = next.find((g) => g.key === key);
         const qf: QueuedFile = { file, base: baseName(file.name) };

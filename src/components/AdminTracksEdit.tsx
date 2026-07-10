@@ -221,7 +221,12 @@ const AdminTracksEdit = ({
   // Title OR Alternative Title; BPM / Description / Tags are written in.
   const [xlsxBusy, setXlsxBusy] = useState(false);
   const normTitle = (v: string) =>
-    v.toLowerCase().replace(/\(.*?\)/g, " ").replace(/[^a-z0-9а-яё]+/g, " ").trim();
+    v
+      .toLowerCase()
+      .replace(/\(.*?\)/g, " ")
+      .replace(/[^a-z0-9а-яё]+/g, " ")
+      .replace(/^[\d\s]+/, "") // "1685 as light as a feather" -> "as light as a feather"
+      .trim();
 
   const readXlsx = async (file: File) => {
     const selectedTracks = tracks.filter((t) => selected.includes(t.id));
@@ -250,8 +255,19 @@ const AdminTracksEdit = ({
         }
       }
 
+      // Exact match first; then a "contains" pass so "Composer_Title_v2"-style
+      // track names still find their sheet row (and vice versa).
+      const sheetKeys = [...byName.keys()];
+      const findRow = (title: string): string[] | undefined => {
+        const n = normTitle(title);
+        if (!n) return undefined;
+        const exact = byName.get(n);
+        if (exact) return exact;
+        const fuzzy = sheetKeys.find((k) => k.includes(n) || n.includes(k));
+        return fuzzy ? byName.get(fuzzy) : undefined;
+      };
       const matches = selectedTracks
-        .map((t) => ({ t, row: byName.get(normTitle(t.title)) }))
+        .map((t) => ({ t, row: findRow(t.title) }))
         .filter((m): m is { t: CatalogTrack; row: string[] } => !!m.row);
       const missed = selectedTracks.length - matches.length;
       if (matches.length === 0) {

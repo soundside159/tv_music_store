@@ -32,7 +32,7 @@ import { toggleFavourite, useFavourites } from "@/lib/favourites";
 import { usePlayer } from "@/components/playerContext";
 import { useLicenseTiers, type LicenseTierId } from "@/lib/licenses";
 import { addToCart } from "@/hooks/useCart";
-import { openDownloadOptions } from "@/lib/downloadTrack";
+import { displayVersionLabel, openDownloadOptions } from "@/lib/downloadTrack";
 import { openPlanModal } from "@/lib/billing";
 
 const GOLD = "#F4C430";
@@ -403,7 +403,7 @@ const TrackDetail = () => {
                   className="h-16"
                 />
                 <div className="font-body text-sm text-muted-foreground md:text-right">
-                  <div>{mainVersion.label}</div>
+                  <div>{mainVersion.label.replace(/_+/g, " ").replace(/^\s*\d+\s*/, "").trim() || mainVersion.label}</div>
                   <div>
                     {mainVersion.duration} / {track.bpm} BPM
                   </div>
@@ -436,6 +436,7 @@ const TrackDetail = () => {
                         onSeek={(nextProgress) => playVersion(track, version, nextProgress)}
                         progress={active ? progress : 0}
                         version={version}
+                        trackTitle={track.title}
                       />
                     );
                   })}
@@ -469,7 +470,7 @@ const TrackDetail = () => {
                           >
                             {active && isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                           </button>
-                          <span className="font-body text-sm text-muted-foreground">{version.label}</span>
+                          <span className="font-body text-sm text-muted-foreground">{displayVersionLabel(version.label, item.title)}</span>
                           <WaveformPreview
                             active={active && isPlaying}
                             onSeek={(nextProgress) => playVersion(item, version, nextProgress)}
@@ -559,6 +560,7 @@ const TrackVersionRow = ({
   onSeek,
   progress,
   version,
+  trackTitle,
 }: {
   active: boolean;
   index: number;
@@ -567,6 +569,7 @@ const TrackVersionRow = ({
   onSeek: (progress: number) => void;
   progress: number;
   version: TrackAudioVersion;
+  trackTitle: string;
 }) => (
   <div className="grid gap-4 border-b border-border/40 py-4 last:border-b-0 md:grid-cols-[2rem_minmax(10rem,16rem)_minmax(0,1fr)_3.5rem] md:items-center">
     <button
@@ -578,7 +581,7 @@ const TrackVersionRow = ({
       {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
     </button>
     <span className={`font-body text-sm ${active ? "text-foreground" : "text-muted-foreground"}`}>
-      {index + 1}. {version.label}
+      {index + 1}. {index === 0 ? version.label : displayVersionLabel(version.label, trackTitle)}
     </span>
     <WaveformPreview active={isPlaying} bars={360} onSeek={onSeek} progress={progress} src={version.src} className="h-9" />
     <span className="font-body text-xs text-muted-foreground">{version.duration}</span>

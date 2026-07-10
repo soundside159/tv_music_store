@@ -9,19 +9,36 @@ const SITE = "tvmusicstore.com";
 const sanitizeName = (s: string) =>
   s.replace(/[\\/:*?"<>|]+/g, "").replace(/\s+/g, " ").trim();
 
+// "1685_As Light As A Feather" -> "As Light As A Feather" for filenames.
+const tidyTitle = (s: string) => {
+  const t = (s ?? "").replace(/_+/g, " ").replace(/^\s*\d+\s*/, "").trim();
+  return t || (s ?? "").trim();
+};
+
 /**
  * Turns a raw version label into just the part that ISN'T the track title.
  * "Opening Up Space (short version)" + title "Opening Up Space" -> "short version".
  * The main version (label == title, "Main", or empty) returns "".
  */
 export const cleanVersionLabel = (label: string, title: string): string => {
-  let s = (label ?? "").trim();
-  const t = (title ?? "").trim();
-  if (t && s.toLowerCase().startsWith(t.toLowerCase())) s = s.slice(t.length);
+  // Underscores/dashes read as spaces; leading catalog numbers ("1685_") drop.
+  let s = (label ?? "").replace(/[_]+/g, " ").replace(/^\s*\d+\s*/, "").trim();
+  const t = (title ?? "").replace(/[_]+/g, " ").replace(/^\s*\d+\s*/, "").trim();
+  if (t) {
+    // The title may sit anywhere ("Composer Name_Title_30sec") — keep only
+    // what comes AFTER it, so author prefixes fall away with it.
+    const idx = s.toLowerCase().indexOf(t.toLowerCase());
+    if (idx >= 0) s = s.slice(idx + t.length);
+  }
   s = s.replace(/^[\s\-–—()[\]]+|[\s\-–—()[\]]+$/g, "").trim();
   if (/^(main|full|original|full version)$/i.test(s)) s = "";
   return s;
 };
+
+/** UI label for a version: cleaned, but never empty — falls back to the raw
+ *  label when nothing but the title itself was in it. */
+export const displayVersionLabel = (label: string, title: string): string =>
+  cleanVersionLabel(label, title) || label;
 
 /** Pulls the leading track code out of a slug ("1042-opening-up-space" -> "1042"). */
 export const codeFromSlug = (slug: string): string => slug.match(/^(\d+)/)?.[1] ?? "";
@@ -29,7 +46,7 @@ export const codeFromSlug = (slug: string): string => slug.match(/^(\d+)/)?.[1] 
 /** tunetank-style name: "tvmusicstore.com_1042_Title (version).mp3". */
 export const downloadFileName = (title: string, label: string, format: string, code = ""): string => {
   const suffix = cleanVersionLabel(label ?? "", title);
-  const base = suffix ? `${title} (${suffix})` : title;
+  const base = suffix ? `${tidyTitle(title)} (${suffix})` : tidyTitle(title);
   const prefix = code ? `${SITE}_${code}` : SITE;
   return `${prefix}_${sanitizeName(base)}.${format}`;
 };
@@ -37,7 +54,7 @@ export const downloadFileName = (title: string, label: string, format: string, c
 /** WAV bundle name: "tvmusicstore.com_1042_Title.zip". */
 export const wavZipFileName = (title: string, code = ""): string => {
   const prefix = code ? `${SITE}_${code}` : SITE;
-  return `${prefix}_${sanitizeName(title)}.zip`;
+  return `${prefix}_${sanitizeName(tidyTitle(title))}.zip`;
 };
 
 export interface DownloadArgs {

@@ -18,13 +18,25 @@ const FREE_MONTHLY_LIMIT = 3;
 const sanitizeFilename = (s: string) =>
   s.replace(/[^\w\s\-().]/g, "").replace(/\s+/g, " ").trim().slice(0, 80) || "track";
 
+// Titles lose leading catalog numbers and underscores for display/filenames:
+// "1685_As Light As A Feather" -> "As Light As A Feather".
+const tidyTitle = (s: string) => {
+  const t = (s ?? "").replace(/_+/g, " ").replace(/^\s*\d+\s*/, "").trim();
+  return t || (s ?? "").trim();
+};
+
 // The part of a version label that isn't the track title (so it isn't duplicated
 // in the filename). "Opening Up Space (short version)" + "Opening Up Space" ->
 // "short version"; the main version returns "".
 const cleanVersionSuffix = (label: string, title: string): string => {
-  let s = (label ?? "").trim();
-  const t = (title ?? "").trim();
-  if (t && s.toLowerCase().startsWith(t.toLowerCase())) s = s.slice(t.length);
+  // Underscores read as spaces, leading catalog numbers ("1685_") drop, and the
+  // title may sit anywhere ("Composer Name_Title_30sec") — keep what FOLLOWS it.
+  let s = (label ?? "").replace(/_+/g, " ").replace(/^\s*\d+\s*/, "").trim();
+  const t = (title ?? "").replace(/_+/g, " ").replace(/^\s*\d+\s*/, "").trim();
+  if (t) {
+    const idx = s.toLowerCase().indexOf(t.toLowerCase());
+    if (idx >= 0) s = s.slice(idx + t.length);
+  }
   s = s.replace(/^[\s\-–—()[\]]+|[\s\-–—()[\]]+$/g, "").trim();
   if (/^(main|full|original|full version)$/i.test(s)) s = "";
   return s;
@@ -129,6 +141,49 @@ export const onRequestPost = async (ctx: Ctx) => {
   })();
   const hasLicense = !!licenseOrder;
 
+  // Composer name for filenames inside zips — the cue-sheet name (next to the
+  // PRO fields) when set, else the public pseudonym. Best-effort.
+  const composerName = await (async () => {
+    if (!track?.composer_id) return "";
+    try {
+      const c = await ctx.env.DB.prepare(
+        `SELECT cue_name, display_name FROM composers WHERE id = ?1`,
+      )
+        .bind(track.composer_id)
+        .first<{ cue_name: string | null; display_name: string | null }>();
+      return (c?.cue_name || c?.display_name || "").trim();
+    } catch {
+      try {
+        const c = await ctx.env.DB.prepare(`SELECT display_name FROM composers WHERE id = ?1`)
+          .bind(track.composer_id)
+          .first<{ display_name: string | null }>();
+        return (c?.display_name || "").trim();
+      } catch {
+        return "";
+      }
+    }
+  })();
+
+  const trackCode = slug.match(/^(\d+)/)?.[1] ?? "";
+
+  // "tvmusicstore.com_1685_Composer Name_Title (30sec).wav" — used for every
+  // audio file we put INSIDE a zip, whatever the master was originally called.
+  const usedZipNames = new Set<string>();
+  const niceZipEntryName = (originalName: string, fallbackExt = ".wav"): string => {
+    const extMatch = originalName.match(/\.[a-z0-9]+$/i);
+    const ext = extMatch ? extMatch[0].toLowerCase() : fallbackExt;
+    const base = originalName.slice(0, originalName.length - (extMatch ? extMatch[0].length : 0));
+    const suffix = cleanVersionSuffix(base, track?.title ?? "");
+    const stem =
+      ["tvmusicstore.com", trackCode, sanitizeFilename(composerName), sanitizeFilename(tidyTitle(track?.title ?? slug))]
+        .filter(Boolean)
+        .join("_") + (suffix ? ` (${sanitizeFilename(suffix)})` : "");
+    let name = stem + ext;
+    for (let n = 2; usedZipNames.has(name); n++) name = `${stem} (${n})${ext}`;
+    usedZipNames.add(name);
+    return name;
+  };
+
   // Plan gates (a purchased one-time license bypasses them for its track)
   if ((format === "wav" || format === "stems") && plan !== "max" && !hasLicense) {
     return json(
@@ -228,7 +283,7 @@ export const onRequestPost = async (ctx: Ctx) => {
     for (const m of manifestEntries) {
       const obj = await ctx.env.R2.get(m.key);
       if (!obj) return json({ error: `File missing in storage (${m.name})`, code: "nofile" }, 404);
-      zipEntries.push({ name: m.name, size: m.size, crc: m.crc, body: obj.body });
+      zipEntries.push({ name: niceZipEntryName(m.name), size: m.size, crc: m.crc, body: obj.body });
     }
     // Drop the license certificate PDF into the bundle too (owner request) —
     // best-effort: the zip still ships if the PDF endpoint hiccups.
@@ -242,7 +297,7 @@ export const onRequestPost = async (ctx: Ctx) => {
       if (licRes.ok) {
         const pdf = new Uint8Array(await licRes.arrayBuffer());
         zipEntries.push({
-          name: `LICENSE - ${sanitizeFilename(track?.title ?? slug)}.pdf`,
+          name: `LICENSE - ${sanitizeFilename(tidyTitle(track?.title ?? slug))}.pdf`,
           size: pdf.length,
           crc: crc32(pdf),
           body: pdf,
@@ -274,9 +329,13 @@ export const onRequestPost = async (ctx: Ctx) => {
     ) {
       try {
         const mp3 = new Uint8Array(await fileRes.arrayBuffer());
+        const mp3Suffix = cleanVersionSuffix(body?.label ?? "", track.title);
         const entries: ZipEntrySpec[] = [
           {
-            name: `${sanitizeFilename(track.title)}.mp3`,
+            name: niceZipEntryName(
+              `${track.title}${mp3Suffix ? ` (${mp3Suffix})` : ""}.mp3`,
+              ".mp3",
+            ),
             size: mp3.length,
             crc: crc32(mp3),
             body: mp3,
@@ -291,7 +350,7 @@ export const onRequestPost = async (ctx: Ctx) => {
         if (licRes.ok) {
           const pdf = new Uint8Array(await licRes.arrayBuffer());
           entries.push({
-            name: `LICENSE - ${sanitizeFilename(track.title)}.pdf`,
+            name: `LICENSE - ${sanitizeFilename(tidyTitle(track.title))}.pdf`,
             size: pdf.length,
             crc: crc32(pdf),
             body: pdf,
@@ -317,15 +376,16 @@ export const onRequestPost = async (ctx: Ctx) => {
     .run();
 
   const rawTitle = body?.title ?? track?.title ?? slug;
-  const title = sanitizeFilename(rawTitle);
+  const title = sanitizeFilename(tidyTitle(rawTitle));
   const ext = isZip ? "zip" : format;
   // Strip the track title out of the version label so it isn't duplicated, then
   // prefix the site (tunetank-style): "tvmusicstore.com_Title (short version).mp3".
   const suffix = isZip ? "" : cleanVersionSuffix(body?.label ?? versionId, rawTitle);
   const stemsTag = format === "stems" ? " STEMS" : "";
   const base = (suffix ? `${title} (${sanitizeFilename(suffix)})` : title) + stemsTag;
-  const code = slug.match(/^(\d+)/)?.[1] ?? "";
-  const filename = code ? `tvmusicstore.com_${code}_${base}.${ext}` : `tvmusicstore.com_${base}.${ext}`;
+  const filename = trackCode
+    ? `tvmusicstore.com_${trackCode}_${base}.${ext}`
+    : `tvmusicstore.com_${base}.${ext}`;
 
   return new Response(audioBody, {
     status: 200,

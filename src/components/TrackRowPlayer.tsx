@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Copy, Download, Heart, Music2, Pause, Play, ShoppingCart, X } from "lucide-react";
-import { openDownloadOptions } from "@/lib/downloadTrack";
+import { displayVersionLabel, openDownloadOptions } from "@/lib/downloadTrack";
 import { openLicenseModal } from "@/hooks/useCart";
 import { toggleFavourite, useFavourites } from "@/lib/favourites";
 import WaveformPreview from "@/components/WaveformPreview";
@@ -363,7 +363,7 @@ export const TrackRow = ({
                       {active && globalIsPlaying && <PlayProgressRing progress={versionProgress(version.id)} />}
                       {active && globalIsPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="ml-0.5 h-3.5 w-3.5" />}
                     </span>
-                    <span className={`truncate ${active && globalIsPlaying ? "text-[#F4C430]" : active ? "text-foreground" : undefined}`}>{version.label}</span>
+                    <span className={`truncate ${active && globalIsPlaying ? "text-[#F4C430]" : active ? "text-foreground" : undefined}`}>{displayVersionLabel(version.label, track.title)}</span>
                   </button>
                   <div className="hidden xl:block" />
                   <div className="hidden xl:block" />
