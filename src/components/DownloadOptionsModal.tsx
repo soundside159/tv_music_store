@@ -87,13 +87,24 @@ const DownloadOptionsModal = () => {
     return () => window.removeEventListener("keydown", onKey);
   }, [args]);
 
+  // When 128 kbps is hidden (Pro/Max/licensed), land on 320 instead.
+  const planNow = status === "authed" ? (subscription?.plan ?? "free") : "free";
+  useEffect(() => {
+    if (selected === "mp3-128" && ((planRank[planNow] ?? 0) >= 1 || license)) {
+      setSelected("mp3-320");
+    }
+  }, [selected, planNow, license]);
+
   if (!args) return null;
 
   const plan = status === "authed" ? (subscription?.plan ?? "free") : "free";
+  // Pro/Max (and license owners) get full quality anyway — the 128 kbps
+  // option would only be clutter, so it disappears for them.
+  const hide128 = planRank[plan] >= 1 || !!license;
   // STEMS unlocks per track once a stems zip is uploaded; otherwise stays SOON.
-  const availableOptions = options.map((o) =>
-    o.id === "stems" ? { ...o, soon: !args.hasStems } : o,
-  );
+  const availableOptions = options
+    .filter((o) => !(o.id === "mp3-128" && hide128))
+    .map((o) => (o.id === "stems" ? { ...o, soon: !args.hasStems } : o));
   const option = availableOptions.find((o) => o.id === selected) ?? availableOptions[0];
   // A purchased one-time license unlocks every available format for its track.
   const locked = planRank[plan] < planRank[option.need] && !license;

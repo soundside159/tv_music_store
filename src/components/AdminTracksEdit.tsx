@@ -126,7 +126,8 @@ const AdminTracksEdit = ({
   onSelectionChange,
   selectionResetKey,
   aiTrackIds = [],
-  fieldsRefreshKey,
+  aiTextIds = [],
+  fieldsPatch,
   onGenerateCover,
   aiModel = "standard",
   onAiModelChange,
@@ -149,10 +150,12 @@ const AdminTracksEdit = ({
   onApplyOverrides: (overrides: Record<string, Partial<CatalogTrack>>) => void;
   onSelectionChange?: (ids: string[]) => void;
   selectionResetKey?: number;
-  /** Track ids with AI generation in flight (sparkle animation on rows). */
+  /** Track ids with AI COVER generation in flight (sparkle on row thumbs). */
   aiTrackIds?: string[];
-  /** Bumped by the parent after AI writes a track — re-reads the fields panel. */
-  fieldsRefreshKey?: number;
+  /** Track ids with AI TEXT generation in flight (pulse on the description). */
+  aiTextIds?: string[];
+  /** AI-written fields to merge into the panel (never wipes manual edits). */
+  fieldsPatch?: { n: number; trackId: string; patch: { cover?: string; description?: string } } | null;
   /** Generate a cover for ONE track (hover button on the row thumbnail). */
   onGenerateCover?: (trackId: string) => void;
   /** Image model for AI covers: standard (cheap) | premium (better). */
@@ -193,18 +196,24 @@ const AdminTracksEdit = ({
   const [fields, setFields] = useState<SingleFields | null>(null);
   const [playlistSearch, setPlaylistSearch] = useState("");
   const aiSet = useMemo(() => new Set(aiTrackIds), [aiTrackIds]);
+  const aiTextSet = useMemo(() => new Set(aiTextIds), [aiTextIds]);
 
-  // After AI writes cover/description into a track, re-read the fields panel
-  // so the fresh text shows up immediately (no reselect needed).
+  // After AI writes cover/description into a track, merge ONLY those fields
+  // into the panel — unsaved manual edits in the other fields stay untouched.
   useEffect(() => {
-    if (fieldsRefreshKey === undefined) return;
+    if (!fieldsPatch) return;
     setFields((prev) => {
-      if (!prev || selected.length !== 1) return prev;
-      const t = tracks.find((x) => x.id === selected[0]);
-      return t ? fieldsOf(t) : prev;
+      if (!prev || selected.length !== 1 || selected[0] !== fieldsPatch.trackId) return prev;
+      return {
+        ...prev,
+        ...(fieldsPatch.patch.cover !== undefined ? { cover: fieldsPatch.patch.cover } : {}),
+        ...(fieldsPatch.patch.description !== undefined
+          ? { description: fieldsPatch.patch.description }
+          : {}),
+      };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fieldsRefreshKey]);
+  }, [fieldsPatch?.n]);
 
   // ---- "Read .xlsx" — fill the SELECTED tracks from the owner's spreadsheet.
   // Fixed column layout: # / Title / BPM / Lengths / Alternative Title /
@@ -1152,7 +1161,9 @@ const AdminTracksEdit = ({
                     />
                   </label>
                   {(() => {
-                    const aiWriting = aiSet.has(selTracks[0].id);
+                    // Only TEXT generation animates/locks the description —
+                    // cover-only generation must not touch this field.
+                    const aiWriting = aiTextSet.has(selTracks[0].id);
                     return (
                       <div className="relative">
                         <textarea

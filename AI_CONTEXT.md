@@ -2054,6 +2054,20 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   HOLDERS (TV Music Store and/or its composers) — the old "property of TV Music Store" was
   wrong for composer-owned works. License wording of all 5 tiers/plans was sent to the owner
   in chat for review — expect wording tweaks in TIER_INFO / PLAN_INFO next.
+- **2026-07-10 (download modal + AI-flash bugfix):** (1) DownloadOptionsModal hides the
+  MP3 128 option for Pro/Max subscribers and license owners (auto-lands on 320); the free
+  128 flow already shows the copyable AttributionModal ("Credit the composer": store, track,
+  composer, link) — confirmed working, unchanged. (2) license-pdf?slug now returns 403 for
+  FREE-plan users (owner: plan certificates are a Pro/Max perk; purchased ?order certs
+  unaffected; the download modal already hid the checkbox for free). (3) TRACKS EDIT BUG:
+  per-row cover generation pulsed AND wiped the description field — root causes: one shared
+  aiTrackIds list drove BOTH the thumb sparkle and the textarea pulse, and fieldsRefreshKey
+  re-read the WHOLE fields panel (discarding unsaved AI text). Fix: separate `aiTextIds`
+  (textarea pulse; only bulk AI Art & Text sets it) vs `aiTrackIds` (thumb sparkle), and
+  fieldsRefreshKey replaced by a targeted `fieldsPatch {trackId, patch:{cover?,description?}}`
+  that MERGES only the AI-written fields into the panel — manual unsaved edits survive.
+  Cover in the panel now also syncs after per-row generation, so a later Apply can't roll
+  the new art back.
 - **BACKLOG — PRO / performance royalties support (researched 2026-07-10, owner considering):**
   composers have IPI numbers and want cue-sheet income; industry does both models (AudioJungle
   lists PRO fields; Tunetank-style libraries sell "PRO-free"). Decision guidance given to the

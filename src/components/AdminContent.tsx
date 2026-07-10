@@ -177,14 +177,20 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
   // failures don't stop the queue.
   const [aiBusy, setAiBusy] = useState(false);
   const [aiNote, setAiNote] = useState("");
-  // Track ids currently being generated — drives the sparkle animation on the
-  // row thumbnails and the description field in AdminTracksEdit.
+  // Track ids with COVER generation in flight (sparkle on the row thumbnails)
+  // and with TEXT generation in flight (pulse on the description field) —
+  // separate lists so generating a cover never touches the text field.
   const [aiTrackIds, setAiTrackIds] = useState<string[]>([]);
+  const [aiTextIds, setAiTextIds] = useState<string[]>([]);
   // Image model for the Tracks Edit generations (switcher in its toolbar).
   const [aiModel, setAiModel] = useState<"standard" | "premium">("standard");
-  // Bumped after each finished track so the single-track fields panel re-reads
-  // the fresh description/cover without waiting for a reselect.
-  const [fieldsRefreshKey, setFieldsRefreshKey] = useState(0);
+  // Targeted patch for the single-track fields panel: ONLY the AI-written
+  // fields are merged in, so unsaved manual edits are never wiped.
+  const [fieldsPatch, setFieldsPatch] = useState<{
+    n: number;
+    trackId: string;
+    patch: { cover?: string; description?: string };
+  } | null>(null);
   const aiStart = (id: string) => setAiTrackIds((ids) => (ids.includes(id) ? ids : [...ids, id]));
   const aiStop = (id: string) => setAiTrackIds((ids) => ids.filter((x) => x !== id));
 
@@ -215,7 +221,8 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
       }
       await api({ action: "bulk_update_tracks", trackIds: [trackId], fields: { cover, coverThumb } });
       setTrackOverrides((o) => ({ ...o, [trackId]: { ...o[trackId], cover, coverThumb } }));
-      setFieldsRefreshKey((k) => k + 1);
+      // Sync ONLY the cover into the fields panel — unsaved text stays put.
+      setFieldsPatch({ n: Date.now(), trackId, patch: { cover } });
       toast.success(`Cover generated — ${t.title}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Generation failed");
@@ -245,6 +252,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
       return;
     setAiBusy(true);
     setAiTrackIds(eligible.map((t) => t.id));
+    setAiTextIds(eligible.map((t) => t.id));
     let done = 0;
     let failed = 0;
     for (const t of eligible) {
@@ -277,18 +285,20 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
           ...o,
           [t.id]: { ...o[t.id], cover, coverThumb, description },
         }));
-        setFieldsRefreshKey((k) => k + 1);
+        setFieldsPatch({ n: Date.now(), trackId: t.id, patch: { cover, description } });
         done += 1;
       } catch (e) {
         failed += 1;
         toast.error(`${t.title}: ${e instanceof Error ? e.message : "failed"}`);
       } finally {
         aiStop(t.id);
+        setAiTextIds((ids) => ids.filter((x) => x !== t.id));
       }
     }
     setAiBusy(false);
     setAiNote("");
     setAiTrackIds([]);
+    setAiTextIds([]);
     if (done > 0) {
       toast.success(
         `AI art & text ready for ${done} track(s)` + (failed > 0 ? ` · ${failed} failed` : ""),
@@ -1151,7 +1161,8 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
           onSelectionChange={setSelectedTrackIds}
           selectionResetKey={selResetKey}
           aiTrackIds={aiTrackIds}
-          fieldsRefreshKey={fieldsRefreshKey}
+          aiTextIds={aiTextIds}
+          fieldsPatch={fieldsPatch}
           onGenerateCover={(id) => void generateCoverForTrack(id)}
           aiModel={aiModel}
           onAiModelChange={setAiModel}
