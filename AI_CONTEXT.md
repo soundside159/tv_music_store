@@ -1976,7 +1976,14 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   profiles that own tracks stay visible for recovery); (b) both pickers sort the signed-in
   admin's OWN profile FIRST and label it "(me)"; (c) "TVMUSICSTORE (house)" is NOT a
   composer — it's the "no author" option (tracks without composer_id show the store brand as
-  artist); kept as the first option by design.] NEXT AI: when the
+  artist); kept as the first option by design.]
+- **2026-07-10 (license prices reverting on F5 — fixed):** owner set Personal 25, the track
+  page showed it, but a hard refresh showed 15 again. Cause: price hydration lives in the
+  /api/content fetch, and NOTHING on a directly-loaded track page mounts a useContent hook —
+  so the fallback prices never got replaced. Fix: `ContentBoot` component in App.tsx (inside
+  BrowserRouter) calls useContentReady() on EVERY page load, warming the content cache and
+  hydrating license prices / vocabularies / trending on all routes. The saved value itself
+  was always correct in site_config. NEXT AI: when the
   owner settles on numbers, hardcode them into DEFAULT_VISUALIZER and DELETE the panel (and
   its Index.tsx mount); if he dislikes the whole thing, remove AudioVisualizer from
   PlayerProvider + the settings lib + panel (analyser can stay, it's harmless).

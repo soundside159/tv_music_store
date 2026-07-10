@@ -12,7 +12,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { decodeAudio, detectBpm, formatDuration, wavToMp3Pair, zipWavs } from "@/lib/audioEncoding";
+import { decodeAudio, detectBpm, encodeMp3, formatDuration, wavToMp3Pair, zipWavs } from "@/lib/audioEncoding";
 import { cleanVersionLabel } from "@/lib/downloadTrack";
 import { useCurrentUser } from "@/hooks/useMockData";
 
@@ -53,6 +53,18 @@ const baseName = (filename: string) => filename.replace(/\.[a-z0-9]+$/i, "").tri
 /** "Epic Battle_Stems_Drums.wav" → a stem, not a version of the track. */
 const isStemFile = (filename: string) => /(^|[_\s(-])stems?([_\s).-]|$)/i.test(baseName(filename));
 
+/** "Epic Battle_main.wav" → this file is the Main version (unless starred). */
+const isMainFile = (filename: string) => /(^|[_\s(-])main([_\s).-]|$)/i.test(baseName(filename));
+
+/** Audio we accept: WAV (full pipeline) and MP3 (used as the 320 preview
+ *  as-is — no re-encode; a 128 kbps copy is still made for the free tier). */
+const isAudioFile = (filename: string) => /\.(wav|mp3)$/i.test(filename);
+const isMp3 = (filename: string) => /\.mp3$/i.test(filename);
+
+/** Cloudflare rejects request bodies over ~100 MB; our server cap is 95 MB. */
+const MAX_UPLOAD_BYTES = 95 * 1024 * 1024;
+const mb = (n: number) => `${Math.round(n / 1024 / 1024)} MB`;
+
 /** Track title for a loose stem file: everything before the stem marker. */
 const stemTitle = (filename: string): string => {
   const base = baseName(filename);
@@ -88,7 +100,7 @@ interface EntryLike {
 const filesFromEntry = async (entry: EntryLike, parentFolder: string | null): Promise<Incoming[]> => {
   if (entry.isFile) {
     const file = await new Promise<File>((ok, err) => entry.file(ok, err));
-    return /\.wav$/i.test(file.name) ? [{ file, folder: parentFolder }] : [];
+    return isAudioFile(file.name) ? [{ file, folder: parentFolder }] : [];
   }
   if (entry.isDirectory) {
     // The CLOSEST folder around a WAV names its track — so a wrapper folder
@@ -108,21 +120,49 @@ const filesFromEntry = async (entry: EntryLike, parentFolder: string | null): Pr
 
 // --- Uploads -----------------------------------------------------------------
 
-const uploadAudio = async (
+const uploadAudio = (
   file: Blob,
-  kind: "preview" | "preview128" | "wavzip",
+  kind: "preview" | "preview128" | "wavzip" | "stems",
   filename: string,
+  onProgress?: (pct: number) => void,
 ): Promise<{ key: string; path: string | null }> => {
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return Promise.reject(
+      new Error(
+        `${kind === "stems" ? "STEMS zip" : kind === "wavzip" ? "WAV zip" : "File"} is ${mb(file.size)} — over the ~95 MB per-upload limit. Split it into smaller parts.`,
+      ),
+    );
+  }
   const base = filename.replace(/\.[^.]+$/, "");
-  const res = await fetch(`/api/admin/upload-audio?kind=${kind}&filename=${encodeURIComponent(base)}`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "content-type": file.type || (kind === "wavzip" ? "application/zip" : "audio/mpeg") },
-    body: file,
+  // XMLHttpRequest instead of fetch — it reports UPLOAD progress, so the big
+  // zips show a live percentage instead of a silent multi-minute wait.
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `/api/admin/upload-audio?kind=${kind}&filename=${encodeURIComponent(base)}`);
+    xhr.withCredentials = true;
+    xhr.setRequestHeader(
+      "content-type",
+      file.type || (kind === "wavzip" || kind === "stems" ? "application/zip" : "audio/mpeg"),
+    );
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => {
+      let d: { ok?: boolean; key?: string; path?: string | null; error?: string } = {};
+      try {
+        d = JSON.parse(xhr.responseText);
+      } catch {
+        // non-JSON error page
+      }
+      if (xhr.status >= 200 && xhr.status < 300 && d.ok && d.key) {
+        resolve({ key: d.key, path: d.path ?? null });
+      } else {
+        reject(new Error(d.error ?? `Upload failed (HTTP ${xhr.status})`));
+      }
+    };
+    xhr.onerror = () => reject(new Error("Network error during upload"));
+    xhr.send(file);
   });
-  const d = (await res.json().catch(() => ({}))) as { ok?: boolean; key?: string; path?: string | null; error?: string };
-  if (!res.ok || !d.ok || !d.key) throw new Error(d.error ?? "Upload failed");
-  return { key: d.key, path: d.path ?? null };
 };
 
 const createTrack = async (payload: Record<string, unknown>): Promise<void> => {
@@ -181,9 +221,9 @@ const AdminBulkUpload = () => {
     setGroups((gs) => gs.map((g) => (g.key === key ? { ...g, ...p } : g)));
 
   const addIncoming = (list: Incoming[]) => {
-    const wavs = list.filter((x) => /\.wav$/i.test(x.file.name));
+    const wavs = list.filter((x) => isAudioFile(x.file.name));
     if (wavs.length === 0) {
-      toast.error("No WAV files found (.wav only)");
+      toast.error("No audio files found (.wav or .mp3)");
       return;
     }
     let skippedDone = 0;
@@ -297,18 +337,32 @@ const AdminBulkUpload = () => {
     patch(group.key, { status: "working", note: "Decoding & encoding…", error: undefined });
 
     // 1. Encode every version (one at a time — keeps memory in check).
+    //    WAV → MP3 320 + 128; MP3 → used AS-IS for the 320 preview (no
+    //    re-encode), only the 128 kbps copy is rendered from it.
     const encoded: { qf: QueuedFile; mp3_320: Blob; mp3_128: Blob; duration: number }[] = [];
     for (let i = 0; i < group.files.length; i++) {
       const qf = group.files[i];
-      patch(group.key, { note: `Encoding ${i + 1}/${group.files.length}: ${qf.file.name}` });
-      const pair = await wavToMp3Pair(qf.file);
-      encoded.push({ qf, ...pair });
+      if (isMp3(qf.file.name)) {
+        patch(group.key, { note: `Reading MP3 ${i + 1}/${group.files.length}: ${qf.file.name}` });
+        const buffer = await decodeAudio(qf.file);
+        encoded.push({
+          qf,
+          mp3_320: qf.file,
+          mp3_128: encodeMp3(buffer, 128),
+          duration: buffer.duration,
+        });
+      } else {
+        patch(group.key, { note: `Encoding ${i + 1}/${group.files.length}: ${qf.file.name}` });
+        const pair = await wavToMp3Pair(qf.file);
+        encoded.push({ qf, ...pair });
+      }
     }
 
-    // 2. Main = the starred file, else the longest one.
+    // 2. Main = the starred file → a file named …_main… → else the longest.
     let mainIdx = group.mainName
       ? encoded.findIndex((e) => e.qf.file.name === group.mainName)
       : -1;
+    if (mainIdx === -1) mainIdx = encoded.findIndex((e) => isMainFile(e.qf.file.name));
     if (mainIdx === -1) {
       mainIdx = encoded.reduce((best, e, i) => (e.duration > encoded[best].duration ? i : best), 0);
     }
@@ -340,17 +394,28 @@ const AdminBulkUpload = () => {
       });
     }
 
-    // 4. One zip with all the original WAVs (the paid WAV download).
-    patch(group.key, { note: "Packing & uploading WAV zip…" });
-    const zipBlob = await zipWavs(group.files.map(({ file }) => ({ name: file.name, file })));
-    const zipUp = await uploadAudio(zipBlob, "wavzip", group.title);
+    // 4. One zip with the original WAVs (the paid WAV download). MP3 versions
+    // have no WAV master, so they stay out of the bundle; when EVERYTHING is
+    // MP3 there is nothing to bundle at all (no WAV download for that track).
+    let wavZipKey: string | undefined;
+    const wavFiles = group.files.filter(({ file }) => !isMp3(file.name));
+    if (wavFiles.length > 0) {
+      patch(group.key, { note: "Packing WAV zip…" });
+      const zipBlob = await zipWavs(wavFiles.map(({ file }) => ({ name: file.name, file })));
+      const zipUp = await uploadAudio(zipBlob, "wavzip", group.title, (pct) =>
+        patch(group.key, { note: `Uploading WAV zip (${mb(zipBlob.size)})… ${pct}%` }),
+      );
+      wavZipKey = zipUp.key;
+    }
 
     // 4b. Stems (…_stem(s)_… files) — their own private zip; has_stems flips on.
     let stemsKey: string | undefined;
     if (group.stems.length > 0) {
-      patch(group.key, { note: "Packing & uploading STEMS zip…" });
+      patch(group.key, { note: "Packing STEMS zip…" });
       const stemsBlob = await zipWavs(group.stems.map(({ file }) => ({ name: file.name, file })));
-      const stemsUp = await uploadAudio(stemsBlob, "stems", `${group.title}-stems`);
+      const stemsUp = await uploadAudio(stemsBlob, "stems", `${group.title}-stems`, (pct) =>
+        patch(group.key, { note: `Uploading STEMS zip (${mb(stemsBlob.size)})… ${pct}%` }),
+      );
       stemsKey = stemsUp.key;
     }
 
@@ -361,7 +426,7 @@ const AdminBulkUpload = () => {
       duration: versions[0].duration,
       bpm: bpmDetected ?? undefined,
       versions,
-      wavZipKey: zipUp.key,
+      wavZipKey,
       stemsKey,
       composerId: composerId || undefined,
     });
@@ -450,7 +515,7 @@ const AdminBulkUpload = () => {
         <input
           ref={filesRef}
           type="file"
-          accept=".wav,audio/wav,audio/x-wav"
+          accept=".wav,.mp3,audio/wav,audio/x-wav,audio/mpeg"
           multiple
           className="hidden"
           onChange={(e) => {

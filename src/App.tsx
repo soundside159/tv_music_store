@@ -30,8 +30,17 @@ import LicenseModal from "./components/LicenseModal";
 import PlanModal from "./components/PlanModal";
 import AttributionModal from "./components/AttributionModal";
 import { PlayerProvider } from "./components/PlayerProvider";
+import { useContentReady } from "./hooks/useContent";
 
 const queryClient = new QueryClient();
+
+/** Warms the /api/content cache on EVERY page load (any route) — this is what
+ *  hydrates the live license prices, vocabularies, trending etc. even when the
+ *  visitor lands directly on a track page and hits F5. */
+const ContentBoot = () => {
+  useContentReady();
+  return null;
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -39,6 +48,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <ContentBoot />
         <DevPersonaSwitcher />
         <PlayerProvider>
           <Routes>
