@@ -2019,6 +2019,50 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   owner settles on numbers, hardcode them into DEFAULT_VISUALIZER and DELETE the panel (and
   its Index.tsx mount); if he dislikes the whole thing, remove AudioVisualizer from
   PlayerProvider + the settings lib + panel (analyser can stay, it's harmless).
+- **2026-07-10 — OWNER'S CONTRACTS REVIEWED (PRO picture is now concrete):**
+  (1) ZEC MUSIC LTD (signed 2022): the owner ALREADY HAS a publisher — Zec Music Ltd
+  (PRS publisher, IPI 687 192 107); owner is a BMI writer (IPI 10585 08257). Classic 50/50
+  collection deal, worldwide, royalties onto his BMI statement. CRITICAL: "film and
+  television synchronisation rights are specifically NOT granted to the Publisher" — TVMS
+  can sell sync licenses freely, Zec doesn't conflict. Covers a large Schedule of his titles
+  (incl. catalog tracks like A Few Clicks To Destruction, Opening Up Space) + future works
+  only if HE opts them in. So "register an own TVMS publisher" is OFF the table for his own
+  tracks (only a future option for new works he keeps out of Zec, or other composers).
+  (2) TUNETANK contract (2022): full BUYOUT in perpetuity of THREE tracks for $500 each —
+  **"We Can Fly", "Only Victory", "The Battle of Pirates" NO LONGER BELONG to the owner
+  and must NEVER be uploaded to TVMS** (check against these names during bulk imports).
+  Interesting intel: Tunetank is NOT PRO-free under the hood — their writer contract splits
+  performance royalties 50/50 (writer keeps writer's share via his PRO, Tunetank takes the
+  publisher share); they just don't advertise it storefront-side. Confirms PRO doesn't break
+  the model. (3) Ghost Mail confirmed the business name for the London address — that
+  thread is closed. For future PRO fields: owner's tracks → publisher "Zec Music Ltd"
+  (PRS IPI 687 192 107), writer Stanislav Barantsov (BMI IPI 10585 08257).
+- **2026-07-10 (PRO / Cue Sheet fields BUILT + license PDF polish):** owner approved (his own
+  Tunetank writer contract proved even "PRO-free-looking" libraries run PRO under the hood).
+  (1) `composers` gained lazy columns cue_name / pro / ipi / publisher_name / publisher_pro /
+  publisher_ipi (ensureCueColumns in admin/users.ts). GET /api/admin/users returns `cue{}` per
+  user; PATCH accepts `cue{cueName,pro,ipi,publisherName,publisherPro,publisherIpi}` (requires
+  an existing composer profile). (2) Admin → Users ⋯ menu: "Sync / Cue Sheet Info" section
+  (6 inputs + Save) under the Composer checkbox. (3) license-pdf.ts: CertData gained `cue`;
+  `fetchCue(db, trackId)` joins the track's composer profile (omits the block when all fields
+  empty / columns missing); ALL THREE issue paths (admin ?code, ?order, ?slug) pass it;
+  buildCertificate draws a "SYNC / CUE SHEET INFORMATION" panel (grey rrect, Composer |
+  Publisher columns with Name/PRO/IPI) between the permitted lists and the Content ID callout.
+  (4) PDF copy fixes per owner: header "LICENSE SCOPE & RESTRICTIONS" → "LICENSE SCOPE &
+  GRANTS"; footer "License Terms v1.0 · …" → "Full license terms: tvmusicstore.com/
+  license-terms"; ownership line now says the music remains the property of ITS RIGHTS
+  HOLDERS (TV Music Store and/or its composers) — the old "property of TV Music Store" was
+  wrong for composer-owned works. License wording of all 5 tiers/plans was sent to the owner
+  in chat for review — expect wording tweaks in TIER_INFO / PLAN_INFO next.
+- **BACKLOG — PRO / performance royalties support (researched 2026-07-10, owner considering):**
+  composers have IPI numbers and want cue-sheet income; industry does both models (AudioJungle
+  lists PRO fields; Tunetank-style libraries sell "PRO-free"). Decision guidance given to the
+  owner: PRO does NOT break the model if transparent — sync fee is ours, broadcast performance
+  royalties are the broadcaster's problem; registering an own publisher (e.g. "TV Music Store
+  Publishing" in BMI/PRS) would earn the business the publisher share. TO BUILD when approved:
+  composer-profile fields PRO name + IPI/CAE, publisher field, per-track PRO/Non-PRO badge,
+  license-terms paragraph about performance royalties (standard broadcaster-responsibility
+  wording).
 - **BACKLOG (owner-approved, do when time allows):** SEO structured data on track pages —
   add schema.org JSON-LD (MusicRecording / MusicComposition: name, byArtist = composer
   pseudonym, duration, genre, description, image) injected per-track (crawlers that run JS

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { MoreHorizontal } from "lucide-react";
+import { toast } from "sonner";
 import { accountNavGroups, adminNavGroups, composerNavItems } from "@/lib/adminNav";
 import MenuGroupHeader from "@/components/MenuGroupHeader";
 import Navigation from "@/components/Navigation";
@@ -91,6 +92,15 @@ interface LiveUser {
   downloads: number;
   /** Composer display pseudonym (composers.display_name), if a profile exists. */
   pseudonym: string | null;
+  /** Sync / cue-sheet info printed on license PDFs (composer profiles only). */
+  cue: {
+    cueName: string | null;
+    pro: string | null;
+    ipi: string | null;
+    publisherName: string | null;
+    publisherPro: string | null;
+    publisherIpi: string | null;
+  } | null;
 }
 
 interface AdminLicense {
@@ -163,6 +173,9 @@ const Admin = () => {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
   const [pseudonymDraftFor, setPseudonymDraftFor] = useState<string | null>(null);
+  // Cue-sheet form inside the ⋯ menu (loaded when the menu opens).
+  const [cueDraft, setCueDraft] = useState<Record<string, string>>({});
+  const [cueBusy, setCueBusy] = useState(false);
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
   const [licenses, setLicenses] = useState<AdminLicense[] | null>(null);
   const [licensesError, setLicensesError] = useState<string | null>(null);
@@ -341,6 +354,44 @@ const Admin = () => {
       setUsersError(e instanceof Error ? e.message : "Delete failed");
     } finally {
       setSavingUserId(null);
+    }
+  };
+
+  // Save the cue-sheet info (printed on license PDFs for this composer's tracks).
+  const saveCue = async (userId: string) => {
+    setCueBusy(true);
+    setUsersError(null);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ userId, cue: cueDraft }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Save failed");
+      setLiveUsers((us) =>
+        (us ?? []).map((u) =>
+          u.id === userId
+            ? {
+                ...u,
+                cue: {
+                  cueName: cueDraft.cueName ?? "",
+                  pro: cueDraft.pro ?? "",
+                  ipi: cueDraft.ipi ?? "",
+                  publisherName: cueDraft.publisherName ?? "",
+                  publisherPro: cueDraft.publisherPro ?? "",
+                  publisherIpi: cueDraft.publisherIpi ?? "",
+                },
+              }
+            : u,
+        ),
+      );
+      toast.success("Cue sheet info saved — it prints on this composer's license PDFs");
+    } catch (e) {
+      setUsersError(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setCueBusy(false);
     }
   };
 
@@ -852,6 +903,14 @@ const Admin = () => {
                                       });
                                       setOpenMenuId(u.id);
                                       setPseudonymDraftFor(null);
+                                      setCueDraft({
+                                        cueName: u.cue?.cueName ?? "",
+                                        pro: u.cue?.pro ?? "",
+                                        ipi: u.cue?.ipi ?? "",
+                                        publisherName: u.cue?.publisherName ?? "",
+                                        publisherPro: u.cue?.publisherPro ?? "",
+                                        publisherIpi: u.cue?.publisherIpi ?? "",
+                                      });
                                     }}
                                     className={`rounded-md border px-2 py-1 transition-colors ${
                                       openMenuId === u.id
@@ -935,6 +994,47 @@ const Admin = () => {
                         />
                         <p className="mt-1 font-body text-[11px] text-muted-foreground">
                           Shown as the track artist site-wide. Saves on Enter / click away.
+                        </p>
+                      </div>
+                    )}
+                    {/* Sync / cue-sheet info — printed on this composer's license PDFs. */}
+                    {composerOn && (
+                      <div className="mt-4 border-t border-border/60 pt-3">
+                        <p className="mb-2 font-body text-[10px] font-bold uppercase tracking-[0.18em] text-[#F4C430]">
+                          Sync / Cue Sheet Info
+                        </p>
+                        <div className="flex flex-col gap-1.5">
+                          {(
+                            [
+                              ["cueName", "Composer (legal name)"],
+                              ["pro", "PRO (BMI, ASCAP…)"],
+                              ["ipi", "IPI / CAE"],
+                              ["publisherName", "Publisher"],
+                              ["publisherPro", "Publisher PRO"],
+                              ["publisherIpi", "Publisher IPI / CAE"],
+                            ] as const
+                          ).map(([key, ph]) => (
+                            <input
+                              key={key}
+                              value={cueDraft[key] ?? ""}
+                              placeholder={ph}
+                              disabled={cueBusy}
+                              onChange={(e) => setCueDraft((d) => ({ ...d, [key]: e.target.value }))}
+                              className="w-full rounded-md border border-border bg-background px-2 py-1.5 font-body text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none disabled:opacity-50"
+                            />
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          disabled={cueBusy}
+                          onClick={() => void saveCue(u.id)}
+                          className="mt-2 w-full rounded-lg bg-[#F4C430] px-3 py-1.5 font-body text-xs font-bold text-background transition-colors hover:bg-[#F4C430]/85 disabled:opacity-50"
+                        >
+                          {cueBusy ? "Saving…" : "Save cue sheet info"}
+                        </button>
+                        <p className="mt-1.5 font-body text-[10px] text-muted-foreground">
+                          Printed in the "Sync / Cue Sheet Information" block of every license PDF
+                          for this composer's tracks.
                         </p>
                       </div>
                     )}

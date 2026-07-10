@@ -54,7 +54,61 @@ export const onRequestGet = async (ctx: Ctx) => {
     pseudonym: string | null;
   }>();
 
-  return json({ users: rows.results });
+  // Sync / cue-sheet info per composer profile (printed on license PDFs).
+  let cueByUser = new Map<string, Record<string, string | null>>();
+  try {
+    await ensureCueColumns(ctx.env.DB);
+    const cues = await ctx.env.DB.prepare(
+      `SELECT user_id, cue_name, pro, ipi, publisher_name, publisher_pro, publisher_ipi
+         FROM composers WHERE user_id IS NOT NULL`,
+    ).all<{
+      user_id: string;
+      cue_name: string | null;
+      pro: string | null;
+      ipi: string | null;
+      publisher_name: string | null;
+      publisher_pro: string | null;
+      publisher_ipi: string | null;
+    }>();
+    cueByUser = new Map(
+      cues.results.map((c) => [
+        c.user_id,
+        {
+          cueName: c.cue_name,
+          pro: c.pro,
+          ipi: c.ipi,
+          publisherName: c.publisher_name,
+          publisherPro: c.publisher_pro,
+          publisherIpi: c.publisher_ipi,
+        },
+      ]),
+    );
+  } catch {
+    // cue columns unavailable — fields just come back empty
+  }
+
+  return json({
+    users: rows.results.map((u) => ({ ...u, cue: cueByUser.get(u.id) ?? null })),
+  });
+};
+
+/** Sync / cue-sheet fields on the composer profile (lazy ALTERs). */
+const ensureCueColumns = async (db: D1Database) => {
+  const alters = [
+    `ALTER TABLE composers ADD COLUMN cue_name TEXT`,
+    `ALTER TABLE composers ADD COLUMN pro TEXT`,
+    `ALTER TABLE composers ADD COLUMN ipi TEXT`,
+    `ALTER TABLE composers ADD COLUMN publisher_name TEXT`,
+    `ALTER TABLE composers ADD COLUMN publisher_pro TEXT`,
+    `ALTER TABLE composers ADD COLUMN publisher_ipi TEXT`,
+  ];
+  for (const sql of alters) {
+    try {
+      await db.prepare(sql).run();
+    } catch {
+      // column exists — fine
+    }
+  }
 };
 
 const slugify = (s: string) =>
@@ -133,13 +187,23 @@ export const onRequestPatch = async (ctx: Ctx) => {
     role?: string;
     pseudonym?: string;
     removeComposer?: boolean;
+    /** Sync / cue-sheet info for the composer profile (license PDFs). */
+    cue?: {
+      cueName?: string;
+      pro?: string;
+      ipi?: string;
+      publisherName?: string;
+      publisherPro?: string;
+      publisherIpi?: string;
+    };
   }>(ctx.request);
   const userId = body?.userId;
   const role = body?.role;
   const removeComposer = body?.removeComposer === true;
+  const cue = body?.cue;
   const pseudonym = typeof body?.pseudonym === "string" ? body.pseudonym.trim() : undefined;
-  if (!userId || (!role && pseudonym === undefined && !removeComposer)) {
-    return json({ error: "userId and role, pseudonym or removeComposer required" }, 400);
+  if (!userId || (!role && pseudonym === undefined && !removeComposer && !cue)) {
+    return json({ error: "userId and role, pseudonym, cue or removeComposer required" }, 400);
   }
   if (role && !["customer", "composer", "admin"].includes(role)) {
     return json({ error: "Invalid role" }, 400);
@@ -164,6 +228,22 @@ export const onRequestPatch = async (ctx: Ctx) => {
   if (pseudonym !== undefined) {
     const err = await upsertComposer(ctx.env.DB, userId, pseudonym.slice(0, 60));
     if (err) return json({ error: err }, 400);
+  }
+  if (cue) {
+    await ensureCueColumns(ctx.env.DB);
+    const has = await ctx.env.DB.prepare(`SELECT id FROM composers WHERE user_id = ?1 LIMIT 1`)
+      .bind(userId)
+      .first();
+    if (!has) return json({ error: "Set a composer pseudonym first, then add cue-sheet info" }, 400);
+    const s = (v: unknown) => (typeof v === "string" ? v.trim().slice(0, 80) : "");
+    await ctx.env.DB.prepare(
+      `UPDATE composers
+          SET cue_name = ?2, pro = ?3, ipi = ?4,
+              publisher_name = ?5, publisher_pro = ?6, publisher_ipi = ?7
+        WHERE user_id = ?1`,
+    )
+      .bind(userId, s(cue.cueName), s(cue.pro), s(cue.ipi), s(cue.publisherName), s(cue.publisherPro), s(cue.publisherIpi))
+      .run();
   }
   if (removeComposer) {
     const cmp = await ctx.env.DB.prepare(`SELECT id FROM composers WHERE user_id = ?1 LIMIT 1`)

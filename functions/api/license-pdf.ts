@@ -1,4 +1,4 @@
-import { getSessionUser, json, OWNER_EMAIL, type Ctx } from "./_utils";
+import { getSessionUser, json, OWNER_EMAIL, type Ctx, type D1Database } from "./_utils";
 import { buildPdf, textWidth, type PdfOp, type PdfImage, type Rgb } from "./_pdf";
 import { LOGO_ALPHA_B64, LOGO_HEIGHT, LOGO_RGB_B64, LOGO_WIDTH } from "./_logo";
 import { ASSETS } from "./_assets";
@@ -127,7 +127,7 @@ const PLAN_INFO: Record<string, LicenseInfo> = {
   },
 };
 
-const TERMS_LINE = "License Terms v1.0 · tvmusicstore.com/license-terms";
+const TERMS_LINE = "Full license terms: tvmusicstore.com/license-terms";
 
 const prettify = (idOrSlug: string) =>
   idOrSlug
@@ -201,6 +201,15 @@ export interface CertData {
   trackTitle: string;
   composer: string;
   trackPage: string; // URL
+  /** Sync / cue-sheet block (composer + publisher PRO data); null = omit. */
+  cue?: {
+    composerName: string;
+    composerPro: string;
+    composerIpi: string;
+    publisherName: string;
+    publisherPro: string;
+    publisherIpi: string;
+  } | null;
 }
 
 const INNER_W = R - L;
@@ -278,8 +287,8 @@ export const buildCertificate = (fields: CertData): Uint8Array => {
 
   ops.push({ op: "line", x1: L, y1: 474, x2: R, y2: 474, width: 0.7, color: RULE });
 
-  // ===================== SCOPE & RESTRICTIONS =============================
-  ops.push({ op: "text", text: spaced("LICENSE SCOPE & RESTRICTIONS"), x: L, y: 456, size: 8.5, font: "helvB", color: GOLD_DARK });
+  // ===================== SCOPE & GRANTS ===================================
+  ops.push({ op: "text", text: spaced("LICENSE SCOPE & GRANTS"), x: L, y: 456, size: 8.5, font: "helvB", color: GOLD_DARK });
 
   const namePrefix = `${fields.title} — `;
   const pw = textWidth(namePrefix, 9.5, "helvB");
@@ -326,6 +335,40 @@ export const buildCertificate = (fields: CertData): Uint8Array => {
   drawList(fields.permitted, L, true);
   drawList(fields.notPermitted, colR, false);
 
+  // ===================== SYNC / CUE SHEET INFORMATION =====================
+  // Composer + publisher PRO data for cue-sheet reporting and broadcast
+  // registrations — printed only when the composer profile carries the info.
+  if (fields.cue) {
+    const c = fields.cue;
+    const cueTop = 302;
+    const cueH = 80;
+    ops.push({ op: "rrect", x: L, y: cueTop - cueH, w: INNER_W, h: cueH, r: 6, color: PANEL_BG });
+    ops.push({ op: "text", text: spaced("SYNC / CUE SHEET INFORMATION"), x: L + 16, y: cueTop - 18, size: 8, font: "helvB", color: GOLD_DARK });
+    ops.push({
+      op: "text",
+      text: "For cue sheet reporting and broadcast registrations.",
+      x: R - 16,
+      y: cueTop - 18,
+      size: 7.3,
+      color: GRAY_LIGHT,
+      align: "right",
+    });
+    const cueMid = midX + 8;
+    ops.push({ op: "line", x1: cueMid - 14, y1: cueTop - cueH + 10, x2: cueMid - 14, y2: cueTop - 28, width: 0.7, color: RULE });
+    ops.push({ op: "text", text: spaced("COMPOSER"), x: L + 16, y: cueTop - 34, size: 7, font: "helvB", color: GRAY });
+    ops.push({ op: "text", text: spaced("PUBLISHER"), x: cueMid, y: cueTop - 34, size: 7, font: "helvB", color: GRAY });
+    const cueKv = (x: number, y: number, label: string, value: string) => {
+      ops.push({ op: "text", text: label, x, y, size: 7.5, font: "helvB", color: GRAY_LIGHT });
+      ops.push({ op: "text", text: value || "—", x: x + 58, y, size: 8.3, font: "helvB", color: INK });
+    };
+    cueKv(L + 16, cueTop - 48, "NAME", c.composerName);
+    cueKv(L + 16, cueTop - 60, "PRO", c.composerPro);
+    cueKv(L + 16, cueTop - 72, "IPI / CAE", c.composerIpi);
+    cueKv(cueMid, cueTop - 48, "NAME", c.publisherName);
+    cueKv(cueMid, cueTop - 60, "PRO", c.publisherPro);
+    cueKv(cueMid, cueTop - 72, "IPI / CAE", c.publisherIpi);
+  }
+
   // ===================== YOUTUBE CONTENT ID CALLOUT =======================
   const boxTop = 214;
   const boxH = 66;
@@ -344,7 +387,7 @@ export const buildCertificate = (fields: CertData): Uint8Array => {
   ops.push({ op: "line", x1: L, y1: 120, x2: R, y2: 120, width: 0.7, color: RULE });
   ops.push({ op: "text", text: TERMS_LINE, x: L, y: 104, size: 8, font: "helvB", color: GRAY });
   ops.push({ op: "text", text: "Questions? contact@tvmusicstore.com · tvmusicstore.com", x: L, y: 90, size: 8, color: GRAY_LIGHT });
-  ops.push({ op: "text", text: "All rights to the music remain the property of TV Music Store. This certificate grants a limited, non-exclusive license as described above.", x: L, y: 74, size: 7.3, color: GRAY_LIGHT });
+  ops.push({ op: "text", text: "The music remains the property of its rights holders (TV Music Store and/or its composers). This certificate grants a limited, non-exclusive license as described above.", x: L, y: 74, size: 7.3, color: GRAY_LIGHT });
 
   // ===================== IMAGES ===========================================
   const usedKeys = Array.from(new Set(ops.filter((o) => o.op === "image").map((o) => (o as { key: string }).key)));
@@ -374,6 +417,44 @@ const pdfResponse = (bytes: Uint8Array, filename: string) =>
 const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 const trackUrl = (slug?: string | null) => (slug ? `tvmusicstore.com/track/${slug}` : "tvmusicstore.com");
 
+/** Sync / cue-sheet info of the track's composer profile (null = omit block). */
+const fetchCue = async (db: D1Database, trackId: string | null | undefined): Promise<CertData["cue"]> => {
+  if (!trackId) return null;
+  try {
+    const row = await db
+      .prepare(
+        `SELECT c.display_name, c.cue_name, c.pro, c.ipi, c.publisher_name, c.publisher_pro, c.publisher_ipi
+           FROM tracks t JOIN composers c ON c.id = t.composer_id
+          WHERE t.id = ?1`,
+      )
+      .bind(trackId)
+      .first<{
+        display_name: string | null;
+        cue_name: string | null;
+        pro: string | null;
+        ipi: string | null;
+        publisher_name: string | null;
+        publisher_pro: string | null;
+        publisher_ipi: string | null;
+      }>();
+    if (!row) return null;
+    const filled = [row.cue_name, row.pro, row.ipi, row.publisher_name, row.publisher_pro, row.publisher_ipi]
+      .some((v) => v && v.trim());
+    if (!filled) return null;
+    return {
+      composerName: row.cue_name?.trim() || row.display_name || "",
+      composerPro: row.pro?.trim() ?? "",
+      composerIpi: row.ipi?.trim() ?? "",
+      publisherName: row.publisher_name?.trim() ?? "",
+      publisherPro: row.publisher_pro?.trim() ?? "",
+      publisherIpi: row.publisher_ipi?.trim() ?? "",
+    };
+  } catch {
+    // cue columns not created yet — just omit the block
+    return null;
+  }
+};
+
 /** Build CertData for a subscription (plan) certificate. */
 const planCert = (
   info: LicenseInfo,
@@ -388,6 +469,7 @@ const planCert = (
     trackSlug: string | null;
     composer: string | null;
     paymentRef?: string;
+    cue?: CertData["cue"];
   },
 ): CertData => ({
   title: info.name,
@@ -404,6 +486,7 @@ const planCert = (
   trackTitle: a.trackTitle,
   composer: a.composer || "TV Music Store",
   trackPage: trackUrl(a.trackSlug),
+  cue: a.cue ?? null,
 });
 
 /** Build CertData for a one-time (single-track) certificate. */
@@ -420,6 +503,7 @@ const orderCert = (
     trackTitle: string;
     trackSlug: string | null;
     composer: string | null;
+    cue?: CertData["cue"];
   },
 ): CertData => ({
   title: info.name,
@@ -436,6 +520,7 @@ const orderCert = (
   trackTitle: a.trackTitle,
   composer: a.composer || "TV Music Store",
   trackPage: trackUrl(a.trackSlug),
+  cue: a.cue ?? null,
 });
 
 export const onRequestGet = async (ctx: Ctx) => {
@@ -491,6 +576,7 @@ export const onRequestGet = async (ctx: Ctx) => {
         trackTitle: row.track_title ?? prettify(row.track_id),
         trackSlug: row.track_slug,
         composer: row.composer,
+        cue: await fetchCue(db, row.track_id),
       }),
     );
     return pdfResponse(bytes, `license-${row.id}.pdf`);
@@ -537,6 +623,7 @@ export const onRequestGet = async (ctx: Ctx) => {
         trackTitle: row.track_title ?? prettify(row.track_id),
         trackSlug: row.track_slug,
         composer: row.composer,
+        cue: await fetchCue(db, row.track_id),
       }),
     );
     return pdfResponse(bytes, `license-${row.id}.pdf`);
@@ -594,6 +681,7 @@ export const onRequestGet = async (ctx: Ctx) => {
         trackTitle: track?.title ?? prettify(trackRef),
         trackSlug: track?.slug ?? (slug ?? null),
         composer: track?.composer ?? null,
+        cue: await fetchCue(db, track?.id),
       }),
     );
     return pdfResponse(bytes, `license-${fileRef}.pdf`);
