@@ -2271,3 +2271,31 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   applying a half-result; system prompt gained an explicit "work through EVERY list you were
   given, one by one, never skip/leave one empty because you answered the others" rule. Still
   ONE API call for everything (owner wants token economy).
+- **BACKLOG — AI Tools for creators (owner liked the ideas 2026-07-11, deciding which first;
+  all run on the existing OPENAI_API_KEY / gpt-4o-mini, pennies per request):**
+  (1) ★ AI MUSIC FINDER — visitor describes their video/scene in their own words → instant
+  track picks from the catalog with playable previews (reverse of AI Magic: prompt → facet/tag
+  match → filtered track list; infra exists). Prime Facebook-ad hook: "Describe your video —
+  AI picks the music in 10 seconds". Rate-limit guests.
+  (2) YOUTUBE LINK PICKER — paste a YouTube URL, read its title/description, feed into (1).
+  Ad copy: "Paste your video link — get music that fits".
+  (3) LICENSE ASSISTANT — small Q&A box ("TV ad in Germany — which license?") answering from
+  the site's OWN license terms (TIER_INFO/PLAN_INFO as grounding), links the right tier;
+  a 24/7 pre-sales fear-remover.
+  (4) FREE LEAD-MAGNET PAGE — creator pastes a video description → free AI title/description/
+  hashtags for YouTube/TikTok + "and here's music for it" track picks underneath; built to
+  catch FB-ad traffic.
+  (5) AI PLAYLIST BY PROMPT — "2-hour lo-fi + cinematic stream playlist" → generated shareable
+  playlist page (each share = free marketing).
+  Owner's suggested order: (1) → (3) → (4). HARD RULE from the owner: NO AI music GENERATION
+  ever — the catalog is real, human-made music only (that's the brand). Also skip
+  audio-upload similarity search for now (heavier tech, later).
+- **2026-07-11 (AI covers for collections & playlists):** the track-page cover generation now
+  exists on collection/playlist detail pages too. `AdminCoverControl` (AdminInlineContent.tsx)
+  gained a ✨ button in the hover overlay → small popover with ONE optional steering word →
+  POST /api/admin/generate-cover with `useCase: [item.title]` (the name stands in for the
+  Use Case slot of the key-art prompt; mood defaults "Cinematic, Emotional"; hint = featured
+  element) → result saved via the usual upsert (setImage) + refreshContent. No brand stamp /
+  thumbnail for these (display tiles only, unlike track covers). Same pulsing-sparkle wait
+  animation as the track page. Server untouched — the endpoint already accepted useCase/mood
+  without trackId.

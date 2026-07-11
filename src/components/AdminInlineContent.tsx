@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import type { DragEvent, ReactNode } from "react";
-import { Check, GripVertical, ImageUp, Pencil, Plus, Tags, Trash2, X } from "lucide-react";
+import { Check, GripVertical, ImageUp, Pencil, Plus, Sparkles, Tags, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { useCurrentUser } from "@/hooks/useMockData";
 import { useTracks } from "@/hooks/useTracks";
@@ -432,7 +432,7 @@ export const AdminEditableText = ({
   );
 };
 
-/** Wraps the cover image; on hover the admin gets Upload / Clear buttons. */
+/** Wraps the cover image; on hover the admin gets Upload / AI Generate / Clear. */
 export const AdminCoverControl = ({
   kind,
   id,
@@ -448,6 +448,11 @@ export const AdminCoverControl = ({
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  // AI cover generation (same pipeline as track covers): the prompt is driven
+  // by the collection/playlist NAME + an optional steering word from the owner.
+  const [genOpen, setGenOpen] = useState(false);
+  const [genHint, setGenHint] = useState("");
+  const [genBusy, setGenBusy] = useState(false);
 
   const item = itemsOf(admin.data, kind).find((x) => x.id === id);
   // ALWAYS render the sized wrapper — returning bare children while the admin
@@ -458,6 +463,37 @@ export const AdminCoverControl = ({
     const ok = await admin.run(upsertPayload(kind, item, { image }));
     if (ok) await afterChange(admin);
     return ok;
+  };
+
+  const generate = async () => {
+    setGenBusy(true);
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/generate-cover", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          // The item's name stands in for "Use Case" in the key-art prompt;
+          // the steering word lands as the featured element.
+          useCase: [item.title],
+          mood: [],
+          hint: genHint.trim() || undefined,
+        }),
+      });
+      const d = (await res.json().catch(() => ({}))) as { ok?: boolean; path?: string; error?: string };
+      if (!res.ok || !d.ok || !d.path) throw new Error(d.error ?? "Generation failed");
+      if (await setImage(d.path)) {
+        toast.success("Cover generated");
+        setGenOpen(false);
+        setGenHint("");
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Generation failed");
+    } finally {
+      setGenBusy(false);
+      setBusy(false);
+    }
   };
 
   const onFile = async (file: File) => {
@@ -486,33 +522,83 @@ export const AdminCoverControl = ({
     <div className={`group/cover relative ${className}`}>
       {children}
       <div
-        className={`absolute inset-0 flex items-center justify-center gap-2 bg-background/70 transition-opacity ${
-          busy ? "opacity-100" : "opacity-0 group-hover/cover:opacity-100"
+        className={`absolute inset-0 z-10 flex items-center justify-center gap-2 bg-background/70 transition-opacity ${
+          busy || genOpen ? "opacity-100" : "opacity-0 group-hover/cover:opacity-100"
         }`}
       >
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => inputRef.current?.click()}
-          title="Upload a new cover"
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-[#F4C430]/60 bg-card text-[#F4C430] transition-colors hover:bg-[#F4C430] hover:text-background disabled:opacity-50"
-        >
-          <ImageUp className="h-4 w-4" />
-        </button>
-        {item.image && (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => {
-              if (window.confirm("Remove the cover image?")) void setImage("");
-            }}
-            title="Remove cover"
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:border-red-400 hover:text-red-400 disabled:opacity-50"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+        {genBusy ? (
+          /* Pulsing sparkle while OpenAI paints — art pops in when it lands. */
+          <span className="relative flex h-12 w-12 items-center justify-center">
+            <span className="absolute inset-0 animate-ping rounded-full bg-[#F4C430]/20" />
+            <span className="absolute inset-1.5 animate-pulse rounded-full bg-[#F4C430]/15" />
+            <Sparkles className="relative h-5 w-5 animate-pulse text-[#F4C430]" />
+          </span>
+        ) : genOpen ? (
+          <div className="flex w-[90%] max-w-[13rem] flex-col items-stretch gap-2">
+            <input
+              autoFocus
+              value={genHint}
+              onChange={(e) => setGenHint(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void generate();
+                if (e.key === "Escape") setGenOpen(false);
+              }}
+              placeholder="Optional word to steer it…"
+              className="rounded-lg border border-border bg-background px-2.5 py-1.5 font-body text-xs text-foreground focus:border-[#F4C430] focus:outline-none"
+            />
+            <div className="flex items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => void generate()}
+                className="rounded-lg bg-[#F4C430] px-3 py-1.5 font-body text-xs font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
+              >
+                Generate
+              </button>
+              <button
+                type="button"
+                onClick={() => setGenOpen(false)}
+                className="rounded-lg border border-border px-3 py-1.5 font-body text-xs text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => inputRef.current?.click()}
+              title="Upload a new cover"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-[#F4C430]/60 bg-card text-[#F4C430] transition-colors hover:bg-[#F4C430] hover:text-background disabled:opacity-50"
+            >
+              <ImageUp className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setGenOpen(true)}
+              title={`Generate a cover with AI (uses the ${kind} name; add a word to steer it)`}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-[#F4C430]/60 bg-card text-[#F4C430] transition-colors hover:bg-[#F4C430] hover:text-background disabled:opacity-50"
+            >
+              <Sparkles className="h-4 w-4" />
+            </button>
+            {item.image && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  if (window.confirm("Remove the cover image?")) void setImage("");
+                }}
+                title="Remove cover"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:border-red-400 hover:text-red-400 disabled:opacity-50"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
+            {busy && <span className="font-body text-[10px] text-muted-foreground">Uploading…</span>}
+          </>
         )}
-        {busy && <span className="font-body text-[10px] text-muted-foreground">Uploading…</span>}
       </div>
       <input
         ref={inputRef}
