@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -17,6 +17,7 @@ import { useTracks } from "@/hooks/useTracks";
 import type { MusicCollection } from "@/data/musicCollections";
 import { useCollections, useTrendingIds, useVocabularies } from "@/hooks/useContent";
 import { buildRecommendedRank, sortTracks } from "@/lib/catalogSort";
+import { relatedTracks, searchScore } from "@/lib/discovery";
 import { TrackRow } from "@/components/TrackRowPlayer";
 import { usePlayer } from "@/components/PlayerProvider";
 import { genreOptions, moodOptions, useCaseOptions } from "@/lib/tagOptions";
@@ -32,6 +33,8 @@ const splitFilterValues = (value: string) => value.split("/").map((item) => item
 const matchesOption = (value: string, option: string) => value.toLowerCase().includes(option.toLowerCase());
 
 const PAGE_SIZE = 15;
+/** How many "related" tracks may follow a narrow result set (see discovery.ts). */
+const RELATED_LIMIT = 30;
 
 /** 1 … around-current … last, with ellipses when there are many pages. */
 const pageNumbers = (current: number, total: number): (number | "...")[] => {
@@ -82,8 +85,11 @@ const Catalog = () => {
     [tracks, trendingIds],
   );
 
-  const filteredTracks = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
+  // EXACT matches: everything the user actually asked for (collection, category,
+  // facet checkboxes, search words). Search is now RANKED, not just filtered —
+  // see src/lib/discovery.ts.
+  const exactTracks = useMemo(() => {
+    const trimmedQuery = query.trim();
 
     const result = tracks.filter((track) => {
       const matchesCollection = !activeCollection || track.collectionIds.includes(activeCollection.id);
@@ -97,24 +103,49 @@ const Catalog = () => {
         filters.useCase === "All" || splitFilterValues(track.useCase).some((item) => matchesOption(item, filters.useCase));
       const matchesGenre = filters.genre === "All" || matchesOption(track.genre, filters.genre);
       const matchesMood = filters.mood === "All" || matchesOption(track.mood, filters.mood);
-      const matchesQuery =
-        !normalizedQuery ||
-        [track.title, track.artist, track.genre, track.mood, track.useCase, track.description, ...track.tags]
-          .join(" ")
-          .toLowerCase()
-          .includes(normalizedQuery);
+      const matchesQuery = !trimmedQuery || searchScore(track, trimmedQuery) > 0;
 
       return matchesCollection && matchesCategory && matchesUseCase && matchesGenre && matchesMood && matchesQuery;
     });
 
+    // While searching, "Recommended" means "most relevant" — a track whose TAG is
+    // the query outranks one that merely mentions the word in its description.
+    // Picking New / Popular explicitly still wins.
+    if (trimmedQuery && sort === "Recommended") {
+      return [...result].sort(
+        (a, b) =>
+          searchScore(b, trimmedQuery) - searchScore(a, trimmedQuery) ||
+          (recommendedRank.get(a.id) ?? 0) - (recommendedRank.get(b.id) ?? 0),
+      );
+    }
     return sortTracks(result, sort, recommendedRank);
   }, [tracks, activeCollection, categoryParam, filters, query, sort, recommendedRank]);
+
+  // RELATED tail: when the request was narrow and returned few tracks, keep the
+  // funnel going with tracks that share what those few have in common (see
+  // relatedTracks()). Only for facet/search requests — a collection or category
+  // page is a closed list by definition.
+  const isNarrowRequest =
+    !!query.trim() ||
+    filters.useCase !== "All" ||
+    filters.genre !== "All" ||
+    filters.mood !== "All";
+  const related = useMemo(() => {
+    if (!isNarrowRequest || activeCollection || categoryParam) return [];
+    if (exactTracks.length === 0 || exactTracks.length >= PAGE_SIZE) return [];
+    return relatedTracks(exactTracks, tracks, RELATED_LIMIT);
+  }, [isNarrowRequest, activeCollection, categoryParam, exactTracks, tracks]);
+
+  // One continuous list: exact matches, then the related tail.
+  const filteredTracks = useMemo(() => [...exactTracks, ...related], [exactTracks, related]);
+  const exactCount = exactTracks.length;
 
   // Pagination: filters/search/sort always run over the FULL catalog above,
   // then we slice the current page — so a checkbox never "loses" tracks.
   const totalPages = Math.max(1, Math.ceil(filteredTracks.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const pagedTracks = filteredTracks.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const pageOffset = (safePage - 1) * PAGE_SIZE;
+  const pagedTracks = filteredTracks.slice(pageOffset, pageOffset + PAGE_SIZE);
 
   // Any change of filters/search/sort returns the user to page 1.
   useEffect(() => {
@@ -226,10 +257,22 @@ const Catalog = () => {
                     const expanded = expandedTrackId === track.id;
                     const mainIsPlaying =
                       activePlayer?.trackId === track.id && activePlayer.versionId === mainVersion.id && isPlaying;
+                    // The row where the exact matches end and the related tail
+                    // begins — a hairline caption so the filter stays honest
+                    // ("these no longer carry the tag you ticked").
+                    const startsRelated = pageOffset + index === exactCount && related.length > 0;
 
                     return (
+                      <Fragment key={track.id}>
+                      {startsRelated && (
+                        <div className="flex items-center gap-3 border-b border-border/30 px-4 py-2.5">
+                          <span className="font-body text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground/70">
+                            Related
+                          </span>
+                          <span className="h-px flex-1 bg-border/40" />
+                        </div>
+                      )}
                       <TrackRow
-                        key={track.id}
                         activePlayer={activePlayer}
                         entranceDelay={0}
                         expanded={expanded}
@@ -248,6 +291,7 @@ const Catalog = () => {
                         selectedVersion={mainVersion}
                         track={track}
                       />
+                      </Fragment>
                     );
                   })}
                 </motion.div>

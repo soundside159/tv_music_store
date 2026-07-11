@@ -3,6 +3,7 @@ import { ArrowRight, Check, Layers, Library, ListMusic, Music2, ShieldCheck, Use
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { TrackRowList } from "@/components/TrackRowPlayer";
+import { discoverPath } from "@/lib/discovery";
 import { useCategories, useTrendingTracks, useVocabularies } from "@/hooks/useContent";
 import { usePlans } from "@/hooks/useMockData";
 
@@ -102,7 +103,7 @@ const Index = () => {
             {moods.map((m) => (
               <Link
                 key={m}
-                to={`/catalog?mood=${encodeURIComponent(m)}`}
+                to={discoverPath("mood", m)}
                 className="rounded-full border border-border px-3 py-1 font-body text-xs text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
               >
                 {m}

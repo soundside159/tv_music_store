@@ -2457,3 +2457,34 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   with the plan chip and, for free users, a gold **Upgrade** button that closes the popup and fires
   `openPlanModal()` (the tvms:pick-plan modal); a rule separates the block from the menu items;
   popup width 52 -> 60.
+- **2026-07-11 (DISCOVERY: relevance search + related tail + /discover SEO pages):** the catalog
+  used to treat search as a yes/no substring test over all fields joined (a track whose EXTRA TAG is
+  "ukulele" ranked exactly like one that merely mentioned it in the description) and a facet click as
+  a hard AND (5 tracks, dead end). New `src/lib/discovery.ts` is the single engine:
+  (1) `searchScore(track, query)` — every query word must match SOMEWHERE (AND, precision), the
+  score only ORDERS: label (extra tag / use case / genre / mood) exact 12 > word-prefix 8 > partial
+  5 > title 7/4 > artist 3 > description 1. Catalog uses it when a query is present and the sort is
+  "Recommended" (New/Popular chosen explicitly still win).
+  (2) `relatedTracks(exact, pool, limit)` — the owner's "spider web": builds the tag profile of the
+  EXACT matches (how often each use case/genre/mood/extra tag occurs in them) and scores the rest of
+  the catalogue by how much of that profile they carry (facet weights useCase/genre 3, mood 2, extra
+  tag 1, times the share of exact tracks carrying it). Relations are DERIVED from co-occurrence — no
+  hand-maintained tag graph. Catalog appends this tail ONLY when the request is narrow (search or a
+  facet checkbox, not a collection/category page) and the exact result set is under one page (15);
+  the boundary is marked by a hairline "Related" caption row INSIDE the same list (owner: no new
+  panels/визуальные блоки), so the filter stays honest and the funnel doesn't dead-end. Pagination
+  runs over exact+related together.
+  (3) /discover SEO PAGES (tunetank-style, `src/pages/Discover.tsx`, routes `/discover` and
+  `/discover/:group/:tag`): groups are `themes` (=use case), `genres`, `moods` — e.g.
+  `/discover/moods/happy`. Each tag page has its own <title>/description/canonical/JSON-LD
+  (CollectionPage) via useSeo, an H1, the exact tracks, the Related tail, and sibling-tag links
+  (internal linking Google follows); `/discover` is the hub listing every tag. Labels come from the
+  LIVE admin vocabularies (+ anything already on a track), so new admin values get a page for free.
+  Helpers `tagSlug` / `discoverPath` / `tracksWithTag` / `facetValuesInCatalog` live in discovery.ts.
+  ALL tag pills now point at these pages: TrackRow (catalog/home/etc), TrackDetail chips, homepage
+  "Browse by mood". `/catalog?usecase=…&genre=…&mood=…` still works (sidebar/back-compat).
+  (4) SITEMAP is now an INDEX: `public/sitemap.xml` -> `public/sitemap-pages.xml` (fixed pages, incl.
+  /discover) + `/api/sitemap` (NEW `functions/api/sitemap.ts`: every tag landing page from the live
+  vocabularies, every published track, composer, collection and playlist; 1h cache).
+  NOTE for the next AI: these pages are client-rendered (Google renders JS, so they index, but for
+  bullet-proof SEO the next step is prerendering/SSR — see docs/SEO.md).

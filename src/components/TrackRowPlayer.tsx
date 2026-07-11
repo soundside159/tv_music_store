@@ -7,6 +7,7 @@ import { openLicenseModal } from "@/hooks/useCart";
 import { toggleFavourite, useFavourites } from "@/lib/favourites";
 import WaveformPreview from "@/components/WaveformPreview";
 import type { CatalogTrack, TrackAudioVersion, TrackVersion } from "@/data/catalogTracks";
+import { discoverPath, type TagFacet } from "@/lib/discovery";
 import { usePlayer } from "@/components/playerContext";
 
 // Shared track-row player pieces. Single source of truth for how a track row
@@ -161,16 +162,17 @@ export const TrackRow = ({
     navigate(`/catalog${params.toString() ? `?${params.toString()}` : ""}`);
   };
 
-  // Fixed tag order: 1 = Use Case, 2 = Genre, 3 = Mood. Each links to the
-  // catalog with only that filter active.
+  // Fixed tag order: 1 = Use Case, 2 = Genre, 3 = Mood. Each pill opens that
+  // tag's own indexable page (/discover/themes/advertising …) — same idea as
+  // tunetank's /discover/moods/happy, and far better for SEO than a query param.
   const firstOf = (value: string) => splitFilterValues(value)[0] ?? null;
   const rowTags = [
-    { param: "usecase", label: firstOf(track.useCase) },
-    { param: "genre", label: firstOf(track.genre) },
-    { param: "mood", label: firstOf(track.mood) },
+    { facet: "useCase" as const, label: firstOf(track.useCase) },
+    { facet: "genre" as const, label: firstOf(track.genre) },
+    { facet: "mood" as const, label: firstOf(track.mood) },
   ]
-    .filter((t): t is { param: string; label: string } => Boolean(t.label))
-    .map((t) => ({ label: t.label, to: `/catalog?${t.param}=${encodeURIComponent(t.label)}` }));
+    .filter((t): t is { facet: TagFacet; label: string } => Boolean(t.label))
+    .map((t) => ({ label: t.label, to: discoverPath(t.facet, t.label) }));
 
   return (
   <motion.article

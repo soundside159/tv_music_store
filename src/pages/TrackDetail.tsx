@@ -28,6 +28,7 @@ import {
   useAdminTrackContent,
 } from "@/components/AdminTrackPanel";
 import { splitFilterValues } from "@/components/TrackRowPlayer";
+import { discoverPath, type TagFacet } from "@/lib/discovery";
 import { toggleFavourite, useFavourites } from "@/lib/favourites";
 import { usePlayer } from "@/components/playerContext";
 import { useLicenseTiers, type LicenseTierId } from "@/lib/licenses";
@@ -166,10 +167,11 @@ const TrackDetail = () => {
   const tier = liveTiers.find((t) => t.id === selectedTier) ?? liveTiers[0];
   // Each use-case / genre / mood value is its own clickable chip that jumps to
   // the catalog pre-filtered by that value (matching the Catalog ?usecase/genre/mood params).
+  // Each chip opens that tag's own indexable page (/discover/moods/happy …).
   const filterChips = [
-    ...splitFilterValues(track.useCase).map((value) => ({ value, param: "usecase" })),
-    ...splitFilterValues(track.genre).map((value) => ({ value, param: "genre" })),
-    ...splitFilterValues(track.mood).map((value) => ({ value, param: "mood" })),
+    ...splitFilterValues(track.useCase).map((value) => ({ value, facet: "useCase" as TagFacet })),
+    ...splitFilterValues(track.genre).map((value) => ({ value, facet: "genre" as TagFacet })),
+    ...splitFilterValues(track.mood).map((value) => ({ value, facet: "mood" as TagFacet })),
   ];
   // NOTE: extra tags (track.tags) are search-engine food only — deliberately
   // NOT rendered under the track; the chips show Use Case / Genre / Mood only.
@@ -305,8 +307,8 @@ const TrackDetail = () => {
             <div className="mt-5 flex flex-wrap gap-2">
               {filterChips.map((chip) => (
                 <Link
-                  key={`${chip.param}:${chip.value}`}
-                  to={`/catalog?${chip.param}=${encodeURIComponent(chip.value)}`}
+                  key={`${chip.facet}:${chip.value}`}
+                  to={discoverPath(chip.facet, chip.value)}
                   className="rounded-full border border-border px-3 py-1 font-body text-xs text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
                 >
                   {chip.value}
