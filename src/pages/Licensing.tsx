@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Check, Minus } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
+import { useSeo } from "@/hooks/useSeo";
 import {
   Accordion,
   AccordionContent,
@@ -64,7 +65,27 @@ const Cell = ({ v }: { v: string | boolean }) => {
   );
 };
 
-const Licensing = () => (
+const Licensing = () => {
+  // The FAQ below is also emitted as FAQPage schema: this is the block Google's
+  // AI Overviews and ChatGPT/Perplexity lift verbatim when someone asks "can I
+  // use royalty-free music for client work / on YouTube / in an ad".
+  useSeo({
+    title: "Music Licensing — What Every Plan Covers | TV Music Store",
+    description:
+      "What each TV Music Store license covers: YouTube monetization and Content ID whitelisting, client and commercial work, paid ads, TV and streaming broadcast, WAV and stems.",
+    path: "/licensing",
+    jsonLd: {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: faq.map((item) => ({
+        "@type": "Question",
+        name: item.q,
+        acceptedAnswer: { "@type": "Answer", text: item.a },
+      })),
+    },
+  });
+
+  return (
   <div className="min-h-screen bg-background">
     <Navigation />
     <main className="mx-auto w-full max-w-5xl px-4 pb-24 pt-28 sm:px-6 md:pt-32">
@@ -130,10 +151,18 @@ const Licensing = () => (
             </AccordionItem>
           ))}
         </Accordion>
+        <p className="mt-8 text-center font-body text-sm text-muted-foreground">
+          Longer answers, worked examples and delivery checklists live in the{" "}
+          <Link to="/guides" className="text-[#F4C430] hover:underline">
+            licensing guides
+          </Link>
+          .
+        </p>
       </section>
     </main>
     <Footer />
   </div>
-);
+  );
+};
 
 export default Licensing;

@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import Catalog from "./pages/Catalog";
 import Discover from "./pages/Discover";
+import Guides from "./pages/Guides";
 import Collections from "./pages/Collections";
 import CollectionDetail from "./pages/CollectionDetail";
 import Playlists from "./pages/Playlists";
@@ -58,6 +59,9 @@ const App = () => (
           {/* SEO tag landing pages: /discover, /discover/moods/happy, … */}
           <Route path="/discover" element={<Discover />} />
           <Route path="/discover/:group/:tag" element={<Discover />} />
+          {/* Answer library — the pages AI engines quote. */}
+          <Route path="/guides" element={<Guides />} />
+          <Route path="/guides/:slug" element={<Guides />} />
           <Route path="/collections" element={<Collections />} />
           <Route path="/collection/:slug" element={<CollectionDetail />} />
           <Route path="/playlists" element={<Playlists />} />

@@ -32,20 +32,15 @@ const splitFilterValues = (value: string) => value.split("/").map((item) => item
 
 const matchesOption = (value: string, option: string) => value.toLowerCase().includes(option.toLowerCase());
 
-const PAGE_SIZE = 15;
+// Infinite scroll instead of numbered pages: the API hands over the whole
+// (light) track list, but rows are MOUNTED in batches — and each mounted row
+// fetches + decodes its preview MP3 to draw the waveform, which is the
+// expensive part. 20 rows on arrival, 20 more whenever the sentinel below the
+// list scrolls into view.
+const PAGE_SIZE = 20;
+const LOAD_MORE_STEP = 20;
 /** How many "related" tracks may follow a narrow result set (see discovery.ts). */
 const RELATED_LIMIT = 30;
-
-/** 1 … around-current … last, with ellipses when there are many pages. */
-const pageNumbers = (current: number, total: number): (number | "...")[] => {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-  const pages: (number | "...")[] = [1];
-  if (current > 3) pages.push("...");
-  for (let p = Math.max(2, current - 1); p <= Math.min(total - 1, current + 1); p += 1) pages.push(p);
-  if (current < total - 2) pages.push("...");
-  pages.push(total);
-  return pages;
-};
 
 const Catalog = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -75,8 +70,10 @@ const Catalog = () => {
   const { activePlayer, isPlaying, progress, playedProgress, playVersion } = usePlayer();
   const { tracks, isLoading } = useTracks();
   const trendingIds = useTrendingIds();
-  const [page, setPage] = useState(1);
+  // How many rows are currently mounted (grows as the user scrolls).
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const listTopRef = useRef<HTMLDivElement | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   // Daily-seeded diverse mix over the FULL catalog (featured pinned first,
   // genre round-robin for the rest) — stable within a day, see catalogSort.ts.
@@ -140,22 +137,34 @@ const Catalog = () => {
   const filteredTracks = useMemo(() => [...exactTracks, ...related], [exactTracks, related]);
   const exactCount = exactTracks.length;
 
-  // Pagination: filters/search/sort always run over the FULL catalog above,
-  // then we slice the current page — so a checkbox never "loses" tracks.
-  const totalPages = Math.max(1, Math.ceil(filteredTracks.length / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const pageOffset = (safePage - 1) * PAGE_SIZE;
-  const pagedTracks = filteredTracks.slice(pageOffset, pageOffset + PAGE_SIZE);
+  // Filters/search/sort always run over the FULL catalog above; only the number
+  // of MOUNTED rows is limited.
+  const pagedTracks = filteredTracks.slice(0, visibleCount);
+  const hasMore = visibleCount < filteredTracks.length;
 
-  // Any change of filters/search/sort returns the user to page 1.
+  // Any change of filters/search/sort/collection starts the list from the top.
   useEffect(() => {
-    setPage(1);
+    setVisibleCount(PAGE_SIZE);
   }, [filters, query, sort, activeCollectionId, categoryParam]);
 
-  const goToPage = (next: number) => {
-    setPage(Math.max(1, Math.min(totalPages, next)));
-    listTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
+  // Load the next batch when the sentinel under the list comes into view
+  // (200px early, so rows are ready before the user reaches them).
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !hasMore || isLoading) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setVisibleCount((current) =>
+            Math.min(current + LOAD_MORE_STEP, filteredTracks.length),
+          );
+        }
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, isLoading, filteredTracks.length]);
 
   const selectCollection = (collectionId: string | null) => {
     const nextParams = new URLSearchParams(searchParams);
@@ -246,7 +255,7 @@ const Catalog = () => {
               {!isLoading && (
               <AnimatePresence mode="wait">
                 <motion.div
-                  key={`${activeCollection?.id ?? "all-tracks"}-${safePage}`}
+                  key={activeCollection?.id ?? "all-tracks"}
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
@@ -260,7 +269,7 @@ const Catalog = () => {
                     // The row where the exact matches end and the related tail
                     // begins — a hairline caption so the filter stays honest
                     // ("these no longer carry the tag you ticked").
-                    const startsRelated = pageOffset + index === exactCount && related.length > 0;
+                    const startsRelated = index === exactCount && related.length > 0;
 
                     return (
                       <Fragment key={track.id}>
@@ -303,51 +312,26 @@ const Catalog = () => {
                   No tracks found. Try another filter or search phrase.
                 </div>
               )}
-            </div>
 
-            {!isLoading && totalPages > 1 && (
-              <nav className="mt-5 flex items-center justify-center gap-1.5" aria-label="Catalog pages">
-                <button
-                  type="button"
-                  disabled={safePage === 1}
-                  onClick={() => goToPage(safePage - 1)}
-                  aria-label="Previous page"
-                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430] disabled:pointer-events-none disabled:opacity-40"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                {pageNumbers(safePage, totalPages).map((p, i) =>
-                  p === "..." ? (
-                    <span key={`gap-${i}`} className="px-1.5 font-body text-sm text-muted-foreground">
-                      …
-                    </span>
-                  ) : (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => goToPage(p)}
-                      aria-current={p === safePage ? "page" : undefined}
-                      className={`h-9 min-w-9 rounded-lg px-2.5 font-body text-sm font-semibold transition-colors ${
-                        p === safePage
-                          ? "bg-[#F4C430] text-background"
-                          : "border border-border text-muted-foreground hover:border-[#F4C430] hover:text-[#F4C430]"
-                      }`}
+              {/* Infinite scroll: crossing this loads the next 20 rows. The two
+                  pulsing placeholders are the only hint that more is coming. */}
+              {!isLoading && hasMore && (
+                <div ref={sentinelRef} aria-hidden="true">
+                  {Array.from({ length: 2 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center gap-4 border-b border-border/30 px-4 py-3.5 last:border-b-0"
                     >
-                      {p}
-                    </button>
-                  ),
-                )}
-                <button
-                  type="button"
-                  disabled={safePage === totalPages}
-                  onClick={() => goToPage(safePage + 1)}
-                  aria-label="Next page"
-                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430] disabled:pointer-events-none disabled:opacity-40"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </nav>
-            )}
+                      <div className="h-10 w-10 shrink-0 animate-pulse rounded-lg bg-foreground/[0.06]" />
+                      <div
+                        className="h-9 flex-1 animate-pulse rounded-lg bg-foreground/[0.04]"
+                        style={{ animationDelay: `${i * 120}ms` }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </section>
         </section>
       </main>

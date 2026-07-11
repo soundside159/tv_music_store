@@ -1,4 +1,5 @@
-import { getVocabularies, type Ctx } from "../_utils";
+import { getVocabularies, type Ctx } from "./_utils";
+import { guides } from "../../src/content/guides";
 
 // Dynamic half of the sitemap: every tag landing page (/discover/...), every
 // track, artist, collection and playlist. public/sitemap.xml is the INDEX that
@@ -24,7 +25,12 @@ const url = (path: string, changefreq: string, priority: string) =>
   `  <url><loc>${xmlEscape(SITE + path)}</loc><changefreq>${changefreq}</changefreq><priority>${priority}</priority></url>`;
 
 export const onRequestGet = async (ctx: Ctx) => {
-  const lines: string[] = [url("/discover", "weekly", "0.8")];
+  const lines: string[] = [
+    url("/discover", "weekly", "0.8"),
+    url("/guides", "weekly", "0.8"),
+    // The answer library — these are the pages AI engines and Google quote.
+    ...guides.map((guide) => url(`/guides/${guide.slug}`, "monthly", "0.8")),
+  ];
 
   if (ctx.env.DB) {
     const db = ctx.env.DB;

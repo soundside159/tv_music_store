@@ -178,6 +178,17 @@ const Pricing = () => {
     description:
       "Simple royalty-free music pricing: Pro $7/mo and Max $15/mo (billed annually) with unlimited downloads, WAV + stems, commercial licensing and YouTube channel whitelisting. Plus one-time track licenses from $15.",
     path: "/pricing",
+    // The pricing FAQ as FAQPage schema — the block AI answer engines quote
+    // when someone asks what a royalty-free subscription costs or covers.
+    jsonLd: {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: faq.map((item) => ({
+        "@type": "Question",
+        name: item.q,
+        acceptedAnswer: { "@type": "Answer", text: item.a },
+      })),
+    },
   });
 
   return (

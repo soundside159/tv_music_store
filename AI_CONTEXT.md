@@ -2488,3 +2488,57 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   vocabularies, every published track, composer, collection and playlist; 1h cache).
   NOTE for the next AI: these pages are client-rendered (Google renders JS, so they index, but for
   bullet-proof SEO the next step is prerendering/SSR — see docs/SEO.md).
+- **2026-07-11 (catalog infinite scroll):** numbered pager REPLACED by scroll-loading in
+  `Catalog.tsx`. Why it matters: /api/tracks already ships the whole (light) track list in one call,
+  but every MOUNTED row fetches + decodes its preview MP3 to draw the waveform — that, not the JSON,
+  is the cost. Now `visibleCount` starts at PAGE_SIZE=20 and grows by LOAD_MORE_STEP=20 whenever an
+  IntersectionObserver sentinel (rootMargin 200px, two pulsing skeleton rows) below the list enters
+  the viewport; it resets to 20 on any filter/search/sort/collection change. Removed: `page` state,
+  `goToPage`, `pageNumbers()`, the whole pager <nav>; the AnimatePresence key no longer carries the
+  page number, and the "Related" divider now compares `index === exactCount` (no page offset).
+  Prev/next in the mini-player still walk the FULL filtered list, not just the mounted rows.
+  If the catalogue ever grows to thousands of tracks, the next step is server-side paging of
+  /api/tracks (cursor by created_at) — the client list is already the only consumer.
+- **2026-07-11 (EDGE PRERENDER — SEO, `functions/_middleware.ts`):** the SPA served the same empty
+  shell for every URL, so JS-less crawlers (Bing, Telegram/X/WhatsApp previews, GPTBot/Perplexity)
+  saw nothing on track/artist/tag pages. Chosen fix: a Pages MIDDLEWARE that rewrites the shell per
+  request with `HTMLRewriter` — no build step, no SSR framework, no headless Chromium, and always
+  fresh (a build-time prerender would go stale the moment a track is published).
+  It skips `/api/*`, any path with a file extension, non-GET, and `/account /admin /cart /login
+  /composer`; for everything else it reads D1 and injects: real `<title>`, meta description,
+  canonical (the existing tag is REWRITTEN, never duplicated), OG/Twitter title/description/url/
+  image, a JSON-LD block (MusicRecording / MusicGroup / CollectionPage), and REAL CONTENT into the
+  empty `<div id="root">` (h1 + description + links to that page's tracks/tags, inline-styled so it
+  looks right in the few hundred ms before React boots and replaces it — same content, so it is
+  prerendering, NOT cloaking; no user-agent sniffing). Routes: `/`, `/catalog`, `/collections`,
+  `/playlists`, `/pricing`, `/licensing`, `/sync`, `/custom`, `/discover`, `/discover/<group>/<tag>`,
+  `/track/<slug>` (falls back to the leading code), `/artist/<slug>`, `/collection/<id>`,
+  `/playlist/<id>`. Any DB error → the untouched shell is served (fail-safe). Local types for
+  HTMLRewriter are declared in the file (repo has no @cloudflare/workers-types). docs/SEO.md updated
+  with the full picture. NOTE: React uses createRoot (not hydrateRoot), so it simply replaces the
+  injected markup — no hydration warnings.
+- **2026-07-11 (GEO / answer library — /guides):** owner asked how to be visible to AI answer
+  engines. Research first (see docs/AI_VISIBILITY.md): `llms.txt` is hype (AI crawlers almost never
+  fetch it); what works is being READABLE (edge prerender — done) + pages that answer a concrete
+  question ANSWER-FIRST with FAQ/Article schema. Built:
+  (1) `src/content/guides.ts` — PURE DATA (no React, no "@/" alias, imported by the app AND by the
+  edge functions): 10 guides, each with `tldr` (the front-loaded paragraph an engine lifts),
+  `sections` (paragraphs / bullets / tables), `faq`, `updated`, `related`. Topics: YouTube +
+  monetization, Content ID claims, royalty-free vs copyright-free vs public domain, client work,
+  ads, documentaries/Netflix, sync + cue sheets, cost (subscription vs single), trailer music,
+  podcasts. Prices are NOT hard-coded in the prose (owner edits them in admin) — guides name the
+  plans and link to /pricing.
+  (2) `src/pages/Guides.tsx` + routes `/guides`, `/guides/:slug`: TL;DR box, sections with real
+  tables, FAQ block, "not legal advice" note, related guides, CTA. JSON-LD = Article + FAQPage
+  (@graph); the index emits ItemList.
+  (3) EDGE PRERENDER extended: `functions/_middleware.ts` imports the same guide data (works even
+  with NO database) and renders the full article as HTML into #root for JS-less crawlers
+  (`guideBody()`), plus the Article/FAQPage schema.
+  (4) `/api/sitemap` now lists /guides and every guide URL.
+  (5) FAQPage schema added to the EXISTING FAQ blocks on /licensing (which had no useSeo at all)
+  and /pricing — those blocks are exactly what AI Overviews quote. Footer got "Licensing Guides"
+  and "Browse by Mood & Genre" links.
+  (6) `docs/AI_VISIBILITY.md` — what works, what doesn't, and a 10-prompt monthly check to measure
+  whether the models actually cite us. Owner should run it monthly.
+  NOT done (deliberately): llms.txt (cheap but near-useless), explicit AI-bot Allow lines in
+  robots.txt (we already allow `*`), competitor comparison pages, 1200x630 OG images.

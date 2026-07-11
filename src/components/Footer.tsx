@@ -21,6 +21,7 @@ const COLUMNS: { title: string; links: FooterLink[] }[] = [
       { label: "Music Library", to: "/catalog" },
       { label: "Collections", to: "/collections" },
       { label: "Playlists", to: "/playlists" },
+      { label: "Browse by Mood & Genre", to: "/discover" },
     ],
   },
   {
@@ -28,6 +29,7 @@ const COLUMNS: { title: string; links: FooterLink[] }[] = [
     links: [
       { label: "Pricing & Plans", to: "/pricing" },
       { label: "How Licensing Works", to: "/licensing" },
+      { label: "Licensing Guides", to: "/guides" },
       { label: "Sync Licensing", to: "/sync" },
       { label: "Custom Music", to: "/custom" },
     ],
