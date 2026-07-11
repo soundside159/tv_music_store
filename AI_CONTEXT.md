@@ -2322,3 +2322,14 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   as a differentiator, the prompt forbids carbon-copy answers (vary borderline picks, keep the
   strongest), temperature 0.4 → 0.75 (canonical filtering still kills hallucinations). Advice
   given to owner: richer, per-batch descriptions still give the best spread.
+- **2026-07-11 (Admin → Playlists: themes-first + playlists ONLY inside themes):** the admin
+  Playlists section already grouped by theme (drag between sections, ↑↓ theme reorder) but
+  could only create theme-less playlists via one "New playlist" button. Now it mirrors
+  /playlists: "+ New theme" control (bottom; empty draft sections live in state until their
+  first playlist is saved — `adminDraftThemes`), "+ Playlist" button in EVERY theme section
+  header (draft form opens with the theme prefilled). OWNER RULE added mid-session: playlists
+  can be created ONLY inside a theme — the generic "New playlist" button is now
+  collections-only, the no-theme section has no "+ Playlist", the /playlists ghost "+" card
+  renders only in themed sections, and the draft form refuses a NEW playlist with an empty
+  theme (editing legacy theme-less playlists still works; the "No theme" section still shows
+  legacy rows). Empty no-theme section is no longer rendered on /playlists.

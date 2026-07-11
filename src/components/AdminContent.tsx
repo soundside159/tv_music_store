@@ -150,6 +150,11 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
   const [selResetKey, setSelResetKey] = useState(0);
   // Playlists tab: id of the playlist being dragged between/within theme sections.
   const [dragPlaylistId, setDragPlaylistId] = useState<string | null>(null);
+  // Playlists tab: freshly created (still empty) theme sections — they persist
+  // in the DB once a playlist is saved into them (mirrors /playlists page).
+  const [adminDraftThemes, setAdminDraftThemes] = useState<string[]>([]);
+  const [newThemeOpen, setNewThemeOpen] = useState(false);
+  const [newThemeName, setNewThemeName] = useState("");
   // Vocabulary tab: the value being dragged (per facet) and the value being
   // renamed inline (double-click).
   const [dragVocab, setDragVocab] = useState<{ facet: string; value: string } | null>(null);
@@ -433,6 +438,12 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
       else playlistSections.push({ theme, items: [p] });
     }
     playlistSections.sort((a, b) => (a.theme === "" ? -1 : b.theme === "" ? 1 : 0));
+    // Empty just-created theme sections (become permanent with their first playlist).
+    for (const t of adminDraftThemes) {
+      if (!playlistSections.some((s) => s.theme.toLowerCase() === t.toLowerCase())) {
+        playlistSections.push({ theme: t, items: [] });
+      }
+    }
   }
 
   /** Persists a new section layout: optional theme move for one playlist + the
@@ -591,6 +602,19 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                       {sec.items.length} playlist{sec.items.length === 1 ? "" : "s"}
                     </span>
                     <span className="ml-auto flex items-center gap-1.5">
+                      {/* Playlists are created INSIDE a theme only (owner rule) —
+                          the no-theme section can hold legacy rows but not new ones. */}
+                      {sec.theme && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => setDraft({ ...emptyDraft, theme: sec.theme })}
+                          title={`Create a playlist in ${sec.theme}`}
+                          className="mr-1 rounded-md border border-[#F4C430]/50 px-2 py-0.5 font-body text-[11px] font-semibold text-[#F4C430] transition-colors hover:bg-[#F4C430]/10 disabled:opacity-40"
+                        >
+                          + Playlist
+                        </button>
+                      )}
                       <button
                         type="button"
                         disabled={si === 0 || busy}
@@ -745,9 +769,68 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
           )}
 
           {!draft && (
-            <button type="button" className={`mt-4 ${goldBtnCls}`} onClick={() => setDraft({ ...emptyDraft })}>
-              New {kind}
-            </button>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              {/* Playlists: no theme-less creation — use "+ Playlist" inside a
+                  theme section; here you only add new themes. */}
+              {tab !== "playlists" && (
+                <button type="button" className={goldBtnCls} onClick={() => setDraft({ ...emptyDraft })}>
+                  New {kind}
+                </button>
+              )}
+              {tab === "playlists" &&
+                (newThemeOpen ? (
+                  <span className="inline-flex items-center gap-2">
+                    <input
+                      autoFocus
+                      value={newThemeName}
+                      onChange={(e) => setNewThemeName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          const t = newThemeName.trim();
+                          if (t) {
+                            setAdminDraftThemes((prev) => [...prev, t]);
+                            setNewThemeName("");
+                            setNewThemeOpen(false);
+                          }
+                        }
+                        if (e.key === "Escape") setNewThemeOpen(false);
+                      }}
+                      placeholder="Theme name (e.g. Podcast)"
+                      className={`${inputCls} w-52 py-2 text-xs`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const t = newThemeName.trim();
+                        if (!t) return;
+                        setAdminDraftThemes((prev) => [...prev, t]);
+                        setNewThemeName("");
+                        setNewThemeOpen(false);
+                      }}
+                      aria-label="Add theme"
+                      className="text-[#F4C430] transition-colors hover:opacity-80"
+                    >
+                      <Check className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewThemeOpen(false)}
+                      aria-label="Cancel"
+                      className="text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setNewThemeOpen(true)}
+                    className="rounded-lg border border-dashed border-[#F4C430]/50 px-4 py-2 font-body text-sm font-semibold text-[#F4C430]/80 transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
+                  >
+                    + New theme
+                  </button>
+                ))}
+            </div>
           )}
 
           {draft && (
@@ -755,6 +838,11 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
               className="mt-5 flex flex-col gap-3 rounded-lg border border-border/60 p-4"
               onSubmit={async (e) => {
                 e.preventDefault();
+                // Owner rule: a NEW playlist must live inside a theme.
+                if (kind === "playlist" && !draft.id && !draft.theme.trim()) {
+                  toast.error("Pick a theme — playlists are created inside a theme");
+                  return;
+                }
                 const saved = await run(
                   {
                     action: `upsert_${kind}`,

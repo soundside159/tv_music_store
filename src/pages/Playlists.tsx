@@ -297,7 +297,9 @@ const Playlists = () => {
           </div>
         ) : (
           <>
-            {sections.map((section) => (
+            {sections
+              .filter((section) => section.theme || section.items.length > 0)
+              .map((section) => (
               <section key={section.theme || "__general"} className="mt-12">
                 {section.theme && (
                   <h2 className="mb-6 font-display text-2xl font-semibold text-white">
@@ -311,7 +313,8 @@ const Playlists = () => {
                       <AdminItemBar kind="playlist" id={p.id} admin={admin} />
                     </div>
                   ))}
-                  <GhostCreateCard theme={section.theme} admin={admin} />
+                  {/* Playlists are created INSIDE a theme only (owner rule). */}
+                  {section.theme && <GhostCreateCard theme={section.theme} admin={admin} />}
                 </div>
               </section>
             ))}
