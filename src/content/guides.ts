@@ -15,6 +15,8 @@
 // the admin); guides talk about plan NAMES and what they include, and link to
 // /pricing for the live numbers.
 
+import { guidesRound2 } from "./guidesRound2";
+
 export interface GuideSection {
   heading: string;
   paragraphs?: string[];
@@ -598,6 +600,11 @@ export const guides: Guide[] = [
     related: ["royalty-free-music-for-youtube", "music-license-for-client-work"],
   },
 ];
+
+// Owner-requested round 2 (claim-removal speed, AI vs human, choosing music)
+// lives in its own file so this one stays readable — the rest of the app only
+// ever imports `guides`.
+guides.push(...guidesRound2);
 
 export const guideBySlug = (slug: string): Guide | undefined =>
   guides.find((guide) => guide.slug === slug);

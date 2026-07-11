@@ -2542,3 +2542,20 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   whether the models actually cite us. Owner should run it monthly.
   NOT done (deliberately): llms.txt (cheap but near-useless), explicit AI-bot Allow lines in
   robots.txt (we already allow `*`), competitor comparison pages, 1200x630 OG images.
+- **2026-07-11 (guides round 2 + Sound Effects placeholder):** owner: (a) where are the guides
+  visible? → **"Guides" is now a top-level HEADER nav item** (Navigation.tsx, between Music Library
+  and Pricing; it was footer-only before). (b) NEW nav placeholder **"Sound Effects" + gold "SOON"
+  chip** (non-clickable span, right of the nav links) until the SFX library ships. (c) 3 NEW GUIDES
+  in `src/content/guidesRound2.ts` (own file to keep guides.ts readable; `guides.push(...guidesRound2)`
+  at the bottom of guides.ts, `import type { Guide }` → no runtime cycle):
+  `how-to-remove-a-content-id-claim` (the SPEED angle — our ~24h release vs YouTube's 30-day dispute
+  window; owner's selling point), `ai-music-vs-human-composed` (detectors are unreliable both ways —
+  the reliable signal is PROVENANCE: named composer + PRO/IPI + a filable cue sheet, which is exactly
+  what our catalogue has and generated tracks do not), `how-to-choose-music-for-your-project`
+  (brief-first method; ends by trailing the future natural-language search). 13 guides total.
+  (d) `docs/AI_VISIBILITY.md` gained a **SOUND-EFFECTS SEO BACKLOG** with the keyword research already
+  done (UI/earcons, whooshes, impacts, foley, ambience, game SFX; buyers filter by duration, format,
+  loopable and — the question libraries answer badly — whether the license covers EMBEDDING in a
+  shipped game/app). Do that pass only AFTER the SFX product exists.
+  FUTURE (owner's idea, mentioned in the "choose music" guide): natural-language "describe your
+  project" search over the catalogue.

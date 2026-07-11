@@ -54,6 +54,46 @@ guides are working; without it, everything here is guesswork.
   backlinks dominate; expect those last, if at all.
 - The guides earn their keep from ordinary search traffic regardless of what the models do.
 
+## BACKLOG — Sound Effects SEO (owner request, do it AFTER the SFX library ships)
+
+The owner is adding a **sound-effects library** (a composer friend has a large SFX base;
+the selling point is again *real recordings, not AI*). When the SFX product exists, repeat
+the whole playbook for it — do NOT write the guides before the product, or they will be
+pages that promise something the site cannot deliver.
+
+Checklist for that pass:
+
+1. **Tag pages for SFX** — the SFX equivalent of /discover: the categories people actually
+   search for, per the research below.
+2. **Guides** — same answer-first shape:
+   - "Do I need a license for sound effects on YouTube?"
+   - "Royalty-free sound effects for games — what the license must cover" (embedding SFX in
+     a shipped game is a different right from playing them in a video)
+   - "How to tell AI-generated sound effects from recorded ones" (our angle)
+   - "Where do sound effects come from? Foley vs library vs synthesis"
+   - "Sound effects for video editing: the 12 you actually need"
+3. **Schema** — `AudioObject` per effect; `FAQPage` on the SFX licensing page.
+4. **Sitemap + prerender** — extend `/api/sitemap` and `functions/_middleware.ts` the same
+   way they were extended for tracks and guides.
+
+**Research already done (July 2026) — what people actually search for in SFX:**
+
+- **UI / "earcons":** click, tap, hover, toggle, success, error, notification, alert, ding,
+  ping. Filtered by duration (sub-1s).
+- **Transitions:** whoosh, swoosh, swish, sweep — for scene changes, text reveals, logo
+  animations. 1-3s.
+- **Impacts / stingers:** hit, impact, slam, thud, boom — to button a cut or land a title.
+- **Foley:** footsteps, doors, cloth, keys, typing.
+- **Ambience:** rain, wind, city, room tone — longer files.
+- **Game-specific:** menu scroll, coin/pickup, level-up, explosion, weapon, cartoon SFX.
+- Popular tags seen across libraries: whoosh, notification, riser, rain, typing, pop.
+- Buyers filter by: duration, file format (WAV vs MP3), loopable, and whether the license
+  covers **embedding in a shipped product** (games, apps) — that last one is the question
+  most libraries answer badly, which is our opening.
+
+Sources: Envato Elements SFX, Mixkit, Soundsnap, StudioBinder's SFX guide, itch.io game
+assets (searched 2026-07-11).
+
 ## Next candidates (not built)
 
 - `llms.txt` — cheap, low expectation.

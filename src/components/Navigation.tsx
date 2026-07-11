@@ -80,6 +80,7 @@ const Navigation = () => {
 
   const navItems = [
     { label: "Music Library", href: "/catalog" },
+    { label: "Guides", href: "/guides" },
     { label: "Pricing", href: "/pricing" },
     { label: "Licensing", href: "/licensing" },
   ];
@@ -116,6 +117,16 @@ const Navigation = () => {
                   {item.label}
                 </Link>
               ))}
+              {/* Sound Effects — placeholder until the SFX library ships. */}
+              <span
+                title="Sound effects library — coming soon"
+                className="flex cursor-default items-center gap-1.5 whitespace-nowrap font-body text-sm text-muted-foreground/50"
+              >
+                Sound Effects
+                <span className="rounded-full border border-[#F4C430]/40 px-1.5 py-px font-body text-[9px] font-bold uppercase tracking-[0.12em] text-[#F4C430]/80">
+                  Soon
+                </span>
+              </span>
             </div>
           </div>
 
