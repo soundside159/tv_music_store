@@ -2356,3 +2356,18 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   the row onto another theme section in Admin → Playlists (already worked). (6) Playlist titles
   in Admin → Playlists rows are now links to /playlist/<id> (hover gold; the small path caption
   fixed from /playlists/ to /playlist/).
+- **2026-07-11 (Admin Playlists/Categories full management rework — owner UX round):** the old
+  flow put ONE draft form at the page bottom (with 30 themes = endless scrolling) and the form
+  carried a TrackPicker the owner never wanted there. Changes in AdminContent.tsx:
+  (1) the create/edit form is now `draftForm` (hoisted const) rendered INLINE inside its theme
+  section (`draftInSection`: by draft.id for edits, by draft.theme for creates); collections
+  keep the bottom form. (2) TrackPicker + set_tracks REMOVED from the playlist form (collections
+  keep it) — playlist tracks are assigned in Tracks Edit and managed on the row itself:
+  (3) NEW `AdminTrackSubList` (module component: play + WaveformPreview click-to-seek via the
+  global player + duration + optional ↑↓/✕) — playlist rows and category rows got a chevron
+  EXPANDER; playlists: reorder (set_tracks with swapped ids) + remove; categories: remove
+  (bulk_update_tracks categoryChanges). (4) THEME RENAME: double-click the section header →
+  inline input → `renamePlaylistTheme` (re-upserts every playlist in the theme + rewrites the
+  `playlist_themes` list). (5) CATEGORIES: ↑↓ reorder (server reorder_content now accepts
+  kind "category" — table whitelist + ensureCategoryTables; body.kind type widened), title
+  links to /catalog?category=<id>. All lists refresh via run()->reload + refreshContent.

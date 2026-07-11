@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, ChevronDown, ChevronUp, GripVertical, Pause, Play, Plus, Sparkles, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, ChevronUp, GripVertical, Pause, Play, Plus, Sparkles, X } from "lucide-react";
+import WaveformPreview from "@/components/WaveformPreview";
 import { toast } from "sonner";
 import { makeThumbnail } from "@/lib/audioEncoding";
 import { brandCover, generateCoverApi, generateDescriptionApi, uploadCoverImage } from "@/lib/coverArt";
@@ -116,6 +117,117 @@ const TrackPicker = ({
   );
 };
 
+/**
+ * Expanded track list under a playlist/category row: play button, waveform
+ * (click-to-seek via the global player), optional ↑↓ reorder and ✕ remove.
+ */
+const AdminTrackSubList = ({
+  trackIds,
+  tracks,
+  busy,
+  onMove,
+  onRemove,
+}: {
+  trackIds: string[];
+  tracks: CatalogTrack[];
+  busy: boolean;
+  /** Present = tracks can be reordered (playlists). */
+  onMove?: (index: number, dir: -1 | 1) => void;
+  /** Present = tracks can be removed from this list. */
+  onRemove?: (trackId: string) => void;
+}) => {
+  const { activePlayer, isPlaying, progress, playVersion } = usePlayer();
+  const byId = new Map(tracks.map((t) => [t.id, t]));
+  const rows = trackIds.map((id) => byId.get(id)).filter((t): t is CatalogTrack => !!t);
+
+  if (rows.length === 0) {
+    return (
+      <p className="border-t border-border/40 px-3 py-3 font-body text-xs text-muted-foreground">
+        No tracks yet — assign them in Tracks Edit.
+      </p>
+    );
+  }
+  return (
+    <ul className="divide-y divide-border/40 border-t border-border/40 bg-background/40">
+      {rows.map((t, i) => {
+        const version = t.audioVersions[0];
+        const active = !!version && activePlayer?.trackId === t.id && activePlayer.versionId === version.id;
+        const thumb = t.coverThumb || t.cover;
+        return (
+          <li key={t.id} className="flex items-center gap-2.5 px-3 py-1.5">
+            <button
+              type="button"
+              disabled={!version}
+              aria-label={active && isPlaying ? `Pause ${t.title}` : `Play ${t.title}`}
+              onClick={() => version && playVersion(t, version)}
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/70 text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430] disabled:opacity-40"
+            >
+              {active && isPlaying ? <Pause className="h-3 w-3" /> : <Play className="ml-0.5 h-3 w-3" />}
+            </button>
+            {thumb && <img src={thumb} alt="" className="h-7 w-7 shrink-0 rounded object-cover" />}
+            <span
+              className={`w-40 shrink-0 truncate font-body text-xs font-semibold ${
+                active ? "text-[#F4C430]" : "text-foreground"
+              }`}
+              title={t.title}
+            >
+              {t.title}
+            </span>
+            {version && (
+              <WaveformPreview
+                active={active && isPlaying}
+                progress={active ? progress : 0}
+                onSeek={(p) => playVersion(t, version, p)}
+                src={version.src}
+                className="h-8 min-w-0 flex-1"
+              />
+            )}
+            <span className="shrink-0 font-body text-[10px] tabular-nums text-muted-foreground">
+              {t.duration}
+            </span>
+            {onMove && (
+              <span className="flex shrink-0 items-center gap-0.5">
+                <button
+                  type="button"
+                  disabled={busy || i === 0}
+                  onClick={() => onMove(i, -1)}
+                  title="Move up"
+                  aria-label={`Move ${t.title} up`}
+                  className="text-muted-foreground transition-colors hover:text-[#F4C430] disabled:opacity-30"
+                >
+                  <ChevronUp className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || i === rows.length - 1}
+                  onClick={() => onMove(i, 1)}
+                  title="Move down"
+                  aria-label={`Move ${t.title} down`}
+                  className="text-muted-foreground transition-colors hover:text-[#F4C430] disabled:opacity-30"
+                >
+                  <ChevronDown className="h-4 w-4" />
+                </button>
+              </span>
+            )}
+            {onRemove && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onRemove(t.id)}
+                title="Remove from this list (the track stays in the catalog)"
+                aria-label={`Remove ${t.title}`}
+                className="shrink-0 text-muted-foreground transition-colors hover:text-red-400 disabled:opacity-30"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+};
+
 const emptyDraft = {
   id: "",
   title: "",
@@ -158,6 +270,11 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
   const [adminDraftThemes, setAdminDraftThemes] = useState<string[]>([]);
   const [newThemeOpen, setNewThemeOpen] = useState(false);
   const [newThemeName, setNewThemeName] = useState("");
+  // Playlists tab: expanded playlist (tracks with waveforms) + theme rename.
+  const [expandedPlaylistId, setExpandedPlaylistId] = useState<string | null>(null);
+  const [themeRename, setThemeRename] = useState<{ from: string; draft: string } | null>(null);
+  // Categories tab: expanded category (tracks with waveforms).
+  const [expandedCategoryId, setExpandedCategoryId] = useState<string | null>(null);
   // Vocabulary tab: the value being dragged (per facet) and the value being
   // renamed inline (double-click).
   const [dragVocab, setDragVocab] = useState<{ facet: string; value: string } | null>(null);
@@ -461,6 +578,74 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
     }
   };
 
+  /** Renames a theme: rewrites every playlist in it + the persisted list. */
+  const renamePlaylistTheme = async (from: string, to: string) => {
+    const t = to.replace(/\s+/g, " ").trim();
+    if (!t || t === from) return;
+    setBusy(true);
+    try {
+      const sec = playlistSections.find((s) => s.theme === from);
+      for (const p of sec?.items ?? []) {
+        await api({
+          action: "upsert_playlist",
+          id: p.id,
+          title: p.title,
+          description: p.description,
+          image: p.image,
+          theme: t,
+        });
+      }
+      const stored = data.playlistThemes ?? [];
+      const values = stored.some((x) => x.toLowerCase() === from.toLowerCase())
+        ? stored.map((x) => (x.toLowerCase() === from.toLowerCase() ? t : x))
+        : [...stored, t];
+      await api({ action: "set_playlist_themes", values });
+      setAdminDraftThemes((prev) => prev.filter((x) => x.toLowerCase() !== from.toLowerCase()));
+      toast.success(`Theme renamed to "${t}"`);
+      reload();
+      void refreshContent();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Rename failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Persists a playlist's track list (order/removal from the expanded row). */
+  const savePlaylistTracks = async (playlistId: string, trackIds: string[]) => {
+    const ok = await run({ action: "set_tracks", kind: "playlist", id: playlistId, trackIds }, "Playlist updated");
+    if (ok) void refreshContent();
+  };
+  const movePlaylistTrack = (item: ContentItem, index: number, dir: -1 | 1) => {
+    const ids = [...item.trackIds];
+    const j = index + dir;
+    if (j < 0 || j >= ids.length) return;
+    [ids[index], ids[j]] = [ids[j], ids[index]];
+    void savePlaylistTracks(item.id, ids);
+  };
+
+  /** Reorders category chips (their sort drives the homepage order). */
+  const moveCategory = (index: number, dir: -1 | 1) => {
+    const cats = data.categories ?? [];
+    const j = index + dir;
+    if (j < 0 || j >= cats.length || busy) return;
+    const ids = cats.map((c) => c.id);
+    [ids[index], ids[j]] = [ids[j], ids[index]];
+    void run({ action: "reorder_content", kind: "category", values: ids }, "Categories reordered").then(
+      (ok) => {
+        if (ok) void refreshContent();
+      },
+    );
+  };
+  const removeCategoryTrack = (catId: string, trackId: string) => {
+    void run(
+      { action: "bulk_update_tracks", trackIds: [trackId], categoryChanges: { remove: [catId] } },
+      "Removed from category",
+    ).then((ok) => {
+      if (ok) void refreshContent();
+    });
+  };
+
   /** Removes an EMPTY theme from the persisted list (its header X button). */
   const removePlaylistTheme = async (theme: string) => {
     setAdminDraftThemes((prev) => prev.filter((x) => x.toLowerCase() !== theme.toLowerCase()));
@@ -549,6 +734,139 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
     void savePlaylistLayout(sections);
   };
 
+  // Create/edit form for a collection or playlist. For playlists it renders
+  // INLINE inside its theme section; tracks are NOT picked here (playlists get
+  // their tracks in Tracks Edit; the expanded row reorders/removes them).
+  const draftForm = draft && (
+    <form
+      className="mt-3 flex flex-col gap-3 rounded-lg border border-[#F4C430]/30 bg-background/40 p-4"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        // Owner rule: a NEW playlist must live inside a theme.
+        if (kind === "playlist" && !draft.id && !draft.theme.trim()) {
+          toast.error("Pick a theme — playlists are created inside a theme");
+          return;
+        }
+        const saved = await run(
+          {
+            action: `upsert_${kind}`,
+            id: draft.id || undefined,
+            title: draft.title,
+            shortTitle: draft.shortTitle || undefined,
+            description: draft.description,
+            image: draft.image,
+            ...(kind === "playlist" ? { theme: draft.theme } : {}),
+          },
+          "Saved",
+        );
+        if (saved && kind === "playlist") void refreshContent();
+        if (saved && kind === "collection" && draft.id) {
+          await run(
+            { action: "set_tracks", kind, id: draft.id, trackIds: draft.trackIds },
+            "Tracks updated",
+          );
+        }
+        if (saved && !draft.id) {
+          toast(
+            kind === "playlist"
+              ? "Playlist created — assign tracks in Tracks Edit."
+              : "Now open Edit to assign tracks to the new item.",
+          );
+        }
+        setDraft(null);
+      }}
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <input
+          required
+          placeholder="Title"
+          value={draft.title}
+          onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+          className={inputCls}
+        />
+        <div className="flex min-w-0 gap-2">
+          <input
+            placeholder="Cover image URL — or press Upload"
+            value={draft.image}
+            onChange={(e) => setDraft({ ...draft, image: e.target.value })}
+            className={`${inputCls} min-w-0 flex-1`}
+          />
+          <label
+            className={`${btnCls} flex shrink-0 cursor-pointer items-center whitespace-nowrap ${
+              uploading ? "pointer-events-none opacity-60" : ""
+            }`}
+          >
+            {uploading ? "Uploading..." : "Upload"}
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) {
+                  void uploadCover(f, (path) =>
+                    setDraft((prev) => (prev ? { ...prev, image: path } : prev)),
+                  );
+                }
+                e.target.value = "";
+              }}
+            />
+          </label>
+        </div>
+      </div>
+      {kind === "collection" && (
+        <input
+          placeholder="Short title (for cards)"
+          value={draft.shortTitle}
+          onChange={(e) => setDraft({ ...draft, shortTitle: e.target.value })}
+          className={inputCls}
+        />
+      )}
+      {kind === "playlist" && (
+        <input
+          placeholder="Theme — section on the /playlists page"
+          value={draft.theme}
+          onChange={(e) => setDraft({ ...draft, theme: e.target.value })}
+          className={inputCls}
+        />
+      )}
+      <textarea
+        placeholder="Short description"
+        rows={2}
+        value={draft.description}
+        onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+        className={inputCls}
+      />
+      {kind === "collection" && (
+        <>
+          <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">
+            Tracks (click order = display order)
+          </p>
+          <TrackPicker
+            tracks={mergedTracks}
+            selected={draft.trackIds}
+            onChange={(ids) => setDraft({ ...draft, trackIds: ids })}
+          />
+        </>
+      )}
+      <div className="flex gap-2">
+        <button type="submit" disabled={busy} className={goldBtnCls}>
+          {busy ? "Saving..." : "Save"}
+        </button>
+        <button type="button" className={btnCls} onClick={() => setDraft(null)}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+
+  /** True when the draft form belongs inside this theme section. */
+  const draftInSection = (sec: { theme: string; items: ContentItem[] }) =>
+    !!draft &&
+    (draft.id
+      ? sec.items.some((i) => i.id === draft.id)
+      : draft.theme.trim().toLowerCase() === sec.theme.toLowerCase());
+
   return (
     <div className="rounded-xl border border-border bg-card p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -626,9 +944,39 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                   className={`rounded-lg border border-border/60 ${busy ? "opacity-60" : ""}`}
                 >
                   <div className="flex items-center gap-2 border-b border-border/50 bg-secondary/30 px-3 py-2">
-                    <span className="font-body text-xs font-semibold uppercase tracking-wide text-foreground">
-                      {sec.theme || "No theme (top of the page)"}
-                    </span>
+                    {themeRename && themeRename.from === sec.theme ? (
+                      <input
+                        autoFocus
+                        value={themeRename.draft}
+                        onChange={(e) => setThemeRename({ from: sec.theme, draft: e.target.value })}
+                        onBlur={() => {
+                          const r = themeRename;
+                          setThemeRename(null);
+                          if (r) void renamePlaylistTheme(r.from, r.draft);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            const r = themeRename;
+                            setThemeRename(null);
+                            if (r) void renamePlaylistTheme(r.from, r.draft);
+                          }
+                          if (e.key === "Escape") setThemeRename(null);
+                        }}
+                        className={`${inputCls} w-56 py-1 text-xs`}
+                      />
+                    ) : (
+                      <span
+                        onDoubleClick={() =>
+                          sec.theme && setThemeRename({ from: sec.theme, draft: sec.theme })
+                        }
+                        title={sec.theme ? "Double-click to rename this theme" : undefined}
+                        className={`font-body text-xs font-semibold uppercase tracking-wide text-foreground ${
+                          sec.theme ? "cursor-text" : ""
+                        }`}
+                      >
+                        {sec.theme || "No theme (top of the page)"}
+                      </span>
+                    )}
                     <span className="font-body text-[11px] text-muted-foreground">
                       {sec.items.length} playlist{sec.items.length === 1 ? "" : "s"}
                     </span>
@@ -704,57 +1052,86 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                           e.stopPropagation();
                           dropPlaylist(sec.theme, item.id);
                         }}
-                        className={`flex items-center gap-3 px-3 py-2.5 ${
-                          dragPlaylistId === item.id ? "opacity-40" : ""
-                        }`}
+                        className={dragPlaylistId === item.id ? "opacity-40" : ""}
                       >
-                        <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-muted-foreground/50" />
-                        {item.image && (
-                          <img src={item.image} alt="" className="h-9 w-9 shrink-0 rounded object-cover" />
-                        )}
-                        <span className="min-w-0 flex-1">
-                          <Link
-                            to={`/playlist/${item.id}`}
-                            title="Open the playlist page"
-                            className="block truncate font-body text-sm font-semibold text-foreground transition-colors hover:text-[#F4C430]"
-                          >
-                            {item.title}
-                          </Link>
-                          <span className="block truncate font-body text-xs text-muted-foreground">
-                            {item.trackIds.length} tracks · /playlist/{item.id}
-                          </span>
-                        </span>
-                        <span className="flex shrink-0 gap-2">
+                        <div className="flex items-center gap-3 px-3 py-2.5">
+                          <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-muted-foreground/50" />
                           <button
                             type="button"
-                            className={btnCls}
                             onClick={() =>
-                              setDraft({
-                                id: item.id,
-                                title: item.title,
-                                shortTitle: item.shortTitle ?? "",
-                                description: item.description,
-                                image: item.image,
-                                theme: item.theme ?? "",
-                                trackIds: item.trackIds,
-                              })
+                              setExpandedPlaylistId((cur) => (cur === item.id ? null : item.id))
                             }
+                            title="Show the playlist's tracks (listen / reorder / remove)"
+                            aria-label={`Expand ${item.title}`}
+                            className="shrink-0 text-muted-foreground transition-colors hover:text-[#F4C430]"
                           >
-                            Edit
+                            {expandedPlaylistId === item.id ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
                           </button>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            className="rounded-lg border border-border px-3 py-1.5 font-body text-xs text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
-                            onClick={() => {
-                              if (window.confirm(`Delete "${item.title}"?`)) {
-                                void run({ action: "delete_playlist", id: item.id }, "Deleted");
+                          {item.image && (
+                            <img src={item.image} alt="" className="h-9 w-9 shrink-0 rounded object-cover" />
+                          )}
+                          <span className="min-w-0 flex-1">
+                            <Link
+                              to={`/playlist/${item.id}`}
+                              title="Open the playlist page"
+                              className="block truncate font-body text-sm font-semibold text-foreground transition-colors hover:text-[#F4C430]"
+                            >
+                              {item.title}
+                            </Link>
+                            <span className="block truncate font-body text-xs text-muted-foreground">
+                              {item.trackIds.length} tracks · /playlist/{item.id}
+                            </span>
+                          </span>
+                          <span className="flex shrink-0 gap-2">
+                            <button
+                              type="button"
+                              className={btnCls}
+                              onClick={() =>
+                                setDraft({
+                                  id: item.id,
+                                  title: item.title,
+                                  shortTitle: item.shortTitle ?? "",
+                                  description: item.description,
+                                  image: item.image,
+                                  theme: item.theme ?? "",
+                                  trackIds: item.trackIds,
+                                })
                               }
-                            }}
-                          >
-                            Delete
-                          </button>
-                        </span>
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              className="rounded-lg border border-border px-3 py-1.5 font-body text-xs text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
+                              onClick={() => {
+                                if (window.confirm(`Delete "${item.title}"?`)) {
+                                  void run({ action: "delete_playlist", id: item.id }, "Deleted");
+                                }
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </span>
+                        </div>
+                        {expandedPlaylistId === item.id && (
+                          <AdminTrackSubList
+                            trackIds={item.trackIds}
+                            tracks={mergedTracks}
+                            busy={busy}
+                            onMove={(i, dir) => movePlaylistTrack(item, i, dir)}
+                            onRemove={(trackId) =>
+                              void savePlaylistTracks(
+                                item.id,
+                                item.trackIds.filter((x) => x !== trackId),
+                              )
+                            }
+                          />
+                        )}
                       </li>
                     ))}
                     {sec.items.length === 0 && (
@@ -763,6 +1140,8 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                       </li>
                     )}
                   </ul>
+                  {/* Inline create/edit form — right inside its own theme. */}
+                  {draftInSection(sec) && <div className="px-3 pb-3">{draftForm}</div>}
                 </div>
               ))}
               {playlistSections.length === 0 && (
@@ -880,120 +1259,9 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
             </div>
           )}
 
-          {draft && (
-            <form
-              className="mt-5 flex flex-col gap-3 rounded-lg border border-border/60 p-4"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                // Owner rule: a NEW playlist must live inside a theme.
-                if (kind === "playlist" && !draft.id && !draft.theme.trim()) {
-                  toast.error("Pick a theme — playlists are created inside a theme");
-                  return;
-                }
-                const saved = await run(
-                  {
-                    action: `upsert_${kind}`,
-                    id: draft.id || undefined,
-                    title: draft.title,
-                    shortTitle: draft.shortTitle || undefined,
-                    description: draft.description,
-                    image: draft.image,
-                    ...(kind === "playlist" ? { theme: draft.theme } : {}),
-                  },
-                  "Saved",
-                );
-                if (saved && kind === "playlist") void refreshContent();
-                if (saved && draft.id) {
-                  await run(
-                    { action: "set_tracks", kind, id: draft.id, trackIds: draft.trackIds },
-                    "Tracks updated",
-                  );
-                }
-                if (saved && !draft.id) {
-                  toast("Now open Edit to assign tracks to the new item.");
-                }
-                setDraft(null);
-              }}
-            >
-              <div className="grid gap-3 sm:grid-cols-2">
-                <input
-                  required
-                  placeholder="Title"
-                  value={draft.title}
-                  onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-                  className={inputCls}
-                />
-                <div className="flex min-w-0 gap-2">
-                  <input
-                    placeholder="Cover image URL — or press Upload"
-                    value={draft.image}
-                    onChange={(e) => setDraft({ ...draft, image: e.target.value })}
-                    className={`${inputCls} min-w-0 flex-1`}
-                  />
-                  <label
-                    className={`${btnCls} flex shrink-0 cursor-pointer items-center whitespace-nowrap ${
-                      uploading ? "pointer-events-none opacity-60" : ""
-                    }`}
-                  >
-                    {uploading ? "Uploading..." : "Upload"}
-                    <input
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
-                      className="hidden"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) {
-                          void uploadCover(f, (path) =>
-                            setDraft((prev) => (prev ? { ...prev, image: path } : prev)),
-                          );
-                        }
-                        e.target.value = "";
-                      }}
-                    />
-                  </label>
-                </div>
-              </div>
-              {kind === "collection" && (
-                <input
-                  placeholder="Short title (for cards)"
-                  value={draft.shortTitle}
-                  onChange={(e) => setDraft({ ...draft, shortTitle: e.target.value })}
-                  className={inputCls}
-                />
-              )}
-              {kind === "playlist" && (
-                <input
-                  placeholder="Theme — section on the /playlists page (empty = top, no section)"
-                  value={draft.theme}
-                  onChange={(e) => setDraft({ ...draft, theme: e.target.value })}
-                  className={inputCls}
-                />
-              )}
-              <textarea
-                placeholder="Short description"
-                rows={2}
-                value={draft.description}
-                onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-                className={inputCls}
-              />
-              <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">
-                Tracks (click order = display order)
-              </p>
-              <TrackPicker
-                tracks={mergedTracks}
-                selected={draft.trackIds}
-                onChange={(ids) => setDraft({ ...draft, trackIds: ids })}
-              />
-              <div className="flex gap-2">
-                <button type="submit" disabled={busy} className={goldBtnCls}>
-                  {busy ? "Saving..." : "Save"}
-                </button>
-                <button type="button" className={btnCls} onClick={() => setDraft(null)}>
-                  Cancel
-                </button>
-              </div>
-            </form>
-          )}
+          {/* Collections keep the form at the bottom; playlist drafts render
+              INLINE inside their theme section (no scrolling with 30 themes). */}
+          {tab !== "playlists" && draftForm}
         </>
       )}
 
@@ -1005,43 +1273,90 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
             Assign tracks to categories in the <span className="text-foreground">Tracks Edit</span> tab.
           </p>
           <ul className="divide-y divide-border/60">
-            {(data.categories ?? []).map((c) => (
-              <li key={c.id} className="flex items-center justify-between gap-4 py-2.5">
-                <span className="min-w-0">
-                  <span className="block truncate font-body text-sm font-semibold text-foreground">
-                    {c.title}
-                  </span>
-                  <span className="block truncate font-body text-xs text-muted-foreground">
-                    {c.trackIds.length} tracks · /catalog?category={c.id}
-                  </span>
-                </span>
-                <span className="flex shrink-0 gap-2">
+            {(data.categories ?? []).map((c, ci) => (
+              <li key={c.id}>
+                <div className="flex items-center gap-3 py-2.5">
                   <button
                     type="button"
-                    className={btnCls}
-                    disabled={busy}
-                    onClick={() => {
-                      const title = window.prompt(`Rename "${c.title}" to:`, c.title)?.trim();
-                      if (title && title !== c.title) {
-                        void run({ action: "upsert_category", id: c.id, title }, "Category renamed");
-                      }
-                    }}
+                    onClick={() => setExpandedCategoryId((cur) => (cur === c.id ? null : c.id))}
+                    title="Show the category's tracks"
+                    aria-label={`Expand ${c.title}`}
+                    className="shrink-0 text-muted-foreground transition-colors hover:text-[#F4C430]"
                   >
-                    Rename
+                    {expandedCategoryId === c.id ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
                   </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    className="rounded-lg border border-border px-3 py-1.5 font-body text-xs text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
-                    onClick={() => {
-                      if (window.confirm(`Delete category "${c.title}"? Tracks stay, only the chip and its list are removed.`)) {
-                        void run({ action: "delete_category", id: c.id }, "Category deleted");
-                      }
-                    }}
-                  >
-                    Delete
-                  </button>
-                </span>
+                  <span className="min-w-0 flex-1">
+                    <Link
+                      to={`/catalog?category=${encodeURIComponent(c.id)}`}
+                      title="Open this category in the catalog"
+                      className="block truncate font-body text-sm font-semibold text-foreground transition-colors hover:text-[#F4C430]"
+                    >
+                      {c.title}
+                    </Link>
+                    <span className="block truncate font-body text-xs text-muted-foreground">
+                      {c.trackIds.length} tracks · /catalog?category={c.id}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={busy || ci === 0}
+                      onClick={() => moveCategory(ci, -1)}
+                      title="Move up"
+                      aria-label={`Move ${c.title} up`}
+                      className="text-muted-foreground transition-colors hover:text-[#F4C430] disabled:opacity-30"
+                    >
+                      <ChevronUp className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy || ci === (data.categories?.length ?? 0) - 1}
+                      onClick={() => moveCategory(ci, 1)}
+                      title="Move down"
+                      aria-label={`Move ${c.title} down`}
+                      className="mr-1 text-muted-foreground transition-colors hover:text-[#F4C430] disabled:opacity-30"
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      className={btnCls}
+                      disabled={busy}
+                      onClick={() => {
+                        const title = window.prompt(`Rename "${c.title}" to:`, c.title)?.trim();
+                        if (title && title !== c.title) {
+                          void run({ action: "upsert_category", id: c.id, title }, "Category renamed");
+                        }
+                      }}
+                    >
+                      Rename
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      className="rounded-lg border border-border px-3 py-1.5 font-body text-xs text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
+                      onClick={() => {
+                        if (window.confirm(`Delete category "${c.title}"? Tracks stay, only the chip and its list are removed.`)) {
+                          void run({ action: "delete_category", id: c.id }, "Category deleted");
+                        }
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </span>
+                </div>
+                {expandedCategoryId === c.id && (
+                  <AdminTrackSubList
+                    trackIds={c.trackIds}
+                    tracks={mergedTracks}
+                    busy={busy}
+                    onRemove={(trackId) => removeCategoryTrack(c.id, trackId)}
+                  />
+                )}
               </li>
             ))}
             {(data.categories ?? []).length === 0 && (

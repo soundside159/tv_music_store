@@ -498,7 +498,7 @@ export const onRequestPost = async (ctx: Ctx) => {
   const body = await readJson<{
     action?: string;
     id?: string;
-    kind?: "collection" | "playlist";
+    kind?: "collection" | "playlist" | "category";
     trackIds?: string[];
     title?: string;
     shortTitle?: string;
@@ -684,10 +684,17 @@ export const onRequestPost = async (ctx: Ctx) => {
     }
 
     case "reorder_content": {
-      // Reorder collections or playlists (their `sort` drives every public
-      // list). values = the full id list in the desired order.
+      // Reorder collections / playlists / categories (their `sort` drives
+      // every public list). values = the full id list in the desired order.
       const table =
-        body.kind === "collection" ? "collections" : body.kind === "playlist" ? "playlists" : null;
+        body.kind === "collection"
+          ? "collections"
+          : body.kind === "playlist"
+            ? "playlists"
+            : body.kind === "category"
+              ? "categories"
+              : null;
+      if (body.kind === "category") await ensureCategoryTables(db);
       if (!table || !Array.isArray(body.values)) {
         return json({ error: "kind and values required" }, 400);
       }
