@@ -2,7 +2,7 @@ import { Link, useParams } from "react-router-dom";
 import { ArrowRight, Home } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import { TrackRowList } from "@/components/TrackRowPlayer";
+import { TrackRowList, TrackRowSkeletonList } from "@/components/TrackRowPlayer";
 import { useTracks } from "@/hooks/useTracks";
 import { useVocabularies } from "@/hooks/useContent";
 import { useSeo } from "@/hooks/useSeo";
@@ -172,11 +172,7 @@ const DiscoverTag = ({ group, slug }: { group: DiscoverGroup; slug: string }) =>
 
         <div className="mt-8">
           {isLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="h-16 animate-pulse rounded-lg bg-white/[0.04]" />
-              ))}
-            </div>
+            <TrackRowSkeletonList count={6} />
           ) : exact.length > 0 ? (
             <TrackRowList tracks={exact} />
           ) : (

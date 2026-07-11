@@ -3,7 +3,8 @@ import { ArrowRight, Home } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { useSeo } from "@/hooks/useSeo";
-import { guideBySlug, guides, type Guide } from "@/content/guides";
+import { useContentReady } from "@/hooks/useContent";
+import { guideBySlug, publishedGuides, type Guide } from "@/content/guides";
 
 // /guides — the answer library. Structured for how AI answer engines (ChatGPT,
 // Perplexity, Gemini, Google AI Overviews) actually quote a page: the answer
@@ -18,6 +19,12 @@ const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 
 const GuidesIndex = () => {
+  // Waiting for /api/content means the owner's own dates (Admin -> Articles)
+  // are applied before we decide what is released — otherwise the page would
+  // render the schedule baked into the bundle and then flicker.
+  const ready = useContentReady();
+  const guides = ready ? publishedGuides() : [];
+
   useSeo({
     title: "Music Licensing Guides — YouTube, Ads, Film & Sync | TV Music Store",
     description:
@@ -52,6 +59,16 @@ const GuidesIndex = () => {
         </p>
 
         <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {/* Placeholder cards of the same size while the schedule loads — the
+              page never grows or shrinks under the reader. */}
+          {!ready &&
+            Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-[13.5rem] animate-pulse rounded-xl border border-border/40 bg-card/30"
+                style={{ animationDelay: `${i * 90}ms` }}
+              />
+            ))}
           {guides.map((guide) => (
             <Link
               key={guide.slug}
@@ -107,6 +124,7 @@ const GuideArticle = ({ guide }: { guide: Guide }) => {
     },
   });
 
+  // A related guide that has not been released yet is simply not linked.
   const related = (guide.related ?? [])
     .map((slug) => guideBySlug(slug))
     .filter((g): g is Guide => !!g);
@@ -269,6 +287,29 @@ const GuideArticle = ({ guide }: { guide: Guide }) => {
   );
 };
 
+/** Same skeleton shape as the article — no jump when the real one renders. */
+const GuideSkeleton = () => (
+  <div className="min-h-screen bg-background">
+    <Navigation />
+    <main className="mx-auto w-full max-w-3xl px-4 pb-32 pt-24 sm:px-6 md:pt-28">
+      <div className="h-3 w-40 animate-pulse rounded bg-white/[0.05]" />
+      <div className="mt-5 h-9 w-3/4 animate-pulse rounded bg-white/[0.06]" />
+      <div className="mt-3 h-3 w-56 animate-pulse rounded bg-white/[0.04]" />
+      <div className="mt-6 h-28 animate-pulse rounded-xl border border-[#F4C430]/20 bg-[#F4C430]/[0.04]" />
+      <div className="mt-10 space-y-3">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-4 animate-pulse rounded bg-white/[0.04]"
+            style={{ animationDelay: `${i * 80}ms`, width: `${90 - (i % 3) * 12}%` }}
+          />
+        ))}
+      </div>
+    </main>
+    <Footer />
+  </div>
+);
+
 const NotFoundGuide = () => (
   <div className="min-h-screen bg-background">
     <Navigation />
@@ -284,7 +325,11 @@ const NotFoundGuide = () => (
 
 const Guides = () => {
   const { slug } = useParams();
+  // The owner's dates arrive with /api/content; decide only once they are in,
+  // otherwise a scheduled-then-moved article could flash "not found".
+  const ready = useContentReady();
   if (!slug) return <GuidesIndex />;
+  if (!ready) return <GuideSkeleton />;
   const guide = guideBySlug(slug);
   if (!guide) return <NotFoundGuide />;
   return <GuideArticle guide={guide} />;

@@ -14,6 +14,7 @@ import {
   ListMusic,
   Mail,
   Music2,
+  Newspaper,
   Send,
   ShieldCheck,
   SlidersHorizontal,
@@ -82,6 +83,10 @@ export const adminNavGroups: { label: string; items: NavItem[] }[] = [
       { id: "categories", label: "Categories", icon: Tags },
       { id: "vocabulary", label: "Vocabulary", icon: ListFilter },
     ],
+  },
+  {
+    label: "Content",
+    items: [{ id: "articles", label: "Articles", icon: Newspaper }],
   },
   {
     label: "Customers",

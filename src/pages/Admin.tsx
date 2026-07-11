@@ -25,6 +25,7 @@ import AdminWhitelist from "@/components/AdminWhitelist";
 import AdminCampaign from "@/components/AdminCampaign";
 import AdminInbox from "@/components/AdminInbox";
 import AdminCustomerProfile from "@/components/AdminCustomerProfile";
+import AdminGuides from "@/components/AdminGuides";
 
 const GOLD = "#F4C430";
 
@@ -40,6 +41,7 @@ type SectionId =
   | "tracksedit"
   | "bulkupload"
   | "import"
+  | "articles"
   | "customers"
   | "licenses"
   | "whitelist"
@@ -59,6 +61,7 @@ const SECTION_IDS: SectionId[] = [
   "tracksedit",
   "bulkupload",
   "import",
+  "articles",
   "customers",
   "licenses",
   "whitelist",
@@ -839,6 +842,9 @@ const Admin = () => {
             {section === "bulkupload" && <AdminBulkUpload />}
 
             {section === "import" && <AdminImport />}
+
+            {/* Publication calendar for the /guides articles. */}
+            {section === "articles" && <AdminGuides />}
 
             {section === "customers" && (
               <Card title={`Users${liveUsers ? ` (${liveUsers.length})` : ""}`}>

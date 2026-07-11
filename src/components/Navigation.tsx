@@ -78,11 +78,12 @@ const Navigation = () => {
     if (user) resumePendingDownload();
   }, [user]);
 
+  // Owner's order: Music Library · Sound Effects (placeholder, rendered below)
+  // · Pricing · Licensing · Guides.
   const navItems = [
-    { label: "Music Library", href: "/catalog" },
-    { label: "Guides", href: "/guides" },
     { label: "Pricing", href: "/pricing" },
     { label: "Licensing", href: "/licensing" },
+    { label: "Guides", href: "/guides" },
   ];
 
   const submitSearch = (e: React.FormEvent) => {
@@ -106,6 +107,24 @@ const Navigation = () => {
               TV Music Store
             </Link>
             <div className="hidden items-center gap-7 md:flex">
+              <Link
+                to="/catalog"
+                className={`whitespace-nowrap font-body text-sm transition-colors duration-300 hover:text-foreground ${
+                  location.pathname === "/catalog" ? "text-[#F4C430]" : "text-muted-foreground"
+                }`}
+              >
+                Music Library
+              </Link>
+              {/* Sound Effects — placeholder until the SFX library ships. */}
+              <span
+                title="Sound effects library — coming soon"
+                className="flex cursor-default items-center gap-1.5 whitespace-nowrap font-body text-sm text-muted-foreground/50"
+              >
+                Sound Effects
+                <span className="rounded-full border border-[#F4C430]/40 px-1.5 py-px font-body text-[9px] font-bold uppercase tracking-[0.12em] text-[#F4C430]/80">
+                  Soon
+                </span>
+              </span>
               {navItems.map((item) => (
                 <Link
                   key={item.label}
@@ -117,16 +136,6 @@ const Navigation = () => {
                   {item.label}
                 </Link>
               ))}
-              {/* Sound Effects — placeholder until the SFX library ships. */}
-              <span
-                title="Sound effects library — coming soon"
-                className="flex cursor-default items-center gap-1.5 whitespace-nowrap font-body text-sm text-muted-foreground/50"
-              >
-                Sound Effects
-                <span className="rounded-full border border-[#F4C430]/40 px-1.5 py-px font-body text-[9px] font-bold uppercase tracking-[0.12em] text-[#F4C430]/80">
-                  Soon
-                </span>
-              </span>
             </div>
           </div>
 
@@ -284,6 +293,21 @@ const Navigation = () => {
                   className="h-10 w-full rounded-full border border-border bg-card/60 pl-10 pr-4 font-body text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-[#F4C430]/70 focus:outline-none"
                 />
               </form>
+              <Link
+                to="/catalog"
+                onClick={() => setIsOpen(false)}
+                className={`py-2 font-body text-base transition-colors duration-300 hover:text-foreground ${
+                  location.pathname === "/catalog" ? "text-[#F4C430]" : "text-muted-foreground"
+                }`}
+              >
+                Music Library
+              </Link>
+              <span className="flex items-center gap-2 py-2 font-body text-base text-muted-foreground/50">
+                Sound Effects
+                <span className="rounded-full border border-[#F4C430]/40 px-1.5 py-px font-body text-[9px] font-bold uppercase tracking-[0.12em] text-[#F4C430]/80">
+                  Soon
+                </span>
+              </span>
               {navItems.map((item) => (
                 <Link
                   key={item.label}

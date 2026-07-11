@@ -2,7 +2,7 @@ import { Link, useParams } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import { TrackRowList } from "@/components/TrackRowPlayer";
+import { TrackRowList, TrackRowSkeletonList } from "@/components/TrackRowPlayer";
 import { useTracks } from "@/hooks/useTracks";
 import { useComposers, useContentReady } from "@/hooks/useContent";
 
@@ -77,11 +77,7 @@ const Artist = () => {
           </div>
           <div className="mt-4">
             {isLoading ? (
-              <div className="space-y-2">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="h-16 animate-pulse rounded-lg bg-white/[0.04]" />
-                ))}
-              </div>
+              <TrackRowSkeletonList count={6} />
             ) : artistTracks.length > 0 ? (
               <TrackRowList tracks={artistTracks} />
             ) : (

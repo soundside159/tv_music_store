@@ -54,6 +54,19 @@ export const onRequestGet = async (ctx: Ctx) => {
     // categories table not created yet
   }
 
+  // Guide publication dates (slug -> YYYY-MM-DD), edited in Admin -> Articles.
+  // The storefront applies them over the built-in schedule, so an article can be
+  // moved earlier or later without a deploy.
+  let guideSchedule: Record<string, string> = {};
+  try {
+    const row = await db
+      .prepare(`SELECT value FROM site_config WHERE key = 'guide_schedule'`)
+      .first<{ value: string }>();
+    if (row) guideSchedule = JSON.parse(row.value) as Record<string, string>;
+  } catch {
+    // no override yet — the schedule baked into the bundle is used
+  }
+
   // Composers (public artist pages): nick + "about" text the owner writes in
   // Admin -> Users. `bio` exists in the base schema, so no lazy ALTER needed.
   let composers: { id: string; slug: string; displayName: string; bio: string }[] = [];
@@ -83,6 +96,7 @@ export const onRequestGet = async (ctx: Ctx) => {
     trending,
     categories,
     composers,
+    guideSchedule,
     vocabularies,
     licensePrices,
     collections: collections.results.map((c) => ({

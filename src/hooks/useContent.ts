@@ -4,6 +4,7 @@ import type { CatalogTrack } from "@/data/catalogTracks";
 import { useTracks } from "@/hooks/useTracks";
 import { defaultVocabularies, type Vocabularies } from "@/lib/tagOptions";
 import { hydrateLicensePrices, type LicenseTierId } from "@/lib/licenses";
+import { applyGuideSchedule } from "@/content/guides";
 
 // Live storefront content from /api/content (what the owner edits in
 // Admin -> Content). NO demo fallback (owner request): an empty DB renders
@@ -31,6 +32,8 @@ interface ApiContent {
   trending?: string[];
   categories?: { id: string; title: string }[];
   composers?: LiveComposer[];
+  /** Guide publication dates set in Admin -> Articles (slug -> YYYY-MM-DD). */
+  guideSchedule?: Record<string, string>;
   collections?: ApiContentItem[];
   playlists?: ApiContentItem[];
   vocabularies?: Partial<Vocabularies>;
@@ -66,6 +69,7 @@ const fetchContent = (): Promise<ApiContent | null> => {
       cache = data;
       fetchedAt = Date.now();
       hydrateLicensePrices(data?.licensePrices);
+      applyGuideSchedule(data?.guideSchedule);
       return data;
     })
     .catch(() => null)
@@ -107,6 +111,7 @@ export const refreshContent = (): Promise<void> =>
         cache = data;
         fetchedAt = Date.now();
         hydrateLicensePrices(data.licensePrices);
+        applyGuideSchedule(data.guideSchedule);
       }
     })
     .catch(() => {
@@ -306,9 +311,13 @@ export const useTrendingIds = (): string[] => {
   return ids;
 };
 
-/** Homepage "Trending tracks": admin-picked order, fallback = first N tracks. */
-export const useTrendingTracks = (limit = 8): CatalogTrack[] => {
-  const { tracks } = useTracks();
+/**
+ * Homepage "Trending tracks": admin-picked order, fallback = first N tracks.
+ * Returns `isLoading` too, so the page can reserve the row space instead of
+ * letting everything below jump down when the tracks land.
+ */
+export const useTrendingTracks = (limit = 8): { tracks: CatalogTrack[]; isLoading: boolean } => {
+  const { tracks, isLoading } = useTracks();
   const [ids, setIds] = useState<string[] | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -328,7 +337,7 @@ export const useTrendingTracks = (limit = 8): CatalogTrack[] => {
   if (ids) {
     const byId = new Map(tracks.map((t) => [t.id, t]));
     const picked = ids.map((id) => byId.get(id)).filter((t): t is CatalogTrack => !!t);
-    if (picked.length > 0) return picked.slice(0, limit);
+    if (picked.length > 0) return { tracks: picked.slice(0, limit), isLoading };
   }
-  return tracks.slice(0, limit);
+  return { tracks: tracks.slice(0, limit), isLoading };
 };

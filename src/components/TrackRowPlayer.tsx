@@ -643,6 +643,39 @@ export const useTrackAudioEngine = () => {
 
 export type PlayerEngine = ReturnType<typeof useTrackAudioEngine>;
 
+/**
+ * Placeholder rows with EXACTLY the height of real ones (h-14 cover + py-1.5 +
+ * the row border). Rendering these while the tracks load reserves the space, so
+ * nothing below the list jumps down when the data lands — the layout is stable
+ * from the first frame. Use it wherever TrackRowList is used.
+ */
+export const TrackRowSkeletonList = ({ count = 8 }: { count?: number }) => (
+  <div className="rounded-lg border border-border/30 bg-card/25" aria-hidden="true">
+    {Array.from({ length: count }).map((_, i) => (
+      <div
+        key={i}
+        className="flex items-center gap-2.5 border-b border-border/30 px-2 py-1.5 last:border-b-0"
+      >
+        <div className="h-14 w-14 shrink-0 animate-pulse rounded-md bg-foreground/[0.06]" />
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <div
+            className="h-3.5 w-1/3 animate-pulse rounded bg-foreground/[0.06]"
+            style={{ animationDelay: `${i * 90}ms` }}
+          />
+          <div
+            className="h-3 w-1/5 animate-pulse rounded bg-foreground/[0.04]"
+            style={{ animationDelay: `${i * 90}ms` }}
+          />
+        </div>
+        <div
+          className="hidden h-8 w-1/3 animate-pulse rounded bg-foreground/[0.04] md:block"
+          style={{ animationDelay: `${i * 90}ms` }}
+        />
+      </div>
+    ))}
+  </div>
+);
+
 /** Drop-in track list with full playback — visually identical to the catalog rows. */
 export const TrackRowList = ({
   tracks,

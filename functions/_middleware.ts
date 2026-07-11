@@ -1,5 +1,10 @@
 import { getVocabularies, type D1Database, type Env } from "./api/_utils";
-import { guideBySlug, guides, type Guide } from "../src/content/guides";
+import {
+  applyGuideSchedule,
+  guideBySlug,
+  publishedGuides,
+  type Guide,
+} from "../src/content/guides";
 
 // ---------------------------------------------------------------------------
 // EDGE PRERENDER (SEO)
@@ -240,6 +245,23 @@ const STATIC_PAGES: Record<string, { title: string; description: string; heading
   },
 };
 
+/**
+ * Pulls the owner's guide publication dates (Admin -> Articles) out of D1 and
+ * applies them over the schedule baked into the bundle — so moving an article
+ * needs no deploy, and the prerendered HTML agrees with what the app shows.
+ */
+const loadGuideSchedule = async (db: D1Database | undefined): Promise<void> => {
+  if (!db) return;
+  try {
+    const row = await db
+      .prepare(`SELECT value FROM site_config WHERE key = 'guide_schedule'`)
+      .first<{ value: string }>();
+    if (row) applyGuideSchedule(JSON.parse(row.value) as Record<string, string>);
+  } catch {
+    // no override / no table — the built-in dates stand
+  }
+};
+
 const buildSeo = async (env: Env, url: URL): Promise<Seo | null> => {
   const path = url.pathname.replace(/\/+$/, "") || "/";
   const db = env.DB;
@@ -282,8 +304,14 @@ const buildSeo = async (env: Env, url: URL): Promise<Seo | null> => {
     };
   }
 
-  // ---- /guides (no DB needed — the articles live in the bundle) ----------
+  // ---- /guides (the articles live in the bundle; only the DATES come from D1)
+  // Scheduled guides are invisible until their publication date: not listed,
+  // not linked, not indexed, no prerendered content.
+  if (path === "/guides" || path.startsWith("/guides/")) {
+    await loadGuideSchedule(db);
+  }
   if (path === "/guides") {
+    const live = publishedGuides();
     return {
       title: "Music Licensing Guides — YouTube, Ads, Film & Sync | TV Music Store",
       description:
@@ -293,7 +321,7 @@ const buildSeo = async (env: Env, url: URL): Promise<Seo | null> => {
         "@context": "https://schema.org",
         "@type": "ItemList",
         name: "Music licensing guides",
-        itemListElement: guides.map((g, i) => ({
+        itemListElement: live.map((g, i) => ({
           "@type": "ListItem",
           position: i + 1,
           url: `${SITE}/guides/${g.slug}`,
@@ -303,7 +331,7 @@ const buildSeo = async (env: Env, url: URL): Promise<Seo | null> => {
       body: shell(
         "Music licensing, answered",
         "The questions creators, editors and producers actually ask — answered in plain language by the people who write and license the music.",
-        linkList(guides.map((g) => ({ href: `/guides/${g.slug}`, label: g.h1 }))),
+        linkList(live.map((g) => ({ href: `/guides/${g.slug}`, label: g.h1 }))),
       ),
     };
   }

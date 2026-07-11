@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Check, Layers, Library, ListMusic, Music2, ShieldCheck, Users } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import { TrackRowList } from "@/components/TrackRowPlayer";
+import { TrackRowList, TrackRowSkeletonList } from "@/components/TrackRowPlayer";
 import { discoverPath } from "@/lib/discovery";
 import { useCategories, useTrendingTracks, useVocabularies } from "@/hooks/useContent";
 import { usePlans } from "@/hooks/useMockData";
@@ -16,9 +16,12 @@ const trustPoints = [
   { icon: Check, label: "License instantly", text: "Clear licenses, PDF certificate right after download." },
 ];
 
+/** Rows shown in "Trending tracks" — also the number of placeholders reserved. */
+const TRENDING_COUNT = 8;
+
 const Index = () => {
   const plans = usePlans();
-  const trendingTracks = useTrendingTracks(8);
+  const { tracks: trendingTracks, isLoading: tracksLoading } = useTrendingTracks(TRENDING_COUNT);
   const categories = useCategories();
   const moods = useVocabularies().mood;
 
@@ -91,8 +94,14 @@ const Index = () => {
               View all <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
+          {/* The skeleton has the exact height of the real rows, so "Browse by
+              mood" and everything below it never move when the tracks land. */}
           <div className="mt-4">
-            <TrackRowList tracks={trendingTracks} />
+            {tracksLoading ? (
+              <TrackRowSkeletonList count={TRENDING_COUNT} />
+            ) : (
+              <TrackRowList tracks={trendingTracks} />
+            )}
           </div>
         </section>
 

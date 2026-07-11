@@ -2559,3 +2559,43 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   shipped game/app). Do that pass only AFTER the SFX product exists.
   FUTURE (owner's idea, mentioned in the "choose music" guide): natural-language "describe your
   project" search over the catalogue.
+- **2026-07-11 (guide publication schedule + nav order):** owner wanted the 13 guides back-dated so
+  they'd look like a month of work. REFUSED the back-dating (date manipulation — Google penalises it
+  and a date contradicting the crawl history costs trust) and built the honest version instead:
+  a real **publication SCHEDULE** in `src/content/guides.ts` (`SCHEDULE` map slug -> ISO date; it also
+  overwrites each guide's `updated`). 6 guides are live now; the other 7 go live by themselves on
+  2026-07-15 … 2026-08-05 — **no deploy needed**, the date check runs at request time. New exports:
+  `isPublished(guide, now?)`, `publishedGuides(now?)`, and `guideBySlug(slug, now?)` which returns
+  undefined for an unreleased guide. Wired into ALL surfaces: /guides index, the article route (shows
+  "Guide not found" before the date), related-guide links, `/api/sitemap`, and the edge prerender —
+  an unreleased guide is not listed, not linked, not indexed, and has no prerendered content.
+  NAV ORDER (owner): Music Library · Sound Effects (SOON placeholder) · Pricing · Licensing · Guides
+  — desktop and mobile menus both; `navItems` now holds only the last three, the first two are
+  rendered explicitly.
+  BACKLOG (docs/AI_VISIBILITY.md): **Smart Search** — one natural-language engine, two surfaces: on
+  /guides the header search animates down into a big field and answers "which guide should I read";
+  on /catalog the same box answers "which tracks fit my brief". The guide corpus is already shaped
+  for retrieval (tldr + faq per guide), and the catalogue side can reuse src/lib/discovery.ts.
+  NOTE: the "choose music" guide already PROMISES this feature on-page — don't let it rot in the
+  backlog.
+- **2026-07-11 (Admin → Articles + layout-shift fixes):**
+  (1) ADMIN ARTICLES TAB: new sidebar group "Content" -> **Articles** (`adminNav.ts`, Newspaper icon;
+  SectionId/SECTION_IDS extended; rendered in Admin.tsx) = `src/components/AdminGuides.tsx` — a
+  publication calendar: every guide with its H1, slug, Live/Scheduled chip, a `<input type=date>` for
+  the publication day, and an "Open" link (live ones only). "Save schedule" POSTs the new admin action
+  **`set_guide_schedule`** (functions/api/admin/content.ts) which validates slug + YYYY-MM-DD and
+  stores the map in site_config key `guide_schedule`.
+  The article TEXT still ships with the build (it is reviewed code, not a CMS) — only the DATE is
+  editable, which is exactly what the owner needs to drip-feed.
+  (2) The schedule now flows everywhere: public `/api/content` returns `guideSchedule`;
+  `applyGuideSchedule(map)` in `src/content/guides.ts` overrides the built-in SCHEDULE (called by
+  useContent on fetch/refresh, by `functions/_middleware.ts` via `loadGuideSchedule(db)` for
+  /guides* requests, and by `functions/api/sitemap.ts`). Moving an article needs NO deploy.
+  Guides pages now gate on `useContentReady()` so the owner's dates are applied before deciding what
+  is published (no flash of "not found" / wrong list).
+  (3) LAYOUT SHIFT (owner: "on F5 the tracks push Browse-by-mood down"): new exported
+  **`TrackRowSkeletonList`** in TrackRowPlayer.tsx — placeholder rows with the EXACT height of real
+  ones (h-14 cover + py-1.5 + border). `useTrendingTracks` now returns `{ tracks, isLoading }`, and
+  Index renders 8 skeleton rows while loading, so the homepage reserves the space and nothing below
+  it moves. Same skeleton adopted on /artist and /discover (their ad-hoc h-16 blocks were the wrong
+  height, so they shifted too), and /guides got matching card + article skeletons.

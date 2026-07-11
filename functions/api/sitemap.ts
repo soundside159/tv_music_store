@@ -1,5 +1,5 @@
 import { getVocabularies, type Ctx } from "./_utils";
-import { guides } from "../../src/content/guides";
+import { applyGuideSchedule, publishedGuides } from "../../src/content/guides";
 
 // Dynamic half of the sitemap: every tag landing page (/discover/...), every
 // track, artist, collection and playlist. public/sitemap.xml is the INDEX that
@@ -25,11 +25,24 @@ const url = (path: string, changefreq: string, priority: string) =>
   `  <url><loc>${xmlEscape(SITE + path)}</loc><changefreq>${changefreq}</changefreq><priority>${priority}</priority></url>`;
 
 export const onRequestGet = async (ctx: Ctx) => {
+  // The owner's publication dates (Admin -> Articles) override the built-in ones.
+  if (ctx.env.DB) {
+    try {
+      const row = await ctx.env.DB
+        .prepare(`SELECT value FROM site_config WHERE key = 'guide_schedule'`)
+        .first<{ value: string }>();
+      if (row) applyGuideSchedule(JSON.parse(row.value) as Record<string, string>);
+    } catch {
+      // no override — built-in schedule stands
+    }
+  }
+
   const lines: string[] = [
     url("/discover", "weekly", "0.8"),
     url("/guides", "weekly", "0.8"),
     // The answer library — these are the pages AI engines and Google quote.
-    ...guides.map((guide) => url(`/guides/${guide.slug}`, "monthly", "0.8")),
+    // Only RELEASED guides: a scheduled one must not be advertised before it exists.
+    ...publishedGuides().map((guide) => url(`/guides/${guide.slug}`, "monthly", "0.8")),
   ];
 
   if (ctx.env.DB) {

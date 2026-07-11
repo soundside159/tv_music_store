@@ -704,6 +704,33 @@ export const onRequestPost = async (ctx: Ctx) => {
       return json({ ok: true });
     }
 
+    // Publication dates of the /guides articles (slug -> "YYYY-MM-DD").
+    // The guide TEXT lives in the code bundle; only WHEN each one goes live is
+    // editable here, so the owner can drip-feed them without a deploy. An
+    // article whose date is in the future is invisible everywhere (page, list,
+    // sitemap, prerender) until that day.
+    case "set_guide_schedule": {
+      const values = body.values as unknown;
+      if (!values || typeof values !== "object" || Array.isArray(values)) {
+        return json({ error: "values object required" }, 400);
+      }
+      const clean: Record<string, string> = {};
+      for (const [slug, date] of Object.entries(values as Record<string, unknown>)) {
+        if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+        if (!/^[a-z0-9-]{3,80}$/.test(slug)) continue;
+        clean[slug] = date;
+      }
+      await ensureSiteConfig(db);
+      await db
+        .prepare(
+          `INSERT INTO site_config (key, value) VALUES ('guide_schedule', ?1)
+           ON CONFLICT(key) DO UPDATE SET value = ?1`,
+        )
+        .bind(JSON.stringify(clean))
+        .run();
+      return json({ ok: true });
+    }
+
     case "set_trending": {
       if (!Array.isArray(body.trackIds)) return json({ error: "trackIds required" }, 400);
       await db

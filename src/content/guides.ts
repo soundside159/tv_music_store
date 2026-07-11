@@ -606,5 +606,66 @@ export const guides: Guide[] = [
 // ever imports `guides`.
 guides.push(...guidesRound2);
 
-export const guideBySlug = (slug: string): Guide | undefined =>
-  guides.find((guide) => guide.slug === slug);
+// ---------------------------------------------------------------------------
+// PUBLICATION SCHEDULE — real, not cosmetic.
+//
+// The owner wanted the guides to look like they appeared over a month rather
+// than in one day. Back-dating them would be date manipulation (Google
+// penalises it, and a date that contradicts the crawl history destroys trust),
+// so instead they are RELEASED over that month for real: a guide listed below
+// with a future date is not on the site — not in /guides, not on its own URL,
+// not in the sitemap, not in the prerender — until that day arrives. Then it
+// appears by itself, with a truthful date. No deploy needed.
+//
+// The date here is also the guide's shown/structured "updated" date.
+// ---------------------------------------------------------------------------
+const SCHEDULE: Record<string, string> = {
+  // Live from day one — the commercially important answers.
+  "royalty-free-music-for-youtube": "2026-07-11",
+  "content-id-claims-explained": "2026-07-11",
+  "how-to-remove-a-content-id-claim": "2026-07-11",
+  "music-license-for-client-work": "2026-07-11",
+  "royalty-free-vs-copyright-free": "2026-07-11",
+  "how-much-does-royalty-free-music-cost": "2026-07-11",
+  // Released over the following weeks.
+  "music-for-ads-and-commercials": "2026-07-15",
+  "how-to-choose-music-for-your-project": "2026-07-18",
+  "ai-music-vs-human-composed": "2026-07-22",
+  "sync-licensing-and-cue-sheets": "2026-07-25",
+  "music-for-documentary-films": "2026-07-29",
+  "trailer-music-guide": "2026-08-01",
+  "music-for-podcasts": "2026-08-05",
+};
+
+for (const guide of guides) {
+  const date = SCHEDULE[guide.slug];
+  if (date) guide.updated = date;
+}
+
+/**
+ * Overrides the built-in schedule with the dates the owner set in
+ * Admin -> Articles (site_config `guide_schedule`, delivered by /api/content and
+ * read straight from D1 by the edge prerender). Moving an article earlier or
+ * later therefore needs no deploy.
+ */
+export const applyGuideSchedule = (dates: Record<string, string> | undefined): void => {
+  if (!dates) return;
+  for (const guide of guides) {
+    const date = dates[guide.slug];
+    if (typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date)) guide.updated = date;
+  }
+};
+
+/** True once the guide's publication date has arrived (UTC). */
+export const isPublished = (guide: Guide, now: Date = new Date()): boolean =>
+  new Date(`${guide.updated}T00:00:00Z`).getTime() <= now.getTime();
+
+/** The guides that are actually live right now — use this everywhere. */
+export const publishedGuides = (now?: Date): Guide[] =>
+  guides.filter((guide) => isPublished(guide, now));
+
+/** A guide by slug — undefined while it is still scheduled for a later date. */
+export const guideBySlug = (slug: string, now?: Date): Guide | undefined => {
+  const guide = guides.find((item) => item.slug === slug);
+  return guide && isPublished(guide, now) ? guide : undefined;
+};

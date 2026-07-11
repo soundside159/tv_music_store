@@ -94,6 +94,24 @@ Checklist for that pass:
 Sources: Envato Elements SFX, Mixkit, Soundsnap, StudioBinder's SFX guide, itch.io game
 assets (searched 2026-07-11).
 
+## BACKLOG — Smart Search (owner's idea, one engine, two surfaces)
+
+"Describe your problem / your project in plain language" — the same natural-language engine
+answers two different questions depending on where it sits:
+
+- **On /guides** — the search box in the header animates DOWN into the page, becomes a big
+  "Smart Search" field, and the answer is *which guide to read* (plus the short answer,
+  lifted from that guide's TL;DR).
+- **On /catalog** — the same box returns *which tracks fit the brief* (see the "choose music"
+  guide, which already trails this feature).
+
+Implementation notes for whoever builds it: the guide corpus is already structured for
+retrieval (`tldr` + `faq` per guide = ready-made embeddings/answers); the catalogue side can
+reuse `src/lib/discovery.ts` scoring with the brief mapped onto use case / mood / genre.
+Start with the guides — the corpus is small, the answer is verifiable, and a wrong answer is
+cheap. Note: the on-page copy in the "choose music" guide promises this, so it should not
+sit in the backlog forever.
+
 ## Next candidates (not built)
 
 - `llms.txt` — cheap, low expectation.
