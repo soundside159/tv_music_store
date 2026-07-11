@@ -194,12 +194,12 @@ const AdminBulkUpload = () => {
   const [groups, setGroups] = useState<Group[]>([]);
   const [running, setRunning] = useState(false);
   // Whole-batch composer: every track created in this run gets this profile
-  // ("" = house catalog / TVMUSICSTORE). List comes from the admin content API;
-  // the signed-in admin's OWN composer profile is preselected when he has one.
+  // ("" = No composer / house catalog). List comes from the admin content API.
+  // Deliberately NOT preselected (owner request): he must consciously pick one
+  // per batch — auto-preselecting his own profile caused wrong-account uploads.
   const user = useCurrentUser();
   const [composers, setComposers] = useState<{ id: string; userId: string | null; displayName: string }[]>([]);
   const [composerId, setComposerId] = useState("");
-  const composerTouchedRef = useRef(false);
   const filesRef = useRef<HTMLInputElement>(null);
   const folderRef = useRef<HTMLInputElement>(null);
   const stopRef = useRef(false);
@@ -221,13 +221,6 @@ const AdminBulkUpload = () => {
       cancelled = true;
     };
   }, []);
-
-  // Default the picker to the signed-in user's own composer profile.
-  useEffect(() => {
-    if (composerTouchedRef.current || composerId || !user) return;
-    const mine = composers.find((c) => c.userId === user.id);
-    if (mine) setComposerId(mine.id);
-  }, [composers, user, composerId]);
 
   const patch = (key: string, p: Partial<Group>) =>
     setGroups((gs) => gs.map((g) => (g.key === key ? { ...g, ...p } : g)));
@@ -585,15 +578,12 @@ const AdminBulkUpload = () => {
             <select
               value={composerId}
               disabled={running}
-              onChange={(e) => {
-                composerTouchedRef.current = true;
-                setComposerId(e.target.value);
-              }}
+              onChange={(e) => setComposerId(e.target.value)}
               aria-label="Composer for this batch"
               title="Every track created in this run is credited to this composer"
               className="rounded-lg border border-border bg-background px-2.5 py-2 font-body text-xs text-foreground focus:border-[#F4C430] focus:outline-none disabled:opacity-50"
             >
-              <option value="">Composer: TVMUSICSTORE (house)</option>
+              <option value="">No composer — pick one (TVMUSICSTORE house)</option>
               {[...composers]
                 .sort(
                   (a, b) =>

@@ -2250,3 +2250,16 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   button ON the Extra tags textarea: calls suggest-tags with extraTags ONLY (include checkboxes
   untouched); prompt = the AI-box text, falling back to the track's description; result merges
   into the field (mergeTags module helper — dedupe, cap 50; also reused by AI Magic).
+- **2026-07-11 (owner round: no default composer, auto stems badge, AI unticks, no extra-tag
+  pills):** (1) BULK UPLOAD: the composer picker is NO LONGER preselected with the admin's own
+  profile (owner kept uploading to his own account by mistake) — defaults to "" with option
+  text "No composer — pick one (TVMUSICSTORE house)"; auto-preselect effect + touched-ref
+  removed. AddTrackModal keeps its preselect. (2) TRACKS EDIT: "Includes stems" TriCheckbox
+  removed from the single-track fields — the stems badge is fully automatic (stems upload sets
+  has_stems, stems delete clears it); fields.hasStems plumbing kept, just no manual UI.
+  (3) AI MAGIC is now AUTHORITATIVE per included section: facets map EVERY vocab option to
+  all/none (picked/unpicked), memberships likewise over all collections/playlists/categories,
+  Extra tags REPLACE the field (solo Generate too; mergeTags helper deleted) — re-running with
+  a new prompt yields a fresh result and UNTICKS what no longer fits (removals happen on
+  Apply); hint text updated. (4) TRACK PAGE: extra tags (track.tags) are no longer rendered
+  as pills under the track — SEO-only; chips show Use Case / Genre / Mood.

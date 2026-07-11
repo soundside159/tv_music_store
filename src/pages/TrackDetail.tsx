@@ -171,8 +171,8 @@ const TrackDetail = () => {
     ...splitFilterValues(track.genre).map((value) => ({ value, param: "genre" })),
     ...splitFilterValues(track.mood).map((value) => ({ value, param: "mood" })),
   ];
-  // Freeform tags (not filter dimensions) link to a catalog search instead.
-  const extraTags = track.tags.filter(Boolean);
+  // NOTE: extra tags (track.tags) are search-engine food only — deliberately
+  // NOT rendered under the track; the chips show Use Case / Genre / Mood only.
 
   const share = async () => {
     try {
@@ -310,15 +310,6 @@ const TrackDetail = () => {
                   className="rounded-full border border-border px-3 py-1 font-body text-xs text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
                 >
                   {chip.value}
-                </Link>
-              ))}
-              {extraTags.map((t) => (
-                <Link
-                  key={`tag:${t}`}
-                  to={`/catalog?search=${encodeURIComponent(t)}`}
-                  className="rounded-full border border-border px-3 py-1 font-body text-xs text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
-                >
-                  {t}
                 </Link>
               ))}
             </div>

@@ -99,20 +99,6 @@ interface SingleFields {
   hasStems: boolean;
 }
 
-/** Merge AI-suggested extra tags into the comma list (dedupe, 50 max). */
-const mergeTags = (prevTags: string, extra: string[]): string[] => {
-  const cur = prevTags.split(",").map((s) => s.trim()).filter(Boolean);
-  const seen = new Set(cur.map((s) => s.toLowerCase()));
-  const merged = [...cur];
-  for (const t of extra) {
-    const k = t.toLowerCase();
-    if (seen.has(k) || merged.length >= 50) continue;
-    seen.add(k);
-    merged.push(t);
-  }
-  return merged;
-};
-
 const fieldsOf = (t: CatalogTrack): SingleFields => ({
   title: t.title,
   bpm: t.bpm ? String(t.bpm) : "",
@@ -384,40 +370,45 @@ const AdminTracksEdit = ({
         extraTags?: string[];
       };
       if (!res.ok || !d.ok) throw new Error(d.error ?? "AI suggestion failed");
+      // The AI answer is AUTHORITATIVE for every included section: each new
+      // generation sets the FULL picture — fitting entries get ticked, the
+      // rest get UNTICKED (removed on Apply). So re-running with a new prompt
+      // shows a fresh result, never the tail of the previous one.
       let n = 0;
       if (aiInclude.tags) {
         setFacetChanges((prev) => {
-          const nx = { useCase: { ...prev.useCase }, genre: { ...prev.genre }, mood: { ...prev.mood } };
+          const nx = { ...prev };
           for (const key of ["useCase", "genre", "mood"] as FacetKey[]) {
-            for (const v of d[key] ?? []) nx[key][v] = "all";
+            const picked = new Set((d[key] ?? []).map((v) => v.toLowerCase()));
+            const m: Record<string, "all" | "none"> = {};
+            for (const opt of vocabularies[key]) m[opt] = picked.has(opt.toLowerCase()) ? "all" : "none";
+            nx[key] = m;
           }
           return nx;
         });
         n += (d.useCase?.length ?? 0) + (d.genre?.length ?? 0) + (d.mood?.length ?? 0);
       }
-      const tick = (
+      const setAuthoritative = (
         ids: string[] | undefined,
+        items: ContentItemLite[],
         set: (fn: (prev: Record<string, "all" | "none">) => Record<string, "all" | "none">) => void,
       ) => {
-        if (!ids || ids.length === 0) return 0;
-        set((prev) => {
-          const nx = { ...prev };
-          for (const id of ids) nx[id] = "all";
-          return nx;
+        const picked = new Set(ids ?? []);
+        set(() => {
+          const m: Record<string, "all" | "none"> = {};
+          for (const it of items) m[it.id] = picked.has(it.id) ? "all" : "none";
+          return m;
         });
-        return ids.length;
+        return picked.size;
       };
-      n += tick(d.collectionIds, setCollectionDelta);
-      n += tick(d.playlistIds, setPlaylistDelta);
-      n += tick(d.categoryIds, setCategoryDelta);
-      // Extra tags land in the single-track "Extra tags" field (comma list,
-      // max 50 per track) — saved by the normal Apply like everything else.
-      if (aiInclude.extraTags && d.extraTags && d.extraTags.length > 0 && fields) {
-        const before = fields.tags.split(",").map((s) => s.trim()).filter(Boolean).length;
-        n += mergeTags(fields.tags, d.extraTags).length - before;
-        setFields((prev) =>
-          prev ? { ...prev, tags: mergeTags(prev.tags, d.extraTags ?? []).join(", ") } : prev,
-        );
+      if (aiInclude.collections) n += setAuthoritative(d.collectionIds, collections, setCollectionDelta);
+      if (aiInclude.playlists) n += setAuthoritative(d.playlistIds, playlists, setPlaylistDelta);
+      if (aiInclude.categories) n += setAuthoritative(d.categoryIds, categories, setCategoryDelta);
+      // Extra tags REPLACE the field content (fresh generation, no old tail);
+      // saved by the normal Apply like everything else.
+      if (aiInclude.extraTags && d.extraTags && d.extraTags.length > 0) {
+        setFields((prev) => (prev ? { ...prev, tags: (d.extraTags ?? []).join(", ") } : prev));
+        n += d.extraTags.length;
       }
       // Description: reuses the owner's fixed SEO prompt (generate-description)
       // fed with the track's saved facets MERGED with the freshly AI-ticked
@@ -482,9 +473,8 @@ const AdminTracksEdit = ({
         toast.error("The AI picked nothing — is the Tags Base filled?");
         return;
       }
-      setFields((prev) =>
-        prev ? { ...prev, tags: mergeTags(prev.tags, d.extraTags ?? []).join(", ") } : prev,
-      );
+      // Replace, don't merge — a re-run shows the fresh pick, not the old tail.
+      setFields((prev) => (prev ? { ...prev, tags: (d.extraTags ?? []).join(", ") } : prev));
       toast.success(`${got} extra tag(s) suggested — review and press Apply`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Tag generation failed");
@@ -1407,7 +1397,8 @@ const AdminTracksEdit = ({
                       {aiPromptBusy ? "Thinking…" : "AI Magic"}
                     </button>
                     <span className="font-body text-[10px] leading-tight text-muted-foreground">
-                      Pre-ticks the panels on the right — review, then press Apply.
+                      Sets the panels on the right (also unticks what doesn't fit) — review, then
+                      press Apply.
                     </span>
                   </div>
                 </div>
@@ -1518,11 +1509,8 @@ const AdminTracksEdit = ({
                       />
                     </label>
                   </div>
-                  <TriCheckbox
-                    label="Includes stems (shown on the track page, Max-plan download)"
-                    state={fields.hasStems ? "all" : "none"}
-                    onToggle={() => setFields({ ...fields, hasStems: !fields.hasStems })}
-                  />
+                  {/* The stems badge is automatic now: it follows the actual stems
+                      bundle on the track (upload adds it, deleting stems removes it). */}
                   <div className="flex items-center gap-2">
                     <button type="button" onClick={() => void openTagsBase()} className={btnCls}>
                       Tags Base…
