@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Check, ChevronDown, ChevronUp, GripVertical, Pause, Play, Plus, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { makeThumbnail } from "@/lib/audioEncoding";
@@ -712,11 +713,15 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                           <img src={item.image} alt="" className="h-9 w-9 shrink-0 rounded object-cover" />
                         )}
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate font-body text-sm font-semibold text-foreground">
+                          <Link
+                            to={`/playlist/${item.id}`}
+                            title="Open the playlist page"
+                            className="block truncate font-body text-sm font-semibold text-foreground transition-colors hover:text-[#F4C430]"
+                          >
                             {item.title}
-                          </span>
+                          </Link>
                           <span className="block truncate font-body text-xs text-muted-foreground">
-                            {item.trackIds.length} tracks · /playlists/{item.id}
+                            {item.trackIds.length} tracks · /playlist/{item.id}
                           </span>
                         </span>
                         <span className="flex shrink-0 gap-2">

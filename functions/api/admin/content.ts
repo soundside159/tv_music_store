@@ -238,6 +238,33 @@ const slugify = (s: string) =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 60) || newId("itm");
 
+/**
+ * Ensures a theme name exists in the persisted `playlist_themes` list — a
+ * theme NEVER dies with its last playlist (the owner creates themes up front
+ * and fills them later; deletion is only the explicit X in the admin).
+ */
+const registerPlaylistTheme = async (db: D1Database, theme: string) => {
+  const t = theme.replace(/\s+/g, " ").trim().slice(0, 60);
+  if (!t) return;
+  let list: string[] = [];
+  try {
+    const row = await db
+      .prepare(`SELECT value FROM site_config WHERE key = 'playlist_themes'`)
+      .first<{ value: string }>();
+    if (row) list = (JSON.parse(row.value) as unknown[]).filter((x): x is string => typeof x === "string");
+  } catch {
+    // none yet
+  }
+  if (list.some((x) => x.toLowerCase() === t.toLowerCase())) return;
+  await db
+    .prepare(
+      `INSERT INTO site_config (key, value) VALUES ('playlist_themes', ?1)
+       ON CONFLICT(key) DO UPDATE SET value = ?1`,
+    )
+    .bind(JSON.stringify([...list, t]))
+    .run();
+};
+
 // Playlists get an optional THEME ("Featured", "Podcast", ...) used to group
 // the /playlists page into sections. Added lazily for existing DBs.
 const ensurePlaylistThemeColumn = async (db: D1Database) => {
@@ -309,6 +336,9 @@ const upsertItem = async (db: D1Database, table: "collections" | "playlists", bo
         .run();
     }
   }
+  // Any theme a playlist is saved with becomes a persistent theme (survives
+  // deleting the playlist itself).
+  if (table === "playlists" && theme) await registerPlaylistTheme(db, theme);
   return json({ ok: true, id });
 };
 
@@ -372,6 +402,30 @@ export const onRequestGet = async (ctx: Ctx) => {
     }
   } catch {
     // none saved yet — fine
+  }
+  // Backfill: themes living only on playlists (typed into a form before the
+  // persistent list existed) become persistent too — so deleting the last
+  // playlist of a theme never kills the theme.
+  {
+    const seenThemes = new Set(playlistThemes.map((t) => t.toLowerCase()));
+    let grew = false;
+    for (const p of playlists.results) {
+      const t = (p.theme ?? "").trim();
+      if (t && !seenThemes.has(t.toLowerCase())) {
+        seenThemes.add(t.toLowerCase());
+        playlistThemes.push(t);
+        grew = true;
+      }
+    }
+    if (grew) {
+      await db
+        .prepare(
+          `INSERT INTO site_config (key, value) VALUES ('playlist_themes', ?1)
+           ON CONFLICT(key) DO UPDATE SET value = ?1`,
+        )
+        .bind(JSON.stringify(playlistThemes))
+        .run();
+    }
   }
   // Composer profiles (pseudonyms) — the upload composer picker needs them.
   // Dead rows (no linked user AND no tracks — e.g. the Composer One/Two/Three

@@ -2347,3 +2347,12 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   in Playlists/PlaylistDetail/Collections/CollectionDetail/Catalog strip).
   (4) CREATING A PLAYLIST from the /playlists ghost card no longer navigates INTO it — stays
   on the page, the new card pops into its theme (owner request).
+  [ROUND 3 — same day:] (5) THEMES ARE FULLY INDEPENDENT of playlists now: deleting a theme's
+  last playlist used to kill the theme (only button-created themes were in the persistent
+  list). `registerPlaylistTheme()` in content.ts — every upsert_playlist with a theme adds the
+  name to `playlist_themes`, and the admin GET back-fills themes found on playlists into the
+  list once. A theme now dies ONLY via its explicit X button. Owner's workflow: create many
+  empty themes first, sort playlists into them later; moving playlists BETWEEN themes = drag
+  the row onto another theme section in Admin → Playlists (already worked). (6) Playlist titles
+  in Admin → Playlists rows are now links to /playlist/<id> (hover gold; the small path caption
+  fixed from /playlists/ to /playlist/).
