@@ -2599,3 +2599,38 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   Index renders 8 skeleton rows while loading, so the homepage reserves the space and nothing below
   it moves. Same skeleton adopted on /artist and /discover (their ad-hoc h-16 blocks were the wrong
   height, so they shifted too), and /guides got matching card + article skeletons.
+- **2026-07-11 (REVENUE ENGINE — the money split is now REAL):** the owner believed the split was
+  already built; it was NOT — only empty tables (payout_periods/payout_lines) plus MOCK numbers in
+  the admin Finance screen and the composer dashboard. Built from scratch, spec in
+  **docs/REVENUE_SPLIT.md** (also the basis for the composer agreement):
+  MODEL = **user-centric** ("the money follows the payer"), NOT a pool. A subscription payment is
+  split only between the composers THAT subscriber downloaded in the cycle he paid for. This is the
+  structural answer to the MotionArray-style self-download fraud: under a pool, a fake subscription
+  farming your own tracks dilutes everyone and pays off; here the fraudster gets back at most his own
+  author share of his own subscription — a guaranteed loss. Owner also chose: the author share of an
+  IDLE subscriber (downloaded nothing) stays with the platform, booked explicitly as
+  `platform_unallocated` so the report balances.
+  SPLIT BASE = **net**: gross − tax/VAT (never split, it's the state's) − real payment fee. 50/50,
+  snapshotted per payment (`author_share_bps`) so later changes never rewrite history. Money in
+  integer CENTS; largest-remainder distribution so cents are never invented or lost.
+  POINTS (owner's rules): 1 point per UNIQUE TRACK per payer per cycle; re-downloads and
+  WAV+stems+MP3 of the same track = still 1; **MP3 128 never counts** (free-tier format — download.ts
+  now logs `download_log.quality` 128/320, lazy ALTER); a composer's own downloads count 0; points
+  reset each cycle.
+  FILES: `functions/api/_revenue.ts` (tables revenue_events / revenue_allocations / payout_runs,
+  `recordRevenueEvent` idempotent on provider_ref, `allocateEvent`, `allocateDue`);
+  stripe/webhook.ts books every `invoice.paid` (gross = amount_paid, tax from Stripe Tax, fee from
+  the charge's balance_transaction with a 2.9%+30c fallback, cycle from the invoice line period);
+  paypal/capture.ts books ONE event per licensed track (gross/fee from
+  seller_receivable_breakdown, split by line price) and allocates immediately;
+  `functions/api/admin/finance.ts` (GET report: gross→tax→fees→net→authors/platform, per-composer
+  payout lines, last 50 payments; POST mark_paid/mark_due) + `src/components/AdminFinance.tsx`
+  (new "Money → Finance" nav item; the OLD mock Finance block in Admin.tsx was DELETED so there are
+  never two sets of numbers).
+  STILL OPEN (in docs/REVENUE_SPLIT.md §8): VAT path (Merchant of Record like Paddle/Lemon Squeezy
+  ~5% vs Stripe Tax ~0.5% + own registration — ledger already stores tax_cents either way), refund/
+  chargeback reversal logic, composer dashboard still on mocks (should read revenue_allocations),
+  payout threshold + hold-back as policy. `composers.revenue_weight` stays 1.0 on purpose.
+  WARNING repeated (it bit again): NEVER edit repo files from the sandbox with python/bash — the
+  host↔sandbox mirror keeps content fresh but LENGTH stale, and writing a truncated mirror back
+  TRUNCATES THE HOST FILE (Admin.tsx lost its tail this session; repaired). Host Edit/Write only.

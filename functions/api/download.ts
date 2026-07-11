@@ -371,12 +371,33 @@ export const onRequestPost = async (ctx: Ctx) => {
   }
 
   // Log AFTER the file is resolved so failed attempts don't burn the limit.
-  await ctx.env.DB.prepare(
-    `INSERT INTO download_log (user_id, track_id, composer_id, plan_at_download, format)
-     VALUES (?1, ?2, ?3, ?4, ?5)`,
-  )
-    .bind(user.id, track?.id ?? slug, track?.composer_id ?? null, hasLicense ? "license" : plan, format)
-    .run();
+  // `quality` matters for money: MP3 128 is the free-tier format and earns the
+  // composer nothing, so the revenue engine has to be able to tell it from 320.
+  const logDownload = () =>
+    ctx.env.DB.prepare(
+      `INSERT INTO download_log (user_id, track_id, composer_id, plan_at_download, format, quality)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
+    )
+      .bind(
+        user.id,
+        track?.id ?? slug,
+        track?.composer_id ?? null,
+        hasLicense ? "license" : plan,
+        format,
+        format === "mp3" ? quality : null,
+      )
+      .run();
+  try {
+    await logDownload();
+  } catch {
+    // Older DB without the column — add it once, then log.
+    try {
+      await ctx.env.DB.prepare(`ALTER TABLE download_log ADD COLUMN quality INTEGER`).run();
+    } catch {
+      // someone else added it in the meantime
+    }
+    await logDownload();
+  }
 
   const rawTitle = body?.title ?? track?.title ?? slug;
   const title = sanitizeFilename(tidyTitle(rawTitle));

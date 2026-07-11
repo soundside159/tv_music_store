@@ -1,4 +1,5 @@
 import { getSessionUser, json, newId, readJson, type Ctx } from "../_utils";
+import { allocateEvent, recordRevenueEvent } from "../_revenue";
 import { LICENSE_PRICES, paypalCall, paypalConfigured, paypalToken } from "./_paypal";
 
 // POST { orderId } -> captures the PayPal order and records the purchased
@@ -11,8 +12,20 @@ interface PayPalOrder {
   purchase_units?: {
     custom_id?: string;
     items?: { sku?: string; unit_amount?: { value?: string } }[];
+    payments?: {
+      captures?: {
+        id?: string;
+        seller_receivable_breakdown?: {
+          gross_amount?: { value?: string; currency_code?: string };
+          paypal_fee?: { value?: string };
+        };
+      }[];
+    };
   }[];
 }
+
+const cents = (value: string | undefined): number =>
+  Math.max(0, Math.round(Number(value ?? 0) * 100));
 
 export const onRequestPost = async (ctx: Ctx) => {
   if (!ctx.env.DB) return json({ error: "DB not bound" }, 503);
@@ -54,21 +67,67 @@ export const onRequestPost = async (ctx: Ctx) => {
     .first<{ n: number }>();
 
   if ((existing?.n ?? 0) === 0) {
-    for (const item of unit?.items ?? []) {
-      const [slug = "", tier = ""] = (item.sku ?? "").split("|");
-      // Record what PayPal actually charged (the order was priced from the
-      // live site_config values); fallback to the static defaults.
-      const price = Number(item.unit_amount?.value ?? 0) || LICENSE_PRICES[tier] || 0;
-      if (!slug || !tier) continue;
+    // What PayPal actually kept: gross and its fee come from the capture itself,
+    // so the ledger books real money, not our list price.
+    const fresh = await paypalCall<PayPalOrder>(
+      ctx.env,
+      token,
+      "GET",
+      `/v2/checkout/orders/${orderId}`,
+    );
+    const capture = fresh.purchase_units?.[0]?.payments?.captures?.[0];
+    const breakdown = capture?.seller_receivable_breakdown;
+    const capturedGross = cents(breakdown?.gross_amount?.value);
+    const capturedFee = cents(breakdown?.paypal_fee?.value);
+    const currency = breakdown?.gross_amount?.currency_code?.toLowerCase() ?? "usd";
+
+    const items = (unit?.items ?? [])
+      .map((item) => {
+        const [slug = "", tier = ""] = (item.sku ?? "").split("|");
+        const price = Number(item.unit_amount?.value ?? 0) || LICENSE_PRICES[tier] || 0;
+        return { slug, tier, priceCents: Math.round(price * 100) };
+      })
+      .filter((i) => i.slug && i.tier);
+
+    const itemsTotal = items.reduce((sum, i) => sum + i.priceCents, 0) || 1;
+
+    for (const item of items) {
       const track = await ctx.env.DB.prepare(`SELECT id FROM tracks WHERE slug = ?1`)
-        .bind(slug)
+        .bind(item.slug)
         .first<{ id: string }>();
+      const trackId = track?.id ?? item.slug;
+
       await ctx.env.DB.prepare(
         `INSERT INTO sync_orders (id, user_id, track_id, tier, price, stripe_session_id)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
       )
-        .bind(newId("ord"), user.id, track?.id ?? slug, tier, price, orderId)
+        .bind(newId("ord"), user.id, trackId, item.tier, item.priceCents / 100, orderId)
         .run();
+
+      // One ledger event per licensed TRACK — a cart with three tracks pays
+      // three composers. Gross and fee are shared out in proportion to price;
+      // PayPal reports them per capture, not per line.
+      const share = item.priceCents / itemsTotal;
+      const gross = capturedGross > 0 ? Math.round(capturedGross * share) : item.priceCents;
+      const fee =
+        capturedFee > 0
+          ? Math.round(capturedFee * share)
+          : Math.round(gross * 0.034) + 30; // PayPal's usual take, if it stayed silent
+      const eventId = await recordRevenueEvent(ctx.env.DB, {
+        source: "license",
+        userId: user.id,
+        provider: "paypal",
+        providerRef: `${capture?.id ?? orderId}:${item.slug}:${item.tier}`,
+        grossCents: gross,
+        // PayPal is the merchant of record for the tax it collects; when it
+        // reports none, there is none to strip out.
+        taxCents: 0,
+        feeCents: fee,
+        currency,
+        trackId,
+      });
+      // A one-off license has no cycle to wait for — split it right away.
+      if (eventId) await allocateEvent(ctx.env.DB, eventId);
     }
   }
 

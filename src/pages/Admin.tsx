@@ -13,10 +13,7 @@ import {
   mockClaimRequests,
   mockComposers,
   mockComposerTracks,
-  mockPayoutLines,
-  mockPayoutPeriods,
   mockWhitelistChannels,
-  PLATFORM_SHARE,
 } from "@/mocks";
 import AdminContent from "@/components/AdminContent";
 import AdminBulkUpload from "@/components/AdminBulkUpload";
@@ -26,6 +23,7 @@ import AdminCampaign from "@/components/AdminCampaign";
 import AdminInbox from "@/components/AdminInbox";
 import AdminCustomerProfile from "@/components/AdminCustomerProfile";
 import AdminGuides from "@/components/AdminGuides";
+import AdminFinance from "@/components/AdminFinance";
 
 const GOLD = "#F4C430";
 
@@ -687,98 +685,6 @@ const Admin = () => {
               </>
             )}
 
-            {section === "finance" && (
-              <>
-                <Card title="Payout periods">
-                  <div className="flex flex-col gap-3">
-                    {mockPayoutPeriods.map((p) => {
-                      const lines = mockPayoutLines.filter((l) => l.periodId === p.id);
-                      const open = openPeriod === p.id;
-                      return (
-                        <div key={p.id} className="rounded-lg border border-border">
-                          <button
-                            type="button"
-                            onClick={() => setOpenPeriod(open ? null : p.id)}
-                            className="flex w-full items-center justify-between gap-4 p-4 text-left"
-                          >
-                            <span className="font-body text-sm font-semibold text-foreground">{p.month}</span>
-                            <span className="hidden font-body text-xs text-muted-foreground sm:block">
-                              net ${p.netRevenue} · platform ${p.platformShare} · authors ${p.authorPool}
-                            </span>
-                            <StatusPill text={p.status} active={p.status === "paid"} />
-                          </button>
-                          {open && (
-                            <div className="border-t border-border/60 p-4">
-                              <table className="w-full font-body text-sm">
-                                <thead>
-                                  <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-                                    <th className="pb-2 pr-4">Composer</th>
-                                    <th className="pb-2 pr-4">Downloads</th>
-                                    <th className="pb-2">Amount</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {lines.map((l) => (
-                                    <tr key={l.id} className="border-t border-border/40">
-                                      <td className="py-2 pr-4 text-foreground">{composerName(l.composerId)}</td>
-                                      <td className="py-2 pr-4 text-muted-foreground">{l.downloadsCount}</td>
-                                      <td className="py-2 font-semibold" style={{ color: GOLD }}>
-                                        ${l.amount.toFixed(2)}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                              {p.status !== "paid" && (
-                                <div className="mt-4 flex gap-3">
-                                  <button
-                                    type="button"
-                                    className="rounded-lg border border-border px-4 py-2 font-body text-xs font-semibold text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
-                                  >
-                                    Generate statements
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="rounded-lg bg-[#F4C430] px-4 py-2 font-body text-xs font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
-                                  >
-                                    Mark paid
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </Card>
-                <Card title="Split settings">
-                  <div className="grid gap-3 font-body text-sm sm:grid-cols-3">
-                    <label className="flex flex-col gap-1 text-muted-foreground">
-                      Platform share, %
-                      <input
-                        defaultValue={PLATFORM_SHARE * 100}
-                        className="rounded-lg border border-border bg-background px-3 py-2 text-foreground focus:border-[#F4C430] focus:outline-none"
-                      />
-                    </label>
-                    <label className="flex flex-col gap-1 text-muted-foreground">
-                      Max-download weight
-                      <input
-                        defaultValue={1}
-                        className="rounded-lg border border-border bg-background px-3 py-2 text-foreground focus:border-[#F4C430] focus:outline-none"
-                      />
-                    </label>
-                    <label className="flex flex-col gap-1 text-muted-foreground">
-                      Payout threshold, $
-                      <input
-                        defaultValue={50}
-                        className="rounded-lg border border-border bg-background px-3 py-2 text-foreground focus:border-[#F4C430] focus:outline-none"
-                      />
-                    </label>
-                  </div>
-                </Card>
-              </>
-            )}
 
             {section === "tracks" && (
               <>
@@ -845,6 +751,9 @@ const Admin = () => {
 
             {/* Publication calendar for the /guides articles. */}
             {section === "articles" && <AdminGuides />}
+
+            {/* Real money: revenue ledger, the 50/50 split, composer payouts. */}
+            {section === "finance" && <AdminFinance />}
 
             {section === "customers" && (
               <Card title={`Users${liveUsers ? ` (${liveUsers.length})` : ""}`}>

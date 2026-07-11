@@ -1,4 +1,5 @@
 import { json, type Ctx } from "../_utils";
+import { recordRevenueEvent } from "../_revenue";
 import {
   mapStripeStatus,
   stripeCall,
@@ -32,6 +33,75 @@ const applySubscription = async (
     currentPeriodEnd: unixToIso(sub.current_period_end),
   });
 };
+
+interface StripeInvoice {
+  id: string;
+  subscription?: string | null;
+  customer?: string | null;
+  amount_paid?: number;
+  tax?: number | null;
+  total_tax_amounts?: { amount: number }[];
+  currency?: string;
+  charge?: string | null;
+  lines?: { data?: { period?: { start?: number; end?: number } }[] };
+}
+
+interface StripeCharge {
+  balance_transaction?: { fee?: number } | string | null;
+}
+
+/**
+ * Books one paid invoice. The split is calculated on the NET:
+ *   gross (amount_paid) − VAT (Stripe Tax) − Stripe's fee.
+ * The fee is read from the charge's balance transaction; if that lookup fails
+ * we fall back to Stripe's standard 2.9% + 30c so the ledger is never wrong in
+ * the composer's favour by accident.
+ */
+const recordStripeInvoice = async (ctx: Ctx, key: string, inv: StripeInvoice): Promise<void> => {
+  const gross = inv.amount_paid ?? 0;
+  if (!inv.id || gross <= 0 || !inv.subscription) return;
+
+  // Which of our users is this? (subscriptions carry user_id in metadata)
+  const sub = await stripeCall<StripeSubscription>(key, "GET", `/subscriptions/${inv.subscription}`);
+  const userId = sub.metadata?.user_id ?? null;
+  if (!userId) return;
+
+  const tax =
+    inv.tax ?? (inv.total_tax_amounts ?? []).reduce((sum, t) => sum + (t.amount ?? 0), 0);
+
+  let fee = Math.round(gross * 0.029) + 30;
+  if (inv.charge) {
+    try {
+      const charge = await stripeCall<StripeCharge>(
+        key,
+        "GET",
+        `/charges/${inv.charge}?expand[]=balance_transaction`,
+      );
+      const bt = charge.balance_transaction;
+      if (bt && typeof bt === "object" && typeof bt.fee === "number") fee = bt.fee;
+    } catch {
+      // keep the estimate
+    }
+  }
+
+  const line = inv.lines?.data?.[0]?.period;
+  const periodStart = unixToIso(line?.start) ?? unixToIso(sub.current_period_end);
+  const periodEnd = unixToIso(line?.end) ?? unixToIso(sub.current_period_end);
+
+  await recordRevenueEvent(ctx.env.DB, {
+    source: "subscription",
+    userId,
+    provider: "stripe",
+    providerRef: inv.id,
+    grossCents: gross,
+    taxCents: tax,
+    feeCents: fee,
+    currency: inv.currency ?? "usd",
+    periodStart,
+    periodEnd,
+  });
+};
+
 
 export const onRequestPost = async (ctx: Ctx) => {
   if (!ctx.env.DB) return json({ error: "DB not bound" }, 503);
@@ -86,6 +156,14 @@ export const onRequestPost = async (ctx: Ctx) => {
           currentPeriodEnd: unixToIso(sub.current_period_end),
         });
       }
+      break;
+    }
+    // Every PAID subscription invoice is booked into the revenue ledger: gross,
+    // the VAT Stripe collected, Stripe's own fee, and the cycle the payment
+    // covers. The split runs when that cycle closes (see functions/api/_revenue.ts).
+    case "invoice.paid":
+    case "invoice.payment_succeeded": {
+      await recordStripeInvoice(ctx, key, event.data.object as StripeInvoice);
       break;
     }
     case "invoice.payment_failed": {
