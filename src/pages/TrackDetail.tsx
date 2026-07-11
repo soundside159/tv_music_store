@@ -44,7 +44,7 @@ const TrackDetail = () => {
   const user = useCurrentUser();
   // Admins also load draft tracks (the server ignores ?drafts=1 for everyone
   // else), so bulk-uploaded drafts can be curated on their own track pages.
-  const { tracks: catalogTracks, reload: reloadTracks, source } = useTracks({
+  const { tracks: catalogTracks, reload: reloadTracks, source, isLoading } = useTracks({
     drafts: user?.role === "admin",
   });
   // Admin-only side panels (tags/trending left, collections/playlists right).
@@ -107,8 +107,30 @@ const TrackDetail = () => {
             ...(track.genre ? { genre: track.genre } : {}),
           },
         }
-      : { title: "Track not found | TV Music Store" },
+      : { title: isLoading ? "Loading… | TV Music Store" : "Track not found | TV Music Store" },
   );
+
+  // While /api/tracks is still loading, a direct page load (F5) briefly has no
+  // track yet — show a quiet skeleton, NOT the "Track not found" screen. That
+  // message is reserved for a finished load with a genuinely missing slug.
+  if (!track && isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navigation />
+        <main className="mx-auto max-w-7xl px-4 pb-24 pt-28 sm:px-6">
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
+            <div className="aspect-square animate-pulse rounded-xl bg-card" />
+            <div className="flex flex-col gap-4">
+              <div className="h-8 w-2/3 animate-pulse rounded bg-card" />
+              <div className="h-4 w-1/3 animate-pulse rounded bg-card" />
+              <div className="mt-4 h-24 animate-pulse rounded-xl bg-card" />
+              <div className="h-16 animate-pulse rounded-xl bg-card" />
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   if (!track) {
     return (

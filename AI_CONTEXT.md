@@ -2230,3 +2230,9 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   deploy.bat host lint is the gate. Stale __lintcheck temp files from yesterday DID sync to the
   host with delay — deleted via allow_cowork_file_delete + rm (Glob-confirmed gone); NEXT AI:
   re-Glob for `**/__*` leftovers before deploys.
+- **2026-07-11 ("Track not found" flash on F5 — fixed):** direct-loading /track/<slug> briefly
+  showed the full "Track not found" screen until /api/tracks answered. TrackDetail now checks
+  `isLoading` from useTracks: while loading with no track yet it renders a quiet pulse skeleton
+  (square cover + title/waveform bars) and the tab title says "Loading…"; the not-found screen
+  appears only after the fetch settles with a genuinely missing slug. CollectionDetail /
+  PlaylistDetail already had this guard — TrackDetail was the only page missing it.
