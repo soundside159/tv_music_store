@@ -280,8 +280,10 @@
   scroll-snap-type: x proximity;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  /* room for the admin bar under each card + the card's own shadow */
-  padding: 0.25rem 0 2rem;
+  /* left inset so the skewed bottom-left corner of the first card is not
+     clipped by the scroll box; bottom room for the admin bar under each card */
+  padding: 0.25rem 0 2rem 1.75rem;
+  scroll-padding-left: 1.75rem;
 }
 
 .card-rail::-webkit-scrollbar {

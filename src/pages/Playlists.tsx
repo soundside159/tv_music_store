@@ -22,7 +22,11 @@ import {
 // page ends with "+ New theme". Visitors see none of the admin controls.
 
 const PlaylistCard = ({ playlist, tracks }: { playlist: LivePlaylist; tracks: CatalogTrack[] }) => {
-  const { activePlayer, isPlaying, playVersion, progress, playedProgress } = usePlayer();
+  const { activePlayer, isPlaying, playVersion } = usePlayer();
+  // Two distinct hover intents on one card: the PLAY button previews the first
+  // track, everything else opens the playlist. While the pointer is on the play
+  // button the "open playlist" affordance (gold title + arrow) is suppressed.
+  const [playHover, setPlayHover] = useState(false);
   // First playable track of the playlist — powers the hover preview play.
   const firstTrack = playlist.trackIds
     .map((id) => tracks.find((t) => t.id === id))
@@ -32,13 +36,6 @@ const PlaylistCard = ({ playlist, tracks }: { playlist: LivePlaylist; tracks: Ca
     !!firstTrack && !!version &&
     activePlayer?.trackId === firstTrack.id &&
     activePlayer.versionId === version.id;
-  // Progress of THIS playlist's preview track — drawn as a stroke that travels
-  // around the card while it plays (same language as the catalog cover ring).
-  const trackProgress = active
-    ? progress
-    : firstTrack && version
-      ? playedProgress[`${firstTrack.id}:${version.id}`] ?? 0
-      : 0;
 
   return (
     <Link to={`/playlist/${playlist.slug}`} className="group block">
@@ -65,65 +62,59 @@ const PlaylistCard = ({ playlist, tracks }: { playlist: LivePlaylist; tracks: Ca
           />
         )}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent" />
-        {/* Hover preview: soft darkening + centered play (first track of the list). */}
+        {/* Hover preview: soft darkening (whole card) + centered play button. */}
         {firstTrack && version && (
-          <div
-            className={`absolute inset-0 flex items-center justify-center bg-black/45 transition-opacity duration-300 ${
-              active ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-            }`}
-          >
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                playVersion(firstTrack, version);
-              }}
-              aria-label={active && isPlaying ? `Pause ${playlist.title}` : `Preview ${playlist.title}`}
-              style={{ transform: "skewX(9deg)" }}
-              className="flex h-14 w-14 items-center justify-center rounded-full bg-[#F4C430] text-background shadow-xl transition-transform duration-200 hover:scale-110"
-            >
-              {active && isPlaying ? (
-                <Pause className="h-5 w-5" />
-              ) : (
-                <Play className="ml-0.5 h-5 w-5" />
-              )}
-            </button>
-          </div>
-        )}
-        {/* Progress stroke travelling around the card while its preview plays. */}
-        {active && (
-          <svg
-            viewBox="0 0 100 100"
-            preserveAspectRatio="none"
-            fill="none"
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 z-10 h-full w-full"
-          >
-            <rect
-              x="0.6"
-              y="0.6"
-              width="98.8"
-              height="98.8"
-              rx="4"
-              pathLength={100}
-              stroke="#F4C430"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeDasharray="100"
-              strokeDashoffset={100 - Math.max(0, Math.min(100, trackProgress * 100))}
-              vectorEffect="non-scaling-stroke"
+          <>
+            <div
+              className={`pointer-events-none absolute inset-0 bg-black/45 transition-opacity duration-300 ${
+                active ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+              }`}
             />
-          </svg>
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  playVersion(firstTrack, version);
+                }}
+                onMouseEnter={() => setPlayHover(true)}
+                onMouseLeave={() => setPlayHover(false)}
+                onFocus={() => setPlayHover(true)}
+                onBlur={() => setPlayHover(false)}
+                aria-label={active && isPlaying ? `Pause ${playlist.title}` : `Preview ${playlist.title}`}
+                style={{ transform: "skewX(9deg)" }}
+                className={`pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#F4C430] text-background shadow-xl transition-all duration-200 hover:scale-110 hover:shadow-[0_0_28px_-4px_rgba(244,196,48,0.8)] ${
+                  active ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                }`}
+              >
+                {active && isPlaying ? (
+                  <Pause className="h-5 w-5" />
+                ) : (
+                  <Play className="ml-0.5 h-5 w-5" />
+                )}
+              </button>
+            </div>
+          </>
         )}
         <div style={{ transform: "skewX(9deg)" }} className="pointer-events-none absolute inset-x-0 bottom-0 p-4">
-          <h3 className="font-display text-lg font-semibold leading-tight text-white transition-colors group-hover:text-[#F4C430]">
+          <h3
+            className={`font-display text-lg font-semibold leading-tight transition-colors ${
+              playHover ? "text-white" : "text-white group-hover:text-[#F4C430]"
+            }`}
+          >
             {playlist.title}
           </h3>
           <p className="mt-1 font-body text-xs text-white/60">{playlist.trackIds.length} tracks</p>
           <div className="mt-2.5 flex items-center justify-between">
             <span className="block h-px w-[70px] bg-gradient-to-r from-[#F4C430]/80 to-[#F4C430]/0" />
-            <span className="font-body text-white/50 transition-colors group-hover:text-[#F4C430]">→</span>
+            <span
+              className={`font-body transition-colors ${
+                playHover ? "text-white/50" : "text-white/50 group-hover:text-[#F4C430]"
+              }`}
+            >
+              →
+            </span>
           </div>
         </div>
       </div>

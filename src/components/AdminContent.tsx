@@ -804,9 +804,22 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) {
-                  void uploadCover(f, (path) =>
-                    setDraft((prev) => (prev ? { ...prev, image: path } : prev)),
-                  );
+                  const apply = (path: string) =>
+                    setDraft((prev) => (prev ? { ...prev, image: path } : prev));
+                  // Collections carry the brand stamp (logo + name along the
+                  // bottom) — playlists stay clean.
+                  void (async () => {
+                    const base = f.name.replace(/\.[^.]+$/, "");
+                    if (kind === "collection" && f.type.startsWith("image/")) {
+                      try {
+                        await uploadCover(await brandCover(f), apply, `${base}-branded.jpg`);
+                        return;
+                      } catch {
+                        // branding failed → store the original
+                      }
+                    }
+                    await uploadCover(f, apply);
+                  })();
                 }
                 e.target.value = "";
               }}

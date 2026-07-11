@@ -49,17 +49,18 @@ const CardCarousel = ({ children }: { children: ReactNode }) => {
         {children}
       </div>
 
-      {/* Right shadow: swallows the half-visible card. */}
+      {/* Right shadow: only the outer edge of the half-visible card fades out —
+          narrow on purpose, the card must stay clearly readable. */}
       <div
         aria-hidden
-        className={`pointer-events-none absolute inset-y-0 right-0 w-[14%] bg-gradient-to-l from-background via-background/85 to-transparent transition-opacity duration-300 ${
+        className={`pointer-events-none absolute inset-y-0 right-0 w-[7%] bg-gradient-to-l from-background via-background/70 to-transparent transition-opacity duration-300 ${
           atEnd ? "opacity-0" : "opacity-100"
         }`}
       />
       {/* Left shadow: only once the row has been scrolled. */}
       <div
         aria-hidden
-        className={`pointer-events-none absolute inset-y-0 left-0 w-[8%] bg-gradient-to-r from-background via-background/75 to-transparent transition-opacity duration-300 ${
+        className={`pointer-events-none absolute inset-y-0 left-0 w-[5%] bg-gradient-to-r from-background via-background/65 to-transparent transition-opacity duration-300 ${
           atStart ? "opacity-0" : "opacity-100"
         }`}
       />

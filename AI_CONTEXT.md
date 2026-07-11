@@ -2388,3 +2388,27 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   follows the skewed shape) — same language as the catalog cover ring; hover play button was
   already there. tsc 0 / eslint 0 (checked on a sandbox copy — the host↔sandbox mirror truncation
   glitch hit Playlists.tsx again; host file verified via Read).
+- **2026-07-11 (playlists carousel — owner round 2 + collection cover branding):**
+  (1) RAIL: `.card-rail` got `padding-left: 1.75rem` + `scroll-padding-left` — the skewed
+  bottom-left corner of the FIRST card was clipped by the scroll box. (2) The right fade was too
+  greedy (the half-visible 6th card almost disappeared): CardCarousel right gradient `w-[14%]
+  via-background/85` → `w-[7%] via-background/70`, left one `8%` → `5%`. (3) PlaylistCard: the
+  progress stroke around the card is GONE (owner: doesn't fit there). (4) Two distinct hover
+  intents on the card: the dark overlay stays card-wide, but the play button is its own
+  absolutely-centered element (`pointer-events-none` wrapper + `pointer-events-auto` button) with
+  a `playHover` state — hovering the PLAY suppresses the "open playlist" affordance (title/arrow
+  stay white) and the button gets a gold glow; hovering anywhere else keeps the gold title + arrow
+  and click opens the playlist. (5) COLLECTION COVERS ARE BRANDED like track art: `brandIfCollection`
+  in `AdminInlineContent.tsx` (AdminCoverControl) runs `brandCover()` + re-upload for BOTH the AI
+  `generate()` and the `onFile()` upload-from-computer paths, and the Collections form in
+  `AdminContent.tsx` brands picked files too — all guarded by `kind === "collection"`, so PLAYLIST
+  covers stay clean (owner: playlist tiles already have title/count/arrow). Branding failures fall
+  back to the plain image. (6) Fixed two pre-existing errors found while checking: `useComposerTracks`
+  didn't return `vocabularies` (tsc error), and a BOM char inside a comment in `AdminImport.tsx`
+  (eslint no-irregular-whitespace). tsc 0, eslint 0 errors.
+  **WARNING for the next AI — do NOT write repo files from the sandbox (bash/python/heredoc).**
+  The host→sandbox mirror keeps content fresh but LENGTH stale (files look truncated sandbox-side),
+  and a sandbox write DOES propagate to the host — writing back a truncated mirror TRUNCATES THE
+  HOST FILE (it happened to ComposerUpload.tsx this session; repaired). Edit/Write host tools only;
+  if the sandbox mirror looks truncated when linting, repair the mirror by appending the missing
+  tail read from the host copy.

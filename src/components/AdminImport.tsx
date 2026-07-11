@@ -151,7 +151,7 @@ const AdminImport = () => {
           .join(","),
       ),
     );
-    // ﻿ BOM so Excel opens the UTF-8 CSV with correct characters.
+    // Leading BOM so Excel opens the UTF-8 CSV with correct characters.
     const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);

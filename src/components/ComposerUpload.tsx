@@ -77,7 +77,7 @@ export const useComposerTracks = (enabled: boolean): ComposerTracksData => {
     reload();
   }, [reload]);
 
-  return { composer, tracks, error, loading, reload };
+  return { composer, tracks, error, loading, reload, vocabularies };
 };
 
 const uploadAudio = async (
