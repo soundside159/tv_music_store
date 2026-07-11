@@ -2157,3 +2157,14 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   vocab + tracks fix themselves; the sidebar value shows as "Social & Shorts". tsc 0, eslint 0
   on the edited file. Client untouched (splitFilterValues stays "/"-based — safe once values
   can't contain "/").
+  [ROUND 2 same day — owner still saw the old orphaned "Shorts"/"Social" tags: the first repair
+  only triggered while a "/" value was STILL in the vocab. `repairSlashVocabValues` reworked:
+  a ONE-TIME track sweep (site_config flag `vocab_slash_repair_v1`) that also maps fragments of
+  already-renamed "&" values (parts of "Social & Shorts" → the whole value; fragments that are
+  themselves canonical vocab values are skipped) + dedupes, regardless of the vocab state. Runs
+  on the next admin content GET after deploy, then flags itself done ("/" rename check stays
+  active forever, it's cheap). Verified: eslint 0 on the full file (sandbox mirror truncated at
+  the old length AGAIN — reconstructed via tail-append per the known recipe; host file whole,
+  a sandbox-only `functions/api/admin/__lintcheck.ts` temp lingers in the mirror, NOT on host).
+  NOTE: `npx tsc --noEmit` does NOT cover functions/ (tsconfig scope) — don't take its silence
+  as a functions/ typecheck.]
