@@ -24,6 +24,8 @@ export interface ContentItemLite {
   id: string;
   title: string;
   trackIds: string[];
+  /** Playlists only: the /playlists page section ("Featured", "Podcast"…). */
+  theme?: string;
 }
 
 type TriState = "all" | "none" | "mixed";
@@ -356,7 +358,13 @@ const AdminTracksEdit = ({
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt: aiPrompt, include: aiInclude }),
+        body: JSON.stringify({
+          prompt: aiPrompt,
+          include: aiInclude,
+          // Variation salt: same description on different tracks should not
+          // yield carbon-copy picks — the model varies borderline calls by it.
+          trackTitle: selTracks.length === 1 ? selTracks[0].title : undefined,
+        }),
       });
       const d = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
@@ -460,7 +468,11 @@ const AdminTracksEdit = ({
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt: promptText, include: { tags: false, extraTags: true } }),
+        body: JSON.stringify({
+          prompt: promptText,
+          include: { tags: false, extraTags: true },
+          trackTitle: selTracks.length === 1 ? selTracks[0].title : undefined,
+        }),
       });
       const d = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
@@ -805,38 +817,60 @@ const AdminTracksEdit = ({
     setDelta: (updater: (prev: Record<string, "all" | "none">) => Record<string, "all" | "none">) => void,
     searchValue?: string,
     setSearchValue?: (v: string) => void,
-  ) => (
-    <div className="border-t border-border/60 pt-4 first:border-t-0 first:pt-0">
-      <p className="mb-2 font-body text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {title}
-      </p>
-      {setSearchValue && items.length > 6 && (
-        <input
-          placeholder={`Search ${title.toLowerCase()}...`}
-          value={searchValue}
-          onChange={(e) => setSearchValue(e.target.value)}
-          className={`${inputCls} mb-2 w-full py-1.5 text-xs`}
-        />
-      )}
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,max-content))] gap-x-5 gap-y-1">
-        {items
-          .filter((i) => !searchValue || i.title.toLowerCase().includes(searchValue.toLowerCase()))
-          .map((item) => (
-            <TriCheckbox
-              key={item.id}
-              label={item.title}
-              state={memberDisplay(delta, item)}
-              onToggle={() =>
-                setDelta((prev) => ({ ...prev, [item.id]: nextState(memberDisplay(delta, item)) }))
-              }
-            />
-          ))}
-        {items.length === 0 && (
-          <p className="col-span-full font-body text-xs text-muted-foreground">None yet.</p>
+  ) => {
+    const visible = items.filter(
+      (i) => !searchValue || i.title.toLowerCase().includes(searchValue.toLowerCase()),
+    );
+    // Playlists carry a THEME — group their checkboxes under small gold theme
+    // headers (mirrors the /playlists page sections). Themeless items first.
+    const groups: { theme: string; items: ContentItemLite[] }[] = [];
+    for (const i of visible) {
+      const theme = (i.theme ?? "").trim();
+      const g = groups.find((x) => x.theme === theme);
+      if (g) g.items.push(i);
+      else groups.push({ theme, items: [i] });
+    }
+    groups.sort((a, b) => (a.theme === "" ? -1 : b.theme === "" ? 1 : 0));
+    return (
+      <div className="border-t border-border/60 pt-4 first:border-t-0 first:pt-0">
+        <p className="mb-2 font-body text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {title}
+        </p>
+        {setSearchValue && items.length > 6 && (
+          <input
+            placeholder={`Search ${title.toLowerCase()}...`}
+            value={searchValue}
+            onChange={(e) => setSearchValue(e.target.value)}
+            className={`${inputCls} mb-2 w-full py-1.5 text-xs`}
+          />
+        )}
+        {groups.map((g) => (
+          <div key={g.theme || "__none"}>
+            {g.theme && (
+              <p className="mb-1 mt-2.5 font-body text-[10px] font-semibold uppercase tracking-wider text-[#F4C430]/70">
+                {g.theme}
+              </p>
+            )}
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,max-content))] gap-x-5 gap-y-1">
+              {g.items.map((item) => (
+                <TriCheckbox
+                  key={item.id}
+                  label={item.title}
+                  state={memberDisplay(delta, item)}
+                  onToggle={() =>
+                    setDelta((prev) => ({ ...prev, [item.id]: nextState(memberDisplay(delta, item)) }))
+                  }
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+        {visible.length === 0 && (
+          <p className="font-body text-xs text-muted-foreground">None yet.</p>
         )}
       </div>
-    </div>
-  );
+    );
+  };
 
   const hasSelection = selTracks.length > 0;
   const single = selTracks.length === 1;

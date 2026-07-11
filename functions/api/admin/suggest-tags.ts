@@ -21,6 +21,8 @@ For every list you are given, select EVERY entry where this track could plausibl
 Act like a generous human curator stocking a storefront: rely on associations, mood and typical usage — never on literal word matching.
 Example: "energetic electronic positive" plausibly fits Sports, Action, Upbeat, Energetic, Technology and similar entries.
 Collections and playlists have descriptive names — put the track everywhere a listener browsing that shelf would be happy to find it.
+Playlists may be shown as "Theme — Playlist" (their section on the site): weigh BOTH parts — the theme tells you the shelf, the playlist name tells you the exact mood/purpose. Return the full "Theme — Playlist" string exactly as given.
+The user may reuse one description for several different tracks. Do NOT return a carbon-copy answer each time: the strongest picks may repeat, but vary the borderline picks with your own curatorial taste — treat the track title as your differentiator, like a human editor who never files ten tracks identically.
 Only leave an entry out when the track clearly would NOT fit there; prefer including a borderline entry over dropping it.
 IMPORTANT: you may be given SEVERAL lists at once. Work through EVERY list you were given, one by one, independently and with the same care and generosity — never skip a list, never leave one empty just because you already answered the others. Given the generosity rule, an empty answer for a provided list should be rare.
 For the extraTags list (search keywords): return BETWEEN 30 AND 50 tags, ordered by relevance — the best-fitting first, then progressively looser but still plausible associations. Returning fewer than 30 is allowed ONLY when the given list itself has fewer than 30 entries (then return them all, best first).
@@ -44,6 +46,9 @@ export const onRequestPost = async (ctx: Ctx) => {
 
   const body = await readJson<{
     prompt?: string;
+    /** The selected track's title — variation salt when one description is
+     *  reused across many tracks (the model varies borderline picks by it). */
+    trackTitle?: string;
     include?: {
       tags?: boolean;
       collections?: boolean;
@@ -73,7 +78,7 @@ export const onRequestPost = async (ctx: Ctx) => {
 
   const db = ctx.env.DB;
   const vocab = await getVocabularies(db);
-  const titled = async (table: "collections" | "playlists" | "categories") => {
+  const titled = async (table: "collections" | "categories") => {
     try {
       const rows = await db
         .prepare(`SELECT id, title FROM ${table} ORDER BY sort`)
@@ -84,8 +89,31 @@ export const onRequestPost = async (ctx: Ctx) => {
     }
   };
   const collections = include.collections ? await titled("collections") : [];
-  const playlists = include.playlists ? await titled("playlists") : [];
   const categories = include.categories ? await titled("categories") : [];
+  // Playlists carry their THEME (the /playlists page section) — the model sees
+  // "Theme — Playlist" labels so the subtheme weighs into the choice.
+  let playlists: { id: string; title: string }[] = [];
+  if (include.playlists) {
+    try {
+      const rows = await db
+        .prepare(`SELECT id, title, theme FROM playlists ORDER BY sort`)
+        .all<{ id: string; title: string; theme: string | null }>();
+      playlists = rows.results.map((p) => ({
+        id: p.id,
+        title: p.theme?.trim() ? `${p.theme.trim()} — ${p.title}` : p.title,
+      }));
+    } catch {
+      // legacy DB without the theme column — plain titles
+      try {
+        const rows = await db
+          .prepare(`SELECT id, title FROM playlists ORDER BY sort`)
+          .all<{ id: string; title: string }>();
+        playlists = rows.results;
+      } catch {
+        playlists = [];
+      }
+    }
+  }
   // Owner-curated global Extra-tags base (Tags Base dialog in Tracks Edit).
   let tagsBase: string[] = [];
   if (include.extraTags) {
@@ -103,6 +131,10 @@ export const onRequestPost = async (ctx: Ctx) => {
   }
 
   const sections: string[] = [`Track description from the user:\n${prompt}`];
+  const trackTitle = (body?.trackTitle ?? "").trim().slice(0, 120);
+  if (trackTitle) {
+    sections.push(`Track title (your differentiator when the description repeats):\n${trackTitle}`);
+  }
   if (include.tags) {
     sections.push(`useCase list:\n${vocab.useCase.join("\n")}`);
     sections.push(`genre list:\n${vocab.genre.join("\n")}`);
@@ -139,7 +171,10 @@ export const onRequestPost = async (ctx: Ctx) => {
       // a tight cap made the model skimp on the later lists (owner saw
       // collections come back empty when everything was ticked at once).
       max_tokens: 3000,
-      temperature: 0.4,
+      // Some warmth on purpose: reused descriptions should yield VARIED
+      // borderline picks (human-curator feel), not carbon copies. Hallucinated
+      // strings are filtered server-side anyway.
+      temperature: 0.75,
     }),
   });
   const data = (await res.json().catch(() => ({}))) as {

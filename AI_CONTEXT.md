@@ -2311,3 +2311,14 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   public storefront. LINK-PREVIEW note: index.html already carries brand og:image/twitter:image
   (512 icon); any old "test playlist" share image is the messenger's CACHE — refresh via
   facebook.com/sharing/debugger (Scrape Again) or just re-send the link after deploy.
+- **2026-07-11 (playlist themes in Tracks Edit + AI variation):** owner asked for "themes with
+  playlists inside" — that ALREADY exists on /playlists (admin "New theme" button + per-theme
+  ghost "+" card; told him). What was missing: (1) TRACKS EDIT panel now groups the Playlists
+  checkboxes under small gold THEME headers (ContentItemLite gained `theme?`; membershipSection
+  groups/sorts, themeless first); (2) suggest-tags.ts feeds playlists as "Theme — Playlist"
+  labels (theme column read with legacy fallback; canonIds maps the label back to the id) and
+  the prompt says to weigh both parts; (3) VARIATION ("human factor"): owner reuses one
+  description across many tracks and got identical picks — now the client sends `trackTitle`
+  as a differentiator, the prompt forbids carbon-copy answers (vary borderline picks, keep the
+  strongest), temperature 0.4 → 0.75 (canonical filtering still kills hallucinations). Advice
+  given to owner: richer, per-batch descriptions still give the best spread.
