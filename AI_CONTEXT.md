@@ -2263,3 +2263,11 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   a new prompt yields a fresh result and UNTICKS what no longer fits (removals happen on
   Apply); hint text updated. (4) TRACK PAGE: extra tags (track.tags) are no longer rendered
   as pills under the track — SEO-only; chips show Use Case / Genre / Mood.
+- **2026-07-11 (AI Magic: collections skipped when all boxes ticked — fixed):** with every
+  include on, the model answered facets + extra tags but returned collections empty (worked
+  fine solo). Two causes addressed in suggest-tags.ts: max_tokens 900 was tight for the full
+  JSON (facets + 3 membership lists + 30-50 tags) — raised to 3000, and a length-cut answer
+  now fails loudly ("answer was cut off — press again", finish_reason check) instead of
+  applying a half-result; system prompt gained an explicit "work through EVERY list you were
+  given, one by one, never skip/leave one empty because you answered the others" rule. Still
+  ONE API call for everything (owner wants token economy).

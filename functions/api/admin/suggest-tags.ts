@@ -22,9 +22,10 @@ Act like a generous human curator stocking a storefront: rely on associations, m
 Example: "energetic electronic positive" plausibly fits Sports, Action, Upbeat, Energetic, Technology and similar entries.
 Collections and playlists have descriptive names — put the track everywhere a listener browsing that shelf would be happy to find it.
 Only leave an entry out when the track clearly would NOT fit there; prefer including a borderline entry over dropping it.
+IMPORTANT: you may be given SEVERAL lists at once. Work through EVERY list you were given, one by one, independently and with the same care and generosity — never skip a list, never leave one empty just because you already answered the others. Given the generosity rule, an empty answer for a provided list should be rare.
 For the extraTags list (search keywords): return BETWEEN 30 AND 50 tags, ordered by relevance — the best-fitting first, then progressively looser but still plausible associations. Returning fewer than 30 is allowed ONLY when the given list itself has fewer than 30 entries (then return them all, best first).
 Never invent entries: every returned string must be copied EXACTLY from the given lists.
-Respond with JSON only, using this shape (leave a list empty if you were not given it or nothing fits):
+Respond with JSON only, using this shape (a key may be empty ONLY if that list was not given, or truly nothing fits):
 {"useCase": [], "genre": [], "mood": [], "collections": [], "playlists": [], "categories": [], "extraTags": []}`;
 
 export const onRequestPost = async (ctx: Ctx) => {
@@ -133,16 +134,25 @@ export const onRequestPost = async (ctx: Ctx) => {
         { role: "user", content: sections.join("\n\n") },
       ],
       response_format: { type: "json_object" },
-      max_tokens: 900,
+      // Generous output budget: with ALL sections on (facets + collections +
+      // playlists + categories + 30-50 extra tags) the JSON answer is long —
+      // a tight cap made the model skimp on the later lists (owner saw
+      // collections come back empty when everything was ticked at once).
+      max_tokens: 3000,
       temperature: 0.4,
     }),
   });
   const data = (await res.json().catch(() => ({}))) as {
-    choices?: { message?: { content?: string } }[];
+    choices?: { message?: { content?: string }; finish_reason?: string }[];
     error?: { message?: string };
   };
   if (!res.ok) {
     return json({ error: data.error?.message ?? `AI request failed (${res.status})` }, 502);
+  }
+  // A length-cut answer is truncated JSON — fail loudly instead of applying
+  // a half-result (this is how "collections came back empty" bugs hide).
+  if (data.choices?.[0]?.finish_reason === "length") {
+    return json({ error: "The AI answer was cut off — press the button again" }, 502);
   }
   const content = data.choices?.[0]?.message?.content ?? "";
   let parsed: Record<string, unknown> = {};
