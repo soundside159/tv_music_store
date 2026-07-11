@@ -77,12 +77,18 @@ export const onRequestGet = async (ctx: Ctx) => {
   // Composer pseudonyms: tracks.composer_id -> composers.display_name, shown
   // as the artist site-wide (fallback handled client-side: "TVMUSICSTORE").
   const composerNames = new Map<string, string>();
+  // ...and their slugs, so the row's "by <artist>" line can link to /artist/<slug>.
+  const composerSlugs = new Map<string, string>();
   try {
-    const cs = await ctx.env.DB.prepare(`SELECT id, display_name FROM composers`).all<{
+    const cs = await ctx.env.DB.prepare(`SELECT id, display_name, slug FROM composers`).all<{
       id: string;
       display_name: string;
+      slug: string;
     }>();
-    for (const c of cs.results) composerNames.set(c.id, c.display_name);
+    for (const c of cs.results) {
+      composerNames.set(c.id, c.display_name);
+      composerSlugs.set(c.id, c.slug);
+    }
   } catch {
     // composers table missing — artist stays null
   }
@@ -142,6 +148,7 @@ export const onRequestGet = async (ctx: Ctx) => {
     tracks: tracks.results.map((t) => ({
       ...t,
       artist: (t.composer_id && composerNames.get(t.composer_id)) || null,
+      artist_slug: (t.composer_id && composerSlugs.get(t.composer_id)) || null,
       tags: t.tags ? (JSON.parse(t.tags) as string[]) : [],
       versions: byTrack.get(t.id) ?? [],
       collection_ids: collectionsByTrack.get(t.id) ?? [],

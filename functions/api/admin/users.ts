@@ -39,7 +39,9 @@ export const onRequestGet = async (ctx: Ctx) => {
               WHERE s.user_id = u.id ORDER BY s.rowid DESC LIMIT 1) AS plan,
             (SELECT COUNT(*) FROM download_log d WHERE d.user_id = u.id) AS downloads,
             (SELECT c.display_name FROM composers c
-              WHERE c.user_id = u.id LIMIT 1) AS pseudonym
+              WHERE c.user_id = u.id LIMIT 1) AS pseudonym,
+            (SELECT c.bio FROM composers c
+              WHERE c.user_id = u.id LIMIT 1) AS bio
        FROM users u
       ORDER BY u.created_at DESC
       LIMIT 200`,
@@ -52,6 +54,8 @@ export const onRequestGet = async (ctx: Ctx) => {
     plan: string | null;
     downloads: number;
     pseudonym: string | null;
+    /** "About the composer" — shown on the public /artist/<slug> page. */
+    bio: string | null;
   }>();
 
   // Sync / cue-sheet info per composer profile (printed on license PDFs).
@@ -186,6 +190,8 @@ export const onRequestPatch = async (ctx: Ctx) => {
     userId?: string;
     role?: string;
     pseudonym?: string;
+    /** "About the composer" text shown on the public /artist/<slug> page. */
+    bio?: string;
     removeComposer?: boolean;
     /** Change the user's login email (unique; the owner account is protected). */
     email?: string;
@@ -204,9 +210,18 @@ export const onRequestPatch = async (ctx: Ctx) => {
   const removeComposer = body?.removeComposer === true;
   const cue = body?.cue;
   const pseudonym = typeof body?.pseudonym === "string" ? body.pseudonym.trim() : undefined;
+  const bio = typeof body?.bio === "string" ? body.bio.trim().slice(0, 2000) : undefined;
   const newEmail = typeof body?.email === "string" ? body.email.trim().toLowerCase() : undefined;
-  if (!userId || (!role && pseudonym === undefined && !removeComposer && !cue && newEmail === undefined)) {
-    return json({ error: "userId and role, pseudonym, cue, email or removeComposer required" }, 400);
+  if (
+    !userId ||
+    (!role &&
+      pseudonym === undefined &&
+      bio === undefined &&
+      !removeComposer &&
+      !cue &&
+      newEmail === undefined)
+  ) {
+    return json({ error: "userId and role, pseudonym, bio, cue, email or removeComposer required" }, 400);
   }
   if (newEmail !== undefined && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
     return json({ error: "That doesn't look like a valid email" }, 400);
@@ -244,6 +259,15 @@ export const onRequestPatch = async (ctx: Ctx) => {
   if (pseudonym !== undefined) {
     const err = await upsertComposer(ctx.env.DB, userId, pseudonym.slice(0, 60));
     if (err) return json({ error: err }, 400);
+  }
+  if (bio !== undefined) {
+    const has = await ctx.env.DB.prepare(`SELECT id FROM composers WHERE user_id = ?1 LIMIT 1`)
+      .bind(userId)
+      .first();
+    if (!has) return json({ error: "Set a composer pseudonym first, then add the about text" }, 400);
+    await ctx.env.DB.prepare(`UPDATE composers SET bio = ?2 WHERE user_id = ?1`)
+      .bind(userId, bio)
+      .run();
   }
   if (cue) {
     await ensureCueColumns(ctx.env.DB);

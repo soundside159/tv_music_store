@@ -92,6 +92,8 @@ interface LiveUser {
   downloads: number;
   /** Composer display pseudonym (composers.display_name), if a profile exists. */
   pseudonym: string | null;
+  /** "About the composer" — shown on the public /artist/<slug> page. */
+  bio: string | null;
   /** Sync / cue-sheet info printed on license PDFs (composer profiles only). */
   cue: {
     cueName: string | null;
@@ -176,6 +178,9 @@ const Admin = () => {
   // Cue-sheet form inside the ⋯ menu (loaded when the menu opens).
   const [cueDraft, setCueDraft] = useState<Record<string, string>>({});
   const [cueBusy, setCueBusy] = useState(false);
+  // "About the composer" text (composers.bio) — same menu, above the cue block.
+  const [bioDraft, setBioDraft] = useState("");
+  const [bioBusy, setBioBusy] = useState(false);
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
   const [licenses, setLicenses] = useState<AdminLicense[] | null>(null);
   const [licensesError, setLicensesError] = useState<string | null>(null);
@@ -380,6 +385,28 @@ const Admin = () => {
       toast.error(e instanceof Error ? e.message : "Update failed");
     } finally {
       setSavingUserId(null);
+    }
+  };
+
+  // Save the composer's "about" text — it heads his public /artist/<slug> page.
+  const saveBio = async (userId: string) => {
+    setBioBusy(true);
+    setUsersError(null);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ userId, bio: bioDraft }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Save failed");
+      setLiveUsers((us) => (us ?? []).map((u) => (u.id === userId ? { ...u, bio: bioDraft } : u)));
+      toast.success("About text saved — it shows on the composer's artist page");
+    } catch (e) {
+      setUsersError(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setBioBusy(false);
     }
   };
 
@@ -929,6 +956,7 @@ const Admin = () => {
                                       });
                                       setOpenMenuId(u.id);
                                       setPseudonymDraftFor(null);
+                                      setBioDraft(u.bio ?? "");
                                       setCueDraft({
                                         cueName: u.cue?.cueName ?? "",
                                         pro: u.cue?.pro ?? "",
@@ -1037,6 +1065,34 @@ const Admin = () => {
                         />
                         <p className="mt-1 font-body text-[11px] text-muted-foreground">
                           Shown as the track artist site-wide. Saves on Enter / click away.
+                        </p>
+                      </div>
+                    )}
+                    {/* About the composer — heads his public /artist/<slug> page. */}
+                    {composerOn && (
+                      <div className="mt-4 border-t border-border/60 pt-3">
+                        <p className="mb-2 font-body text-[10px] font-bold uppercase tracking-[0.18em] text-[#F4C430]">
+                          About the composer
+                        </p>
+                        <textarea
+                          rows={4}
+                          value={bioDraft}
+                          placeholder="A few lines about this composer — shown on his artist page…"
+                          disabled={bioBusy}
+                          onChange={(e) => setBioDraft(e.target.value)}
+                          className="w-full rounded-md border border-border bg-background px-2 py-1.5 font-body text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none disabled:opacity-50"
+                        />
+                        <button
+                          type="button"
+                          disabled={bioBusy}
+                          onClick={() => void saveBio(u.id)}
+                          className="mt-2 w-full rounded-lg bg-[#F4C430] px-3 py-1.5 font-body text-xs font-bold text-background transition-colors hover:bg-[#F4C430]/85 disabled:opacity-50"
+                        >
+                          {bioBusy ? "Saving…" : "Save about text"}
+                        </button>
+                        <p className="mt-1.5 font-body text-[10px] text-muted-foreground">
+                          Shown under the pseudonym on the artist page — the page every
+                          "by {u.pseudonym ?? "…"}" link under a track title opens.
                         </p>
                       </div>
                     )}

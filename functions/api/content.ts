@@ -54,6 +54,23 @@ export const onRequestGet = async (ctx: Ctx) => {
     // categories table not created yet
   }
 
+  // Composers (public artist pages): nick + "about" text the owner writes in
+  // Admin -> Users. `bio` exists in the base schema, so no lazy ALTER needed.
+  let composers: { id: string; slug: string; displayName: string; bio: string }[] = [];
+  try {
+    const rows = await db
+      .prepare(`SELECT id, slug, display_name, bio FROM composers ORDER BY display_name`)
+      .all<{ id: string; slug: string; display_name: string; bio: string | null }>();
+    composers = rows.results.map((c) => ({
+      id: c.id,
+      slug: c.slug,
+      displayName: c.display_name,
+      bio: c.bio ?? "",
+    }));
+  } catch {
+    // composers table missing — artist pages fall back to "not found"
+  }
+
   const colMap: Record<string, string[]> = {};
   for (const r of colTracks.results) (colMap[r.collection_id] ??= []).push(r.track_id);
   const plMap: Record<string, string[]> = {};
@@ -65,6 +82,7 @@ export const onRequestGet = async (ctx: Ctx) => {
   return json({
     trending,
     categories,
+    composers,
     vocabularies,
     licensePrices,
     collections: collections.results.map((c) => ({

@@ -2,14 +2,41 @@ import { Link, useParams } from "react-router-dom";
 import { ArrowRight, Music2 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import { catalogTracks } from "@/data/catalogTracks";
-import { mockComposers, mockComposerTracks, mockDownloadLog } from "@/mocks";
+import { TrackRowList } from "@/components/TrackRowPlayer";
+import { useTracks } from "@/hooks/useTracks";
+import { useComposers, useContentReady } from "@/hooks/useContent";
 
 const GOLD = "#F4C430";
 
+/**
+ * Public composer page: /artist/<slug>. The nick (composers.display_name) and
+ * the "about" text (composers.bio) come from Admin -> Users; the track list is
+ * every live catalog track whose artist is this composer — clicking "by <nick>"
+ * under any track title lands here.
+ */
 const Artist = () => {
   const { slug } = useParams();
-  const composer = mockComposers.find((c) => c.slug === slug);
+  const composers = useComposers();
+  const ready = useContentReady();
+  const { tracks, isLoading } = useTracks();
+
+  const composer = composers.find((c) => c.slug === slug);
+  const artistTracks = tracks.filter((t) => t.artistSlug === slug);
+  const totalDownloads = artistTracks.reduce((sum, t) => sum + (t.downloads ?? 0), 0);
+
+  if (!ready) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navigation />
+        <main className="mx-auto w-full max-w-5xl px-4 pb-24 pt-28 sm:px-6 md:pt-32">
+          <div className="h-24 w-24 animate-pulse rounded-full bg-white/[0.06]" />
+          <div className="mt-6 h-8 w-64 animate-pulse rounded bg-white/[0.06]" />
+          <div className="mt-3 h-4 w-96 max-w-full animate-pulse rounded bg-white/[0.04]" />
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   if (!composer) {
     return (
@@ -26,34 +53,33 @@ const Artist = () => {
     );
   }
 
-  const tracks = mockComposerTracks.filter((t) => t.composerId === composer.id && t.published);
-  const totalDownloads = mockDownloadLog.filter((d) => d.composerId === composer.id).length;
-
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
-      <main className="mx-auto w-full max-w-5xl px-4 pb-24 pt-28 sm:px-6 md:pt-32">
+      <main className="mx-auto w-full max-w-7xl px-4 pb-32 pt-24 sm:px-6 md:pt-28">
         <header className="flex flex-col items-start gap-6 md:flex-row md:items-center">
           <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-full border border-[#F4C430]/40 bg-card">
             <Music2 className="h-10 w-10" style={{ color: GOLD }} />
           </div>
-          <div>
-            <h1 className="text-3xl text-foreground md:text-4xl">{composer.displayName}</h1>
-            <p className="mt-1 font-body text-sm" style={{ color: GOLD }}>
-              {composer.styles.join(" · ")}
-            </p>
-            <p className="mt-3 max-w-2xl font-body text-sm leading-relaxed text-muted-foreground">
-              {composer.bio}
-            </p>
+          <div className="min-w-0">
+            <h1 className="font-display text-3xl font-bold tracking-tight text-foreground md:text-4xl">
+              {composer.displayName}
+            </h1>
+            {composer.bio && (
+              <p className="mt-3 max-w-2xl font-body text-sm leading-relaxed text-muted-foreground">
+                {composer.bio}
+              </p>
+            )}
             <p className="mt-3 font-body text-xs text-muted-foreground">
-              {composer.trackCount} tracks in catalog · {totalDownloads} downloads
+              {artistTracks.length} {artistTracks.length === 1 ? "track" : "tracks"} in catalog
+              {totalDownloads > 0 ? ` · ${totalDownloads} downloads` : ""}
             </p>
           </div>
         </header>
 
         <section className="mt-12">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl text-foreground md:text-2xl">Tracks</h2>
+            <h2 className="font-display text-xl font-semibold text-foreground md:text-2xl">Tracks</h2>
             <Link
               to="/catalog"
               className="inline-flex items-center gap-1 font-body text-sm text-muted-foreground transition-colors hover:text-[#F4C430]"
@@ -61,38 +87,28 @@ const Artist = () => {
               Open full catalog <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
-          <div className="mt-4 divide-y divide-border/60 rounded-xl border border-border bg-card">
-            {tracks.map((t) => {
-              const real = catalogTracks.find((ct) => ct.title === t.title);
-              const row = (
-                <>
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors group-hover:border-[#F4C430] group-hover:text-[#F4C430]">
-                    <Music2 className="h-4 w-4" />
-                  </span>
-                  <span className="min-w-0 flex-1 truncate font-body text-sm font-semibold text-foreground transition-colors group-hover:text-[#F4C430]">
-                    {t.title}
-                  </span>
-                  <span className="shrink-0 font-body text-xs text-muted-foreground">
-                    {mockDownloadLog.filter((d) => d.trackId === t.id).length} downloads
-                  </span>
-                </>
-              );
-              return real ? (
-                <Link key={t.id} to={`/track/${real.slug}`} className="group flex items-center gap-4 p-4 transition-colors hover:bg-secondary/40">
-                  {row}
-                </Link>
-              ) : (
-                <div key={t.id} className="group flex items-center gap-4 p-4">
-                  {row}
-                </div>
-              );
-            })}
+          <div className="mt-4">
+            {isLoading ? (
+              <div className="space-y-2">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="h-16 animate-pulse rounded-lg bg-white/[0.04]" />
+                ))}
+              </div>
+            ) : artistTracks.length > 0 ? (
+              <TrackRowList tracks={artistTracks} />
+            ) : (
+              <p className="rounded-lg border border-border/40 bg-card/25 p-8 text-center font-body text-sm text-muted-foreground">
+                No published tracks yet.
+              </p>
+            )}
           </div>
         </section>
 
         <section className="mt-14 rounded-xl border border-border bg-card p-6 md:flex md:items-center md:justify-between md:p-8">
           <div>
-            <h2 className="text-xl text-foreground">License {composer.displayName}'s music</h2>
+            <h2 className="font-display text-xl font-semibold text-foreground">
+              License {composer.displayName}'s music
+            </h2>
             <p className="mt-2 max-w-lg font-body text-sm text-muted-foreground">
               Every track is covered by our plans — start free with 3 downloads a month. Need
               something written just for your project?

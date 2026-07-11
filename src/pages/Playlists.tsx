@@ -23,14 +23,17 @@ import {
 
 const PlaylistCard = ({ playlist, tracks }: { playlist: LivePlaylist; tracks: CatalogTrack[] }) => {
   const { activePlayer, isPlaying, playVersion } = usePlayer();
+  // Every playable track of this playlist, in order — becomes the prev/next
+  // queue when the card's play button starts the first one.
+  const playlistTracks = playlist.trackIds
+    .map((id) => tracks.find((t) => t.id === id))
+    .filter((t): t is CatalogTrack => !!t && t.audioVersions.length > 0);
   // Two distinct hover intents on one card: the PLAY button previews the first
   // track, everything else opens the playlist. While the pointer is on the play
   // button the "open playlist" affordance (gold title + arrow) is suppressed.
   const [playHover, setPlayHover] = useState(false);
   // First playable track of the playlist — powers the hover preview play.
-  const firstTrack = playlist.trackIds
-    .map((id) => tracks.find((t) => t.id === id))
-    .find((t) => t && t.audioVersions.length > 0);
+  const firstTrack = playlistTracks[0];
   const version = firstTrack?.audioVersions[0];
   const active =
     !!firstTrack && !!version &&
@@ -76,7 +79,9 @@ const PlaylistCard = ({ playlist, tracks }: { playlist: LivePlaylist; tracks: Ca
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  playVersion(firstTrack, version);
+                  // The whole playlist becomes the queue → next/prev in the
+                  // mini-player walk THIS playlist.
+                  playVersion(firstTrack, version, null, playlistTracks);
                 }}
                 onMouseEnter={() => setPlayHover(true)}
                 onMouseLeave={() => setPlayHover(false)}
@@ -84,7 +89,8 @@ const PlaylistCard = ({ playlist, tracks }: { playlist: LivePlaylist; tracks: Ca
                 onBlur={() => setPlayHover(false)}
                 aria-label={active && isPlaying ? `Pause ${playlist.title}` : `Preview ${playlist.title}`}
                 style={{ transform: "skewX(9deg)" }}
-                className={`pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#F4C430] text-background shadow-xl transition-all duration-200 hover:scale-110 hover:shadow-[0_0_28px_-4px_rgba(244,196,48,0.8)] ${
+                /* White by default; gold + glow only once the pointer is on it. */
+                className={`pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-white text-background shadow-xl transition-all duration-200 hover:scale-110 hover:bg-[#F4C430] hover:shadow-[0_0_28px_-4px_rgba(244,196,48,0.8)] ${
                   active ? "opacity-100" : "opacity-0 group-hover:opacity-100"
                 }`}
               >

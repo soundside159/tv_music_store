@@ -2412,3 +2412,33 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   HOST FILE (it happened to ComposerUpload.tsx this session; repaired). Edit/Write host tools only;
   if the sandbox mirror looks truncated when linting, repair the mirror by appending the missing
   tail read from the host copy.
+- **2026-07-11 (composer credit + artist page + player queue):** owner round 3.
+  (1) PLAYLIST CARD: play button is WHITE by default, turns gold (+glow) only on hover.
+  (2) TRACK ROW TITLE CELL rebuilt (`TrackRowPlayer.tsx`): the title `<Link>` filled the whole grid
+  cell, so hovering/clicking the empty space right of the text still navigated. Now the cell is a
+  `flex-col` with two `w-fit` links — TITLE (top) and **"by <composer>"** (below, muted, gold on
+  hover) — only the text is interactive. The composer line links to `/artist/<slug>` when the track
+  has a composer profile, otherwise it is plain text.
+  (3) COMPOSER DATA: `/api/tracks` also returns `artist_slug` (composers.slug map);
+  `CatalogTrack.artistSlug` + useTracks mapping; public `/api/content` returns `composers`
+  [{id, slug, displayName, bio}]; `useContent.ts` gained `useComposers()`.
+  (4) ADMIN -> Users ⋯ menu: new **"About the composer"** textarea + Save button, right under the
+  pseudonym and ABOVE Sync / Cue Sheet Info (owner's spec). Writes `composers.bio` (already in the
+  base schema): `/api/admin/users` GET returns `bio`, PATCH accepts `bio` (≤2000 chars, requires an
+  existing composer profile). `LiveUser.bio` + `bioDraft`/`saveBio` in Admin.tsx.
+  (5) ARTIST PAGE `/artist/:slug` is LIVE (was 100% mock): nick + bio from `useComposers()`, tracks =
+  live catalog rows filtered by `artistSlug`, rendered with the shared `TrackRowList` (full playback,
+  identical rows to the catalog); skeletons while content/tracks load; "not found" only after content
+  settles. Download total = sum of the tracks' `downloads`.
+  (6) PLAYER QUEUE + PREV/NEXT: `useTrackAudioEngine` keeps a `queue` (CatalogTrack[]). `playVersion`
+  gained an optional 4th arg `fromList` — the list the play came FROM: `TrackRowList` passes its
+  `tracks` (home/collection/playlist/artist), Catalog passes the FULL filtered list (not just the
+  current page), and the playlist CARD on /playlists passes that playlist's tracks. Engine exposes
+  `hasPrev`/`hasNext`/`playPrev`/`playNext` (index of the active track inside the queue; no
+  wrap-around). Mini-player: SkipBack / SkipForward flank the play button, dimmed + inert at the
+  ends of the queue. A track started outside any list (TrackDetail) leaves the index at -1 → arrows
+  inactive.
+  (7) Fixed two more PRE-EXISTING errors found while verifying: `useComposerTracks` didn't return
+  `vocabularies` (tsc error) and `for (const ok of results) ok ? sent++ : failed++;` in
+  `functions/api/admin/campaign.ts` (eslint no-unused-expressions — this made `npm run lint` FAIL,
+  i.e. deploy.bat's lint gate was red). Now: `npm run lint` 0 errors, tsc 0 errors.

@@ -27,6 +27,8 @@ type ApiTrack = {
   moderation_status?: string;
   /** Composer pseudonym (composers.display_name) — null = house catalog. */
   artist?: string | null;
+  /** composers.slug — target of the artist link under the track title. */
+  artist_slug?: string | null;
 };
 
 const mapTrack = (t: ApiTrack): CatalogTrack => ({
@@ -34,6 +36,7 @@ const mapTrack = (t: ApiTrack): CatalogTrack => ({
   slug: t.slug,
   title: t.title,
   artist: t.artist || "TVMUSICSTORE",
+  artistSlug: t.artist_slug || undefined,
   category: t.category as TrackCategory,
   genre: t.genre ?? "",
   mood: t.mood ?? "",

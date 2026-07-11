@@ -229,14 +229,31 @@ export const TrackRow = ({
         )}
       </button>
 
-      <Link
-        to={`/track/${track.slug}`}
-        className={`flex min-w-0 items-center gap-3 font-body text-sm font-medium transition-colors ${
-          mainIsPlaying ? "text-[#F4C430]" : "text-foreground hover:text-[#F4C430]"
-        }`}
-      >
-        <span className="min-w-0 truncate whitespace-nowrap">{track.title}</span>
-      </Link>
+      {/* Title + composer. Both links are `w-fit` so ONLY the text is hoverable
+          and clickable — the empty space to their right stays inert (the whole
+          cell used to be one big link). */}
+      <div className="flex min-w-0 flex-col justify-center gap-0.5">
+        <Link
+          to={`/track/${track.slug}`}
+          className={`block w-fit max-w-full truncate whitespace-nowrap font-body text-sm font-medium leading-tight transition-colors ${
+            mainIsPlaying ? "text-[#F4C430]" : "text-foreground hover:text-[#F4C430]"
+          }`}
+        >
+          {track.title}
+        </Link>
+        {track.artistSlug ? (
+          <Link
+            to={`/artist/${track.artistSlug}`}
+            className="block w-fit max-w-full truncate whitespace-nowrap font-body text-xs leading-tight text-muted-foreground transition-colors hover:text-[#F4C430]"
+          >
+            by {track.artist}
+          </Link>
+        ) : (
+          <span className="block w-fit max-w-full truncate whitespace-nowrap font-body text-xs leading-tight text-muted-foreground">
+            by {track.artist}
+          </span>
+        )}
+      </div>
 
       {/* pr keeps the last pill clear of the versions button; the mask fades a
           clipped pill out softly instead of a hard cut. -ml pulls the pills a
@@ -427,6 +444,10 @@ export const useTrackAudioEngine = () => {
   const [volume, setVolume] = useState(0.8);
   const [activeTrack, setActiveTrack] = useState<CatalogTrack | null>(null);
   const [activeVersion, setActiveVersion] = useState<TrackAudioVersion | null>(null);
+  // Playback QUEUE = the list the current track was started from (catalog page,
+  // a playlist, a collection, the homepage…). The mini-player's prev/next walk
+  // this list, so "next" means the next track of THAT list — never a global one.
+  const [queue, setQueue] = useState<CatalogTrack[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const pendingPlayRef = useRef(false);
   const pendingSeekRef = useRef<number | null>(null);
@@ -497,9 +518,16 @@ export const useTrackAudioEngine = () => {
       .catch(() => setIsPlaying(false));
   };
 
-  const playVersion = (track: CatalogTrack, version: TrackAudioVersion, seekTo: number | null = null) => {
+  const playVersion = (
+    track: CatalogTrack,
+    version: TrackAudioVersion,
+    seekTo: number | null = null,
+    /** The list this play came from — becomes the prev/next queue. */
+    fromList?: CatalogTrack[],
+  ) => {
     const audio = audioRef.current;
     ensureAudioGraph();
+    if (fromList) setQueue(fromList);
     setActiveTrack(track);
     setActiveVersion(version);
     const sameVersion = activePlayer?.trackId === track.id && activePlayer.versionId === version.id;
@@ -545,6 +573,20 @@ export const useTrackAudioEngine = () => {
       .catch(() => setIsPlaying(false));
   };
 
+  // Where the current track sits in its queue (-1 = started outside any list).
+  const queueIndex = activeTrack ? queue.findIndex((t) => t.id === activeTrack.id) : -1;
+  const hasPrev = queueIndex > 0;
+  const hasNext = queueIndex >= 0 && queueIndex < queue.length - 1;
+
+  /** Jump to the neighbouring track of the queue and play its main version. */
+  const skipTo = (dir: -1 | 1) => {
+    if (queueIndex < 0) return;
+    const next = queue[queueIndex + dir];
+    const version = next?.audioVersions[0];
+    if (!next || !version) return;
+    playVersion(next, version);
+  };
+
   const audioElement = (
     <audio
       ref={audioRef}
@@ -581,11 +623,17 @@ export const useTrackAudioEngine = () => {
     activeVersion,
     audioElement,
     expandedTrackId,
+    hasNext,
+    hasPrev,
     isPlaying,
+    playNext: () => skipTo(1),
+    playPrev: () => skipTo(-1),
     playVersion,
     playedProgress,
     progress,
+    queue,
     setExpandedTrackId,
+    setQueue,
     setVolume,
     volume,
   };
@@ -625,7 +673,8 @@ export const TrackRowList = ({
             globalProgress={engine.progress}
             index={index}
             mainIsPlaying={mainIsPlaying}
-            onPlayVersion={engine.playVersion}
+            // Playing from THIS list makes it the prev/next queue.
+            onPlayVersion={(t, v, seekTo) => engine.playVersion(t, v, seekTo ?? null, tracks)}
             onToggleExpanded={() => engine.setExpandedTrackId(expanded ? null : track.id)}
             playedProgress={engine.playedProgress}
             selectedVersion={mainVersion}

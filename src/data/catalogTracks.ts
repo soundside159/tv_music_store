@@ -30,6 +30,8 @@ export interface CatalogTrack {
   slug: string;
   title: string;
   artist: string;
+  /** composers.slug — links the row's "by <artist>" line to /artist/<slug>. */
+  artistSlug?: string;
   category: TrackCategory;
   genre: string;
   mood: string;

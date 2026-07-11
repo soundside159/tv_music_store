@@ -99,7 +99,10 @@ export const onRequestPost = async (ctx: Ctx) => {
         ),
       ),
     );
-    for (const ok of results) ok ? sent++ : failed++;
+    for (const ok of results) {
+      if (ok) sent++;
+      else failed++;
+    }
   }
 
   await db
@@ -109,6 +112,7 @@ export const onRequestPost = async (ctx: Ctx) => {
     )
     .bind(newId("cmp"), subject, tag ? `tag:${tag}` : "all", list.length, sent, failed)
     .run();
+
 
   return json({ sent, failed, recipients: list.length, capped: list.length > SEND_CAP });
 };

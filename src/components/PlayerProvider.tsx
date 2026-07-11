@@ -1,6 +1,6 @@
 import { type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Download, Heart, Pause, Play, ShoppingCart, Volume2 } from "lucide-react";
+import { Download, Heart, Pause, Play, ShoppingCart, SkipBack, SkipForward, Volume2 } from "lucide-react";
 import { openDownloadOptions } from "@/lib/downloadTrack";
 import { openLicenseModal } from "@/hooks/useCart";
 import { toggleFavourite, useFavourites } from "@/lib/favourites";
@@ -20,9 +20,19 @@ export { usePlayer } from "@/components/playerContext";
 export const PlayerProvider = ({ children }: { children: ReactNode }) => {
   const engine = useTrackAudioEngine();
   const { isPlaying, progress, playVersion, volume, setVolume } = engine;
+  const { hasNext, hasPrev, playNext, playPrev } = engine;
   const currentTrack = engine.activeTrack;
   const currentVersion = engine.activeVersion;
   const favIds = useFavourites();
+
+  // Prev/next walk the list the track was started from (playlist, collection,
+  // catalog…). Dimmed + inert at the ends of that list.
+  const skipCls = (enabled: boolean) =>
+    `flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors ${
+      enabled
+        ? "text-muted-foreground hover:text-[#F4C430]"
+        : "cursor-default text-muted-foreground/30"
+    }`;
 
   return (
     <PlayerContext.Provider value={engine}>
@@ -33,7 +43,16 @@ export const PlayerProvider = ({ children }: { children: ReactNode }) => {
           {/* Particle equalizer rising from the bar's top border (experiment). */}
           <AudioVisualizer />
           <div className="mx-auto grid min-h-16 w-full max-w-7xl gap-3 px-4 py-3 sm:px-6 md:grid-cols-[minmax(12rem,20rem)_minmax(0,1fr)_auto] md:items-center">
-            <div className="flex min-w-0 items-center gap-3">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <button
+                type="button"
+                onClick={playPrev}
+                disabled={!hasPrev}
+                aria-label="Previous track"
+                className={skipCls(hasPrev)}
+              >
+                <SkipBack className="h-4 w-4" />
+              </button>
               <button
                 type="button"
                 onClick={() => playVersion(currentTrack, currentVersion)}
@@ -44,6 +63,15 @@ export const PlayerProvider = ({ children }: { children: ReactNode }) => {
               >
                 {isPlaying && <PlayProgressRing progress={progress} />}
                 {isPlaying ? <Pause className="h-4 w-4 text-[#F4C430]" /> : <Play className="ml-0.5 h-4 w-4" />}
+              </button>
+              <button
+                type="button"
+                onClick={playNext}
+                disabled={!hasNext}
+                aria-label="Next track"
+                className={`${skipCls(hasNext)} mr-1.5`}
+              >
+                <SkipForward className="h-4 w-4" />
               </button>
               <div className="min-w-0">
                 <Link

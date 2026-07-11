@@ -237,7 +237,12 @@ const Catalog = () => {
                         globalProgress={progress}
                         index={index}
                         mainIsPlaying={mainIsPlaying}
-                        onPlayVersion={playVersion}
+                        // Prev/next in the mini-player walk the FULL filtered
+                        // list (not just this page) — that's what the user sees
+                        // as "the catalog I'm listening to".
+                        onPlayVersion={(t, v, seekTo) =>
+                          playVersion(t, v, seekTo ?? null, filteredTracks)
+                        }
                         onToggleExpanded={() => setExpandedTrackId(expanded ? null : track.id)}
                         playedProgress={playedProgress}
                         selectedVersion={mainVersion}

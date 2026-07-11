@@ -19,9 +19,18 @@ interface ApiContentItem {
   trackIds?: string[];
 }
 
+export interface LiveComposer {
+  id: string;
+  slug: string;
+  displayName: string;
+  /** "About the composer" — written by the owner in Admin -> Users. */
+  bio: string;
+}
+
 interface ApiContent {
   trending?: string[];
   categories?: { id: string; title: string }[];
+  composers?: LiveComposer[];
   collections?: ApiContentItem[];
   playlists?: ApiContentItem[];
   vocabularies?: Partial<Vocabularies>;
@@ -169,6 +178,27 @@ export const useVocabularies = (): Vocabularies => {
     };
   }, []);
   return v;
+};
+
+/** Composer profiles (nick + about text) — powers the public /artist/<slug> page. */
+export const useComposers = (): LiveComposer[] => {
+  const [list, setList] = useState<LiveComposer[]>(() => cache?.composers ?? []);
+  useEffect(() => {
+    let cancelled = false;
+    const apply = () => {
+      void fetchContent().then((data) => {
+        if (cancelled || !data) return;
+        setList(data.composers ?? []);
+      });
+    };
+    apply();
+    contentListeners.add(apply);
+    return () => {
+      cancelled = true;
+      contentListeners.delete(apply);
+    };
+  }, []);
+  return list;
 };
 
 const mapCollections = (data: ApiContent): MusicCollection[] =>
