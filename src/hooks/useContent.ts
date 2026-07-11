@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
-import { musicCollections, type MusicCollection } from "@/data/musicCollections";
-import { mockPlaylists } from "@/mocks";
+import type { MusicCollection } from "@/data/musicCollections";
 import type { CatalogTrack } from "@/data/catalogTracks";
 import { useTracks } from "@/hooks/useTracks";
 import { defaultVocabularies, type Vocabularies } from "@/lib/tagOptions";
 import { hydrateLicensePrices, type LicenseTierId } from "@/lib/licenses";
 
 // Live storefront content from /api/content (what the owner edits in
-// Admin -> Content), with graceful fallback to the bundled mock data.
+// Admin -> Content). NO demo fallback (owner request): an empty DB renders
+// empty sections, never mock collections/playlists.
 
 interface ApiContentItem {
   id: string;
@@ -171,33 +171,30 @@ export const useVocabularies = (): Vocabularies => {
   return v;
 };
 
-const mapCollections = (data: ApiContent): MusicCollection[] | null =>
-  data.collections?.length
-    ? data.collections.map((c) => ({
-        id: c.id,
-        title: c.title,
-        shortTitle: c.shortTitle || c.title,
-        eyebrow: "Collection",
-        description: c.description ?? "",
-        trackCount: c.trackIds?.length ?? 0,
-        image: c.image || "/images/collections/orchestral.jpg",
-      }))
-    : null;
+const mapCollections = (data: ApiContent): MusicCollection[] =>
+  (data.collections ?? []).map((c) => ({
+    id: c.id,
+    title: c.title,
+    shortTitle: c.shortTitle || c.title,
+    eyebrow: "Collection",
+    description: c.description ?? "",
+    trackCount: c.trackIds?.length ?? 0,
+    image: c.image || "/images/collections/orchestral.jpg",
+  }));
 
-/** Collections for the catalog strip / collections pages (live, mock fallback). */
+/** Collections for the catalog strip / collections pages (live only, no mocks). */
 export const useCollections = (): MusicCollection[] => {
   // Start from the module cache when it's already there (SPA navigation) so
-  // live data renders on the very first frame instead of flashing mocks.
-  const [list, setList] = useState<MusicCollection[]>(
-    () => (cache && mapCollections(cache)) || musicCollections,
+  // live data renders on the very first frame.
+  const [list, setList] = useState<MusicCollection[]>(() =>
+    cache ? mapCollections(cache) : [],
   );
   useEffect(() => {
     let cancelled = false;
     const apply = () => {
       void fetchContent().then((data) => {
         if (cancelled || !data) return;
-        const mapped = mapCollections(data);
-        if (mapped) setList(mapped);
+        setList(mapCollections(data));
       });
     };
     apply();
@@ -221,22 +218,20 @@ export interface LivePlaylist {
   trackIds: string[];
 }
 
-const mapPlaylists = (data: ApiContent): LivePlaylist[] | null =>
-  data.playlists?.length
-    ? data.playlists.map((p) => ({
-        id: p.id,
-        slug: p.id,
-        title: p.title,
-        description: p.description ?? "",
-        image: p.image || "/images/collections/orchestral.jpg",
-        theme: p.theme ?? "",
-        trackIds: p.trackIds ?? [],
-      }))
-    : null;
+const mapPlaylists = (data: ApiContent): LivePlaylist[] =>
+  (data.playlists ?? []).map((p) => ({
+    id: p.id,
+    slug: p.id,
+    title: p.title,
+    description: p.description ?? "",
+    image: p.image || "/images/collections/orchestral.jpg",
+    theme: p.theme ?? "",
+    trackIds: p.trackIds ?? [],
+  }));
 
-/** Playlists for /playlists pages (live, mock fallback). */
+/** Playlists for /playlists pages (live only, no mocks). */
 export const usePlaylists = (): LivePlaylist[] => {
-  // Start from the module cache when present — no mock flash on navigation.
+  // Start from the module cache when present — instant render on navigation.
   const [list, setList] = useState<LivePlaylist[] | null>(() =>
     cache ? mapPlaylists(cache) : null,
   );
@@ -245,8 +240,7 @@ export const usePlaylists = (): LivePlaylist[] => {
     const apply = () => {
       void fetchContent().then((data) => {
         if (cancelled || !data) return;
-        const mapped = mapPlaylists(data);
-        if (mapped) setList(mapped);
+        setList(mapPlaylists(data));
       });
     };
     apply();
@@ -256,16 +250,7 @@ export const usePlaylists = (): LivePlaylist[] => {
       contentListeners.delete(apply);
     };
   }, []);
-  if (list) return list;
-  return mockPlaylists.map((p) => ({
-    id: p.id,
-    slug: p.slug,
-    title: p.title,
-    description: p.description ?? "",
-    image: p.image,
-    theme: "",
-    trackIds: p.trackIds,
-  }));
+  return list ?? [];
 };
 
 /** Raw admin-picked trending/featured track ids (empty until content loads). */

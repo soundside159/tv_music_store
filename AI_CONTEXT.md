@@ -2299,3 +2299,15 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   thumbnail for these (display tiles only, unlike track covers). Same pulsing-sparkle wait
   animation as the track page. Server untouched — the endpoint already accepted useCase/mood
   without trackId.
+- **2026-07-11 (mock/demo fallback REMOVED from the storefront — owner request):** an empty or
+  unreachable DB used to render the bundled demo tracks/collections/playlists; the owner hated
+  it (also suspected it fed a demo-playlist image into link previews). Changes: useTracks.ts —
+  starts empty, a successful /api/tracks answer is live data EVEN when 0 rows (source="api",
+  admin tools stay on), API failure → empty catalog, catalogTracks import dropped;
+  useContent.ts — musicCollections/mockPlaylists imports dropped, mapCollections/mapPlaylists
+  always map (empty in → empty out, so deleting the LAST collection/playlist now clears the UI
+  immediately), usePlaylists returns [] when nothing loaded. Mock data files stay in src/data +
+  src/mocks (Account/Admin/Artist mock personas still import them) — they just never reach the
+  public storefront. LINK-PREVIEW note: index.html already carries brand og:image/twitter:image
+  (512 icon); any old "test playlist" share image is the messenger's CACHE — refresh via
+  facebook.com/sharing/debugger (Scrape Again) or just re-send the link after deploy.

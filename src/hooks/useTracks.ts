@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { catalogTracks } from "@/data/catalogTracks";
 import type { CatalogTrack, TrackCategory, TrackVersion } from "@/data/catalogTracks";
 
 type ApiVersion = { version_id: string; label: string; duration: string | null; preview_src: string };
@@ -64,17 +63,17 @@ const mapTrack = (t: ApiTrack): CatalogTrack => ({
 });
 
 /**
- * Live catalog data from /api/tracks (Cloudflare D1), with a safe fallback to the
- * bundled mock data when the API is unavailable or the DB has no tracks yet.
+ * Live catalog data from /api/tracks (Cloudflare D1). NO demo fallback (owner
+ * request): an empty DB renders an honestly empty catalog, never mock tracks.
  * `drafts: true` (admin pages) also loads draft tracks — the server only honors
  * it for admin sessions.
  */
 export const useTracks = (opts?: { drafts?: boolean }) => {
   const wantDrafts = !!opts?.drafts;
-  const [tracks, setTracks] = useState<CatalogTrack[]>(catalogTracks);
+  const [tracks, setTracks] = useState<CatalogTrack[]>([]);
   const [source, setSource] = useState<"mock" | "api">("mock");
   // True until the API answers (or fails) — lets pages show skeletons instead
-  // of flashing mock rows that then get replaced by live rows.
+  // of flashing empty/placeholder rows that then get replaced by live rows.
   const [isLoading, setIsLoading] = useState(true);
 
   const load = useCallback(() => {
@@ -83,13 +82,13 @@ export const useTracks = (opts?: { drafts?: boolean }) => {
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
       .then((data: { tracks?: ApiTrack[] }) => {
         const list = (data.tracks ?? []).map(mapTrack).filter((t) => t.audioVersions.length > 0);
-        if (list.length > 0) {
-          setTracks(list);
-          setSource("api");
-        }
+        // Even an EMPTY answer counts as live data — admin tools stay enabled
+        // and the storefront simply shows nothing instead of demo content.
+        setTracks(list);
+        setSource("api");
       })
       .catch(() => {
-        // API unavailable / DB empty -> keep mock fallback
+        // API unavailable — catalog stays empty (no mock data on the site)
       })
       .finally(() => setIsLoading(false));
   }, [wantDrafts]);
