@@ -266,3 +266,48 @@
     opacity: 1;
   }
 }
+
+/* Horizontal card rail (CardCarousel) — playlists themes etc.
+   Cards never wrap: the row scrolls sideways and the NEXT card is left
+   half-visible (--rail-cards has a .5) so it fades under the right shadow. */
+.card-rail {
+  --rail-gap: 1.5rem;
+  --rail-cards: 2.2;
+  display: flex;
+  gap: var(--rail-gap);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  /* room for the admin bar under each card + the card's own shadow */
+  padding: 0.25rem 0 2rem;
+}
+
+.card-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.card-rail > * {
+  flex: 0 0 calc((100% - var(--rail-gap) * (var(--rail-cards) - 1)) / var(--rail-cards));
+  min-width: 0;
+  scroll-snap-align: start;
+}
+
+@media (min-width: 640px) {
+  .card-rail {
+    --rail-cards: 3.5;
+  }
+}
+
+@media (min-width: 1024px) {
+  .card-rail {
+    --rail-cards: 4.5;
+  }
+}
+
+@media (min-width: 1280px) {
+  .card-rail {
+    --rail-cards: 5.5;
+  }
+}

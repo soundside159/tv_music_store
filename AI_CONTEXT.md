@@ -2371,3 +2371,20 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   `playlist_themes` list). (5) CATEGORIES: ↑↓ reorder (server reorder_content now accepts
   kind "category" — table whitelist + ensureCategoryTables; body.kind type widened), title
   links to /catalog?category=<id>. All lists refresh via run()->reload + refreshContent.
+- **2026-07-11 (playlists carousel + card progress ring):** /playlists theme sections no longer
+  wrap onto a second line — each theme is a horizontal RAIL. New `src/components/CardCarousel.tsx`
+  (generic; wraps any card children): scroll container + ResizeObserver/onScroll `atStart`/`atEnd`
+  state; round prev/next arrows are rendered ONLY for the side that can scroll and fade in on
+  `group-hover/rail`; right-edge gradient (`from-background via-background/85`) swallows the
+  half-visible card, left gradient appears once scrolled. Widths live in `.card-rail` in
+  `index.css`: `--rail-cards` = 2.2 / 3.5 (sm) / 4.5 (lg) / **5.5 (xl)** with
+  `flex: 0 0 calc((100% - gap*(cards-1))/cards)`, so on desktop 5 cards are full and the 6th is
+  cut in half under the shadow (owner-approved, competitor-style); scrollbar hidden,
+  scroll-snap x proximity, `padding-bottom: 2rem` leaves room for the AdminItemBar under each
+  card. `Playlists.tsx`: grid → `<CardCarousel>` (skeletons + each theme section; the admin ghost
+  "+" card is the last rail item), cards keep the skewX(-9deg) parallelogram. PlaylistCard now
+  also draws a **progress stroke around the card** while its preview track plays (SVG rect,
+  `pathLength=100` + `vector-effect: non-scaling-stroke`, `preserveAspectRatio="none"` so it
+  follows the skewed shape) — same language as the catalog cover ring; hover play button was
+  already there. tsc 0 / eslint 0 (checked on a sandbox copy — the host↔sandbox mirror truncation
+  glitch hit Playlists.tsx again; host file verified via Read).
