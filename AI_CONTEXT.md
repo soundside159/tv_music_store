@@ -2168,3 +2168,40 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   a sandbox-only `functions/api/admin/__lintcheck.ts` temp lingers in the mirror, NOT on host).
   NOTE: `npx tsc --noEmit` does NOT cover functions/ (tsconfig scope) — don't take its silence
   as a functions/ typecheck.]
+- **2026-07-11 (track page Versions tab = alternates only):** owner: the MAIN version showed up
+  as row 1 in the TrackDetail Versions tab (catalog rows already list alternates only via
+  slice(1)). Fix in TrackDetail.tsx: (1) the Versions tab now maps `audioVersions.slice(1)` +
+  an empty-state line ("No alternate versions for this track.") when there's only the main;
+  (2) TrackVersionRow always uses displayVersionLabel (the old "index 0 keeps its raw label"
+  rule applied to the main row, which is gone from the list); (3) `mainVersion` is PINNED to
+  `audioVersions[0]` (was getSelectedVersion → after clicking an alternate the big waveform
+  card switched to it and Main became unreachable until reload; now the card/hero play button
+  always run the main version, alternates play from their own rows). getSelectedVersion stays
+  (Similar-tracks tab still uses it). eslint 0 (sandbox mirror truncated AGAIN — rebuilt via
+  cut-at-last-line + host tail, temp lint copies stayed sandbox-only, host verified clean).
+- **2026-07-11 (SYNC GLITCH HIT THE HOST FILE — content.ts NUL-repaired):** worse than the usual
+  mirror glitch: after this session's Edits, the HOST copy of functions/api/admin/content.ts had
+  REAL NUL bytes where quoted spaces were written (e.g. `join(" ")` became `join("\0")`) — Read
+  rendered them invisibly, but ripgrep flagged "binary file" and Edit couldn't match the text.
+  FIX: read the whole file (Read shows NULs as spaces = the intended chars), rewrote it in one
+  Write — host file now greps clean, quoted-space strings match regexes again (also swapped that
+  comparison to JSON.stringify while at it). LESSON for next AI on this machine: after editing,
+  Grep the file for one of your quoted-space strings (e.g. `join\(" / "\)`) — "binary file
+  matches" means the HOST copy is NUL-poisoned → Read whole file + rewrite via Write. Sandbox
+  mirrors of EDITED files stay stale/NUL-laced (lint there is meaningless for them; freshly
+  CREATED files sync fine and lint OK). deploy.bat's host-side lint remains the final gate.
+- **2026-07-11 (AI tagging by prompt — Tracks Edit):** owner describes a track in his own words
+  and the AI pre-ticks the panel checkboxes. NEW `functions/api/admin/suggest-tags.ts` (admin
+  only, same OPENAI_API_KEY, model gpt-4o-mini, JSON mode): POST { prompt, include:{tags,
+  collections,playlists,categories} } → loads live vocabularies + collection/playlist/category
+  titles from D1, system prompt demands GENEROUS human-curator matching (associations, not
+  literal keywords; "energetic electronic positive" → Sports/Action/Upbeat/Energetic etc.;
+  prefer including borderline entries), answers are canonicalized server-side (case-insensitive
+  map to real vocab values / titles→ids; hallucinations dropped). CLIENT (AdminTracksEdit.tsx):
+  gold "AI tagging by prompt" box at the top of the Track details panel (visible with exactly
+  ONE track selected) — textarea + 4 include-checkboxes (Tags on by default; Collections/
+  Playlists/Categories opt-in) + "Suggest ticks" button. Result only PRE-TICKS the tri-state
+  checkboxes (facetChanges/collection-playlist-categoryDelta = "all") — the owner reviews and
+  presses the normal Apply; nothing autosaved. suggest-tags.ts lints 0 sandbox-side (fresh
+  file); AdminTracksEdit host copy verified by Read (mirror corrupt as usual) — final check =
+  deploy.bat lint.

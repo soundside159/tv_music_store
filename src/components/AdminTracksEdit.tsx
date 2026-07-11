@@ -338,6 +338,74 @@ const AdminTracksEdit = ({
     }
   };
 
+  // ---- AI tagging by prompt: the owner describes the track in his own words;
+  // the model reads the live vocab + collection/playlist/category titles and
+  // PRE-TICKS the panel checkboxes (generous human-curator matching). Nothing
+  // is saved until Apply — the owner reviews the ticks first.
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiPromptBusy, setAiPromptBusy] = useState(false);
+  const [aiInclude, setAiInclude] = useState({
+    tags: true,
+    collections: false,
+    playlists: false,
+    categories: false,
+  });
+  const runAiSuggest = async () => {
+    setAiPromptBusy(true);
+    try {
+      const res = await fetch("/api/admin/suggest-tags", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ prompt: aiPrompt, include: aiInclude }),
+      });
+      const d = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        useCase?: string[];
+        genre?: string[];
+        mood?: string[];
+        collectionIds?: string[];
+        playlistIds?: string[];
+        categoryIds?: string[];
+      };
+      if (!res.ok || !d.ok) throw new Error(d.error ?? "AI suggestion failed");
+      let n = 0;
+      if (aiInclude.tags) {
+        setFacetChanges((prev) => {
+          const nx = { useCase: { ...prev.useCase }, genre: { ...prev.genre }, mood: { ...prev.mood } };
+          for (const key of ["useCase", "genre", "mood"] as FacetKey[]) {
+            for (const v of d[key] ?? []) nx[key][v] = "all";
+          }
+          return nx;
+        });
+        n += (d.useCase?.length ?? 0) + (d.genre?.length ?? 0) + (d.mood?.length ?? 0);
+      }
+      const tick = (
+        ids: string[] | undefined,
+        set: (fn: (prev: Record<string, "all" | "none">) => Record<string, "all" | "none">) => void,
+      ) => {
+        if (!ids || ids.length === 0) return 0;
+        set((prev) => {
+          const nx = { ...prev };
+          for (const id of ids) nx[id] = "all";
+          return nx;
+        });
+        return ids.length;
+      };
+      n += tick(d.collectionIds, setCollectionDelta);
+      n += tick(d.playlistIds, setPlaylistDelta);
+      n += tick(d.categoryIds, setCategoryDelta);
+      toast.success(
+        n > 0 ? `AI ticked ${n} box(es) — review and press Apply` : "AI didn't find anything fitting",
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "AI suggestion failed");
+    } finally {
+      setAiPromptBusy(false);
+    }
+  };
+
   const composers = useMemo(
     () => [...new Set(tracks.map((t) => t.artist).filter(Boolean))].sort(),
     [tracks],
@@ -1157,6 +1225,60 @@ const AdminTracksEdit = ({
                   Select exactly one track to edit its title, BPM, description, tags, cover and
                   stems here.
                 </p>
+              )}
+              {single && (
+                <div className="mb-4 rounded-lg border border-[#F4C430]/30 bg-[#F4C430]/[0.04] p-3">
+                  <p className="flex items-center gap-1.5 font-body text-xs font-semibold text-foreground">
+                    <Sparkles className="h-3.5 w-3.5 text-[#F4C430]" />
+                    AI tagging by prompt
+                  </p>
+                  <textarea
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    rows={3}
+                    placeholder='Describe the track in your own words — e.g. "gentle guitars, warm, good for travel videos"'
+                    className={`${inputCls} mt-2 w-full resize-y`}
+                  />
+                  <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-0.5">
+                    <TriCheckbox
+                      label="Tags (Usage/Mood/Genre)"
+                      state={aiInclude.tags ? "all" : "none"}
+                      onToggle={() => setAiInclude((p) => ({ ...p, tags: !p.tags }))}
+                    />
+                    <TriCheckbox
+                      label="Collections"
+                      state={aiInclude.collections ? "all" : "none"}
+                      onToggle={() => setAiInclude((p) => ({ ...p, collections: !p.collections }))}
+                    />
+                    <TriCheckbox
+                      label="Playlists"
+                      state={aiInclude.playlists ? "all" : "none"}
+                      onToggle={() => setAiInclude((p) => ({ ...p, playlists: !p.playlists }))}
+                    />
+                    <TriCheckbox
+                      label="Categories"
+                      state={aiInclude.categories ? "all" : "none"}
+                      onToggle={() => setAiInclude((p) => ({ ...p, categories: !p.categories }))}
+                    />
+                  </div>
+                  <div className="mt-2 flex items-center gap-3">
+                    <button
+                      type="button"
+                      disabled={
+                        aiPromptBusy ||
+                        !aiPrompt.trim() ||
+                        !(aiInclude.tags || aiInclude.collections || aiInclude.playlists || aiInclude.categories)
+                      }
+                      onClick={() => void runAiSuggest()}
+                      className={`${goldBtnCls} px-3 py-1.5 text-xs`}
+                    >
+                      {aiPromptBusy ? "Thinking…" : "Suggest ticks"}
+                    </button>
+                    <span className="font-body text-[10px] leading-tight text-muted-foreground">
+                      Pre-ticks the panels on the right — review, then press Apply.
+                    </span>
+                  </div>
+                </div>
               )}
               {fields && selTracks.length === 1 && (
                 <div className="flex flex-col gap-2.5">
