@@ -52,8 +52,10 @@ interface Group {
 const baseName = (filename: string) => filename.replace(/\.[a-z0-9]+$/i, "").trim();
 
 /** Track titles lose leading catalog numbers: "1685_As Light As A Feather"
- *  → "As Light As A Feather" (many stock libraries prefix files this way). */
-const cleanTitle = (s: string) => s.replace(/^\s*\d+[\s_-]*/, "").trim() || s.trim();
+ *  → "As Light As A Feather" (many stock libraries prefix files this way).
+ *  Digits followed by a duration word stay: "15sec…" / "30 sec…" keep the 15. */
+const cleanTitle = (s: string) =>
+  s.replace(/^\s*\d+[\s._-]+(?!(?:sec(?:s|onds?)?|min(?:s|utes?)?)\b)/i, "").trim() || s.trim();
 
 /** "Epic Battle_Stems_Drums.wav" → a stem, not a version of the track. */
 const isStemFile = (filename: string) => /(^|[_\s(-])stems?([_\s).-]|$)/i.test(baseName(filename));

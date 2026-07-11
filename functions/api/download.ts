@@ -20,8 +20,11 @@ const sanitizeFilename = (s: string) =>
 
 // Titles lose leading catalog numbers and underscores for display/filenames:
 // "1685_As Light As A Feather" -> "As Light As A Feather".
+// Leading digits are ONLY a catalog number when a separator follows AND they
+// are not a duration marker — "15sec" / "30 sec" version labels keep their 15.
+const CATALOG_NUM_RE = /^\s*\d+[\s._-]+(?!(?:sec(?:s|onds?)?|min(?:s|utes?)?)\b)/i;
 const tidyTitle = (s: string) => {
-  const t = (s ?? "").replace(/_+/g, " ").replace(/^\s*\d+\s*/, "").trim();
+  const t = (s ?? "").replace(/_+/g, " ").replace(CATALOG_NUM_RE, "").trim();
   return t || (s ?? "").trim();
 };
 
@@ -31,8 +34,8 @@ const tidyTitle = (s: string) => {
 const cleanVersionSuffix = (label: string, title: string): string => {
   // Underscores read as spaces, leading catalog numbers ("1685_") drop, and the
   // title may sit anywhere ("Composer Name_Title_30sec") — keep what FOLLOWS it.
-  let s = (label ?? "").replace(/_+/g, " ").replace(/^\s*\d+\s*/, "").trim();
-  const t = (title ?? "").replace(/_+/g, " ").replace(/^\s*\d+\s*/, "").trim();
+  let s = (label ?? "").replace(/_+/g, " ").replace(CATALOG_NUM_RE, "").trim();
+  const t = (title ?? "").replace(/_+/g, " ").replace(CATALOG_NUM_RE, "").trim();
   if (t) {
     const idx = s.toLowerCase().indexOf(t.toLowerCase());
     if (idx >= 0) s = s.slice(idx + t.length);

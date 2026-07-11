@@ -120,7 +120,6 @@ const AdminTracksEdit = ({
   uploading,
   run,
   uploadCover,
-  uploadStems,
   onTracksReload,
   onApplyOverrides,
   onSelectionChange,
@@ -143,8 +142,6 @@ const AdminTracksEdit = ({
   uploading: boolean;
   run: (payload: Record<string, unknown>, okMsg: string) => Promise<boolean>;
   uploadCover: (file: File, apply: (path: string) => void) => Promise<void> | void;
-  /** Uploads a stems .zip for one track (stores key + flips has_stems on). */
-  uploadStems?: (file: File, trackId: string) => Promise<boolean>;
   /** Refetch /api/tracks (after version set-main/delete in the table). */
   onTracksReload?: () => void;
   onApplyOverrides: (overrides: Record<string, Partial<CatalogTrack>>) => void;
@@ -349,6 +346,7 @@ const AdminTracksEdit = ({
     collections: false,
     playlists: false,
     categories: false,
+    extraTags: false,
   });
   const runAiSuggest = async () => {
     setAiPromptBusy(true);
@@ -368,6 +366,7 @@ const AdminTracksEdit = ({
         collectionIds?: string[];
         playlistIds?: string[];
         categoryIds?: string[];
+        extraTags?: string[];
       };
       if (!res.ok || !d.ok) throw new Error(d.error ?? "AI suggestion failed");
       let n = 0;
@@ -396,6 +395,21 @@ const AdminTracksEdit = ({
       n += tick(d.collectionIds, setCollectionDelta);
       n += tick(d.playlistIds, setPlaylistDelta);
       n += tick(d.categoryIds, setCategoryDelta);
+      // Extra tags land in the single-track "Extra tags" field (comma list,
+      // max 25 per track) — saved by the normal Apply like everything else.
+      if (aiInclude.extraTags && d.extraTags && d.extraTags.length > 0 && fields) {
+        const cur = fields.tags.split(",").map((s) => s.trim()).filter(Boolean);
+        const seenTags = new Set(cur.map((s) => s.toLowerCase()));
+        const merged = [...cur];
+        for (const t of d.extraTags) {
+          const k = t.toLowerCase();
+          if (seenTags.has(k) || merged.length >= 25) continue;
+          seenTags.add(k);
+          merged.push(t);
+        }
+        setFields({ ...fields, tags: merged.join(", ") });
+        n += merged.length - cur.length;
+      }
       toast.success(
         n > 0 ? `AI ticked ${n} box(es) — review and press Apply` : "AI didn't find anything fitting",
       );
@@ -404,6 +418,34 @@ const AdminTracksEdit = ({
     } finally {
       setAiPromptBusy(false);
     }
+  };
+
+  // ---- Tags Base: global comma-separated tag list (stored in site_config) —
+  // the AI prompt-tagging picks a track's Extra tags ONLY from here. The
+  // button replaces the legacy "Upload stems ZIP" (stems now arrive as plain
+  // audio files through Bulk Upload).
+  const [tagsBaseOpen, setTagsBaseOpen] = useState(false);
+  const [tagsBaseText, setTagsBaseText] = useState("");
+  const [tagsBaseBusy, setTagsBaseBusy] = useState(false);
+  const openTagsBase = async () => {
+    setTagsBaseOpen(true);
+    setTagsBaseBusy(true);
+    try {
+      const res = await fetch("/api/admin/content", { credentials: "include" });
+      const d = (await res.json().catch(() => ({}))) as { tagsBase?: string[] };
+      setTagsBaseText((d.tagsBase ?? []).join(", "));
+    } catch {
+      // dialog opens empty — saving overwrites
+    } finally {
+      setTagsBaseBusy(false);
+    }
+  };
+  const saveTagsBase = async () => {
+    setTagsBaseBusy(true);
+    const values = tagsBaseText.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean);
+    const ok = await run({ action: "set_tags_base", values }, "Tags Base saved");
+    setTagsBaseBusy(false);
+    if (ok) setTagsBaseOpen(false);
   };
 
   const composers = useMemo(
@@ -1260,6 +1302,11 @@ const AdminTracksEdit = ({
                       state={aiInclude.categories ? "all" : "none"}
                       onToggle={() => setAiInclude((p) => ({ ...p, categories: !p.categories }))}
                     />
+                    <TriCheckbox
+                      label="Extra tags (from Tags Base)"
+                      state={aiInclude.extraTags ? "all" : "none"}
+                      onToggle={() => setAiInclude((p) => ({ ...p, extraTags: !p.extraTags }))}
+                    />
                   </div>
                   <div className="mt-2 flex items-center gap-3">
                     <button
@@ -1267,7 +1314,13 @@ const AdminTracksEdit = ({
                       disabled={
                         aiPromptBusy ||
                         !aiPrompt.trim() ||
-                        !(aiInclude.tags || aiInclude.collections || aiInclude.playlists || aiInclude.categories)
+                        !(
+                          aiInclude.tags ||
+                          aiInclude.collections ||
+                          aiInclude.playlists ||
+                          aiInclude.categories ||
+                          aiInclude.extraTags
+                        )
                       }
                       onClick={() => void runAiSuggest()}
                       className={`${goldBtnCls} px-3 py-1.5 text-xs`}
@@ -1378,33 +1431,14 @@ const AdminTracksEdit = ({
                     state={fields.hasStems ? "all" : "none"}
                     onToggle={() => setFields({ ...fields, hasStems: !fields.hasStems })}
                   />
-                  {uploadStems && (
-                    <label className="flex cursor-pointer items-center gap-2">
-                      <span className="rounded-lg border border-border px-3 py-1.5 font-body text-xs text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]">
-                        {uploading ? "Uploading…" : "Upload stems ZIP"}
-                      </span>
-                      <span className="font-body text-[11px] text-muted-foreground">
-                        {selTracks[0].hasStems
-                          ? "Stems on — uploading replaces the bundle"
-                          : "One .zip with the separated layers"}
-                      </span>
-                      <input
-                        type="file"
-                        accept=".zip,application/zip,application/x-zip-compressed"
-                        className="hidden"
-                        disabled={uploading}
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f) {
-                            void uploadStems(f, selTracks[0].id).then((ok) => {
-                              if (ok) setFields((prev) => (prev ? { ...prev, hasStems: true } : prev));
-                            });
-                          }
-                          e.target.value = "";
-                        }}
-                      />
-                    </label>
-                  )}
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => void openTagsBase()} className={btnCls}>
+                      Tags Base…
+                    </button>
+                    <span className="font-body text-[11px] text-muted-foreground">
+                      Global tag list the AI picks Extra tags from
+                    </span>
+                  </div>
                 </div>
               )}
 
@@ -1445,6 +1479,54 @@ const AdminTracksEdit = ({
         {membershipSection("Categories", categories, categoryDelta, setCategoryDelta)}
       </aside>
     </div>
+
+    {/* ===== Tags Base dialog: the global Extra-tags pool (comma list) ===== */}
+    {tagsBaseOpen && (
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4"
+      >
+        <div className="w-full max-w-xl rounded-xl border border-border bg-card p-5">
+          <div className="flex items-center justify-between">
+            <h3 className="font-body text-sm font-semibold text-foreground">Tags Base</h3>
+            <button
+              type="button"
+              onClick={() => setTagsBaseOpen(false)}
+              aria-label="Close"
+              className="text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <p className="mt-1 font-body text-xs text-muted-foreground">
+            Comma-separated global tag list. "AI tagging by prompt" picks a track's Extra tags
+            only from here (a track holds up to 25 tags).
+          </p>
+          <textarea
+            value={tagsBaseText}
+            onChange={(e) => setTagsBaseText(e.target.value)}
+            rows={8}
+            disabled={tagsBaseBusy}
+            placeholder="cinematic, epic drums, uplifting, travel, drone footage, workout, …"
+            className={`${inputCls} mt-3 w-full resize-y`}
+          />
+          <div className="mt-3 flex items-center justify-end gap-2">
+            <button type="button" onClick={() => setTagsBaseOpen(false)} className={btnCls}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={tagsBaseBusy}
+              onClick={() => void saveTagsBase()}
+              className={goldBtnCls}
+            >
+              {tagsBaseBusy ? "…" : "Save"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     </>
   );
 };

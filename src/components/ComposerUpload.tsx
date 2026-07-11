@@ -274,8 +274,9 @@ const ComposerUpload = ({
       const base = baseName(incoming[0]);
       const m = base.match(/^(.*?)\s*\(([^()]+)\)\s*$/);
       const raw = (m ? m[1] : base).trim();
-      // Leading catalog numbers drop: "1685_Epic Battle" -> "Epic Battle".
-      setTitle(raw.replace(/^\s*\d+[\s_-]*/, "").trim() || raw);
+      // Leading catalog numbers drop: "1685_Epic Battle" -> "Epic Battle"
+      // (digits + duration word stay: "15sec…" keeps its 15).
+      setTitle(raw.replace(/^\s*\d+[\s._-]+(?!(?:sec(?:s|onds?)?|min(?:s|utes?)?)\b)/i, "").trim() || raw);
     }
   };
 

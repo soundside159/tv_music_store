@@ -405,7 +405,7 @@ const TrackDetail = () => {
                   className="h-16"
                 />
                 <div className="font-body text-sm text-muted-foreground md:text-right">
-                  <div>{mainVersion.label.replace(/_+/g, " ").replace(/^\s*\d+\s*/, "").trim() || mainVersion.label}</div>
+                  <div>{mainVersion.label.replace(/_+/g, " ").replace(/^\s*\d+[\s._-]+(?!(?:sec(?:s|onds?)?|min(?:s|utes?)?)\b)/i, "").trim() || mainVersion.label}</div>
                   <div>
                     {mainVersion.duration} / {track.bpm} BPM
                   </div>

@@ -320,25 +320,8 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
     }
   };
 
-  // Stems zip for ONE track: upload to R2 (private), then store the key —
-  // this also switches has_stems on, unlocking STEMS in the download dialog.
-  const uploadStems = async (file: File, trackId: string): Promise<boolean> => {
-    setUploading(true);
-    try {
-      const up = await uploadAudio(file, "stems", file.name);
-      if (!up) return false;
-      const ok = await run(
-        { action: "bulk_update_tracks", trackIds: [trackId], fields: { stemsKey: up.key } },
-        "Stems uploaded",
-      );
-      if (ok) {
-        setTrackOverrides((o) => ({ ...o, [trackId]: { ...o[trackId], hasStems: true } }));
-      }
-      return ok;
-    } finally {
-      setUploading(false);
-    }
-  };
+  // (The legacy per-track "Upload stems ZIP" flow was removed — stems arrive
+  // as plain audio files through Bulk Upload; Tags Base took its button spot.)
 
   // Reset any open draft when the sidebar switches the active view.
   useEffect(() => {
@@ -1149,7 +1132,6 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
           uploading={uploading}
           run={run}
           uploadCover={uploadCover}
-          uploadStems={uploadStems}
           onTracksReload={() => void reloadTracks()}
           onApplyOverrides={(overrides) =>
             setTrackOverrides((prev) => {

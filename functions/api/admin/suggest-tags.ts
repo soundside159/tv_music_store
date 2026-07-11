@@ -22,9 +22,10 @@ Act like a generous human curator stocking a storefront: rely on associations, m
 Example: "energetic electronic positive" plausibly fits Sports, Action, Upbeat, Energetic, Technology and similar entries.
 Collections and playlists have descriptive names — put the track everywhere a listener browsing that shelf would be happy to find it.
 Only leave an entry out when the track clearly would NOT fit there; prefer including a borderline entry over dropping it.
+For the extraTags list (search keywords): pick the 10-25 BEST-fitting tags for this track, most relevant first.
 Never invent entries: every returned string must be copied EXACTLY from the given lists.
 Respond with JSON only, using this shape (leave a list empty if you were not given it or nothing fits):
-{"useCase": [], "genre": [], "mood": [], "collections": [], "playlists": [], "categories": []}`;
+{"useCase": [], "genre": [], "mood": [], "collections": [], "playlists": [], "categories": [], "extraTags": []}`;
 
 export const onRequestPost = async (ctx: Ctx) => {
   if (!ctx.env.DB) return json({ error: "DB not bound" }, 503);
@@ -42,7 +43,13 @@ export const onRequestPost = async (ctx: Ctx) => {
 
   const body = await readJson<{
     prompt?: string;
-    include?: { tags?: boolean; collections?: boolean; playlists?: boolean; categories?: boolean };
+    include?: {
+      tags?: boolean;
+      collections?: boolean;
+      playlists?: boolean;
+      categories?: boolean;
+      extraTags?: boolean;
+    };
   }>(ctx.request);
   const prompt = body?.prompt?.trim().slice(0, 1000);
   if (!prompt) return json({ error: "Describe the track first" }, 400);
@@ -51,8 +58,15 @@ export const onRequestPost = async (ctx: Ctx) => {
     collections: !!body?.include?.collections,
     playlists: !!body?.include?.playlists,
     categories: !!body?.include?.categories,
+    extraTags: !!body?.include?.extraTags,
   };
-  if (!include.tags && !include.collections && !include.playlists && !include.categories) {
+  if (
+    !include.tags &&
+    !include.collections &&
+    !include.playlists &&
+    !include.categories &&
+    !include.extraTags
+  ) {
     return json({ error: "Pick at least one section to fill" }, 400);
   }
 
@@ -71,6 +85,21 @@ export const onRequestPost = async (ctx: Ctx) => {
   const collections = include.collections ? await titled("collections") : [];
   const playlists = include.playlists ? await titled("playlists") : [];
   const categories = include.categories ? await titled("categories") : [];
+  // Owner-curated global Extra-tags base (Tags Base dialog in Tracks Edit).
+  let tagsBase: string[] = [];
+  if (include.extraTags) {
+    try {
+      const row = await db
+        .prepare(`SELECT value FROM site_config WHERE key = 'extra_tags_base'`)
+        .first<{ value: string }>();
+      if (row) tagsBase = (JSON.parse(row.value) as unknown[]).filter((x): x is string => typeof x === "string");
+    } catch {
+      // none saved yet
+    }
+    if (tagsBase.length === 0 && !include.tags && !include.collections && !include.playlists && !include.categories) {
+      return json({ error: "Tags Base is empty — add tags via the Tags Base button first" }, 400);
+    }
+  }
 
   const sections: string[] = [`Track description from the user:\n${prompt}`];
   if (include.tags) {
@@ -87,6 +116,9 @@ export const onRequestPost = async (ctx: Ctx) => {
   if (categories.length > 0) {
     sections.push(`categories list:\n${categories.map((c) => c.title).join("\n")}`);
   }
+  if (tagsBase.length > 0) {
+    sections.push(`extraTags list (search keywords):\n${tagsBase.join("\n")}`);
+  }
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -101,7 +133,7 @@ export const onRequestPost = async (ctx: Ctx) => {
         { role: "user", content: sections.join("\n\n") },
       ],
       response_format: { type: "json_object" },
-      max_tokens: 600,
+      max_tokens: 900,
       temperature: 0.4,
     }),
   });
@@ -157,5 +189,7 @@ export const onRequestPost = async (ctx: Ctx) => {
     collectionIds: canonIds(parsed.collections, collections),
     playlistIds: canonIds(parsed.playlists, playlists),
     categoryIds: canonIds(parsed.categories, categories),
+    // A track carries at most 25 tags — trim here so the client can merge as-is.
+    extraTags: canonValues(parsed.extraTags, tagsBase).slice(0, 25),
   });
 };

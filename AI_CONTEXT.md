@@ -2205,3 +2205,28 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   presses the normal Apply; nothing autosaved. suggest-tags.ts lints 0 sandbox-side (fresh
   file); AdminTracksEdit host copy verified by Read (mirror corrupt as usual) — final check =
   deploy.bat lint.
+- **2026-07-11 (round 2: Tags Base + Extra tags in AI prompt, 25-tag cap, "15sec" label fix):**
+  (1) TAGS BASE: global owner-curated tag pool in site_config key `extra_tags_base` — new admin
+  action `set_tags_base` {values[]} (trim/dedupe, ≤40 chars each, ≤500), admin content GET now
+  returns `tagsBase`. UI: "Tags Base…" button in the Tracks Edit single-track fields panel —
+  it REPLACED the legacy "Upload stems ZIP" button (owner: stems now arrive as plain audio via
+  Bulk Upload; uploadStems prop/function removed from AdminTracksEdit/AdminContent; bulk-upload
+  _stem_ pipeline untouched) — opens a dialog with one comma-separated textarea (loads current
+  list via GET, saves via set_tags_base). (2) EXTRA TAGS in AI prompt-tagging: 5th checkbox
+  "Extra tags (from Tags Base)"; suggest-tags.ts accepts include.extraTags, feeds the base list
+  to the model ("pick the 10-25 best, most relevant first"), canonicalizes against the base,
+  caps at 25; client merges results into the single-track Extra-tags field (dedupe, ≤25) —
+  saved by the normal Apply. 400 if extraTags is the ONLY section and the base is empty.
+  (3) TAG CAP 12→25 in content.ts (update_track, bulk fields.tags, create_track).
+  (4) "15sec" BUG: version "15sec" displayed as "1. sec" — the catalog-number strip
+  `/^\s*\d+\s*/` ate duration digits. New rule everywhere: leading digits strip ONLY when a
+  separator follows AND they're not a duration word — `/^\s*\d+[\s._-]+(?!(?:sec(?:s|onds?)?|
+  min(?:s|utes?)?)\b)/i` — applied in src/lib/downloadTrack.ts (tidyTitle + cleanVersionLabel →
+  fixes Versions tab/rows/filenames), functions/api/download.ts (tidyTitle + cleanVersionSuffix
+  → zip entry names), TrackDetail main-label cosmetic, AdminBulkUpload cleanTitle,
+  ComposerUpload title derivation. Also: labels that are ONLY digits ("60") are kept now.
+  VERIFIED: all edited host files grep clean (no NUL poisoning; quoted-space strings match);
+  sandbox mirrors of edited files are corrupt as usual so sandbox eslint is meaningless —
+  deploy.bat host lint is the gate. Stale __lintcheck temp files from yesterday DID sync to the
+  host with delay — deleted via allow_cowork_file_delete + rm (Glob-confirmed gone); NEXT AI:
+  re-Glob for `**/__*` leftovers before deploys.

@@ -347,6 +347,17 @@ export const onRequestGet = async (ctx: Ctx) => {
   // Self-heal legacy vocab values containing "/" (they broke the " / "-joined
   // facet storage and duplicated tags on tracks) — no-op when data is clean.
   await repairSlashVocabValues(db, vocabularies);
+  // Global Extra-tags base (owner-curated, comma list in the Tags Base dialog);
+  // the AI prompt-tagging picks a track's extra tags from here.
+  let tagsBase: string[] = [];
+  try {
+    const row = await db
+      .prepare(`SELECT value FROM site_config WHERE key = 'extra_tags_base'`)
+      .first<{ value: string }>();
+    if (row) tagsBase = (JSON.parse(row.value) as unknown[]).filter((x): x is string => typeof x === "string");
+  } catch {
+    // none saved yet — fine
+  }
   // Composer profiles (pseudonyms) — the upload composer picker needs them.
   // Dead rows (no linked user AND no tracks — e.g. the Composer One/Two/Three
   // demo seeds from the first migration) are hidden: they only confused the
@@ -380,6 +391,7 @@ export const onRequestGet = async (ctx: Ctx) => {
   return json({
     dbTrackCount: trackCount?.n ?? 0,
     vocabularies,
+    tagsBase,
     composers,
     trending: trendingRow ? (JSON.parse(trendingRow.value) as string[]) : [],
     categories: categories.results.map((c) => ({
@@ -649,7 +661,7 @@ export const onRequestPost = async (ctx: Ctx) => {
           body.useCase ?? "",
           bpm,
           body.description ?? "",
-          JSON.stringify(Array.isArray(body.tags) ? body.tags.slice(0, 12) : []),
+          JSON.stringify(Array.isArray(body.tags) ? body.tags.slice(0, 25) : []),
           body.cover ?? "",
         )
         .run();
@@ -714,7 +726,7 @@ export const onRequestPost = async (ctx: Ctx) => {
           if (typeof f.description === "string") next.description = f.description;
           if (typeof f.cover === "string") next.cover = f.cover;
           if (typeof f.coverThumb === "string") next.cover_thumb = f.coverThumb;
-          if (Array.isArray(f.tags)) next.tags = JSON.stringify(f.tags.slice(0, 12));
+          if (Array.isArray(f.tags)) next.tags = JSON.stringify(f.tags.slice(0, 25));
           if (typeof f.hasStems === "boolean") next.has_stems = f.hasStems ? 1 : 0;
           // Stems bundle: storing the key also switches the STEMS badge on.
           if (typeof f.stemsKey === "string" && /^masters\//.test(f.stemsKey)) {
@@ -843,7 +855,7 @@ export const onRequestPost = async (ctx: Ctx) => {
 
       const trackId = newId("trk");
       const bpm = Number.isFinite(body.bpm) ? Math.round(body.bpm as number) : null;
-      const tags = Array.isArray(body.tags) ? body.tags.slice(0, 12) : [];
+      const tags = Array.isArray(body.tags) ? body.tags.slice(0, 25) : [];
       const wavZipKey =
         typeof body.wavZipKey === "string" && /^masters\//.test(body.wavZipKey)
           ? body.wavZipKey
@@ -1247,6 +1259,32 @@ export const onRequestPost = async (ctx: Ctx) => {
         updated += 1;
       }
       return json({ ok: true, values: list, tracksUpdated: updated });
+    }
+
+    case "set_tags_base": {
+      // Global Extra-tags base (Tags Base dialog in Tracks Edit). The AI
+      // prompt-tagging picks a track's extra tags ONLY from this list.
+      if (!Array.isArray(body.values)) return json({ error: "values required" }, 400);
+      const seen = new Set<string>();
+      const list: string[] = [];
+      for (const raw of body.values) {
+        if (typeof raw !== "string") continue;
+        const v = raw.replace(/\s+/g, " ").trim().slice(0, 40);
+        const k = v.toLowerCase();
+        if (v && !seen.has(k)) {
+          seen.add(k);
+          list.push(v);
+        }
+        if (list.length >= 500) break;
+      }
+      await db
+        .prepare(
+          `INSERT INTO site_config (key, value) VALUES ('extra_tags_base', ?1)
+           ON CONFLICT(key) DO UPDATE SET value = ?1`,
+        )
+        .bind(JSON.stringify(list))
+        .run();
+      return json({ ok: true, values: list });
     }
 
     case "set_vocab": {
