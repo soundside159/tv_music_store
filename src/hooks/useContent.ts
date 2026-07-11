@@ -179,7 +179,9 @@ const mapCollections = (data: ApiContent): MusicCollection[] =>
     eyebrow: "Collection",
     description: c.description ?? "",
     trackCount: c.trackIds?.length ?? 0,
-    image: c.image || "/images/collections/orchestral.jpg",
+    // No default artwork (owner request): a fresh item shows an EMPTY card
+    // until he uploads or AI-generates a cover himself.
+    image: c.image ?? "",
   }));
 
 /** Collections for the catalog strip / collections pages (live only, no mocks). */
@@ -224,7 +226,8 @@ const mapPlaylists = (data: ApiContent): LivePlaylist[] =>
     slug: p.id,
     title: p.title,
     description: p.description ?? "",
-    image: p.image || "/images/collections/orchestral.jpg",
+    // No default artwork (owner request) — empty card until he adds a cover.
+    image: p.image ?? "",
     theme: p.theme ?? "",
     trackIds: p.trackIds ?? [],
   }));

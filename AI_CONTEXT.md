@@ -2333,3 +2333,17 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   renders only in themed sections, and the draft form refuses a NEW playlist with an empty
   theme (editing legacy theme-less playlists still works; the "No theme" section still shows
   legacy rows). Empty no-theme section is no longer rendered on /playlists.
+  [ROUND 2 — owner bug reports + tweaks, same day:]
+  (1) BLACK SCREEN on "+ New theme" in Admin → Playlists: the new input used the <Check> icon
+  which was NOT imported in AdminContent.tsx (ReferenceError on render) — import added.
+  (2) EMPTY THEMES NOW SURVIVE F5: theme names persist in site_config key `playlist_themes` —
+  new admin action `set_playlist_themes` {values[]}, admin content GET returns `playlistThemes`
+  (added to AdminContentData in AdminTrackPanel + ContentData in AdminContent). Both "New
+  theme" flows (admin section + /playlists page) save the name; section builders merge stored
+  names as empty sections. Empty stored themes get an X (delete) button in the admin section
+  header (occupied themes can't be deleted).
+  (3) NO DEFAULT COVER: mapCollections/mapPlaylists no longer fall back to orchestral.jpg —
+  new items render as EMPTY cards until the owner uploads/generates art (image renders guarded
+  in Playlists/PlaylistDetail/Collections/CollectionDetail/Catalog strip).
+  (4) CREATING A PLAYLIST from the /playlists ghost card no longer navigates INTO it — stays
+  on the page, the new card pops into its theme (owner request).

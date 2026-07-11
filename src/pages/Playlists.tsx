@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Check, Pause, Play, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import Navigation from "@/components/Navigation";
@@ -38,22 +38,24 @@ const PlaylistCard = ({ playlist, tracks }: { playlist: LivePlaylist; tracks: Ca
         style={{ transform: "skewX(-9deg)" }}
         className="relative h-64 w-full overflow-hidden rounded-lg border border-white/15 bg-white/[0.04] shadow-[inset_0_0_16px_-8px_rgba(255,255,255,0.3)]"
       >
-        <img
-          src={playlist.image}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          onLoad={(event) => {
-            event.currentTarget.style.opacity = "1";
-          }}
-          style={{
-            transform: "skewX(9deg) scale(1.32) translateZ(0)",
-            backfaceVisibility: "hidden",
-            opacity: 0,
-            transition: "opacity 0.5s ease",
-          }}
-          className="absolute inset-0 h-full w-full object-cover"
-        />
+        {playlist.image && (
+          <img
+            src={playlist.image}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            onLoad={(event) => {
+              event.currentTarget.style.opacity = "1";
+            }}
+            style={{
+              transform: "skewX(9deg) scale(1.32) translateZ(0)",
+              backfaceVisibility: "hidden",
+              opacity: 0,
+              transition: "opacity 0.5s ease",
+            }}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        )}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent" />
         {/* Hover preview: soft darkening + centered play (first track of the list). */}
         {firstTrack && version && (
@@ -106,7 +108,6 @@ const SkeletonCard = () => (
 
 /** Admin ghost card: "+" → title input → creates a playlist in this theme. */
 const GhostCreateCard = ({ theme, admin }: { theme: string; admin: ContentAdmin }) => {
-  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
@@ -123,10 +124,12 @@ const GhostCreateCard = ({ theme, admin }: { theme: string; admin: ContentAdmin 
       return;
     }
     toast.success(`Playlist "${t}" created — add a cover and tracks`);
-    // Wait for the fresh content BEFORE navigating, so the new page finds it.
+    // Stay on THIS page (owner request) — the new card pops into its theme.
     await refreshContent();
     await admin.reload();
-    navigate(`/playlist/${res.id}`);
+    setBusy(false);
+    setTitle("");
+    setOpen(false);
   };
 
   return (
@@ -268,7 +271,8 @@ const Playlists = () => {
     else sections.push({ theme, items: [p] });
   }
   sections.sort((a, b) => (a.theme === "" ? -1 : b.theme === "" ? 1 : 0));
-  for (const t of draftThemes) {
+  // Persisted theme names (admin; survive F5 even while empty) + local drafts.
+  for (const t of [...(admin.data?.playlistThemes ?? []), ...draftThemes]) {
     if (!sections.some((s) => s.theme.toLowerCase() === t.toLowerCase())) {
       sections.push({ theme: t, items: [] });
     }
@@ -320,7 +324,18 @@ const Playlists = () => {
             ))}
             <NewThemeButton
               admin={admin}
-              onCreate={(theme) => setDraftThemes((prev) => [...prev, theme])}
+              onCreate={(theme) => {
+                setDraftThemes((prev) => [...prev, theme]);
+                // Persist the name so the empty theme survives a refresh.
+                const stored = admin.data?.playlistThemes ?? [];
+                if (!stored.some((x) => x.toLowerCase() === theme.toLowerCase())) {
+                  void admin
+                    .run({ action: "set_playlist_themes", values: [...stored, theme] })
+                    .then((ok) => {
+                      if (ok) void admin.reload();
+                    });
+                }
+              }}
             />
           </>
         )}

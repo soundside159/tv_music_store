@@ -56,6 +56,8 @@ export interface AdminContentData {
   trending: string[];
   collections: AdminContentItem[];
   playlists: AdminContentItem[];
+  /** Persisted theme names — empty themes survive F5 (site_config list). */
+  playlistThemes: string[];
 }
 
 type RunPayload = Record<string, unknown>;
@@ -76,6 +78,7 @@ export const useAdminTrackContent = (enabled: boolean) => {
           trending: d.trending ?? [],
           collections: d.collections ?? [],
           playlists: d.playlists ?? [],
+          playlistThemes: d.playlistThemes ?? [],
         });
       }
     } catch {

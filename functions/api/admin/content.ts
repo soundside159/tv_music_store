@@ -358,6 +358,21 @@ export const onRequestGet = async (ctx: Ctx) => {
   } catch {
     // none saved yet — fine
   }
+  // Persisted playlist THEME names — an empty theme (no playlists yet) must
+  // survive a refresh, so themes live as their own site_config list.
+  let playlistThemes: string[] = [];
+  try {
+    const row = await db
+      .prepare(`SELECT value FROM site_config WHERE key = 'playlist_themes'`)
+      .first<{ value: string }>();
+    if (row) {
+      playlistThemes = (JSON.parse(row.value) as unknown[]).filter(
+        (x): x is string => typeof x === "string",
+      );
+    }
+  } catch {
+    // none saved yet — fine
+  }
   // Composer profiles (pseudonyms) — the upload composer picker needs them.
   // Dead rows (no linked user AND no tracks — e.g. the Composer One/Two/Three
   // demo seeds from the first migration) are hidden: they only confused the
@@ -392,6 +407,7 @@ export const onRequestGet = async (ctx: Ctx) => {
     dbTrackCount: trackCount?.n ?? 0,
     vocabularies,
     tagsBase,
+    playlistThemes,
     composers,
     trending: trendingRow ? (JSON.parse(trendingRow.value) as string[]) : [],
     categories: categories.results.map((c) => ({
@@ -1259,6 +1275,32 @@ export const onRequestPost = async (ctx: Ctx) => {
         updated += 1;
       }
       return json({ ok: true, values: list, tracksUpdated: updated });
+    }
+
+    case "set_playlist_themes": {
+      // Persisted playlist theme names (Playlists admin + /playlists page):
+      // lets an empty theme exist before its first playlist is created.
+      if (!Array.isArray(body.values)) return json({ error: "values required" }, 400);
+      const seen = new Set<string>();
+      const list: string[] = [];
+      for (const raw of body.values) {
+        if (typeof raw !== "string") continue;
+        const v = raw.replace(/\s+/g, " ").trim().slice(0, 60);
+        const k = v.toLowerCase();
+        if (v && !seen.has(k)) {
+          seen.add(k);
+          list.push(v);
+        }
+        if (list.length >= 100) break;
+      }
+      await db
+        .prepare(
+          `INSERT INTO site_config (key, value) VALUES ('playlist_themes', ?1)
+           ON CONFLICT(key) DO UPDATE SET value = ?1`,
+        )
+        .bind(JSON.stringify(list))
+        .run();
+      return json({ ok: true, values: list });
     }
 
     case "set_tags_base": {

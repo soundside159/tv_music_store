@@ -52,12 +52,16 @@ const Collections = () => {
               {/* transform-gpu + hidden backface + will-change kill the sub-pixel
                   "jump" at the start/end of the hover zoom. */}
               <div className="aspect-[4/3] w-full overflow-hidden">
-                <img
-                  src={c.image}
-                  alt={c.shortTitle}
-                  loading="lazy"
-                  className="h-full w-full transform-gpu object-cover transition-transform duration-700 ease-out will-change-transform [backface-visibility:hidden] group-hover:scale-[1.06]"
-                />
+                {c.image ? (
+                  <img
+                    src={c.image}
+                    alt={c.shortTitle}
+                    loading="lazy"
+                    className="h-full w-full transform-gpu object-cover transition-transform duration-700 ease-out will-change-transform [backface-visibility:hidden] group-hover:scale-[1.06]"
+                  />
+                ) : (
+                  <div className="h-full w-full bg-white/[0.04]" />
+                )}
               </div>
               <div className="p-3">
                 <p className="font-body text-sm font-semibold text-foreground transition-colors group-hover:text-[#F4C430]">

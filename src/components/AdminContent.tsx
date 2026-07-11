@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ChevronDown, ChevronUp, GripVertical, Pause, Play, Plus, Sparkles, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, GripVertical, Pause, Play, Plus, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { makeThumbnail } from "@/lib/audioEncoding";
 import { brandCover, generateCoverApi, generateDescriptionApi, uploadCoverImage } from "@/lib/coverArt";
@@ -40,6 +40,8 @@ interface ContentData {
   collections: ContentItem[];
   playlists: ContentItem[];
   vocabularies?: Vocabularies;
+  /** Persisted theme names — empty themes survive F5 (site_config list). */
+  playlistThemes?: string[];
   /** Composer profiles (pseudonyms) for the upload composer picker. */
   composers?: { id: string; userId: string | null; displayName: string }[];
 }
@@ -438,13 +440,41 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
       else playlistSections.push({ theme, items: [p] });
     }
     playlistSections.sort((a, b) => (a.theme === "" ? -1 : b.theme === "" ? 1 : 0));
-    // Empty just-created theme sections (become permanent with their first playlist).
-    for (const t of adminDraftThemes) {
+    // Persisted theme names (survive F5 even while empty) + just-created ones.
+    for (const t of [...(data.playlistThemes ?? []), ...adminDraftThemes]) {
       if (!playlistSections.some((s) => s.theme.toLowerCase() === t.toLowerCase())) {
         playlistSections.push({ theme: t, items: [] });
       }
     }
   }
+
+  /** Adds a theme to the persisted list (so it survives F5 while empty). */
+  const addPlaylistTheme = async (name: string) => {
+    const t = name.trim();
+    if (!t) return;
+    setAdminDraftThemes((prev) => [...prev, t]);
+    const stored = data.playlistThemes ?? [];
+    if (!stored.some((x) => x.toLowerCase() === t.toLowerCase())) {
+      const ok = await run({ action: "set_playlist_themes", values: [...stored, t] }, "Theme saved");
+      if (ok) reload();
+    }
+  };
+
+  /** Removes an EMPTY theme from the persisted list (its header X button). */
+  const removePlaylistTheme = async (theme: string) => {
+    setAdminDraftThemes((prev) => prev.filter((x) => x.toLowerCase() !== theme.toLowerCase()));
+    const stored = data.playlistThemes ?? [];
+    if (stored.some((x) => x.toLowerCase() === theme.toLowerCase())) {
+      const ok = await run(
+        {
+          action: "set_playlist_themes",
+          values: stored.filter((x) => x.toLowerCase() !== theme.toLowerCase()),
+        },
+        "Theme removed",
+      );
+      if (ok) reload();
+    }
+  };
 
   /** Persists a new section layout: optional theme move for one playlist + the
       global sort order (themes move with their playlists automatically). */
@@ -635,6 +665,23 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                       >
                         <ChevronDown className="h-4 w-4" />
                       </button>
+                      {/* Empty themes can be deleted (occupied ones can't). */}
+                      {sec.theme && sec.items.length === 0 && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => {
+                            if (window.confirm(`Delete empty theme "${sec.theme}"?`)) {
+                              void removePlaylistTheme(sec.theme);
+                            }
+                          }}
+                          title="Delete this empty theme"
+                          aria-label={`Delete theme ${sec.theme}`}
+                          className="text-muted-foreground transition-colors hover:text-red-400 disabled:opacity-30"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
                     </span>
                   </div>
                   <ul className="divide-y divide-border/50">
@@ -786,12 +833,9 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                       onChange={(e) => setNewThemeName(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
-                          const t = newThemeName.trim();
-                          if (t) {
-                            setAdminDraftThemes((prev) => [...prev, t]);
-                            setNewThemeName("");
-                            setNewThemeOpen(false);
-                          }
+                          void addPlaylistTheme(newThemeName);
+                          setNewThemeName("");
+                          setNewThemeOpen(false);
                         }
                         if (e.key === "Escape") setNewThemeOpen(false);
                       }}
@@ -801,9 +845,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                     <button
                       type="button"
                       onClick={() => {
-                        const t = newThemeName.trim();
-                        if (!t) return;
-                        setAdminDraftThemes((prev) => [...prev, t]);
+                        void addPlaylistTheme(newThemeName);
                         setNewThemeName("");
                         setNewThemeOpen(false);
                       }}

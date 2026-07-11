@@ -444,16 +444,18 @@ const CollectionStrip = ({
                       : "border-white/15 shadow-[inset_0_0_16px_-8px_rgba(255,255,255,0.3)] hover:border-white/35"
                   }`}
                 >
-                  <img
-                    src={collection.image}
-                    alt=""
-                    decoding="async"
-                    onLoad={(event) => {
-                      event.currentTarget.style.opacity = "1";
-                    }}
-                    style={{ transform: "skewX(9deg) scale(1.32) translateZ(0)", backfaceVisibility: "hidden", opacity: 0, transition: "opacity 0.5s ease" }}
-                    className="absolute inset-0 h-full w-full object-cover"
-                  />
+                  {collection.image && (
+                    <img
+                      src={collection.image}
+                      alt=""
+                      decoding="async"
+                      onLoad={(event) => {
+                        event.currentTarget.style.opacity = "1";
+                      }}
+                      style={{ transform: "skewX(9deg) scale(1.32) translateZ(0)", backfaceVisibility: "hidden", opacity: 0, transition: "opacity 0.5s ease" }}
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
+                  )}
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent" />
                   <div
                     style={{ willChange: "opacity" }}

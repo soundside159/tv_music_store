@@ -90,20 +90,24 @@ const PlaylistDetail = () => {
               admin={admin}
               className="h-40 w-40 overflow-hidden rounded-xl border border-white/15 bg-white/[0.04] [transform:skewX(-9deg)]"
             >
-              <img
-                src={playlist.image}
-                alt={playlist.title}
-                onLoad={(event) => {
-                  event.currentTarget.style.opacity = "1";
-                }}
-                style={{
-                  transform: "skewX(9deg) scale(1.32) translateZ(0)",
-                  backfaceVisibility: "hidden",
-                  opacity: 0,
-                  transition: "opacity 0.4s ease",
-                }}
-                className="h-full w-full object-cover"
-              />
+              {playlist.image ? (
+                <img
+                  src={playlist.image}
+                  alt={playlist.title}
+                  onLoad={(event) => {
+                    event.currentTarget.style.opacity = "1";
+                  }}
+                  style={{
+                    transform: "skewX(9deg) scale(1.32) translateZ(0)",
+                    backfaceVisibility: "hidden",
+                    opacity: 0,
+                    transition: "opacity 0.4s ease",
+                  }}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="h-full w-full bg-white/[0.04]" />
+              )}
             </AdminCoverControl>
           </div>
           <div className="min-w-0">

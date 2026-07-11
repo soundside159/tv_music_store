@@ -80,7 +80,11 @@ const CollectionDetail = () => {
             admin={admin}
             className="h-40 w-40 shrink-0 overflow-hidden rounded-xl border border-border"
           >
-            <img src={collection.image} alt={collection.shortTitle} className="h-full w-full object-cover" />
+            {collection.image ? (
+              <img src={collection.image} alt={collection.shortTitle} className="h-full w-full object-cover" />
+            ) : (
+              <div className="h-full w-full bg-white/[0.04]" />
+            )}
           </AdminCoverControl>
           <div className="min-w-0">
             <p className="font-body text-[0.7rem] font-semibold uppercase tracking-[0.32em] text-[#F4C430]/90">
