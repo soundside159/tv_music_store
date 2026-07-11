@@ -29,6 +29,90 @@ const requireAdmin = async (ctx: Ctx) => {
   return { user };
 };
 
+// Vocab values must NEVER contain "/" — it is the storage separator for the
+// tracks.use_case / genre / mood columns (values are joined with " / ").
+// A value like "Social / Shorts" would split back into two tags, so its
+// checkbox never reads as checked and every click appends another copy.
+// Slashes are folded to "&" ("Social / Shorts" -> "Social & Shorts").
+const cleanVocabValue = (v: string) =>
+  v.replace(/\s*\/+\s*/g, " & ").replace(/\s+/g, " ").trim();
+
+/**
+ * One-time self-repair for vocab values that slipped in WITH a slash before
+ * cleanVocabValue existed: renames them to the "&" form in site_config and
+ * rewrites every track — the split fragments (e.g. "Social", "Shorts") are
+ * collapsed back into the renamed value and duplicates are removed.
+ * Cheap no-op when no vocab value contains "/". Called from the admin GET.
+ */
+const repairSlashVocabValues = async (db: D1Database, vocab: Record<VocabFacet, string[]>) => {
+  const facets = Object.keys(VOCAB_KEY) as VocabFacet[];
+  for (const facet of facets) {
+    const list = vocab[facet];
+    if (!list.some((v) => v.includes("/"))) continue;
+
+    const renames: Array<{ parts: string[]; to: string }> = [];
+    const seen = new Set<string>();
+    const next: string[] = [];
+    for (const v of list) {
+      const nv = v.includes("/") ? cleanVocabValue(v) : v;
+      if (v.includes("/")) {
+        renames.push({
+          parts: v.split("/").map((s) => s.trim()).filter(Boolean),
+          to: nv,
+        });
+      }
+      const k = nv.toLowerCase();
+      if (nv && !seen.has(k)) {
+        seen.add(k);
+        next.push(nv);
+      }
+    }
+    await db
+      .prepare(
+        `INSERT INTO site_config (key, value) VALUES (?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = ?2`,
+      )
+      .bind(VOCAB_KEY[facet], JSON.stringify(next))
+      .run();
+    vocab[facet] = next;
+
+    // Fix tracks: fragments of the old value were stored as separate tags —
+    // map them back to the renamed value (unless the fragment is itself a
+    // legitimate vocab value) and drop duplicates.
+    const canonical = new Set(next.map((v) => v.toLowerCase()));
+    const col = VOCAB_COL[facet];
+    const rows = await db
+      .prepare(`SELECT id, ${col} AS v FROM tracks WHERE ${col} IS NOT NULL AND ${col} != ''`)
+      .all<{ id: string; v: string | null }>();
+    for (const r of rows.results) {
+      const pieces = (r.v ?? "").split("/").map((s) => s.trim()).filter(Boolean);
+      const out: string[] = [];
+      const outSeen = new Set<string>();
+      let changed = false;
+      for (const p of pieces) {
+        let val = p;
+        if (!canonical.has(p.toLowerCase())) {
+          const hit = renames.find((rn) => rn.parts.some((x) => x.toLowerCase() === p.toLowerCase()));
+          if (hit) {
+            val = hit.to;
+            changed = true;
+          }
+        }
+        const k = val.toLowerCase();
+        if (outSeen.has(k)) {
+          changed = true;
+          continue;
+        }
+        outSeen.add(k);
+        out.push(val);
+      }
+      if (changed) {
+        await db.prepare(`UPDATE tracks SET ${col} = ?2 WHERE id = ?1`).bind(r.id, out.join(" / ")).run();
+      }
+    }
+  }
+};
+
 /** Adds newer track columns on first use — saves the owner wrangler migrations. */
 const ensureTrackCoverColumn = async (db: D1Database) => {
   const alters = [
@@ -222,6 +306,9 @@ export const onRequestGet = async (ctx: Ctx) => {
     .first<{ value: string }>();
   const trackCount = await db.prepare(`SELECT COUNT(*) AS n FROM tracks`).first<{ n: number }>();
   const vocabularies = await getVocabularies(db);
+  // Self-heal legacy vocab values containing "/" (they broke the " / "-joined
+  // facet storage and duplicated tags on tracks) — no-op when data is clean.
+  await repairSlashVocabValues(db, vocabularies);
   // Composer profiles (pseudonyms) — the upload composer picker needs them.
   // Dead rows (no linked user AND no tracks — e.g. the Composer One/Two/Three
   // demo seeds from the first migration) are hidden: they only confused the
@@ -562,9 +649,24 @@ export const onRequestPost = async (ctx: Ctx) => {
         for (const [key, col] of facetCols) {
           const ch = body.facets?.[key];
           if (!ch) continue;
-          const rm = new Set((ch.remove ?? []).map(String));
-          let vals = splitVals(row[col]).filter((v) => !rm.has(v));
-          for (const a of ch.add ?? []) if (!vals.includes(a)) vals = [...vals, a];
+          const rm = new Set((ch.remove ?? []).map((s) => String(s).toLowerCase()));
+          // Case-insensitive dedupe on read — self-heals rows that ever
+          // accumulated duplicate tags.
+          const seen = new Set<string>();
+          const vals: string[] = [];
+          for (const v of splitVals(row[col])) {
+            const k = v.toLowerCase();
+            if (rm.has(k) || seen.has(k)) continue;
+            seen.add(k);
+            vals.push(v);
+          }
+          for (const a of ch.add ?? []) {
+            const c = cleanVocabValue(String(a));
+            const k = c.toLowerCase();
+            if (!c || seen.has(k)) continue;
+            seen.add(k);
+            vals.push(c);
+          }
           next[col] = vals.join(" / ");
         }
         const f = body.fields;
@@ -1004,7 +1106,11 @@ export const onRequestPost = async (ctx: Ctx) => {
       const vocab = await getVocabularies(db);
       let list = vocab[facet];
       if (body.action === "add_vocab") {
-        if (!list.some((v) => v.toLowerCase() === value.toLowerCase())) list = [...list, value];
+        // "/" is the storage separator — fold it to "&" so the value survives
+        // the join/split round-trip (see cleanVocabValue).
+        const clean = cleanVocabValue(value);
+        if (!clean) return json({ error: "value required" }, 400);
+        if (!list.some((v) => v.toLowerCase() === clean.toLowerCase())) list = [...list, clean];
       } else {
         list = list.filter((v) => v !== value);
       }
@@ -1066,7 +1172,7 @@ export const onRequestPost = async (ctx: Ctx) => {
       const facet = body.facet as VocabFacet;
       if (!VOCAB_KEY[facet]) return json({ error: "Unknown facet" }, 400);
       const value = body.value?.trim();
-      const newValue = body.newValue?.trim();
+      const newValue = cleanVocabValue(body.newValue?.trim() ?? "");
       if (!value || !newValue) return json({ error: "value and newValue required" }, 400);
       if (value === newValue) return json({ ok: true });
 
@@ -1114,7 +1220,7 @@ export const onRequestPost = async (ctx: Ctx) => {
       const list: string[] = [];
       for (const raw of body.values) {
         if (typeof raw !== "string") continue;
-        const v = raw.trim();
+        const v = cleanVocabValue(raw);
         const k = v.toLowerCase();
         if (v && !seen.has(k)) {
           seen.add(k);

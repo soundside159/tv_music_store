@@ -2140,3 +2140,20 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   pseudonym, duration, genre, description, image) injected per-track (crawlers that run JS
   see it via useSeo; consider prerendering later). Also consider BreadcrumbList and
   MusicPlaylist markup on playlist/collection pages.
+- **2026-07-11 (vocab "/" bug — Social / Shorts duplicates fixed):** owner added the Use Case
+  value "Social / Shorts" via Admin → Vocabulary; since facet values are stored " / "-joined in
+  tracks.use_case/genre/mood and split by "/", the value could never round-trip: the track-page
+  admin checkbox never read as checked and EVERY click appended another "Social"+"Shorts" pair
+  (owner's Unstoppable track collected ~8 copies). Fix in functions/api/admin/content.ts:
+  (1) `cleanVocabValue()` — folds "/" to "&" ("Social / Shorts" → "Social & Shorts"), applied in
+  add_vocab, rename_vocab (newValue), set_vocab, and to added values in bulk_update_tracks;
+  (2) bulk_update_tracks now dedupes facet values case-insensitively on every write (removes are
+  case-insensitive too) — corrupted rows self-heal on the next edit;
+  (3) `repairSlashVocabValues()` — lazy one-time repair called from the admin content GET: any
+  vocab value containing "/" is renamed to its "&" form in site_config, and every track's facet
+  column has the orphaned fragments (e.g. standalone "Social", "Shorts") collapsed back into the
+  renamed value + duplicates removed (fragments that are themselves canonical vocab values are
+  left alone). No-op when data is clean. So the owner just opens any admin page once and the
+  vocab + tracks fix themselves; the sidebar value shows as "Social & Shorts". tsc 0, eslint 0
+  on the edited file. Client untouched (splitFilterValues stays "/"-based — safe once values
+  can't contain "/").
