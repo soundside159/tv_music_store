@@ -2236,3 +2236,17 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   (square cover + title/waveform bars) and the tab title says "Loading…"; the not-found screen
   appears only after the fetch settles with a genuinely missing slug. CollectionDetail /
   PlaylistDetail already had this guard — TrackDetail was the only page missing it.
+- **2026-07-11 (tag cap 25 → 50):** owner plans a large Tags Base, 25 per track felt tight.
+  Bumped everywhere: content.ts (update_track / bulk fields.tags / create_track slice(0, 50)),
+  suggest-tags.ts (model asked for "15-50 best, most relevant first", server slice(0, 50)),
+  AdminTracksEdit (client merge cap 50 + Tags Base dialog copy).
+- **2026-07-11 (AI Magic round: 30-50 tags, solo Generate on Extra tags, Description checkbox):**
+  (1) suggest-tags.ts prompt now demands BETWEEN 30 AND 50 extra tags, best-fitting first then
+  progressively looser (fewer only when the base itself is smaller). (2) The AI-box button
+  renamed "Suggest ticks" → "AI Magic". (3) NEW 6th checkbox "Description": AI Magic also
+  writes the SEO description via the existing generate-description endpoint, fed with the
+  track's saved facets MERGED with the just-AI-ticked ones (lands in the Description field,
+  saved by Apply; toast says "N box(es) ticked + description written"). (4) NEW solo ✨ Generate
+  button ON the Extra tags textarea: calls suggest-tags with extraTags ONLY (include checkboxes
+  untouched); prompt = the AI-box text, falling back to the track's description; result merges
+  into the field (mergeTags module helper — dedupe, cap 50; also reused by AI Magic).

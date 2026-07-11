@@ -99,6 +99,20 @@ interface SingleFields {
   hasStems: boolean;
 }
 
+/** Merge AI-suggested extra tags into the comma list (dedupe, 50 max). */
+const mergeTags = (prevTags: string, extra: string[]): string[] => {
+  const cur = prevTags.split(",").map((s) => s.trim()).filter(Boolean);
+  const seen = new Set(cur.map((s) => s.toLowerCase()));
+  const merged = [...cur];
+  for (const t of extra) {
+    const k = t.toLowerCase();
+    if (seen.has(k) || merged.length >= 50) continue;
+    seen.add(k);
+    merged.push(t);
+  }
+  return merged;
+};
+
 const fieldsOf = (t: CatalogTrack): SingleFields => ({
   title: t.title,
   bpm: t.bpm ? String(t.bpm) : "",
@@ -347,6 +361,7 @@ const AdminTracksEdit = ({
     playlists: false,
     categories: false,
     extraTags: false,
+    description: false,
   });
   const runAiSuggest = async () => {
     setAiPromptBusy(true);
@@ -396,27 +411,85 @@ const AdminTracksEdit = ({
       n += tick(d.playlistIds, setPlaylistDelta);
       n += tick(d.categoryIds, setCategoryDelta);
       // Extra tags land in the single-track "Extra tags" field (comma list,
-      // max 25 per track) — saved by the normal Apply like everything else.
+      // max 50 per track) — saved by the normal Apply like everything else.
       if (aiInclude.extraTags && d.extraTags && d.extraTags.length > 0 && fields) {
-        const cur = fields.tags.split(",").map((s) => s.trim()).filter(Boolean);
-        const seenTags = new Set(cur.map((s) => s.toLowerCase()));
-        const merged = [...cur];
-        for (const t of d.extraTags) {
-          const k = t.toLowerCase();
-          if (seenTags.has(k) || merged.length >= 25) continue;
-          seenTags.add(k);
-          merged.push(t);
-        }
-        setFields({ ...fields, tags: merged.join(", ") });
-        n += merged.length - cur.length;
+        const before = fields.tags.split(",").map((s) => s.trim()).filter(Boolean).length;
+        n += mergeTags(fields.tags, d.extraTags).length - before;
+        setFields((prev) =>
+          prev ? { ...prev, tags: mergeTags(prev.tags, d.extraTags ?? []).join(", ") } : prev,
+        );
       }
+      // Description: reuses the owner's fixed SEO prompt (generate-description)
+      // fed with the track's saved facets MERGED with the freshly AI-ticked
+      // ones, so the text matches what the owner is about to Apply.
+      let wroteDescription = false;
+      if (aiInclude.description && selTracks.length === 1) {
+        const t = selTracks[0];
+        try {
+          const text = await generateDescriptionApi({
+            useCase: [...new Set([...splitFilterValues(t.useCase), ...(d.useCase ?? [])])],
+            genre: [...new Set([...splitFilterValues(t.genre), ...(d.genre ?? [])])],
+            mood: [...new Set([...splitFilterValues(t.mood), ...(d.mood ?? [])])],
+          });
+          setFields((prev) => (prev ? { ...prev, description: text } : prev));
+          wroteDescription = true;
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : "Description generation failed");
+        }
+      }
+      const parts: string[] = [];
+      if (n > 0) parts.push(`${n} box(es) ticked`);
+      if (wroteDescription) parts.push("description written");
       toast.success(
-        n > 0 ? `AI ticked ${n} box(es) — review and press Apply` : "AI didn't find anything fitting",
+        parts.length > 0
+          ? `AI: ${parts.join(" + ")} — review and press Apply`
+          : "AI didn't find anything fitting",
       );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "AI suggestion failed");
     } finally {
       setAiPromptBusy(false);
+    }
+  };
+
+  // Solo Extra-tags generation (Generate button on the Extra tags field):
+  // same endpoint, extraTags ONLY — the include checkboxes above stay as-is.
+  // Uses the AI-prompt text, falling back to the track's description.
+  const [tagsGenBusy, setTagsGenBusy] = useState(false);
+  const generateExtraTags = async () => {
+    if (!fields) return;
+    const promptText = aiPrompt.trim() || fields.description.trim();
+    if (!promptText) {
+      toast.error("Write a prompt in the AI box above (or a description) first");
+      return;
+    }
+    setTagsGenBusy(true);
+    try {
+      const res = await fetch("/api/admin/suggest-tags", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ prompt: promptText, include: { tags: false, extraTags: true } }),
+      });
+      const d = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        extraTags?: string[];
+      };
+      if (!res.ok || !d.ok) throw new Error(d.error ?? "Tag generation failed");
+      const got = d.extraTags?.length ?? 0;
+      if (got === 0) {
+        toast.error("The AI picked nothing — is the Tags Base filled?");
+        return;
+      }
+      setFields((prev) =>
+        prev ? { ...prev, tags: mergeTags(prev.tags, d.extraTags ?? []).join(", ") } : prev,
+      );
+      toast.success(`${got} extra tag(s) suggested — review and press Apply`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Tag generation failed");
+    } finally {
+      setTagsGenBusy(false);
     }
   };
 
@@ -1307,6 +1380,11 @@ const AdminTracksEdit = ({
                       state={aiInclude.extraTags ? "all" : "none"}
                       onToggle={() => setAiInclude((p) => ({ ...p, extraTags: !p.extraTags }))}
                     />
+                    <TriCheckbox
+                      label="Description"
+                      state={aiInclude.description ? "all" : "none"}
+                      onToggle={() => setAiInclude((p) => ({ ...p, description: !p.description }))}
+                    />
                   </div>
                   <div className="mt-2 flex items-center gap-3">
                     <button
@@ -1319,13 +1397,14 @@ const AdminTracksEdit = ({
                           aiInclude.collections ||
                           aiInclude.playlists ||
                           aiInclude.categories ||
-                          aiInclude.extraTags
+                          aiInclude.extraTags ||
+                          aiInclude.description
                         )
                       }
                       onClick={() => void runAiSuggest()}
                       className={`${goldBtnCls} px-3 py-1.5 text-xs`}
                     >
-                      {aiPromptBusy ? "Thinking…" : "Suggest ticks"}
+                      {aiPromptBusy ? "Thinking…" : "AI Magic"}
                     </button>
                     <span className="font-body text-[10px] leading-tight text-muted-foreground">
                       Pre-ticks the panels on the right — review, then press Apply.
@@ -1383,13 +1462,26 @@ const AdminTracksEdit = ({
                       </div>
                     );
                   })()}
-                  <textarea
-                    placeholder="Extra tags, comma separated (epic, hybrid, rise…)"
-                    rows={4}
-                    value={fields.tags}
-                    onChange={(e) => setFields({ ...fields, tags: e.target.value })}
-                    className={inputCls}
-                  />
+                  <div className="relative">
+                    <textarea
+                      placeholder="Extra tags, comma separated (epic, hybrid, rise…)"
+                      rows={4}
+                      value={fields.tags}
+                      onChange={(e) => setFields({ ...fields, tags: e.target.value })}
+                      className={`${inputCls} w-full ${tagsGenBusy ? "animate-pulse border-[#F4C430]/60" : ""}`}
+                    />
+                    {/* Solo AI pick from the Tags Base — ignores the include checkboxes. */}
+                    <button
+                      type="button"
+                      disabled={tagsGenBusy || busy}
+                      onClick={() => void generateExtraTags()}
+                      title="Pick 30-50 tags from the Tags Base (uses the AI prompt above, or the description)"
+                      className="absolute bottom-2.5 right-2 inline-flex items-center gap-1 rounded-md border border-[#F4C430]/50 bg-card px-2 py-1 font-body text-[11px] font-semibold text-[#F4C430] transition-colors hover:bg-[#F4C430] hover:text-background disabled:opacity-40"
+                    >
+                      <Sparkles className={`h-3 w-3 ${tagsGenBusy ? "animate-pulse" : ""}`} />
+                      {tagsGenBusy ? "Picking…" : "Generate"}
+                    </button>
+                  </div>
                   <div className="flex items-center gap-2.5">
                     <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/60 bg-secondary">
                       {fields.cover ? (
@@ -1501,7 +1593,7 @@ const AdminTracksEdit = ({
           </div>
           <p className="mt-1 font-body text-xs text-muted-foreground">
             Comma-separated global tag list. "AI tagging by prompt" picks a track's Extra tags
-            only from here (a track holds up to 25 tags).
+            only from here (a track holds up to 50 tags).
           </p>
           <textarea
             value={tagsBaseText}

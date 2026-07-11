@@ -661,7 +661,7 @@ export const onRequestPost = async (ctx: Ctx) => {
           body.useCase ?? "",
           bpm,
           body.description ?? "",
-          JSON.stringify(Array.isArray(body.tags) ? body.tags.slice(0, 25) : []),
+          JSON.stringify(Array.isArray(body.tags) ? body.tags.slice(0, 50) : []),
           body.cover ?? "",
         )
         .run();
@@ -726,7 +726,7 @@ export const onRequestPost = async (ctx: Ctx) => {
           if (typeof f.description === "string") next.description = f.description;
           if (typeof f.cover === "string") next.cover = f.cover;
           if (typeof f.coverThumb === "string") next.cover_thumb = f.coverThumb;
-          if (Array.isArray(f.tags)) next.tags = JSON.stringify(f.tags.slice(0, 25));
+          if (Array.isArray(f.tags)) next.tags = JSON.stringify(f.tags.slice(0, 50));
           if (typeof f.hasStems === "boolean") next.has_stems = f.hasStems ? 1 : 0;
           // Stems bundle: storing the key also switches the STEMS badge on.
           if (typeof f.stemsKey === "string" && /^masters\//.test(f.stemsKey)) {
@@ -855,7 +855,7 @@ export const onRequestPost = async (ctx: Ctx) => {
 
       const trackId = newId("trk");
       const bpm = Number.isFinite(body.bpm) ? Math.round(body.bpm as number) : null;
-      const tags = Array.isArray(body.tags) ? body.tags.slice(0, 25) : [];
+      const tags = Array.isArray(body.tags) ? body.tags.slice(0, 50) : [];
       const wavZipKey =
         typeof body.wavZipKey === "string" && /^masters\//.test(body.wavZipKey)
           ? body.wavZipKey

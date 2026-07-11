@@ -22,7 +22,7 @@ Act like a generous human curator stocking a storefront: rely on associations, m
 Example: "energetic electronic positive" plausibly fits Sports, Action, Upbeat, Energetic, Technology and similar entries.
 Collections and playlists have descriptive names — put the track everywhere a listener browsing that shelf would be happy to find it.
 Only leave an entry out when the track clearly would NOT fit there; prefer including a borderline entry over dropping it.
-For the extraTags list (search keywords): pick the 10-25 BEST-fitting tags for this track, most relevant first.
+For the extraTags list (search keywords): return BETWEEN 30 AND 50 tags, ordered by relevance — the best-fitting first, then progressively looser but still plausible associations. Returning fewer than 30 is allowed ONLY when the given list itself has fewer than 30 entries (then return them all, best first).
 Never invent entries: every returned string must be copied EXACTLY from the given lists.
 Respond with JSON only, using this shape (leave a list empty if you were not given it or nothing fits):
 {"useCase": [], "genre": [], "mood": [], "collections": [], "playlists": [], "categories": [], "extraTags": []}`;
@@ -189,7 +189,7 @@ export const onRequestPost = async (ctx: Ctx) => {
     collectionIds: canonIds(parsed.collections, collections),
     playlistIds: canonIds(parsed.playlists, playlists),
     categoryIds: canonIds(parsed.categories, categories),
-    // A track carries at most 25 tags — trim here so the client can merge as-is.
-    extraTags: canonValues(parsed.extraTags, tagsBase).slice(0, 25),
+    // A track carries at most 50 tags — trim here so the client can merge as-is.
+    extraTags: canonValues(parsed.extraTags, tagsBase).slice(0, 50),
   });
 };
