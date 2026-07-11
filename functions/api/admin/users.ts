@@ -33,6 +33,9 @@ export const onRequestGet = async (ctx: Ctx) => {
   const gate = await requireAdmin(ctx);
   if (gate.error) return gate.error;
 
+  // Drops legacy random suffixes from artist-page slugs (idempotent).
+  await normalizeComposerSlugs(ctx.env.DB);
+
   const rows = await ctx.env.DB.prepare(
     `SELECT u.id, u.email, u.name, u.role, u.created_at,
             (SELECT s.plan FROM subscriptions s
@@ -124,9 +127,13 @@ const slugify = (s: string) =>
 
 /**
  * Creates or renames the composer profile (pseudonym) linked to a user.
- * Pseudonyms are UNIQUE (case-insensitive). If the pseudonym belongs to a
- * DETACHED profile (its user was deleted), the profile — with all its tracks —
- * is re-attached to this user. Returns an error string or null on success.
+ * Pseudonyms are UNIQUE (case-insensitive) and the artist-page slug is the
+ * plain slugified nick — NO random suffix (owner rule: /artist/lumine-wave,
+ * never /artist/lumine-wave-6cab66). A name whose slug is already taken by
+ * another composer is REFUSED instead of being silently suffixed. If the
+ * pseudonym belongs to a DETACHED profile (its user was deleted), the profile —
+ * with all its tracks — is re-attached to this user. Returns an error string or
+ * null on success.
  */
 const upsertComposer = async (
   db: D1Database,
@@ -156,29 +163,57 @@ const upsertComposer = async (
     return null;
   }
 
+  const slug = slugify(pseudonym);
+  if (!slug) return "The pseudonym needs at least one letter or digit";
+  // The slug is the public artist URL — it must be free (two different nicks can
+  // still collapse to the same slug, e.g. "Neo Wave" and "neo-wave").
+  const slugOwner = await db
+    .prepare(`SELECT id FROM composers WHERE slug = ?1 LIMIT 1`)
+    .bind(slug)
+    .first<{ id: string }>();
+  if (slugOwner && slugOwner.id !== existing?.id) {
+    return "That artist page name is already taken — pick a different pseudonym";
+  }
+
   if (existing) {
+    // Rename: the slug follows the nick, so the artist URL stays readable.
     await db
-      .prepare(`UPDATE composers SET display_name = ?2 WHERE id = ?1`)
-      .bind(existing.id, pseudonym)
+      .prepare(`UPDATE composers SET display_name = ?2, slug = ?3 WHERE id = ?1`)
+      .bind(existing.id, pseudonym, slug)
       .run();
     return null;
   }
-  // New composer row — slug must be unique; suffix on collision.
-  let slug = slugify(pseudonym) || newId("cmp");
-  const taken = await db
-    .prepare(`SELECT id FROM composers WHERE slug = ?1`)
-    .bind(slug)
-    .first();
-  if (taken) slug = `${slug}-${crypto.randomUUID().slice(0, 6)}`;
-  const id = newId("cmp");
   await db
     .prepare(
       `INSERT INTO composers (id, user_id, slug, display_name, bio, styles)
        VALUES (?1, ?2, ?3, ?4, '', '[]')`,
     )
-    .bind(id, userId, slug, pseudonym)
+    .bind(newId("cmp"), userId, slug, pseudonym)
     .run();
   return null;
+};
+
+/**
+ * One-time cleanup of legacy suffixed slugs ("lumine-wave-6cab66"): give every
+ * composer the plain slug of his nick whenever that slug is free. Runs on the
+ * admin Users load — idempotent, and never touches a slug that would clash.
+ */
+const normalizeComposerSlugs = async (db: D1Database) => {
+  try {
+    const rows = await db
+      .prepare(`SELECT id, slug, display_name FROM composers`)
+      .all<{ id: string; slug: string; display_name: string }>();
+    const used = new Set(rows.results.map((c) => c.slug));
+    for (const c of rows.results) {
+      const want = slugify(c.display_name);
+      if (!want || want === c.slug || used.has(want)) continue;
+      await db.prepare(`UPDATE composers SET slug = ?2 WHERE id = ?1`).bind(c.id, want).run();
+      used.delete(c.slug);
+      used.add(want);
+    }
+  } catch {
+    // composers table missing / read-only hiccup — slugs just stay as they are
+  }
 };
 
 export const onRequestPatch = async (ctx: Ctx) => {
@@ -292,6 +327,7 @@ export const onRequestPatch = async (ctx: Ctx) => {
     if (cmp) {
       // Never orphan tracks: the profile can only go when it owns none.
       const n = await ctx.env.DB.prepare(`SELECT COUNT(*) AS n FROM tracks WHERE composer_id = ?1`)
+        .bind(cmp.id)
         .bind(cmp.id)
         .first<{ n: number }>();
       if ((n?.n ?? 0) > 0) {

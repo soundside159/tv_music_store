@@ -1,12 +1,10 @@
 import { Link, useParams } from "react-router-dom";
-import { ArrowRight, Music2 } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { TrackRowList } from "@/components/TrackRowPlayer";
 import { useTracks } from "@/hooks/useTracks";
 import { useComposers, useContentReady } from "@/hooks/useContent";
-
-const GOLD = "#F4C430";
 
 /**
  * Public composer page: /artist/<slug>. The nick (composers.display_name) and
@@ -22,16 +20,14 @@ const Artist = () => {
 
   const composer = composers.find((c) => c.slug === slug);
   const artistTracks = tracks.filter((t) => t.artistSlug === slug);
-  const totalDownloads = artistTracks.reduce((sum, t) => sum + (t.downloads ?? 0), 0);
 
   if (!ready) {
     return (
       <div className="min-h-screen bg-background">
         <Navigation />
-        <main className="mx-auto w-full max-w-5xl px-4 pb-24 pt-28 sm:px-6 md:pt-32">
-          <div className="h-24 w-24 animate-pulse rounded-full bg-white/[0.06]" />
-          <div className="mt-6 h-8 w-64 animate-pulse rounded bg-white/[0.06]" />
-          <div className="mt-3 h-4 w-96 max-w-full animate-pulse rounded bg-white/[0.04]" />
+        <main className="mx-auto w-full max-w-7xl px-4 pb-24 pt-24 sm:px-6 md:pt-28">
+          <div className="h-9 w-64 animate-pulse rounded bg-white/[0.06]" />
+          <div className="mt-4 h-4 w-96 max-w-full animate-pulse rounded bg-white/[0.04]" />
         </main>
         <Footer />
       </div>
@@ -57,24 +53,16 @@ const Artist = () => {
     <div className="min-h-screen bg-background">
       <Navigation />
       <main className="mx-auto w-full max-w-7xl px-4 pb-32 pt-24 sm:px-6 md:pt-28">
-        <header className="flex flex-col items-start gap-6 md:flex-row md:items-center">
-          <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-full border border-[#F4C430]/40 bg-card">
-            <Music2 className="h-10 w-10" style={{ color: GOLD }} />
-          </div>
-          <div className="min-w-0">
-            <h1 className="font-display text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-              {composer.displayName}
-            </h1>
-            {composer.bio && (
-              <p className="mt-3 max-w-2xl font-body text-sm leading-relaxed text-muted-foreground">
-                {composer.bio}
-              </p>
-            )}
-            <p className="mt-3 font-body text-xs text-muted-foreground">
-              {artistTracks.length} {artistTracks.length === 1 ? "track" : "tracks"} in catalog
-              {totalDownloads > 0 ? ` · ${totalDownloads} downloads` : ""}
+        {/* Nick + about text only — no avatar, no stats (owner request). */}
+        <header className="min-w-0">
+          <h1 className="font-display text-3xl font-bold tracking-tight text-foreground md:text-4xl">
+            {composer.displayName}
+          </h1>
+          {composer.bio && (
+            <p className="mt-3 max-w-2xl font-body text-sm leading-relaxed text-muted-foreground">
+              {composer.bio}
             </p>
-          </div>
+          )}
         </header>
 
         <section className="mt-12">

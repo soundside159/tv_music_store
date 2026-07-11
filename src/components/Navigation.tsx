@@ -5,6 +5,7 @@ import AuthModal from "@/components/AuthModal";
 import { useCurrentUser, useSubscription } from "@/hooks/useMockData";
 import { logout } from "@/hooks/useAuth";
 import { useCart } from "@/hooks/useCart";
+import { openPlanModal } from "@/lib/billing";
 import { resumePendingDownload } from "@/lib/downloadTrack";
 
 const ACCOUNT_MENU = [
@@ -27,6 +28,11 @@ const Navigation = () => {
   const subscription = useSubscription();
   const { count: cartCount } = useCart();
   const acctRef = useRef<HTMLDivElement>(null);
+
+  // Account popup header: plan chip (+ "Upgrade" when the user is still free).
+  const plan = subscription?.plan ?? "free";
+  const isPaidPlan = plan !== "free";
+  const planLabel = plan.replace(/^\w/, (c) => c.toUpperCase());
 
   const onAccountClick = () => {
     // Logged in: toggle the dropdown. Guest: open the sign-in dialog.
@@ -151,21 +157,37 @@ const Navigation = () => {
               {user && acctOpen && (
                 <div
                   role="menu"
-                  className="absolute right-0 top-full z-50 mt-3 w-52 overflow-hidden rounded-xl border border-border/70 bg-card/95 py-1.5 shadow-[0_20px_40px_-16px_rgba(0,0,0,0.7)] backdrop-blur-xl animate-fade-in"
+                  className="absolute right-0 top-full z-50 mt-3 w-60 overflow-hidden rounded-xl border border-border/70 bg-card/95 py-1.5 shadow-[0_20px_40px_-16px_rgba(0,0,0,0.7)] backdrop-blur-xl animate-fade-in"
                 >
-                  <div className="px-4 pb-2 pt-1">
+                  {/* Identity block: email on top, plan chip + Upgrade on one row,
+                      separated from the menu items by a rule. */}
+                  <div className="px-4 pb-2.5 pt-1.5">
                     <p className="truncate font-body text-xs text-muted-foreground">{user.email}</p>
-                    {/* Current plan at a glance (matches the Profile chip). */}
-                    <span
-                      className={`mt-1 inline-flex items-center rounded-full border px-2 py-px font-body text-[10px] font-semibold ${
-                        subscription?.plan && subscription.plan !== "free"
-                          ? "border-[#F4C430]/50 bg-[#F4C430]/10 text-[#F4C430]"
-                          : "border-border text-muted-foreground"
-                      }`}
-                    >
-                      {(subscription?.plan ?? "free").replace(/^\w/, (c) => c.toUpperCase())} plan
-                    </span>
+                    <div className="mt-1.5 flex items-center justify-between gap-2">
+                      <span
+                        className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 font-body text-[10px] font-semibold ${
+                          isPaidPlan
+                            ? "border-[#F4C430]/50 bg-[#F4C430]/10 text-[#F4C430]"
+                            : "border-border text-muted-foreground"
+                        }`}
+                      >
+                        {planLabel} plan
+                      </span>
+                      {!isPaidPlan && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAcctOpen(false);
+                            openPlanModal();
+                          }}
+                          className="shrink-0 rounded-full bg-[#F4C430] px-2.5 py-0.5 font-body text-[10px] font-bold text-background transition-colors hover:bg-[#F4C430]/85"
+                        >
+                          Upgrade
+                        </button>
+                      )}
+                    </div>
                   </div>
+                  <div className="mb-1 h-px bg-border/60" />
                   {ACCOUNT_MENU.map((item) => (
                     <Link
                       key={item.section}

@@ -68,11 +68,9 @@ const PlaylistCard = ({ playlist, tracks }: { playlist: LivePlaylist; tracks: Ca
         {/* Hover preview: soft darkening (whole card) + centered play button. */}
         {firstTrack && version && (
           <>
-            <div
-              className={`pointer-events-none absolute inset-0 bg-black/45 transition-opacity duration-300 ${
-                active ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-              }`}
-            />
+            {/* Both the dim and the play button live ONLY on hover — a playing
+                card no longer keeps the button pinned on top of its art. */}
+            <div className="pointer-events-none absolute inset-0 bg-black/45 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
               <button
                 type="button"
@@ -90,9 +88,7 @@ const PlaylistCard = ({ playlist, tracks }: { playlist: LivePlaylist; tracks: Ca
                 aria-label={active && isPlaying ? `Pause ${playlist.title}` : `Preview ${playlist.title}`}
                 style={{ transform: "skewX(9deg)" }}
                 /* White by default; gold + glow only once the pointer is on it. */
-                className={`pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-white text-background shadow-xl transition-all duration-200 hover:scale-110 hover:bg-[#F4C430] hover:shadow-[0_0_28px_-4px_rgba(244,196,48,0.8)] ${
-                  active ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                }`}
+                className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-white text-background opacity-0 shadow-xl transition-all duration-200 hover:scale-110 hover:bg-[#F4C430] hover:shadow-[0_0_28px_-4px_rgba(244,196,48,0.8)] group-hover:opacity-100"
               >
                 {active && isPlaying ? (
                   <Pause className="h-5 w-5" />

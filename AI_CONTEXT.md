@@ -2442,3 +2442,18 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   `vocabularies` (tsc error) and `for (const ok of results) ok ? sent++ : failed++;` in
   `functions/api/admin/campaign.ts` (eslint no-unused-expressions — this made `npm run lint` FAIL,
   i.e. deploy.bat's lint gate was red). Now: `npm run lint` 0 errors, tsc 0 errors.
+- **2026-07-11 (polish round 4):** (1) ARTIST PAGE: removed the round Music2 avatar circle and the
+  "N tracks in catalog · N downloads" line — header is just the nick + about text (owner: no avatar
+  planned); page container widened to max-w-7xl, skeleton simplified.
+  (2) COMPOSER SLUGS have NO random suffix any more (`/artist/lumine-wave`, not
+  `…-6cab66`): `upsertComposer` in `functions/api/admin/users.ts` now slugifies the nick and REFUSES
+  the save when that slug (or the display name) already belongs to another composer — "That artist
+  page name is already taken". A RENAME now also rewrites the slug, so the URL follows the nick.
+  Legacy suffixed slugs are cleaned by `normalizeComposerSlugs(db)` — a lazy, idempotent pass that
+  runs on every admin Users GET and rewrites a composer's slug to the plain one whenever it is free.
+  (3) PLAYLIST CARD: the play button + dim overlay now appear ONLY on hover (previously the button
+  stayed pinned on a card whose track was playing).
+  (4) HEADER ACCOUNT POPUP (`Navigation.tsx`): identity block reworked — email on top, then a row
+  with the plan chip and, for free users, a gold **Upgrade** button that closes the popup and fires
+  `openPlanModal()` (the tvms:pick-plan modal); a rule separates the block from the menu items;
+  popup width 52 -> 60.
