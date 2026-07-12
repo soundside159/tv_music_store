@@ -16,15 +16,17 @@ export const onRequestGet = async (ctx: Ctx) => {
   const user = await getSessionUser(ctx);
   if (!user) return json({ error: "Not signed in" }, 401);
 
-  // Refunded licences are gone: the money went back, so did the rights.
+  // A refunded licence STAYS in the list — plainly marked, with its download and
+  // certificate buttons gone. Hiding it would just make the customer wonder
+  // where his purchase went; showing it says exactly what happened.
   // (Older DBs have no `status` column — COALESCE keeps them working.)
   const rows = await ctx.env.DB.prepare(
     `SELECT o.id, o.track_id, o.tier, o.price, o.license_r2_key, o.created_at,
+            COALESCE(o.status, 'active') AS status,
             t.title AS track_title, t.slug AS track_slug
        FROM sync_orders o
        LEFT JOIN tracks t ON t.id = o.track_id
       WHERE o.user_id = ?1
-        AND COALESCE(o.status, 'active') <> 'refunded'
       ORDER BY o.created_at DESC
       LIMIT 200`,
   )
@@ -36,6 +38,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       price: number;
       license_r2_key: string | null;
       created_at: string;
+      status: string;
       track_title: string | null;
       track_slug: string | null;
     }>();
@@ -48,7 +51,9 @@ export const onRequestGet = async (ctx: Ctx) => {
       trackSlug: r.track_slug ?? undefined,
       tier: r.tier,
       price: r.price,
-      hasPdf: !!r.license_r2_key,
+      // Refunded: no file, no certificate — the rights went back with the money.
+      hasPdf: r.status !== "refunded" && !!r.license_r2_key,
+      refunded: r.status === "refunded",
       createdAt: r.created_at,
     })),
   });

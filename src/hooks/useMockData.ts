@@ -132,6 +132,8 @@ export interface LicenseEntry {
   tier: string;
   price: number;
   hasPdf?: boolean;
+  /** Money was returned — the licence is void: no download, no certificate. */
+  refunded?: boolean;
   createdAt: string;
 }
 
