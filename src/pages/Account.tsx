@@ -729,15 +729,10 @@ const Account = () => {
 
             {section === "claims" && (
               <SectionCard title="Content ID claims">
-                <p className="font-body text-sm leading-6 text-muted-foreground">
-                  Got a claim on a video that uses our music? Paste the link — it is sent for release
-                  and cleared within one business day. Add your channel under{" "}
-                  <span className="text-foreground">Whitelisting</span> and we watch it for you, so
-                  claims on new uploads are cleared without you asking.
-                </p>
-                <p className="mt-2 font-body text-xs leading-5 text-muted-foreground/80">
-                  The video has to be <span className="text-foreground">Public or Unlisted</span> —
-                  a private video is invisible to YouTube's API, so nobody can release a claim on it.
+                {/* No essays: the server validates the link (a private video is
+                    rejected with an explanation) and the list below shows status. */}
+                <p className="font-body text-sm text-muted-foreground">
+                  Submit YouTube copyright claim removals — they appear below with their status.
                 </p>
                 <form
                   className="mt-4 flex gap-2"
