@@ -212,16 +212,24 @@ export const onRequestPost = async (ctx: Ctx) => {
   }
   if (plan === "free" && !hasLicense) {
     const used = await ctx.env.DB.prepare(
-      `SELECT COUNT(*) AS n FROM download_log
+      // DISTINCT tracks, not raw downloads: the free limit is "3 tracks a
+      // month", so re-downloading one you already took must never cost another
+      // slot. The track being fetched right now is excluded from the count —
+      // it is only blocked if it is a NEW track and 3 different ones are used.
+      `SELECT COUNT(DISTINCT track_id) AS n FROM download_log
         WHERE user_id = ?1 AND format = 'mp3'
           AND plan_at_download != 'license'
+          AND track_id != ?2
           AND created_at >= datetime('now', 'start of month')`,
     )
-      .bind(user.id)
+      .bind(user.id, track?.id ?? slug)
       .first<{ n: number }>();
     if ((used?.n ?? 0) >= FREE_MONTHLY_LIMIT) {
       return json(
-        { error: `Free plan limit reached (${FREE_MONTHLY_LIMIT} downloads/month)`, code: "limit" },
+        {
+          error: `Free plan limit reached (${FREE_MONTHLY_LIMIT} tracks a month). Re-downloading a track you already took is always free.`,
+          code: "limit",
+        },
         403,
       );
     }

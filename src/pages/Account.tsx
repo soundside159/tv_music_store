@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowUpRight } from "lucide-react";
 import { accountNavGroups, adminNavGroups, composerNavItems } from "@/lib/adminNav";
@@ -8,6 +8,9 @@ import { useComposerTracks } from "@/components/ComposerUpload";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { catalogTracks } from "@/data/catalogTracks";
+import { TrackRowList } from "@/components/TrackRowPlayer";
+import { useTracks } from "@/hooks/useTracks";
+import type { CatalogTrack } from "@/data/catalogTracks";
 import {
   useCurrentUser,
   useMyDownloads,
@@ -166,12 +169,43 @@ const Account = () => {
 
   const plan = plans.find((p) => p.id === subscription?.plan);
 
-  // Download history: 20 rows a page — a heavy user's list gets long fast.
+  // Download history = the customer's LIBRARY: one row per track, newest first,
+  // rendered with the same player rows as the catalogue. The server already
+  // de-duplicates re-downloads; here we just resolve each id to a real track.
   const DOWNLOADS_PER_PAGE = 20;
   const [dlPage, setDlPage] = useState(1);
-  const downloadPages = Math.max(1, Math.ceil(downloads.length / DOWNLOADS_PER_PAGE));
+  const { tracks: liveTracks } = useTracks();
+
+  // The single library-wide licence of the current subscription period.
+  const [subLicense, setSubLicense] = useState<{
+    code: string;
+    periodEnd: string | null;
+  } | null>(null);
+  useEffect(() => {
+    if (!user) return;
+    fetch("/api/my-subscription-license", { credentials: "include" })
+      .then(async (r) => {
+        if (!r.ok) return;
+        const d = (await r.json()) as { license?: { code: string; periodEnd: string | null } | null };
+        setSubLicense(d.license ?? null);
+      })
+      .catch(() => setSubLicense(null));
+  }, [user]);
+  const downloadedTracks = useMemo(() => {
+    const byId = new Map(liveTracks.map((t) => [t.id, t]));
+    const seen = new Set<string>();
+    const list: CatalogTrack[] = [];
+    for (const d of downloads) {
+      const track = byId.get(d.trackId);
+      if (!track || seen.has(track.id)) continue;
+      seen.add(track.id);
+      list.push(track);
+    }
+    return list;
+  }, [downloads, liveTracks]);
+  const downloadPages = Math.max(1, Math.ceil(downloadedTracks.length / DOWNLOADS_PER_PAGE));
   const safeDlPage = Math.min(dlPage, downloadPages);
-  const pagedDownloads = downloads.slice(
+  const pagedDownloadTracks = downloadedTracks.slice(
     (safeDlPage - 1) * DOWNLOADS_PER_PAGE,
     safeDlPage * DOWNLOADS_PER_PAGE,
   );
@@ -539,87 +573,15 @@ const Account = () => {
             {section === "downloads" && (
               <SectionCard title="Download history">
                 {downloads.length === 0 ? (
-                  <EmptyNote text="Nothing here yet — your downloaded tracks will appear with re-download links." />
+                  <EmptyNote text="Nothing here yet — the tracks you download will appear here." />
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[480px] font-body text-sm">
-                      <thead>
-                        <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                          <th className="py-2 pr-4">Track</th>
-                          <th className="py-2 pr-4">Format</th>
-                          <th className="py-2 pr-4">Plan</th>
-                          <th className="py-2 pr-4">Date</th>
-                          <th className="py-2" />
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {pagedDownloads.map((d) => (
-                          <tr key={d.id} className="border-b border-border/50 last:border-0">
-                            <td className="py-2.5 pr-4">
-                              {d.trackSlug ? (
-                                <Link to={`/track/${d.trackSlug}`} className="text-foreground transition-colors hover:text-[#F4C430]">
-                                  {d.trackTitle ?? trackTitle(d.trackId)}
-                                </Link>
-                              ) : (
-                                <span className="text-foreground">{d.trackTitle ?? trackTitle(d.trackId)}</span>
-                              )}
-                            </td>
-                            <td className="py-2.5 pr-4 uppercase text-muted-foreground">{d.format}</td>
-                            <td className="py-2.5 pr-4 capitalize text-muted-foreground">{d.planAtDownload}</td>
-                            <td className="py-2.5 pr-4 text-muted-foreground">{fmtDate(d.createdAt)}</td>
-                            <td className="py-2.5 text-right">
-                              <span className="flex items-center justify-end gap-3">
-                                <a
-                                  href={`/api/license-pdf?track=${encodeURIComponent(d.trackId)}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="font-body text-xs font-semibold text-[#F4C430] hover:underline"
-                                >
-                                  Download License
-                                </a>
-                                {d.trackSlug && (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        void downloadTrackVersion({
-                                          slug: d.trackSlug!,
-                                          versionId: "main",
-                                          src: "",
-                                          title: d.trackTitle ?? trackTitle(d.trackId),
-                                          label: "Main",
-                                          format: "mp3",
-                                          quality: 320,
-                                        })
-                                      }
-                                      className="font-body text-xs font-semibold text-muted-foreground hover:text-foreground hover:underline"
-                                    >
-                                      MP3 320
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        void downloadTrackVersion({
-                                          slug: d.trackSlug!,
-                                          versionId: "main",
-                                          src: "",
-                                          title: d.trackTitle ?? trackTitle(d.trackId),
-                                          label: "Main",
-                                          format: "wav",
-                                        })
-                                      }
-                                      className="font-body text-xs font-semibold text-muted-foreground hover:text-foreground hover:underline"
-                                    >
-                                      WAV 44/16 zip
-                                    </button>
-                                  </>
-                                )}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div>
+                    {/* The customer's library: the same rows as the catalogue —
+                        play, waveform, and the download button on each one. One
+                        row per track (re-downloads don't duplicate it), newest
+                        first. No per-track licence link here: a subscriber has a
+                        single library-wide licence in the Licenses tab. */}
+                    <TrackRowList tracks={pagedDownloadTracks} />
 
                     {/* 20 per page — the history of a heavy user gets long fast. */}
                     {downloadPages > 1 && (
@@ -652,9 +614,39 @@ const Account = () => {
 
             {section === "license" && (
               <>
+                {/* ONE licence covers the whole library for the period you paid
+                    for. It is re-issued with a new code on every renewal. */}
+                <SectionCard title="Subscription license">
+                  {subLicense ? (
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                      <div>
+                        <p className="font-body text-sm text-foreground">
+                          Covers every track in the catalogue while your plan is active.
+                        </p>
+                        <p className="mt-1 font-body text-xs text-muted-foreground">
+                          Code <span className="text-foreground">{subLicense.code}</span>
+                          {subLicense.periodEnd
+                            ? ` · valid until ${fmtDate(subLicense.periodEnd)}`
+                            : ""}
+                        </p>
+                      </div>
+                      <a
+                        href="/api/license-pdf?subscription=1"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-lg bg-[#F4C430] px-4 py-2 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
+                      >
+                        Download license
+                      </a>
+                    </div>
+                  ) : (
+                    <EmptyNote text="The subscription license comes with the Pro and Max plans." />
+                  )}
+                </SectionCard>
+
                 <SectionCard title="Your licensed tracks">
                   <p className="font-body text-sm text-muted-foreground">
-                    Download the audio file, PDF certificate and receipt for each one.
+                    Tracks you bought one by one — each with its own certificate.
                   </p>
                   {syncOrders.length === 0 ? (
                     <div className="mt-3">

@@ -89,6 +89,139 @@ export const verifyCode = async (env: Env, license: PlanLicense): Promise<boolea
   return sig === expected;
 };
 
+// ---------------------------------------------------------------------------
+// SUBSCRIPTION LICENCE — one per customer per BILLING PERIOD (owner's design).
+//
+// A subscriber should not collect a separate certificate for every track he
+// downloads. He holds ONE licence that covers the whole library for as long as
+// the period he paid for: buy a month, it is valid for that month; buy a year,
+// it is valid for the year. When the subscription renews, a NEW code is issued
+// and the old one becomes historic — the admin can look up any code and see
+// exactly which period it covered and whether it has expired.
+//
+// Per-track certificates remain, but only for tracks bought ONE-OFF.
+// ---------------------------------------------------------------------------
+
+export interface SubscriptionLicense {
+  code: string;
+  userId: string;
+  plan: string;
+  periodStart: string;
+  periodEnd: string | null;
+  createdAt: string;
+}
+
+export const ensureSubscriptionLicensesTable = async (db: D1Database): Promise<void> => {
+  try {
+    await db
+      .prepare(
+        `CREATE TABLE IF NOT EXISTS subscription_licenses (
+           code         TEXT PRIMARY KEY,
+           user_id      TEXT NOT NULL,
+           plan         TEXT NOT NULL,
+           period_start TEXT NOT NULL,
+           period_end   TEXT,
+           created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+         )`,
+      )
+      .run();
+    await db
+      .prepare(
+        `CREATE INDEX IF NOT EXISTS idx_sub_lic_user ON subscription_licenses(user_id, period_end)`,
+      )
+      .run();
+  } catch {
+    // already there
+  }
+};
+
+/**
+ * The customer's licence for the period he is IN right now. Issued once per
+ * period: the same period always returns the same code; a renewal (new
+ * period_end) mints a new one and leaves the previous row untouched as history.
+ */
+export const getOrCreateSubscriptionLicense = async (
+  env: Env,
+  userId: string,
+  plan: string,
+  periodEnd: string | null,
+): Promise<SubscriptionLicense | null> => {
+  if (!env.DB || plan === "free") return null;
+  await ensureSubscriptionLicensesTable(env.DB);
+
+  const existing = await env.DB.prepare(
+    `SELECT code, user_id, plan, period_start, period_end, created_at
+       FROM subscription_licenses
+      WHERE user_id = ?1 AND plan = ?2
+        AND ((period_end IS NULL AND ?3 IS NULL) OR period_end = ?3)
+      LIMIT 1`,
+  )
+    .bind(userId, plan, periodEnd)
+    .first<{
+      code: string;
+      user_id: string;
+      plan: string;
+      period_start: string;
+      period_end: string | null;
+      created_at: string;
+    }>();
+
+  if (existing) {
+    return {
+      code: existing.code,
+      userId: existing.user_id,
+      plan: existing.plan,
+      periodStart: existing.period_start,
+      periodEnd: existing.period_end,
+      createdAt: existing.created_at,
+    };
+  }
+
+  // The code is signed over the PERIOD, not a track — "SUB" takes the track slot.
+  const code = await mintCode(env, userId, `SUB:${periodEnd ?? "open"}`, plan);
+  const periodStart = new Date().toISOString();
+
+  await env.DB.prepare(
+    `INSERT INTO subscription_licenses (code, user_id, plan, period_start, period_end)
+     VALUES (?1, ?2, ?3, ?4, ?5)`,
+  )
+    .bind(code, userId, plan, periodStart, periodEnd)
+    .run();
+
+  return { code, userId, plan, periodStart, periodEnd, createdAt: periodStart };
+};
+
+/** Admin lookup: who held this code, for which period, and is it still valid. */
+export const findSubscriptionLicense = async (
+  db: D1Database,
+  code: string,
+): Promise<SubscriptionLicense | null> => {
+  await ensureSubscriptionLicensesTable(db);
+  const row = await db
+    .prepare(
+      `SELECT code, user_id, plan, period_start, period_end, created_at
+         FROM subscription_licenses WHERE code = ?1 LIMIT 1`,
+    )
+    .bind(code)
+    .first<{
+      code: string;
+      user_id: string;
+      plan: string;
+      period_start: string;
+      period_end: string | null;
+      created_at: string;
+    }>();
+  if (!row) return null;
+  return {
+    code: row.code,
+    userId: row.user_id,
+    plan: row.plan,
+    periodStart: row.period_start,
+    periodEnd: row.period_end,
+    createdAt: row.created_at,
+  };
+};
+
 /** Creates the plan_licenses table on first use (no manual migration needed). */
 export const ensurePlanLicensesTable = async (db: D1Database): Promise<void> => {
   try {

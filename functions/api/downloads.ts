@@ -14,14 +14,20 @@ export const onRequestGet = async (ctx: Ctx) => {
   const user = await getSessionUser(ctx);
   if (!user) return json({ error: "Not signed in" }, 401);
 
+  // ONE ROW PER TRACK — the newest download of it. A customer who re-downloaded
+  // the same track four times wants his library, not a log file.
   const rows = await ctx.env.DB.prepare(
     `SELECT d.id, d.track_id, d.composer_id, d.plan_at_download, d.format, d.created_at,
             t.title AS track_title, t.slug AS track_slug
        FROM download_log d
        LEFT JOIN tracks t ON t.id = d.track_id
       WHERE d.user_id = ?1
+        AND d.id = (
+          SELECT MAX(d2.id) FROM download_log d2
+           WHERE d2.user_id = d.user_id AND d2.track_id = d.track_id
+        )
       ORDER BY d.created_at DESC
-      LIMIT 100`,
+      LIMIT 200`,
   )
     .bind(user.id)
     .all<{

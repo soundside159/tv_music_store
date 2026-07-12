@@ -2,7 +2,7 @@ import { getSessionUser, json, OWNER_EMAIL, type Ctx, type D1Database } from "./
 import { buildPdf, textWidth, type PdfOp, type PdfImage, type Rgb } from "./_pdf";
 import { LOGO_ALPHA_B64, LOGO_HEIGHT, LOGO_RGB_B64, LOGO_WIDTH } from "./_logo";
 import { ASSETS } from "./_assets";
-import { getOrCreatePlanLicense } from "./_licenses";
+import { getOrCreatePlanLicense, getOrCreateSubscriptionLicense } from "./_licenses";
 
 // GET /api/license-pdf?order=<sync_order_id>  -> certificate for a purchased
 //     one-time license (Account -> Licenses "License PDF").
@@ -637,6 +637,52 @@ export const onRequestGet = async (ctx: Ctx) => {
     return pdfResponse(bytes, `license-${row.id}.pdf`);
   }
 
+  // --- the SUBSCRIPTION licence: ONE certificate for the whole library -------
+  // A subscriber holds a single licence covering everything he downloads while
+  // his period runs — not a separate certificate per track. It carries one code,
+  // valid until the period ends; a renewal issues a new code and the old one
+  // stays in the admin as history.
+  if (url.searchParams.get("subscription")) {
+    const sub = await db
+      .prepare(
+        `SELECT plan, status, current_period_end
+           FROM subscriptions WHERE user_id = ?1 ORDER BY rowid DESC LIMIT 1`,
+      )
+      .bind(user.id)
+      .first<{ plan: string; status: string | null; current_period_end: string | null }>();
+
+    const plan = sub?.status === "active" ? (sub.plan ?? "free") : "free";
+    if (plan === "free") {
+      return json(
+        { error: "The subscription licence comes with the Pro and Max plans", code: "plan" },
+        403,
+      );
+    }
+
+    const lic = await getOrCreateSubscriptionLicense(
+      ctx.env,
+      user.id,
+      plan,
+      sub?.current_period_end ?? null,
+    );
+    const info = PLAN_INFO[plan] ?? PLAN_INFO.free;
+
+    const bytes = buildCertificate(
+      planCert(info, plan, {
+        licenseeName,
+        licenseeEmail: user.email,
+        code: lic?.code ?? `${plan.toUpperCase()} PLAN`,
+        issued: fmtDate(lic?.createdAt),
+        periodEnd: lic?.periodEnd ?? sub?.current_period_end ?? null,
+        trackTitle: "Every track in the TV Music Store catalogue",
+        trackSlug: null,
+        composer: null,
+        cue: null,
+      }),
+    );
+    return pdfResponse(bytes, `tvmusicstore-subscription-license.pdf`);
+  }
+
   const trackRef = slug ?? trackId;
   if (trackRef) {
     const trackSql = `SELECT t.id, t.title, t.slug, c.display_name AS composer
@@ -656,6 +702,7 @@ export const onRequestGet = async (ctx: Ctx) => {
         `SELECT plan, status, current_period_end
            FROM subscriptions WHERE user_id = ?1 ORDER BY rowid DESC LIMIT 1`,
       )
+      .bind(user.id)
       .bind(user.id)
       .first<{ plan: string; status: string | null; current_period_end: string | null }>();
     const plan = sub?.plan ?? "free";

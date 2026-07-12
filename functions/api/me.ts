@@ -35,8 +35,10 @@ export const onRequestGet = async (ctx: Ctx) => {
 
   // Downloads made under a purchased one-time license don't burn the free
   // limit — mirrors the exclusion in /api/download.
+  // DISTINCT tracks — same rule as /api/download: the free plan is 3 TRACKS a
+  // month, and re-downloading one you already took costs nothing.
   const used = await ctx.env.DB.prepare(
-    `SELECT COUNT(*) AS n FROM download_log
+    `SELECT COUNT(DISTINCT track_id) AS n FROM download_log
       WHERE user_id = ?1 AND format = 'mp3'
         AND plan_at_download != 'license'
         AND created_at >= datetime('now', 'start of month')`,
