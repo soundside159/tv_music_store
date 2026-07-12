@@ -1,4 +1,5 @@
 import { getSessionUser, json, OWNER_EMAIL, readJson, type Ctx } from "../_utils";
+import { bumpUsage } from "../_usage";
 
 // POST /api/admin/generate-cover — admins AND composers.
 //   { trackId, hint? }                — track page: the track's SAVED Use
@@ -115,6 +116,10 @@ export const onRequestPost = async (ctx: Ctx) => {
   if (hint) {
     prompt += `\n\nFeatured element (make it a natural, prominent part of the scene):\n${hint}`;
   }
+
+  // Metered for Admin → Usage. Rough list price for a 1024x1024 medium-quality
+  // image; the OpenAI dashboard stays the source of truth for the real bill.
+  void bumpUsage(ctx.env.DB, "openai", 1, model.includes("gpt-image") ? 4 : 2);
 
   const res = await fetch("https://api.openai.com/v1/images/generations", {
     method: "POST",

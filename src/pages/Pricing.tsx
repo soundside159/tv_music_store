@@ -28,11 +28,11 @@ const faq: { q: string; a: string }[] = [
   },
   {
     q: "How does channel whitelisting work?",
-    a: "Add your YouTube channel in your account and it gets protected within 24 hours: Content ID claims on our tracks are cleared for that channel. Pro covers 3 channels, Max covers 10.",
+    a: "Add your YouTube channel in your account and we watch it: new uploads are sent for claim release automatically, so claims on our tracks are cleared within one business day — usually before you even see them. Pro covers 3 channels, Max covers 10.",
   },
   {
     q: "What if I get a copyright claim?",
-    a: "Every track in the catalog is Content ID registered by its composer. Send us the video link and the claim is removed within 24 hours — on any plan, including Free.",
+    a: "Every track in the catalog is Content ID registered by its composer, so a claim can appear — it is not a strike and it does not hurt your channel. Paste the video link in your account and the claim is released within one business day, on any plan including Free. Adding your channel to Whitelisting is better still: we watch it and clear claims on new uploads without you asking.",
   },
   {
     q: "What formats do I get?",

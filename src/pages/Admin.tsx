@@ -24,6 +24,7 @@ import AdminInbox from "@/components/AdminInbox";
 import AdminCustomerProfile from "@/components/AdminCustomerProfile";
 import AdminGuides from "@/components/AdminGuides";
 import AdminFinance from "@/components/AdminFinance";
+import AdminUsage from "@/components/AdminUsage";
 
 const GOLD = "#F4C430";
 
@@ -40,6 +41,7 @@ type SectionId =
   | "bulkupload"
   | "import"
   | "articles"
+  | "usage"
   | "customers"
   | "licenses"
   | "whitelist"
@@ -60,6 +62,7 @@ const SECTION_IDS: SectionId[] = [
   "bulkupload",
   "import",
   "articles",
+  "usage",
   "customers",
   "licenses",
   "whitelist",
@@ -754,6 +757,9 @@ const Admin = () => {
 
             {/* Real money: revenue ledger, the 50/50 split, composer payouts. */}
             {section === "finance" && <AdminFinance />}
+
+            {/* Resend / YouTube / OpenAI credits — do I need to top up? */}
+            {section === "usage" && <AdminUsage />}
 
             {section === "customers" && (
               <Card title={`Users${liveUsers ? ` (${liveUsers.length})` : ""}`}>

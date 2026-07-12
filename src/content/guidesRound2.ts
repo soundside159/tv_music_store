@@ -16,7 +16,7 @@ export const guidesRound2: Guide[] = [
     description:
       "Step by step: what to do when a Content ID claim appears on licensed music, how long each route takes, and how to make sure it never happens again.",
     tldr:
-      "Go to the library that licensed you the music — not to YouTube's dispute form. Send them the video URL and your license or account reference and ask them to release the claim and whitelist the channel. With TV Music Store, claims on a paid plan are released within about 24 hours, and once your channel is whitelisted new uploads are not claimed at all. Disputing through YouTube alone can take up to 30 days, because YouTube gives the claimant that long to respond.",
+      "Go to the library that licensed you the music — not to YouTube's dispute form. Send them the video URL and your license or account reference and ask them to release the claim and whitelist the channel. With TV Music Store, claims are released within one business day, and once your channel is whitelisted new uploads are not claimed at all. Disputing through YouTube alone can take up to 30 days, because YouTube gives the claimant that long to respond.",
     updated: "2026-07-11",
     readMinutes: 4,
     sections: [
@@ -66,7 +66,7 @@ export const guidesRound2: Guide[] = [
     faq: [
       {
         q: "How long does it take to remove a Content ID claim?",
-        a: "Through the library that licensed you the track: usually within a day — TV Music Store releases claims on paid plans in about 24 hours. Through YouTube's own dispute process the claimant has up to 30 days to answer, so it can take weeks.",
+        a: "Through the library that licensed you the track: usually within a day — TV Music Store releases claims within one business day. Through YouTube's own dispute process the claimant has up to 30 days to answer, so it can take weeks.",
       },
       {
         q: "Does the claim hurt my channel while it is open?",

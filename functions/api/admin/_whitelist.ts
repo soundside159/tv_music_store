@@ -2,6 +2,9 @@
 // lookups + the wl_handled table ("this video was already sent for claim
 // removal"). Underscore-prefixed = not routed by Pages Functions.
 
+import { bumpUsage } from "../_usage";
+import type { D1Database } from "../_utils";
+
 const YT = "https://www.googleapis.com/youtube/v3";
 
 export interface WlVideo {
@@ -73,12 +76,18 @@ export const ytUploads = async (key: string, playlist: string) => {
     .filter((v) => v.videoId);
 };
 
-/** New uploads on a whitelisted channel since `cutoff`, newest first. */
+/**
+ * New uploads on a whitelisted channel since `cutoff`, newest first.
+ * `db` is optional and only used to meter the YouTube quota we burn (2 units per
+ * channel: one `channels` lookup + one `playlistItems` page) — see _usage.ts.
+ */
 export const channelNewVideos = async (
   key: string,
   channelUrl: string,
   cutoff: string,
+  db?: D1Database,
 ): Promise<{ videos: WlVideo[]; channelTitle: string } | null> => {
+  void bumpUsage(db, "youtube", 2);
   const channel = await ytChannel(key, channelUrl);
   if (!channel) return null;
   const videos = (await ytUploads(key, channel.uploads))

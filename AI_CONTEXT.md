@@ -2726,3 +2726,76 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   valid whatever they do"); Footer strapline; LicenseTerms §8 now states the authorisation is
   NON-EXCLUSIVE instead of "not a reseller, marketplace or aggregator of third-party stock".
   The guides already said royalty-free = non-exclusive, so they were already honest.
+- **2026-07-12 (composer agreement v2 + claim-SLA correction):** rewrote
+  **docs/COMPOSER_AGREEMENT_DRAFT.md** to v2 with every decision we made: covers **Works = Tracks
+  AND Sound Effects** (his friend has an SFX library); non-exclusive; 50% of NET (gross − tax −
+  real payment fee − refunds); user-centric subscription split with the exact points rules; idle
+  subscriber's share stays with the platform; refunds never clawed back, netted off the next payout;
+  30-day hold-back, $50 minimum, monthly; statements only for CLOSED months; indefinite term with a
+  60-day withdrawal wind-down; licences already granted SURVIVE withdrawal; human-composed warranty
+  (no AI) + SFX-specific field-recording warranty; indemnity; and — per owner — **no third-party
+  platform rights** (Adobe etc.) without a separate signed addendum the composer may refuse.
+  ⚠️ **I DID NOT WRITE HIS "60 days" FOR CLAIM RELEASE** and flagged it loudly in the doc: the
+  withdrawal wind-down is 60 days, but the composer's duty to RELEASE CLAIMS must survive as long as
+  customer licences do (they are perpetual for projects already made). A 60-day cut-off would leave a
+  paying customer stuck with a claim years later — and he would blame TVMS. If a composer refuses
+  that clause, do not take his music.
+  CLAIM SLA FIXED SITE-WIDE: composers register their own tracks in Content ID and release claims
+  THEMSELVES, on business days — so "claims removed within 24 hours" was a promise nobody could keep.
+  Changed everywhere (Index trust point + about paragraph, Licensing FAQ, Pricing FAQ x2, Account
+  claims box, the Content-ID guide + its FAQ) to **"released within one business day"**, with
+  whitelisting pushed as the real fix (it prevents claims entirely).
+  e-Signature: DocuSign fine; cheaper equals: Dropbox Sign, SignWell, PandaDoc, self-hosted Documenso.
+  BACKLOG (owner-requested, later):
+  1. **Sound Effects as a separate product**: separate upload permission per composer (tracks vs SFX),
+     an admin "Sound Effects" section next to Tracks Edit, its own categories, its own SEO pass (the
+     keyword research is already in docs/AI_VISIBILITY.md).
+  2. **Claim queue for composers**: a per-composer list of pending Content ID claims (video URL,
+     licence ref, date) — in their dashboard, plus a daily digest email. Owner floated a Google Sheet;
+     an in-site queue is better (it is already half-built: whitelist_channels + claim_requests).
+- **2026-07-12 (claims: honest promise + live pipeline + agreement §6.6/§6.7):** the owner corrected a
+  factual error of mine: **"whitelisting" here does NOT prevent claims.** It is channel MONITORING —
+  the YouTube Data API lists new uploads of a registered channel in the admin, and those are then sent
+  to Content ID for release. Claims DO appear; they are cleared pre-emptively. Every promise on the
+  site was rewritten accordingly (Index trust point + hero "claim-free" → "claims handled for you",
+  Licensing FAQ, Pricing FAQ x2, Account claims box, LicenseTerms §6): **"we watch your channel and
+  get claims released within one business day"**, plus the constraint the owner pointed out —
+  **a video must be Public or Unlisted**; a PRIVATE video is invisible to the YouTube API, so nobody
+  can find or release a claim on it.
+  NEW `functions/api/claims.ts`: POST (customer submits a video link) validates the id against the
+  YouTube API — rejects private/unfindable videos with a plain explanation — dedupes open tickets and
+  writes `claim_requests`; GET returns the customer's own tickets (admins: `?all=1`). Account →
+  Content ID claims is now LIVE (was `mockClaimRequests` + a form with preventDefault).
+  COMPOSER AGREEMENT §6 rewritten: 6.3 monitoring (not prevention); **6.6 CONTINUITY** — composer adds
+  TVMS as an authorised user of his Content ID account for claim release only, TVMS may release a
+  claim itself if the composer does not act within 3 business days, and the clause binds his heirs and
+  successors (people fall ill, lose interest and are not immortal); **6.7** — if a claim is not
+  released within **14 days** for ANY reason (force majeure, illness, unreachable account), TVMS may
+  refund the affected customer and **deduct it from the composer's future payouts**. The mirror of
+  6.7 is now in the customer-facing LicenseTerms §6: after 14 days the customer may ask for his money
+  back (one-time licence, or the subscription payment for that period). This is what makes the
+  survival clause (§6.5) safe to promise: if the author vanishes, the customer is not left holding a
+  claim on music he paid for.
+  BACKLOG: admin UI for the claim queue (the API is there, `?all=1`); composer-side claim queue +
+  daily digest email.
+- **2026-07-12 (agreement §6.6 simplified + Usage & credits panel):**
+  (1) §6.6 REWRITTEN on the owner's (correct) objection: he has NO access to composers' Content ID
+  accounts, so a clause built on that access was a promise he cannot keep, and "binds your heirs and
+  executors" was legally shaky and out of place. Now: if the composer has not released a claim within
+  **5 business days**, TVMS may (a) refund the affected customer and deduct it from his payouts, and
+  (b) remove the Work from the catalogue. Standing Content-ID authority is now a *"where your
+  provider allows it"* convenience, not a condition. The ordinary "successors" boilerplate moved to
+  §9 General. §6.7 (the customer's 14-day refund right) is unchanged and is what actually protects
+  the customer. LicenseTerms §6 reworded to match, in plain language: claims are released through the
+  copyright system at the composer's request, automatic once the channel is whitelisted, and if a
+  claim is still open 14 days after you reported it you may ask for a refund.
+  Site copy now also says the monitoring only happens **if the channel is added to the whitelist**.
+  (2) NEW **Admin → Money → Usage & credits** (`functions/api/_usage.ts`, `functions/api/admin/usage.ts`,
+  `src/components/AdminUsage.tsx`): three meters — Resend emails this month, YouTube Data API quota
+  units today (2 units per whitelisted-channel check; Google's free daily quota is 10,000), OpenAI
+  spend this month (≈4¢/cover, ≈1¢/description, estimated). HONEST BY DESIGN: none of the three
+  providers exposes a "credits left" endpoint, so we METER OUR OWN CALLS (`bumpUsage()` hooked into
+  `sendEmail` in _utils.ts, `channelNewVideos` in admin/_whitelist.ts, and both generate-* endpoints)
+  and compare against limits the owner types in (site_config `usage_limits`). Bars go red at 85%.
+  The provider dashboards remain the source of truth for the actual bill — the panel says so.
+  Metering can never break the thing it measures (every bump is fire-and-forget, wrapped in try/catch).

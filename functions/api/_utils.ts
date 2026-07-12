@@ -1,6 +1,8 @@
 // Shared helpers for Pages Functions. Files starting with "_" are not routed.
 // Minimal local typings so we don't need @cloudflare/workers-types yet.
 
+import { bumpUsage } from "./_usage";
+
 export interface D1PreparedStatement {
   bind(...values: unknown[]): D1PreparedStatement;
   first<T = Record<string, unknown>>(): Promise<T | null>;
@@ -220,6 +222,9 @@ export const sendEmail = async (
     console.log(`[email dev-fallback] to=${to} subject="${subject}"`);
     return false;
   }
+  // Count the send BEFORE the await, so a slow/failed Resend call still shows up
+  // in Admin → Usage. (Resend has no "credits left" endpoint; we meter ourselves.)
+  void bumpUsage(env.DB, "resend", 1);
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {

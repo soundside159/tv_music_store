@@ -41,7 +41,12 @@ export const onRequestGet = async (ctx: Ctx) => {
     return json({ videos: [], inactive: true, cutoff: row.added_at });
   }
 
-  const resolved = await channelNewVideos(env.YOUTUBE_API_KEY, row.channel_url, row.added_at);
+  const resolved = await channelNewVideos(
+    env.YOUTUBE_API_KEY,
+    row.channel_url,
+    row.added_at,
+    ctx.env.DB,
+  );
   if (!resolved) {
     return json({ error: "Couldn't resolve this channel on YouTube. Ask the customer for the @handle or /channel/ URL." }, 422);
   }
@@ -52,6 +57,7 @@ export const onRequestGet = async (ctx: Ctx) => {
     handled: handled.has(v.videoId),
     handledAt: handled.get(v.videoId) ?? null,
   }));
+
 
   return json({ videos, channelTitle: resolved.channelTitle, cutoff: row.added_at });
 };

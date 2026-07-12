@@ -5,6 +5,7 @@ import {
   Download,
   FileSpreadsheet,
   FileText,
+  Gauge,
   Heart,
   Inbox,
   LayoutDashboard,
@@ -90,7 +91,10 @@ export const adminNavGroups: { label: string; items: NavItem[] }[] = [
   },
   {
     label: "Money",
-    items: [{ id: "finance", label: "Finance", icon: DollarSign }],
+    items: [
+      { id: "finance", label: "Finance", icon: DollarSign },
+      { id: "usage", label: "Usage & credits", icon: Gauge },
+    ],
   },
   {
     label: "Customers",

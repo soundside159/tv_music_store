@@ -1,4 +1,5 @@
 import { getSessionUser, json, OWNER_EMAIL, readJson, type Ctx } from "../_utils";
+import { bumpUsage } from "../_usage";
 
 // POST /api/admin/generate-description — admins AND composers.
 //   { trackId }                                — saved Genre/Mood/Use Case drive the prompt
@@ -65,6 +66,10 @@ export const onRequestPost = async (ctx: Ctx) => {
   const prompt = PROMPT_TEMPLATE.replace("<GENRE>", genre.join(", ") || "Cinematic")
     .replace("<MOOD>", mood.join(", ") || "Emotional")
     .replace("<USE_CASE>", useCase.join(", ") || "Film & TV");
+
+  // A short text generation — pennies, but it is counted so the AI line in
+  // Admin → Usage tells the whole truth.
+  void bumpUsage(ctx.env.DB, "openai", 1, 1);
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",

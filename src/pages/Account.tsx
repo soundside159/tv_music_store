@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowUpRight } from "lucide-react";
 import { accountNavGroups, adminNavGroups, composerNavItems } from "@/lib/adminNav";
@@ -15,7 +15,7 @@ import {
   usePlans,
   useSubscription,
 } from "@/hooks/useMockData";
-import { mockClaimRequests } from "@/mocks";
+import { toast } from "sonner";
 import MyChannels from "@/components/MyChannels";
 import NotificationsSettings from "@/components/NotificationsSettings";
 import SupportSection from "@/components/SupportSection";
@@ -165,7 +165,60 @@ const Account = () => {
   };
 
   const plan = plans.find((p) => p.id === subscription?.plan);
-  const claims = user ? mockClaimRequests.filter((c) => c.userId === user.id) : [];
+
+  // Content ID claim requests — LIVE (/api/claims). The server checks the video
+  // is actually visible on YouTube before accepting it: a private video cannot
+  // have its claim released by anyone, so promising it would be a lie.
+  const [claims, setClaims] = useState<
+    { id: number; videoUrl: string; status: string; trackTitle?: string | null }[]
+  >([]);
+  const [claimUrl, setClaimUrl] = useState("");
+  const [claimBusy, setClaimBusy] = useState(false);
+
+  const loadClaims = useCallback(async () => {
+    try {
+      const res = await fetch("/api/claims", { credentials: "include" });
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        claims?: { id: number; video_url: string; status: string; track_title?: string | null }[];
+      };
+      setClaims(
+        (data.claims ?? []).map((c) => ({
+          id: c.id,
+          videoUrl: c.video_url,
+          status: c.status,
+          trackTitle: c.track_title,
+        })),
+      );
+    } catch {
+      // offline — the list just stays as it is
+    }
+  }, []);
+
+  useEffect(() => {
+    if (user) void loadClaims();
+  }, [user, loadClaims]);
+
+  const submitClaim = async () => {
+    setClaimBusy(true);
+    try {
+      const res = await fetch("/api/claims", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ videoUrl: claimUrl.trim() }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Could not send the request");
+      setClaimUrl("");
+      await loadClaims();
+      toast.success("Sent — the claim is released within one business day");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not send the request");
+    } finally {
+      setClaimBusy(false);
+    }
+  };
   const planSubtitle =
     plan?.id === "max"
       ? "Full access — unlimited downloads, WAV, stems & commercial license"
@@ -676,20 +729,35 @@ const Account = () => {
 
             {section === "claims" && (
               <SectionCard title="Content ID claims">
-                <p className="font-body text-sm text-muted-foreground">
-                  Got a claim on a video using our music? Paste the video link — the composer removes
-                  it within 24 hours.
+                <p className="font-body text-sm leading-6 text-muted-foreground">
+                  Got a claim on a video that uses our music? Paste the link — it is sent for release
+                  and cleared within one business day. Add your channel under{" "}
+                  <span className="text-foreground">Whitelisting</span> and we watch it for you, so
+                  claims on new uploads are cleared without you asking.
                 </p>
-                <form className="mt-4 flex gap-2" onSubmit={(e) => e.preventDefault()}>
+                <p className="mt-2 font-body text-xs leading-5 text-muted-foreground/80">
+                  The video has to be <span className="text-foreground">Public or Unlisted</span> —
+                  a private video is invisible to YouTube's API, so nobody can release a claim on it.
+                </p>
+                <form
+                  className="mt-4 flex gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void submitClaim();
+                  }}
+                >
                   <input
+                    value={claimUrl}
+                    onChange={(e) => setClaimUrl(e.target.value)}
                     placeholder="https://youtube.com/watch?v=..."
                     className="flex-1 rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
                   />
                   <button
                     type="submit"
-                    className="rounded-lg bg-[#F4C430] px-4 py-2 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
+                    disabled={claimBusy || !claimUrl.trim()}
+                    className="rounded-lg bg-[#F4C430] px-4 py-2 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85 disabled:opacity-50"
                   >
-                    Submit
+                    {claimBusy ? "Sending…" : "Submit"}
                   </button>
                 </form>
                 {claims.length > 0 && (

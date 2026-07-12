@@ -10,7 +10,7 @@ import { usePlans } from "@/hooks/useMockData";
 const GOLD = "#F4C430";
 
 const trustPoints = [
-  { icon: ShieldCheck, label: "Content ID protected", text: "Every track is registered. Claims removed within 24 hours." },
+  { icon: ShieldCheck, label: "Content ID handled", text: "Add your channel to the whitelist and we watch new uploads: claims are released within one business day — usually before you notice." },
   { icon: Users, label: "Written by humans", text: "Named composers with real PRO/IPI registration — never AI-generated filler." },
   { icon: Music2, label: "Versions included", text: "Cut-downs and alternate mixes with every track." },
   { icon: Check, label: "License instantly", text: "Clear licenses, PDF certificate right after download." },
@@ -36,7 +36,7 @@ const Index = () => {
           </h1>
           <p className="mt-3 max-w-xl font-body text-sm text-muted-foreground md:text-base">
             Written by real composers, licensed to you directly.
-            Monetization-safe, claim-free, licensed in one click.
+            Monetization-safe, claims handled for you, licensed in one click.
           </p>
           <div className="mt-6 flex flex-wrap items-center gap-2">
             {categories.map((c) => (
@@ -234,8 +234,8 @@ const Index = () => {
               named human composer we work with under agreement — no AI-generated filler — and we
               license it to you directly: we are the licensor on your licence, not a middleman passing
               you someone else's terms. Each track ships with cut-down versions, the cue-sheet data you
-              need for broadcast (composer, PRO, IPI), Content ID whitelisting and claim removal within
-              24 hours. Composers keep the copyright in their work and may licence it elsewhere too;
+              need for broadcast (composer, PRO, IPI), Content ID whitelisting and claim release within
+              one business day. Composers keep the copyright in their work and may licence it elsewhere too;
               what you buy from us is a licence to use the music, and it is valid whatever they do.
             </p>
           </div>

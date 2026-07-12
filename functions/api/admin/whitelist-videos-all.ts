@@ -77,7 +77,12 @@ export const onRequestGet = async (ctx: Ctx) => {
       customerEmail: r.user_email ?? "",
       plan: r.plan ?? "free",
     };
-    const resolved = await channelNewVideos(env.YOUTUBE_API_KEY, r.channel_url, r.added_at);
+    const resolved = await channelNewVideos(
+      env.YOUTUBE_API_KEY,
+      r.channel_url,
+      r.added_at,
+      ctx.env.DB,
+    );
     if (!resolved) {
       groups.push({ ...base, channelTitle: "", videos: [], error: "Couldn't resolve channel on YouTube" });
       continue;
@@ -92,6 +97,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       })),
     });
   }
+
 
   return json({ groups, activeChannels: active.length, totalChannels: rows.results.length });
 };

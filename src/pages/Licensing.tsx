@@ -36,7 +36,7 @@ const faq = [
   },
   {
     q: "What happens if I get a Content ID claim?",
-    a: "All tracks are registered in Content ID by their composers. On a paid plan, whitelist your channel(s) and we clear Content ID claims on them while your subscription is active (usually within 24 hours). For a one-off, send the video link and your License Number and we'll release that specific claim.",
+    a: "All tracks are registered in Content ID by their composers — that is what stops other people stealing them, and it means a claim can still appear on your video. Add your channel to Whitelisting and we watch your new uploads and send them for release automatically. If a claim does land, paste the video link in your account: it is released within one business day (composers work weekdays). The video must be Public or Unlisted — a private video is invisible to YouTube's API, so no one can clear a claim on it.",
   },
   {
     q: "Can I use one subscription for multiple clients?",

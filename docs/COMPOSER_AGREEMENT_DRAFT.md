@@ -1,131 +1,258 @@
-# TV Music Store — Composer Agreement
+# TV Music Store — Composer & Sound Designer Agreement
 
-**DRAFT v1.0 · for owner review** · *not yet in use*
+**DRAFT v2.0 · 2026-07-12 · for owner review, then a lawyer** · *not yet in use*
 
-> ⚠️ **Not legal advice.** Original draft for TV Music Store. This is the contract
-> between you (the store) and each composer who supplies music. Its whole purpose
-> is to push the **ownership / authorship risk onto the composer** so you can
-> license to customers with confidence. Have a UK lawyer review before signing.
+> ⚠️ **I am not a lawyer and this is not legal advice.** This is a working draft built
+> from the decisions you and I have made. Before anyone signs it, a solicitor in
+> England & Wales should read it — it deals with copyright, indemnities and money,
+> and a cheap hour of legal review now is worth more than the whole document.
 >
-> **Decision made:** licensing is **non-exclusive** (composers may also sell the
-> track elsewhere, subject to the Content ID condition in §5).
+> **Decisions baked in (v2):**
+> - Non-exclusive: composers may license the same work elsewhere.
+> - 50% of NET revenue to the composer; net = gross − tax/VAT − payment fees − refunds.
+> - Subscription money follows the payer (user-centric), 1 point per unique track per cycle.
+> - Indefinite term; a composer can pull a work at any time with a 60-day wind-down.
+> - Composers register their own works in Content ID and release claims themselves.
+> - Covers **both music tracks and sound effects**.
+> - Anything beyond the tvmusicstore.com website (e.g. supplying Adobe or another
+>   platform) needs a **separate written addendum** the composer may sign or refuse.
 >
-> **Open decisions (marked `[[ ]]`):**
-> 1. **Revenue share %** — composer's cut of net revenue and payout schedule.
-> 2. **Content ID** — will you register tracks in YouTube Content ID (via
->    Identifyy / your provider), and does the composer confirm the track isn't
->    already registered elsewhere in a conflicting way?
+> **⚠️ ONE THING I CHANGED FROM YOUR INSTRUCTION — read §6 and the note under it.**
 
 ---
 
 ## Parties
 
-This Composer Agreement ("Agreement") is between:
+This Agreement ("Agreement") is between:
 
-- **TV Music Store**, a UK general partnership of Stanislav Barantsov and Maryna
-  Huz ("TV Music Store", "we", "us"); and
+- **TV Music Store**, a UK general partnership of Stanislav Barantsov and Maryna Huz
+  ("TV Music Store", "we", "us"); and
 - **[[Composer legal name]]** ("Composer", "you"), of [[address / country]].
 
-Effective date: [[date]].
+Effective date: **[[date]]**.
 
-## 1. What the Composer provides
+---
 
-You will deliver original musical works ("Tracks") to TV Music Store, together
-with, for each Track: the full mix (WAV, [[24-bit / 44.1kHz+]]), stems where
-available, and accurate metadata (title, BPM, genre/mood/use-case tags,
-composer/writer split). You confirm each delivered file is free of third-party
-samples or loops that are not fully cleared and owned by you.
+## 1. What this Agreement covers ("Works")
 
-## 2. Rights you grant to TV Music Store
+"**Works**" means everything you deliver to TV Music Store for the catalogue, in either
+category:
 
-You grant TV Music Store a **worldwide, non-exclusive** right, for the term of
-this Agreement, to (non-exclusive: you may also offer the Track elsewhere, subject
-to the Content ID condition in §5):
+- **Tracks** — musical compositions and their recordings, including alternate versions,
+  cut-downs and stems;
+- **Sound Effects** — recorded, designed or synthesised audio (foley, ambiences, impacts,
+  UI sounds, etc.), including field recordings.
 
-- host, reproduce, and make the Tracks available on tvmusicstore.com;
-- **license the Tracks to end users** (customers) under TV Music Store's own
-  Music License Terms, including one-time and subscription licenses, and to issue
-  License Certificates in TV Music Store's name;
-- collect payment from customers and account to you under §4;
-- where agreed (§5), register the Tracks with content-identification systems
-  (e.g. YouTube Content ID) and **release claims** on licensed customer uses.
+Everything in this Agreement applies to both unless a clause says otherwise.
 
-You retain **ownership and copyright** of your Tracks at all times. This Agreement
-is a licence to distribute, not a sale of your copyright.
+## 2. Delivery
 
-## 3. Your warranties & indemnity (the important part)
+For each Work you deliver:
 
-You **warrant** that, for every Track you deliver:
+- the master file (Tracks: WAV, 24-bit / 44.1 kHz or better; Sound Effects: WAV, 48 kHz or
+  better), plus stems where they exist;
+- accurate metadata: title, tags, BPM/duration where relevant, and your **writer/performer
+  split** if anyone other than you contributed;
+- your cue-sheet data: **legal name, PRO (BMI/ASCAP/PRS…), IPI/CAE number**, and publisher
+  details if you have one.
 
-1. you are the sole owner or fully-authorised controller of 100% of the rights,
-   including any performers' rights, and have full authority to grant §2;
-2. the Track is **original** and does not infringe any copyright, trademark, moral
-   right, or other right of any third party;
-3. it contains no uncleared samples, interpolations, or AI-generated material that
-   would compromise its ownership or eligibility for licensing/Content ID;
-4. it is not subject to any conflicting exclusive deal, publisher, or Content ID
-   registration that would prevent the rights in §2;
-5. to the extent permitted by law, you **waive moral rights** necessary for
-   customers to synchronise and edit the Track as allowed by the license.
+TV Music Store may **decline or remove** any Work at its discretion (quality, fit, legal
+risk). We are not obliged to publish everything you send.
 
-You agree to **indemnify and hold harmless** TV Music Store (and its partners) and,
-where relevant, its customers, against any claim, loss, damage, or cost (including
-reasonable legal fees) arising from a breach of these warranties. This is what lets
-TV Music Store disclaim ownership/authorship risk to customers — that risk sits
-with you.
+## 3. Rights you grant
 
-## 4. Revenue share & payouts
+You grant TV Music Store a **worldwide, non-exclusive** right, for the term of this
+Agreement, to:
 
-- Composer receives **[[__%]]** of net revenue attributable to your Tracks (net =
-  amount received from the customer minus payment-processor fees, refunds, and
-  chargebacks).
-- Subscription revenue is allocated to composers **[[pro-rata by qualifying
-  downloads/streams of their Tracks in the period]]**.
-- Payouts are made **[[monthly]]**, above a minimum threshold of **[[$__]]**, via
-  **[[PayPal]]** to the account you nominate. You are responsible for your own
-  taxes.
-- TV Music Store will provide a statement of sales/downloads for your Tracks each
-  payout period.
+- host, reproduce and make the Works available on **tvmusicstore.com**;
+- **license the Works to end customers** under TV Music Store's own License Terms —
+  one-time licences and subscription licences — and to issue licence certificates in TV
+  Music Store's name;
+- create previews, waveforms, cover art and cut-downs for the purpose of presenting and
+  selling the Works;
+- collect payment from customers and account to you under §5.
 
-## 5. Content ID & claims
+**You keep the copyright.** This is a licence to distribute and sub-license to customers,
+not a sale of your rights. Because it is **non-exclusive**, you remain free to license the
+same Work elsewhere.
 
-- If enabled, you authorise TV Music Store (directly or via a third-party
-  administrator such as Identifyy) to register your delivered Tracks in YouTube
-  Content ID solely to protect them from unlicensed use.
-- You confirm the Tracks are not already registered in Content ID by another
-  party in a way that conflicts with this Agreement; if they are, you must resolve
-  it before delivery.
-- Claims on **licensed** customer uses are released per-claim by TV Music Store.
-  You will not separately claim, strike, or monetise a customer's video that holds
-  a valid TV Music Store license for that use.
+**Nothing beyond the website.** This Agreement covers the TV Music Store website only. If
+TV Music Store later wants to supply the Works to a third-party platform or partner (for
+example a stock marketplace, an app, or a bundled catalogue deal), that requires a
+**separate written addendum**, which you are free to sign or refuse. Your refusal is not a
+breach of this Agreement and has no effect on the rest of it.
 
-## 6. Term, termination & survival
+## 4. Your warranties and indemnity — the part that protects everybody
 
-- This Agreement runs until terminated by either party on **[[30 days']]** written
-  notice.
-- On termination, TV Music Store will stop offering your Tracks to **new**
-  customers within a reasonable wind-down period and remove them from the catalog.
-- **Survival:** every license already granted to a customer before removal
-  **remains valid** (customers keep their perpetual licenses), and your §3
-  warranties and indemnity continue to apply to those Tracks. Payouts accrued
-  before termination remain payable.
+You **warrant**, for every Work you deliver, that:
 
-## 7. Relationship of the parties
+1. you are the sole owner, or fully-authorised controller, of **100% of the rights**
+   (composition, recording, and any performers' rights) and can grant §3;
+2. the Work is **original** and infringes nobody's copyright, trademark or other right;
+3. it contains **no uncleared samples, loops or interpolations**, and no third-party
+   recording you do not own;
+4. **for Sound Effects specifically**: any field recording is yours, was lawfully made, and
+   contains no recognisable third-party music, no copyrighted material, and no identifiable
+   person's voice or likeness used without their consent;
+5. the Work is **composed/created by a human being** and is **not AI-generated**. You may
+   use software instruments and editing tools; you may not deliver material generated by a
+   music- or audio-generation model. *(This is not a stylistic preference: TV Music Store
+   tells its customers the catalogue is human-made, and cue sheets require a real,
+   registrable author.)*
+6. no exclusive deal, publisher, or other arrangement prevents any of the above.
 
-You are an **independent contractor**. Nothing here creates an employment,
-agency, joint venture, or partnership between you and TV Music Store, and you have
-no authority to bind TV Music Store.
+You agree to **indemnify TV Music Store** (and, where relevant, its customers) against any
+claim, loss or cost — including reasonable legal fees — arising from a breach of these
+warranties.
 
-## 8. General
+**Why this clause exists, plainly:** TV Music Store sells a promise that the music is safe
+to use. It can only make that promise because you have made it here first. If a Work turns
+out not to be yours, the loss lands on you, not on the store and not on a customer who paid
+in good faith.
+
+## 5. Money
+
+**5.1 The split.** You receive **50% of NET revenue** attributable to your Works.
+
+```
+Gross          what the customer paid
+− Tax / VAT    collected for the state — never split
+− Payment fee  Stripe / PayPal, as actually charged
+− Refunds and chargebacks
+= NET          →  50% you  /  50% TV Music Store
+```
+
+**5.2 One-time licences.** 50% of the net of that sale, allocated to you immediately.
+
+**5.3 Subscriptions — the money follows the payer.** A subscription payment is divided only
+between the composers **that subscriber actually downloaded** during the cycle he paid for.
+It is not pooled across the whole catalogue. Within that, allocation is by **points**:
+
+- **1 point per unique Work, per subscriber, per cycle.** Downloading the same Work twice —
+  or taking the WAV, then the stems, then the MP3 of it — is still **one** point.
+- **MP3 128 does not count** (it is the free-tier format).
+- **Your own downloads of your own Works count for nothing.**
+- Points reset each cycle; the same Work can earn again in the next one.
+
+**5.4 The idle subscriber.** If a subscriber pays but downloads nothing in his cycle, there
+is no composer to pay and that money stays with TV Music Store.
+
+**5.5 Refunds.** If a customer is refunded **before** you have been paid, the allocation is
+simply removed. If it is refunded **after** you have been paid, **we will never take money
+back out of your account** — the amount is netted off your next payout.
+
+**5.6 Timing and threshold.** A month is closed and then **held for 30 days** so refunds and
+chargebacks settle. Cleared balances are paid **monthly**, above a minimum of **$50**; a
+smaller balance rolls over to the next payout. Payment by **[[PayPal / bank transfer]]** to
+the account you nominate.
+
+**5.7 Statements.** Your dashboard shows your earnings **month by month, once each month is
+closed and final** — deliberately not as a live counter. TV Music Store's own records are
+the reference for any dispute; you may ask for a breakdown at any time.
+
+**5.8 Taxes.** You are responsible for your own taxes and for telling us anything we need in
+order to pay you lawfully.
+
+## 6. Content ID and claims
+
+**6.1 You register, you release.** You register your own Works in YouTube Content ID (or
+keep them registered) under your own account or administrator. TV Music Store does not
+register them.
+
+**6.2 Your obligation.** When TV Music Store forwards you a claim raised against a customer
+whose use is covered by a valid TV Music Store licence, you will **release that claim within
+one (1) business day**. TV Music Store will give you the video URL and the licence reference.
+
+**6.3 Monitored channels.** Customers may register their YouTube channels with TV Music Store.
+TV Music Store watches those channels for new uploads and forwards them to you for
+pre-emptive claim release, so that most claims are cleared before the customer ever notices.
+This is monitoring, not prevention — a claim can still appear, and §6.2 still applies.
+(A video must be published — Public or Unlisted — before anyone can act on it.)
+
+**6.4 No claiming licensed customers.** You will not strike, claim or monetise a video that
+holds a valid TV Music Store licence for that use.
+
+**6.5 ⚠️ This obligation SURVIVES.** Your duty to release claims under §6.2 continues **for
+as long as customer licences granted while your Work was in the catalogue remain in force —
+including after you withdraw the Work and after this Agreement ends.**
+
+**6.6 If you cannot act.** People fall ill, travel, and change their minds. If you have not
+released a claim within **five (5) business days**, TV Music Store may:
+
+1. **refund the affected customer** and deduct that refund from your future payouts (§6.7);
+2. **remove the Work from the catalogue** so no new customer is exposed to the same problem.
+
+Where your Content ID provider allows it, you will — if asked — give TV Music Store or its
+nominated administrator **standing authority to release claims on licensed uses only**. This
+is a convenience, not a condition: if your provider does not allow it, §6.6(1) and (2) are
+what protect the customer.
+
+**6.7 The customer's 14-day refund right — and where it lands.** If a claim on a licensed
+customer's video is **still open fourteen (14) days** after the customer reported it to
+TV Music Store, that customer may claim a refund (the one-time licence, or the subscription
+payment for the affected period). Where the claim was yours to release, TV Music Store will
+**deduct the refunded amount from your future payouts**.
+
+> **Why 14 days and why it lands on the composer:** the customer paid for music that was safe
+> to use. If it turns out not to be, someone has to make him whole, and it cannot be the store
+> that merely relayed your promise. Fourteen days is deliberately generous — it survives a
+> holiday, a flu, a lost password. It is not generous enough to survive somebody simply
+> walking away, which is exactly the case it is written for.
+>
+> **Note to the owner:** I removed the "binds your heirs and executors" wording you disliked.
+> You were right — you have no access to a composer's Content ID account, so a clause built on
+> access you do not have is a promise you cannot keep. The refund right (§6.7) plus removal of
+> the Work is the mechanism that actually works, because it only needs **your** hands. (The
+> standard "successors" boilerplate now sits in §9, where it belongs — it is about the
+> agreement, not about Content ID.)
+
+> ### ⚠️ Note to the owner — I did not write your "60 days" here, and here is why
+>
+> You said the composer should keep clearing claims **for 60 days after a track is removed**.
+> That number protects the composer and **breaks the customer**.
+>
+> A customer who downloaded the track under a valid subscription keeps a **perpetual licence
+> for that project**. His video may sit on YouTube for five years. If a claim lands in year
+> three and the composer's duty expired after 60 days, that customer is stuck with a claim on
+> a video he paid for and did nothing wrong — and he will, correctly, blame **you**, because
+> he bought from you.
+>
+> So the withdrawal wind-down (§7) is 60 days — that is about **new** customers.
+> The claim-release duty has to survive as long as the licences do. It costs the composer
+> almost nothing (whitelisting means claims mostly never arise) and it is the single clause
+> that keeps your central promise true. **If a composer refuses this clause, do not take his
+> music** — you cannot sell "claim-free" music whose author can walk away from the claim.
+
+## 7. Term, withdrawal and survival
+
+- The Agreement runs **indefinitely** until ended by either party in writing.
+- You may ask for any Work — or all of them — to be **withdrawn at any time**. We will remove
+  it from the catalogue within **60 days** of your request (the wind-down: we re-cut
+  playlists, and customers browsing stop seeing it).
+- **Licences already granted survive.** A customer who downloaded the Work under an active
+  subscription, or bought a one-time licence, keeps the right to use it in his projects,
+  perpetually, under the terms he bought. A withdrawal removes the Work from **sale**; it
+  does not reach back into projects already made.
+- **What a new subscription covers:** the catalogue as it stands at the moment of each
+  download. A withdrawn Work is simply no longer downloadable.
+- Your **§4 warranties**, your **§6 claim-release duty**, and any **payouts accrued** all
+  survive the end of this Agreement.
+
+## 8. Relationship
+
+You are an **independent contractor**. This is not employment, agency, partnership or joint
+venture, and you cannot bind TV Music Store.
+
+## 9. General
 
 - **Governing law:** England & Wales; exclusive jurisdiction of its courts.
-- **Assignment:** TV Music Store may assign this Agreement (e.g. on sale of the
-  business); you may not assign without our written consent.
-- **Confidentiality:** payout terms and non-public business information are kept
-  confidential by both parties.
-- **Entire agreement:** this document (plus any signed schedules of delivered
-  Tracks) is the whole agreement between us and supersedes prior discussions.
-- **Changes:** amendments must be in writing and agreed by both parties.
+- **Assignment:** TV Music Store may assign this Agreement (e.g. if the business is sold);
+  you may not, without our written consent.
+- **Successors:** this Agreement binds and benefits the parties' permitted successors — the
+  ordinary boilerplate, so that a change of hands on either side does not void it.
+- **Confidentiality:** payout terms and non-public business information stay between us.
+- **Entire agreement:** this document plus any signed schedule of delivered Works.
+- **Changes:** in writing, agreed by both.
 
 ---
 
@@ -135,4 +262,21 @@ TV Music Store (Stanislav Barantsov / Maryna Huz): ______________  Date: _______
 
 Composer ([[name]]): ______________  Date: ________
 
-*TV Music Store Composer Agreement — Draft v1.0.*
+*TV Music Store Composer & Sound Designer Agreement — Draft v2.0.*
+
+---
+
+## Owner's checklist before this goes out
+
+1. **Fill the `[[ ]]` blanks** — your entity details, payout method, effective date.
+2. **Have a UK solicitor read it.** Especially §4 (indemnity) and §6.5 (surviving duty) —
+   those two clauses are the ones carrying your risk.
+3. **Decide the friend problem now, not later.** These are your friends; that is exactly why
+   the paper matters. A signed agreement is not distrust — it is what lets a friendship
+   survive a bad month, a chargeback, or a copyright claim.
+4. **Site copy must match §6.2.** The homepage promises claims "removed within 24 hours",
+   but composers clear claims on **business days** — so the honest promise is **"within one
+   business day"**. (I have already changed the copy; see the code.)
+5. **e-Signature:** DocuSign works. Cheaper and equally valid for this: **Dropbox Sign**,
+   **SignWell**, **PandaDoc**, or self-hosted **Documenso**. All produce a legally binding
+   e-signature in the UK/EU. Pick on price — the document does the work, not the tool.

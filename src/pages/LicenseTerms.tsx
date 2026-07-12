@@ -109,15 +109,28 @@ const LicenseTerms = () => (
 
       <H2>6. YouTube Content ID</H2>
       <P>
-        Our catalog is protected through YouTube's Content ID system. A claim on a video is normally
-        just a notice, not a copyright strike, and we release it for licensed uses:
+        Every track is registered in Content ID by its composer — that is what stops other people
+        using it without paying, and it means a claim can still appear on your video even though you
+        are licensed. A claim is a notice, not a copyright strike: it does not harm your channel. We
+        get it released for licensed uses.
       </P>
       <UL
         items={[
-          "Subscription plans — channel whitelisting: add your YouTube channel(s), up to your plan's limit, in your account. While your subscription is active, we clear Content ID claims on videos on those channels that use our music. Anything you publish while active stays cleared; videos published after your subscription ends are not covered.",
-          "One-time licenses (or any single claim): send us your License Number and the video link at contact@tvmusicstore.com and we'll release that specific claim.",
+          "Monitored channels: add your YouTube channel(s) in your account, up to your plan's limit. While your subscription is active we watch those channels for new uploads and send them for claim release proactively — usually the claim is cleared before you notice it. Anything you publish while active stays cleared; videos published after your subscription ends are not covered.",
+          "Any single claim: paste the video link in your account (Content ID claims), or send it with your License Number to contact@tvmusicstore.com. The claim is released within one business day.",
+          "The video must be Public or Unlisted. A private video is invisible to YouTube's API, so a claim on it cannot be found or released by anyone — publish it first, then send us the link.",
         ]}
       />
+      <P>
+        <strong>If a claim is not resolved.</strong> Claims are released through the copyright system
+        at the composer's request — with your channel whitelisted this happens automatically, and you
+        normally never see it. Things can still go wrong: a composer can fall ill or become
+        unreachable. So if a claim on a video covered by a valid license is still open{" "}
+        <strong>14 days</strong> after you reported it to us (through your account or by email), you
+        may ask for a refund — the one-time license for that track, or the subscription payment for
+        the period concerned. We would rather return your money than leave you stuck with a claim on
+        music you paid for.
+      </P>
       <P>
         Releasing a claim transfers no ownership; the music remains the property of TV Music Store
         and its composers.
