@@ -36,9 +36,20 @@ interface RevenueEvent {
   user_email: string | null;
 }
 
+interface Balance {
+  composerId: string;
+  name: string;
+  released: number;
+  held: number;
+  payable: boolean;
+}
+
 interface Report {
   month: string;
   months: string[];
+  policy: { holdbackDays: number; thresholdCents: number };
+  releaseDate: string;
+  balances: Balance[];
   totals: {
     gross: number;
     tax: number;
@@ -108,6 +119,28 @@ const AdminFinance = () => {
   useEffect(() => {
     void load();
   }, [load]);
+
+  /** One place for every POST — they all reload the report afterwards. */
+  const act = async (payload: Record<string, unknown>, okMessage: string) => {
+    if (!report) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/finance", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ month: report.month, ...payload }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Failed");
+      await load(report.month);
+      toast.success(okMessage);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const setPaid = async (composerId: string, paid: boolean) => {
     if (!report) return;
@@ -282,6 +315,118 @@ const AdminFinance = () => {
         </div>
       </div>
 
+      {/* What can actually be sent today */}
+      <div className="rounded-xl border border-border bg-card p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="font-body text-sm font-semibold text-foreground">Payable now</h2>
+            <p className="mt-1 font-body text-xs text-muted-foreground">
+              A month clears {report.policy.holdbackDays} days after it ends (refunds settle first);
+              balances under {money(report.policy.thresholdCents)} roll over instead of being wired
+              for pennies. {report.month} clears on {report.releaseDate}.
+            </p>
+          </div>
+          <div className="flex items-end gap-2">
+            <label className="flex flex-col gap-1 font-body text-[11px] text-muted-foreground">
+              Hold-back, days
+              <input
+                type="number"
+                min={0}
+                max={180}
+                defaultValue={report.policy.holdbackDays}
+                onBlur={(e) =>
+                  void act(
+                    {
+                      action: "set_policy",
+                      holdbackDays: Number(e.target.value),
+                      thresholdCents: report.policy.thresholdCents,
+                    },
+                    "Payout policy saved",
+                  )
+                }
+                className="w-24 rounded-md border border-border bg-background px-2 py-1 font-body text-xs text-foreground focus:border-[#F4C430] focus:outline-none"
+              />
+            </label>
+            <label className="flex flex-col gap-1 font-body text-[11px] text-muted-foreground">
+              Minimum payout, $
+              <input
+                type="number"
+                min={0}
+                defaultValue={report.policy.thresholdCents / 100}
+                onBlur={(e) =>
+                  void act(
+                    {
+                      action: "set_policy",
+                      holdbackDays: report.policy.holdbackDays,
+                      thresholdCents: Math.round(Number(e.target.value) * 100),
+                    },
+                    "Payout policy saved",
+                  )
+                }
+                className="w-24 rounded-md border border-border bg-background px-2 py-1 font-body text-xs text-foreground focus:border-[#F4C430] focus:outline-none"
+              />
+            </label>
+          </div>
+        </div>
+
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[34rem] border-collapse font-body text-sm">
+            <thead>
+              <tr className="border-b border-border/60 text-left">
+                <th className="py-2 pr-4 font-semibold text-muted-foreground">Composer</th>
+                <th className="py-2 pr-4 text-right font-semibold text-muted-foreground">Cleared</th>
+                <th className="py-2 pr-4 text-right font-semibold text-muted-foreground">Clearing</th>
+                <th className="py-2 font-semibold text-muted-foreground"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.balances.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="py-6 text-center text-muted-foreground">
+                    Nothing outstanding.
+                  </td>
+                </tr>
+              )}
+              {report.balances.map((b) => (
+                <tr key={b.composerId} className="border-b border-border/40 last:border-b-0">
+                  <td className="py-2.5 pr-4 font-medium text-foreground">{b.name}</td>
+                  <td
+                    className="py-2.5 pr-4 text-right font-semibold tabular-nums"
+                    style={{ color: GOLD }}
+                  >
+                    {money(b.released)}
+                  </td>
+                  <td className="py-2.5 pr-4 text-right tabular-nums text-muted-foreground">
+                    {money(b.held)}
+                  </td>
+                  <td className="py-2.5 text-right">
+                    {b.payable ? (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          void act(
+                            { action: "pay_balance", composerId: b.composerId },
+                            `Paid out ${b.name}`,
+                          )
+                        }
+                        className="rounded-md bg-[#F4C430] px-3 py-1 font-body text-xs font-bold text-background transition-colors hover:bg-[#F4C430]/85 disabled:opacity-50"
+                      >
+                        Mark paid
+                      </button>
+                    ) : (
+                      <span className="font-body text-[11px] text-muted-foreground/70">
+                        {b.released > 0 ? "Under minimum — rolls over" : "Still clearing"}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* Payout lines */}
       <div className="rounded-xl border border-border bg-card p-5">
         <h2 className="font-body text-sm font-semibold text-foreground">
@@ -360,23 +505,34 @@ const AdminFinance = () => {
                 <th className="py-2 pr-4 text-right font-semibold text-muted-foreground">Gross</th>
                 <th className="py-2 pr-4 text-right font-semibold text-muted-foreground">Tax</th>
                 <th className="py-2 pr-4 text-right font-semibold text-muted-foreground">Fee</th>
-                <th className="py-2 text-right font-semibold text-muted-foreground">Net</th>
+                <th className="py-2 pr-4 text-right font-semibold text-muted-foreground">Net</th>
+                <th className="py-2 font-semibold text-muted-foreground"></th>
               </tr>
             </thead>
             <tbody>
               {report.events.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-6 text-center text-muted-foreground">
+                  <td colSpan={8} className="py-6 text-center text-muted-foreground">
                     No payments yet.
                   </td>
                 </tr>
               )}
               {report.events.map((e) => (
-                <tr key={e.id} className="border-b border-border/40 last:border-b-0">
+                <tr
+                  key={e.id}
+                  className={`border-b border-border/40 last:border-b-0 ${
+                    e.status === "refunded" ? "opacity-50" : ""
+                  }`}
+                >
                   <td className="py-2.5 pr-4 text-muted-foreground">{e.created_at.slice(0, 10)}</td>
                   <td className="py-2.5 pr-4 text-foreground">{e.user_email ?? "—"}</td>
                   <td className="py-2.5 pr-4 capitalize text-muted-foreground">
                     {e.source === "license" ? "License" : "Subscription"} · {e.provider}
+                    {e.status === "refunded" && (
+                      <span className="ml-2 rounded-full border border-red-400/40 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-red-400">
+                        refunded
+                      </span>
+                    )}
                   </td>
                   <td className="py-2.5 pr-4 text-right tabular-nums text-foreground/90">
                     {money(e.gross_cents)}
@@ -387,14 +543,39 @@ const AdminFinance = () => {
                   <td className="py-2.5 pr-4 text-right tabular-nums text-muted-foreground">
                     {money(e.fee_cents)}
                   </td>
-                  <td className="py-2.5 text-right font-semibold tabular-nums text-foreground">
+                  <td className="py-2.5 pr-4 text-right font-semibold tabular-nums text-foreground">
                     {money(e.net_cents)}
+                  </td>
+                  <td className="py-2.5 text-right">
+                    {e.status !== "refunded" && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => {
+                          if (
+                            !window.confirm(
+                              "Book this payment as refunded?\n\nIt leaves the revenue totals. If the composer was already paid, the amount is netted off his NEXT payout — we never take money back from his account.",
+                            )
+                          )
+                            return;
+                          void act({ action: "refund_event", eventId: e.id }, "Refund booked");
+                        }}
+                        className="rounded-md border border-border px-2.5 py-1 font-body text-xs text-muted-foreground transition-colors hover:border-red-400/60 hover:text-red-400 disabled:opacity-50"
+                      >
+                        Refund
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        <p className="mt-3 font-body text-[11px] text-muted-foreground">
+          Stripe refunds and chargebacks are booked automatically by webhook. Use this button for
+          PayPal refunds (issued in the PayPal dashboard) — it only records the reversal here, it
+          does not move money.
+        </p>
       </div>
     </div>
   );

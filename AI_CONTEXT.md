@@ -2634,3 +2634,27 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   WARNING repeated (it bit again): NEVER edit repo files from the sandbox with python/bash — the
   host↔sandbox mirror keeps content fresh but LENGTH stale, and writing a truncated mirror back
   TRUNCATES THE HOST FILE (Admin.tsx lost its tail this session; repaired). Host Edit/Write only.
+- **2026-07-12 (refunds, composer earnings, payout policy — revenue engine complete):**
+  (1) REFUNDS/CHARGEBACKS: `reverseEvent(db, {eventId|providerRef})` in `_revenue.ts`. The event is
+  marked `refunded` (so it drops out of the revenue totals — the platform absorbs it in the month it
+  happens); for each author allocation: if the composer's payout for that month is NOT yet `paid` the
+  allocation is DELETED, if it IS paid a NEGATIVE allocation is booked into the CURRENT month, i.e.
+  netted off his next payout. We never claw money back out of a composer's account — that rule is
+  also written on his earnings page. Stripe books this automatically (`charge.refunded`,
+  `charge.dispute.created`, `charge.dispute.funds_withdrawn` → charge.invoice → provider_ref);
+  PayPal has no webhook here, so Admin → Finance has a **Refund** button per payment (records the
+  reversal only; PayPal moves the money).
+  (2) PAYOUT POLICY is now real, not paper: `site_config.payout_policy` = {holdbackDays: 30,
+  thresholdCents: 5000} with `getPayoutPolicy` / `savePayoutPolicy` / `releaseDateOf(month, days)`.
+  A month clears at end-of-month + hold-back (refunds settle first); a cleared balance under the
+  minimum rolls over. Admin → Finance gained a **"Payable now"** table (per composer: cleared /
+  clearing / Mark paid → new `pay_balance` action closes every cleared month at once) and inline
+  inputs for the two settings (`set_policy`).
+  (3) COMPOSER EARNINGS ARE LIVE: `functions/api/composer/earnings.ts` + NEW
+  `src/components/ComposerEarnings.tsx` (lifetime / paid out / ready to pay / clearing; month rows
+  with points, amount and paid|payable|held + the clearing date; his tracks by COUNTED downloads —
+  points not dollars, because a download's value depends on what that subscriber paid; and the whole
+  rule set in plain language). The mock earnings table and the fake "This month (est.)" dashboard card
+  were removed from ComposerPanel.tsx (mockPayoutLines/mockPayoutPeriods imports dropped).
+  Remaining in docs/REVENUE_SPLIT.md: the MoR/VAT decision (Paddle REJECTED the site — read Lemon
+  Squeezy / FastSpring acceptable-use terms, compare against staying on Stripe + Stripe Tax).

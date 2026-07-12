@@ -1,20 +1,15 @@
 import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import ComposerUpload, { useComposerTracks } from "@/components/ComposerUpload";
+import ComposerEarnings from "@/components/ComposerEarnings";
 import { useComposer, useCurrentUser } from "@/hooks/useMockData";
-import {
-  mockBriefs,
-  mockClaimRequests,
-  mockComposerTracks,
-  mockDownloadLog,
-  mockPayoutLines,
-  mockPayoutPeriods,
-} from "@/mocks";
+import { mockBriefs, mockClaimRequests, mockComposerTracks, mockDownloadLog } from "@/mocks";
 
 // Composer studio sections, rendered INSIDE the /account page (owner decision:
 // no separate /composer panel — the account sidebar has a "Composer" group).
-// Upload + My tracks are live (/api/composer/tracks); dashboard / earnings /
-// requests / profile still show mock data until stage 5+.
+// LIVE: Upload + My tracks (/api/composer/tracks) and EARNINGS
+// (/api/composer/earnings — real money from the revenue ledger).
+// Still mock: dashboard / requests / profile.
 
 const GOLD = "#F4C430";
 
@@ -92,10 +87,6 @@ const ComposerPanel = ({ section }: { section: ComposerSectionId }) => {
       }));
   }, [myDownloads]);
 
-  const myLines = composer ? mockPayoutLines.filter((l) => l.composerId === composer.id) : [];
-  const currentDraft = myLines.find(
-    (l) => mockPayoutPeriods.find((p) => p.id === l.periodId)?.status === "draft",
-  );
   const myTracks = composer ? mockComposerTracks.filter((t) => t.composerId === composer.id) : [];
   const myClaims = composer ? mockClaimRequests.filter((c) => c.composerId === composer.id) : [];
   const myBriefs = composer
@@ -134,10 +125,18 @@ const ComposerPanel = ({ section }: { section: ComposerSectionId }) => {
                 {live.composer ? liveDownloadsTotal : myDownloads.length}
               </p>
             </Card>
+            {/* No fake "estimate" here — the real money lives in Earnings. */}
             <Card>
-              <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">This month (est.)</p>
-              <p className="mt-1 font-body text-3xl font-semibold" style={{ color: GOLD }}>
-                ${currentDraft?.amount.toFixed(0) ?? "0"}
+              <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">Earnings</p>
+              <Link
+                to="/account?section=composer-earnings"
+                className="mt-1 inline-block font-body text-lg font-semibold hover:underline"
+                style={{ color: GOLD }}
+              >
+                Open earnings →
+              </Link>
+              <p className="mt-1 font-body text-xs text-muted-foreground">
+                Real payouts, month by month.
               </p>
             </Card>
             <Card>
@@ -304,58 +303,8 @@ const ComposerPanel = ({ section }: { section: ComposerSectionId }) => {
         </Card>
       )}
 
-      {section === "earnings" && (
-        <Card title="Earnings by month">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[480px] font-body text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="py-2 pr-4">Month</th>
-                  <th className="py-2 pr-4">Downloads</th>
-                  <th className="py-2 pr-4">Amount</th>
-                  <th className="py-2 pr-4">Status</th>
-                  <th className="py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {myLines.map((l) => {
-                  const period = mockPayoutPeriods.find((p) => p.id === l.periodId);
-                  return (
-                    <tr key={l.id} className="border-b border-border/50 last:border-0">
-                      <td className="py-2.5 pr-4 text-foreground">{period?.month}</td>
-                      <td className="py-2.5 pr-4 text-muted-foreground">{l.downloadsCount}</td>
-                      <td className="py-2.5 pr-4 font-semibold" style={{ color: GOLD }}>
-                        ${l.amount.toFixed(2)}
-                      </td>
-                      <td className="py-2.5 pr-4">
-                        <span
-                          className={`rounded-full px-2.5 py-0.5 text-xs ${
-                            period?.status === "paid"
-                              ? "bg-[#F4C430]/15 text-[#F4C430]"
-                              : "bg-secondary text-muted-foreground"
-                          }`}
-                        >
-                          {period?.status === "draft" ? "accruing" : period?.status}
-                        </span>
-                      </td>
-                      <td className="py-2.5 text-right">
-                        {period?.status === "paid" && (
-                          <button type="button" className="font-body text-xs font-semibold text-[#F4C430] hover:underline">
-                            Statement PDF
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <p className="mt-4 font-body text-xs text-muted-foreground">
-            Author pool = 50% of net revenue, split by downloads. Payouts by the 15th, minimum $50.
-          </p>
-        </Card>
-      )}
+      {/* Live money from the revenue ledger — no mocks (see ComposerEarnings). */}
+      {section === "earnings" && <ComposerEarnings />}
 
       {section === "requests" && (
         <>

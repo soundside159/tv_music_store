@@ -80,19 +80,25 @@ cents, so a split never invents or loses money.
 
 ## 8. Still open (owner decisions / next steps)
 
-**Order agreed with the owner for the next session (2026-07-12), first thing:**
+**DONE 2026-07-12** — items 1-3 below are built:
 
-1. **Refunds & chargebacks** — reverse the allocations. Stripe `charge.refunded` /
-   `charge.dispute.created` and the PayPal equivalent mark the event `refunded`; if the
-   composer has NOT been paid yet, delete its allocations; if he HAS, carry a negative
-   balance into his next month (never claw money back from a bank account).
-2. **Composer dashboard on live data** — the earnings screen reads `revenue_allocations`
-   instead of mocks: per month, points, amount, due/paid, and a plain-language line
-   explaining WHY it is that number (which subscribers downloaded him).
-3. **Payout threshold + hold-back** — make them real settings (site_config), not policy on
-   paper: hold ~30–45 days after the month closes so refunds net out; do not pay under $50,
-   roll the balance forward.
-4. Then: the MoR / VAT research below.
+1. ✅ **Refunds & chargebacks.** `reverseEvent()` in `_revenue.ts`. Stripe books them
+   automatically (`charge.refunded`, `charge.dispute.created`, `charge.dispute.funds_withdrawn`
+   → the charge's invoice → the event). PayPal refunds are booked by hand with the **Refund**
+   button in Admin → Finance (PayPal issues the money; we only record the reversal).
+   The rule: the event leaves the revenue totals; if the composer was **not** paid yet his
+   allocation is deleted, and if he **was**, a NEGATIVE allocation is booked into the current
+   month — netted off his next payout. **We never take money back out of a composer's account.**
+2. ✅ **Composer earnings on live data.** `GET /api/composer/earnings` +
+   `src/components/ComposerEarnings.tsx`: lifetime / paid out / ready to pay / clearing, month
+   rows (points, amount, paid | payable | held + the date it clears), his tracks by counted
+   downloads, and the rules written out in plain language. The old mock table and the fake
+   "This month (est.)" card are gone.
+3. ✅ **Hold-back + minimum payout** are real settings (`site_config.payout_policy`, defaults
+   30 days / $50), editable in Admin → Finance. A month clears `end of month + hold-back`;
+   a balance under the minimum rolls over. "Payable now" shows each composer's cleared and
+   clearing balance with a one-click **Mark paid** that closes every cleared month at once.
+4. **Next:** the MoR / VAT research below.
 
 - **VAT collection — NEXT TASK (2026-07-12).** ⚠️ **Paddle REJECTED the site** (reason not given;
   likely their policy on marketplaces / reselling third-party creators' content — a royalty-free

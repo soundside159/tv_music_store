@@ -1,5 +1,12 @@
 import { getSessionUser, json, OWNER_EMAIL, readJson, type Ctx } from "../_utils";
-import { allocateDue, ensureRevenueTables } from "../_revenue";
+import {
+  allocateDue,
+  ensureRevenueTables,
+  getPayoutPolicy,
+  releaseDateOf,
+  reverseEvent,
+  savePayoutPolicy,
+} from "../_revenue";
 
 // Admin finance report — the real numbers, straight from the revenue ledger.
 //
@@ -112,6 +119,55 @@ export const onRequestGet = async (ctx: Ctx) => {
     .bind(month)
     .all();
 
+  // ---- Balances: what is actually PAYABLE today ---------------------------
+  // Money is held until the month it belongs to has aged past the hold-back
+  // (so refunds and chargebacks net out first), and a balance under the
+  // threshold simply rolls forward instead of being wired for pennies.
+  const policy = await getPayoutPolicy(db);
+  const today = new Date().toISOString().slice(0, 10);
+
+  const openLines = await db
+    .prepare(
+      `SELECT a.month AS month, a.composer_id AS composer_id, c.display_name AS name,
+              SUM(a.amount_cents) AS amount
+         FROM revenue_allocations a
+         LEFT JOIN composers c ON c.id = a.composer_id
+         LEFT JOIN payout_runs p ON p.month = a.month AND p.composer_id = a.composer_id
+        WHERE a.kind = 'author'
+          AND a.composer_id IS NOT NULL
+          AND (p.status IS NULL OR p.status <> 'paid')
+        GROUP BY a.month, a.composer_id`,
+    )
+    .all<{ month: string; composer_id: string; name: string | null; amount: number }>();
+
+  const balanceBy = new Map<
+    string,
+    { composerId: string; name: string; released: number; held: number; months: string[] }
+  >();
+  for (const line of openLines.results) {
+    const entry = balanceBy.get(line.composer_id) ?? {
+      composerId: line.composer_id,
+      name: line.name ?? "(deleted composer)",
+      released: 0,
+      held: 0,
+      months: [],
+    };
+    if (releaseDateOf(line.month, policy.holdbackDays) <= today) {
+      entry.released += line.amount ?? 0;
+      entry.months.push(line.month);
+    } else {
+      entry.held += line.amount ?? 0;
+    }
+    balanceBy.set(line.composer_id, entry);
+  }
+
+  const balances = [...balanceBy.values()]
+    .map((b) => ({
+      ...b,
+      payable: b.released >= policy.thresholdCents && b.released > 0,
+    }))
+    .sort((a, b) => b.released - a.released);
+
   const sum = (key: "gross" | "tax" | "fee" | "net") =>
     totals.results.reduce((acc, r) => acc + (r[key] ?? 0), 0);
 
@@ -122,6 +178,9 @@ export const onRequestGet = async (ctx: Ctx) => {
   return json({
     month,
     months: months.results.map((m) => m.month),
+    policy,
+    releaseDate: releaseDateOf(month, policy.holdbackDays),
+    balances,
     totals: {
       gross: sum("gross"),
       tax: sum("tax"),
@@ -152,9 +211,67 @@ export const onRequestPost = async (ctx: Ctx) => {
   const db = ctx.env.DB;
   await ensureRevenueTables(db);
 
-  const body = await readJson<{ action?: string; month?: string; composerId?: string }>(
-    ctx.request,
-  );
+  const body = await readJson<{
+    action?: string;
+    month?: string;
+    composerId?: string;
+    eventId?: string;
+    holdbackDays?: number;
+    thresholdCents?: number;
+  }>(ctx.request);
+
+  // --- Payout policy (hold-back + minimum payout) ---------------------------
+  if (body?.action === "set_policy") {
+    await savePayoutPolicy(db, {
+      holdbackDays: Math.max(0, Math.min(180, Math.round(Number(body.holdbackDays ?? 30)))),
+      thresholdCents: Math.max(0, Math.round(Number(body.thresholdCents ?? 5000))),
+    });
+    return json({ ok: true });
+  }
+
+  // --- Refund / chargeback booked by hand (PayPal has no webhook here) ------
+  if (body?.action === "refund_event") {
+    if (!body.eventId) return json({ error: "eventId required" }, 400);
+    const done = await reverseEvent(db, { eventId: body.eventId });
+    return json({ ok: true, reversed: done });
+  }
+
+  // --- Pay out a composer's whole released balance at once ------------------
+  if (body?.action === "pay_balance") {
+    const composer = body.composerId;
+    if (!composer) return json({ error: "composerId required" }, 400);
+    const policy = await getPayoutPolicy(db);
+    const today = new Date().toISOString().slice(0, 10);
+
+    const open = await db
+      .prepare(
+        `SELECT a.month AS month, SUM(a.amount_cents) AS amount
+           FROM revenue_allocations a
+           LEFT JOIN payout_runs p ON p.month = a.month AND p.composer_id = a.composer_id
+          WHERE a.kind = 'author' AND a.composer_id = ?1
+            AND (p.status IS NULL OR p.status <> 'paid')
+          GROUP BY a.month`,
+      )
+      .bind(composer)
+      .all<{ month: string; amount: number }>();
+
+    let paidTotal = 0;
+    for (const line of open.results) {
+      if (releaseDateOf(line.month, policy.holdbackDays) > today) continue; // still held
+      await db
+        .prepare(
+          `INSERT INTO payout_runs (month, composer_id, amount_cents, status, paid_at)
+           VALUES (?1, ?2, ?3, 'paid', ?4)
+           ON CONFLICT(month, composer_id) DO UPDATE SET
+             amount_cents = ?3, status = 'paid', paid_at = ?4`,
+        )
+        .bind(line.month, composer, line.amount ?? 0, new Date().toISOString())
+        .run();
+      paidTotal += line.amount ?? 0;
+    }
+    return json({ ok: true, paidCents: paidTotal });
+  }
+
   const month = body?.month;
   const composerId = body?.composerId;
   if (!month || !/^\d{4}-\d{2}$/.test(month) || !composerId) {

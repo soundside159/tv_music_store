@@ -167,6 +167,59 @@ export const recordRevenueEvent = async (
 /** YYYY-MM the money is booked into. */
 const monthOf = (iso: string) => iso.slice(0, 7);
 
+// --- Payout policy (site_config, editable in Admin -> Finance) --------------
+
+export interface PayoutPolicy {
+  /** Nothing is paid out before the month has aged this long (refunds net out). */
+  holdbackDays: number;
+  /** A balance under this simply rolls into the next payout. */
+  thresholdCents: number;
+}
+
+export const DEFAULT_POLICY: PayoutPolicy = { holdbackDays: 30, thresholdCents: 5000 };
+
+export const getPayoutPolicy = async (db: D1Database): Promise<PayoutPolicy> => {
+  try {
+    const row = await db
+      .prepare(`SELECT value FROM site_config WHERE key = 'payout_policy'`)
+      .first<{ value: string }>();
+    if (!row) return DEFAULT_POLICY;
+    const parsed = JSON.parse(row.value) as Partial<PayoutPolicy>;
+    return {
+      holdbackDays: Number.isFinite(parsed.holdbackDays)
+        ? Math.max(0, Math.round(parsed.holdbackDays as number))
+        : DEFAULT_POLICY.holdbackDays,
+      thresholdCents: Number.isFinite(parsed.thresholdCents)
+        ? Math.max(0, Math.round(parsed.thresholdCents as number))
+        : DEFAULT_POLICY.thresholdCents,
+    };
+  } catch {
+    return DEFAULT_POLICY;
+  }
+};
+
+export const savePayoutPolicy = async (db: D1Database, policy: PayoutPolicy): Promise<void> => {
+  await db
+    .prepare(`CREATE TABLE IF NOT EXISTS site_config (key TEXT PRIMARY KEY, value TEXT NOT NULL)`)
+    .run();
+  await db
+    .prepare(
+      `INSERT INTO site_config (key, value) VALUES ('payout_policy', ?1)
+       ON CONFLICT(key) DO UPDATE SET value = ?1`,
+    )
+    .bind(JSON.stringify(policy))
+    .run();
+};
+
+/** The day a month's money becomes payable: end of that month + holdback. */
+export const releaseDateOf = (month: string, holdbackDays: number): string => {
+  const [year, mon] = month.split("-").map(Number);
+  // First day of the NEXT month, plus the holdback.
+  const date = new Date(Date.UTC(year, mon, 1));
+  date.setUTCDate(date.getUTCDate() + holdbackDays);
+  return date.toISOString().slice(0, 10);
+};
+
 /**
  * Splits `authorPool` between composers by points, largest-remainder style so
  * the cents always add up to the pool exactly (no money invented or lost).
@@ -301,6 +354,91 @@ export const allocateEvent = async (db: D1Database, eventId: string): Promise<vo
     )
     .bind(event.id)
     .run();
+};
+
+/** YYYY-MM of today (UTC) — where a reversal is booked. */
+const currentMonth = () => new Date().toISOString().slice(0, 7);
+
+/**
+ * Money came back (refund or chargeback). Two cases, and the difference matters
+ * to the composer:
+ *
+ *   • Not paid out yet  → the allocation is simply deleted. Nobody notices.
+ *   • Already paid out  → we do NOT claw money out of his account. A NEGATIVE
+ *     allocation is booked into the CURRENT month, so the refund is netted off
+ *     his next payout. That is how every serious platform handles it: the
+ *     composer is not punished for a customer's chargeback, he just carries the
+ *     balance forward.
+ *
+ * The event itself is marked `refunded`, which drops it out of the revenue
+ * totals — so the platform absorbs it in the month it happened.
+ * Idempotent: a webhook may fire twice.
+ */
+export const reverseEvent = async (
+  db: D1Database,
+  ref: { eventId?: string; providerRef?: string },
+): Promise<boolean> => {
+  await ensureRevenueTables(db);
+
+  const event = ref.eventId
+    ? await db
+        .prepare(`SELECT id, status FROM revenue_events WHERE id = ?1`)
+        .bind(ref.eventId)
+        .first<{ id: string; status: string }>()
+    : await db
+        .prepare(`SELECT id, status FROM revenue_events WHERE provider_ref = ?1`)
+        .bind(ref.providerRef ?? "")
+        .first<{ id: string; status: string }>();
+  if (!event || event.status === "refunded") return false;
+
+  const allocations = await db
+    .prepare(
+      `SELECT id, composer_id, kind, amount_cents, month
+         FROM revenue_allocations WHERE event_id = ?1`,
+    )
+    .bind(event.id)
+    .all<{
+      id: number;
+      composer_id: string | null;
+      kind: string;
+      amount_cents: number;
+      month: string;
+    }>();
+
+  const month = currentMonth();
+
+  for (const line of allocations.results) {
+    if (line.kind !== "author" || !line.composer_id) {
+      // The platform's own share needs no carry-forward — dropping the event
+      // from the totals already takes it back.
+      await db.prepare(`DELETE FROM revenue_allocations WHERE id = ?1`).bind(line.id).run();
+      continue;
+    }
+
+    const payout = await db
+      .prepare(`SELECT status FROM payout_runs WHERE month = ?1 AND composer_id = ?2`)
+      .bind(line.month, line.composer_id)
+      .first<{ status: string }>();
+
+    if (payout?.status === "paid") {
+      // Already in his pocket — carry the minus forward, never reach back in.
+      await db
+        .prepare(
+          `INSERT INTO revenue_allocations (event_id, composer_id, kind, points, amount_cents, month)
+           VALUES (?1, ?2, 'author', 0, ?3, ?4)`,
+        )
+        .bind(event.id, line.composer_id, -line.amount_cents, month)
+        .run();
+    } else {
+      await db.prepare(`DELETE FROM revenue_allocations WHERE id = ?1`).bind(line.id).run();
+    }
+  }
+
+  await db
+    .prepare(`UPDATE revenue_events SET status = 'refunded' WHERE id = ?1`)
+    .bind(event.id)
+    .run();
+  return true;
 };
 
 /**

@@ -1,5 +1,5 @@
 import { json, type Ctx } from "../_utils";
-import { recordRevenueEvent } from "../_revenue";
+import { recordRevenueEvent, reverseEvent } from "../_revenue";
 import {
   mapStripeStatus,
   stripeCall,
@@ -163,7 +163,31 @@ export const onRequestPost = async (ctx: Ctx) => {
     // covers. The split runs when that cycle closes (see functions/api/_revenue.ts).
     case "invoice.paid":
     case "invoice.payment_succeeded": {
-      await recordStripeInvoice(ctx, key, event.data.object as StripeInvoice);
+      await recordStripeInvoice(ctx, key, event.data.object as unknown as StripeInvoice);
+      break;
+    }
+    // Money went back to the customer. The invoice drops out of the revenue
+    // totals; a composer who was already paid carries the minus into his next
+    // payout — we never claw money back out of his account (see _revenue.ts).
+    case "charge.refunded":
+    case "charge.dispute.created":
+    case "charge.dispute.funds_withdrawn": {
+      const obj = event.data.object as { invoice?: string | null; charge?: string | null };
+      // A dispute object points at the charge; a charge points at the invoice.
+      let invoiceId = obj.invoice ?? null;
+      if (!invoiceId && obj.charge) {
+        try {
+          const ch = await stripeCall<{ invoice?: string | null }>(
+            key,
+            "GET",
+            `/charges/${obj.charge}`,
+          );
+          invoiceId = ch.invoice ?? null;
+        } catch {
+          // charge gone — nothing to reverse
+        }
+      }
+      if (invoiceId) await reverseEvent(ctx.env.DB, { providerRef: invoiceId });
       break;
     }
     case "invoice.payment_failed": {
