@@ -2814,3 +2814,18 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   implying it knows the provider's balance.
   OWNER ACTION: add OPENAI_ADMIN_KEY in Cloudflare → Pages → tv_music_store → Settings → Variables, then
   redeploy; the AI meter switches to the real bill by itself.
+- **2026-07-12 (Usage panel → Dashboard, links instead of fake meters):** owner's call, and it is the
+  right one: only meter what we can measure honestly, LINK OUT for the rest.
+  • The "Usage & credits" SIDEBAR ITEM is GONE (removed from adminNav + Admin.tsx SectionId/SECTION_IDS).
+    `<AdminUsage />` now renders at the BOTTOM OF **Admin → Dashboard**, under a `h-px bg-border/60`
+    rule, below the "Revenue & funnel analytics…" card. The dashboard is becoming the owner's single
+    landing screen — more blocks will be moved there.
+  • **YouTube stays a real meter**: its cost is deterministic (2 quota units per whitelisted-channel
+    check, 10,000 free units/day), so counting our own calls IS the true number. Bar goes red at 85%.
+  • **Resend and OpenAI are now LINK CARDS** ("Open dashboard" → resend.com/emails,
+    platform.openai.com/usage). Resend has no usage API at all. OpenAI does, but only with an Admin
+    key — so if `OPENAI_ADMIN_KEY` is set the card turns into the REAL monthly spend; otherwise it is
+    just a link. No invented numbers anywhere.
+  • The "Your plan limits" editor and the `POST /api/admin/usage` handler were DELETED (the limits it
+    stored only existed to feed fake meters). `getUsageLimits`/`saveUsageLimits` remain in _usage.ts,
+    unused, in case a real quota API ever appears.

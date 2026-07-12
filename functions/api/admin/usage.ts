@@ -1,16 +1,11 @@
-import { getSessionUser, json, OWNER_EMAIL, readJson, type Ctx } from "../_utils";
-import {
-  fetchOpenAiSpend,
-  getUsageReport,
-  saveUsageLimits,
-  type UsageLimits,
-} from "../_usage";
+import { getSessionUser, json, OWNER_EMAIL, type Ctx } from "../_utils";
+import { fetchOpenAiSpend, getUsageReport } from "../_usage";
 
-// Admin → Usage. What we have spent this month on Resend, the YouTube Data API
-// and OpenAI, against the limits the owner enters.
+// Services & credits (rendered at the bottom of Admin → Dashboard).
 //
-// GET  -> today + this month + a 14-day history + the limits
-// POST { resendMonthly, youtubeDaily, openaiMonthlyCents } -> update the limits
+// GET -> today's YouTube quota use (the only figure we can honestly meter),
+//        plus OpenAI's REAL monthly spend when an Admin key is configured.
+//        Resend has no usage API at all — the UI just links to its dashboard.
 
 const requireAdmin = async (ctx: Ctx) => {
   const user = await getSessionUser(ctx);
@@ -44,18 +39,4 @@ export const onRequestGet = async (ctx: Ctx) => {
       openaiAdmin: !!ctx.env.OPENAI_ADMIN_KEY,
     },
   });
-};
-
-export const onRequestPost = async (ctx: Ctx) => {
-  if (!ctx.env.DB) return json({ error: "DB not bound" }, 503);
-  const gate = await requireAdmin(ctx);
-  if (gate.error) return gate.error;
-
-  const body = await readJson<Partial<UsageLimits>>(ctx.request);
-  await saveUsageLimits(ctx.env.DB, {
-    resendMonthly: Math.max(0, Math.round(Number(body?.resendMonthly ?? 0))) || 3000,
-    youtubeDaily: Math.max(0, Math.round(Number(body?.youtubeDaily ?? 0))) || 10000,
-    openaiMonthlyCents: Math.max(0, Math.round(Number(body?.openaiMonthlyCents ?? 0))) || 2000,
-  });
-  return json({ ok: true });
 };

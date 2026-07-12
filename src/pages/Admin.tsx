@@ -41,7 +41,6 @@ type SectionId =
   | "bulkupload"
   | "import"
   | "articles"
-  | "usage"
   | "customers"
   | "licenses"
   | "whitelist"
@@ -62,7 +61,6 @@ const SECTION_IDS: SectionId[] = [
   "bulkupload",
   "import",
   "articles",
-  "usage",
   "customers",
   "licenses",
   "whitelist",
@@ -685,6 +683,11 @@ const Admin = () => {
                     Revenue &amp; funnel analytics will appear here once subscription billing goes live.
                   </p>
                 </Card>
+
+                {/* Everything below the rule is "services & credits" — the
+                    dashboard is becoming the owner's single landing screen. */}
+                <div className="my-2 h-px bg-border/60" />
+                <AdminUsage />
               </>
             )}
 
@@ -758,8 +761,6 @@ const Admin = () => {
             {/* Real money: revenue ledger, the 50/50 split, composer payouts. */}
             {section === "finance" && <AdminFinance />}
 
-            {/* Resend / YouTube / OpenAI credits — do I need to top up? */}
-            {section === "usage" && <AdminUsage />}
 
             {section === "customers" && (
               <Card title={`Users${liveUsers ? ` (${liveUsers.length})` : ""}`}>
