@@ -587,6 +587,7 @@ export const onRequestGet = async (ctx: Ctx) => {
     const row = await db
       .prepare(
         `SELECT o.id, o.track_id, o.tier, o.price, o.stripe_session_id, o.created_at,
+                COALESCE(o.status, 'active') AS status,
                 t.title AS track_title, t.slug AS track_slug, c.display_name AS composer,
                 u.email AS user_email, u.name AS user_name
            FROM sync_orders o
@@ -603,6 +604,7 @@ export const onRequestGet = async (ctx: Ctx) => {
         price: number;
         stripe_session_id: string | null;
         created_at: string;
+        status: string;
         track_title: string | null;
         track_slug: string | null;
         composer: string | null;
@@ -610,6 +612,12 @@ export const onRequestGet = async (ctx: Ctx) => {
         user_name: string | null;
       }>();
     if (!row) return json({ error: "License not found" }, 404);
+    // Refunded = void. The certificate must not print, and the code must not
+    // validate — otherwise a refunded buyer keeps a document that says he may
+    // use the music.
+    if (row.status === "refunded") {
+      return json({ error: "This license was refunded and is no longer valid", code: "refunded" }, 410);
+    }
 
     const info = TIER_INFO[row.tier] ?? TIER_INFO.commercial;
     const bytes = buildCertificate(

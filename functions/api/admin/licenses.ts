@@ -42,6 +42,7 @@ export const onRequestGet = async (ctx: Ctx) => {
   const syncRows = await db
     .prepare(
       `SELECT o.id, o.tier, o.price, o.stripe_session_id, o.created_at, o.track_id, o.user_id,
+              COALESCE(o.status, 'active') AS status,
               u.email AS user_email, u.name AS user_name, t.title AS track_title
          FROM sync_orders o
          LEFT JOIN users u ON u.id = o.user_id
@@ -55,6 +56,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       price: number;
       stripe_session_id: string | null;
       created_at: string;
+      status: string;
       track_id: string;
       user_id: string;
       user_email: string | null;
@@ -65,7 +67,9 @@ export const onRequestGet = async (ctx: Ctx) => {
   const oneTime: AdminLicenseRow[] = syncRows.results.map((r) => ({
     id: r.id,
     kind: "one-time",
-    tier: r.tier,
+    // A refunded purchase is shown, but plainly marked void — the owner must be
+    // able to see that this code no longer validates.
+    tier: r.status === "refunded" ? `${r.tier} (refunded)` : r.tier,
     price: r.price,
     reference: r.stripe_session_id ?? "",
     createdAt: r.created_at,

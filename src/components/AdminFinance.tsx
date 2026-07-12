@@ -548,22 +548,50 @@ const AdminFinance = () => {
                   </td>
                   <td className="py-2.5 text-right">
                     {e.status !== "refunded" && (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => {
-                          if (
-                            !window.confirm(
-                              "Book this payment as refunded?\n\nIt leaves the revenue totals. If the composer was already paid, the amount is netted off his NEXT payout — we never take money back from his account.",
+                      <div className="flex items-center justify-end gap-1.5">
+                        {/* Actually sends the money back through Stripe/PayPal. */}
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => {
+                            if (
+                              !window.confirm(
+                                `Refund ${money(e.gross_cents)} to ${e.user_email ?? "this customer"}?\n\n` +
+                                  `This REALLY sends the money back through ${
+                                    e.provider === "stripe" ? "Stripe" : "PayPal"
+                                  }.\n\n` +
+                                  "The payment then leaves the revenue totals. If the composer was already paid, the amount is netted off his NEXT payout — we never take money back from his account.",
+                              )
                             )
-                          )
-                            return;
-                          void act({ action: "refund_event", eventId: e.id }, "Refund booked");
-                        }}
-                        className="rounded-md border border-border px-2.5 py-1 font-body text-xs text-muted-foreground transition-colors hover:border-red-400/60 hover:text-red-400 disabled:opacity-50"
-                      >
-                        Refund
-                      </button>
+                              return;
+                            void act(
+                              { action: "refund_payment", eventId: e.id },
+                              "Refunded — the money is on its way back",
+                            );
+                          }}
+                          className="rounded-md border border-red-400/40 px-2.5 py-1 font-body text-xs text-red-400 transition-colors hover:bg-red-400/10 disabled:opacity-50"
+                        >
+                          Refund
+                        </button>
+                        {/* For money already sent back outside the site. */}
+                        <button
+                          type="button"
+                          disabled={busy}
+                          title="Only records the reversal — use this if you already refunded the customer in the Stripe or PayPal dashboard"
+                          onClick={() => {
+                            if (
+                              !window.confirm(
+                                "Record this payment as refunded WITHOUT sending money?\n\nUse this only if the customer has already been refunded elsewhere.",
+                              )
+                            )
+                              return;
+                            void act({ action: "refund_event", eventId: e.id }, "Reversal recorded");
+                          }}
+                          className="rounded-md border border-border px-2 py-1 font-body text-xs text-muted-foreground/70 transition-colors hover:text-foreground disabled:opacity-50"
+                        >
+                          Mark only
+                        </button>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -571,10 +599,12 @@ const AdminFinance = () => {
             </tbody>
           </table>
         </div>
-        <p className="mt-3 font-body text-[11px] text-muted-foreground">
-          Stripe refunds and chargebacks are booked automatically by webhook. Use this button for
-          PayPal refunds (issued in the PayPal dashboard) — it only records the reversal here, it
-          does not move money.
+        <p className="mt-3 font-body text-[11px] leading-5 text-muted-foreground">
+          <span className="text-red-400">Refund</span> really sends the money back through Stripe or
+          PayPal — you never have to open their dashboards.{" "}
+          <span className="text-foreground">Mark only</span> just records a reversal for money you
+          already returned elsewhere. Refunds and chargebacks that start on Stripe's side are booked
+          here automatically.
         </p>
       </div>
     </div>

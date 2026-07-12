@@ -20,6 +20,7 @@ interface MonthRow {
 interface Earnings {
   composer: { id: string; name: string };
   policy: { holdbackDays: number; thresholdCents: number };
+  openMonth: { month: string; publishOn: string };
   totals: {
     lifetimeCents: number;
     paidOutCents: number;
@@ -114,6 +115,13 @@ const ComposerEarnings = () => {
 
       <div className="rounded-xl border border-border bg-card p-5">
         <h2 className="font-body text-sm font-semibold text-foreground">Earnings by month</h2>
+        {/* The running month is deliberately shown WITHOUT a figure: a number
+            that moves every time a subscriber's cycle closes is noise, not
+            information. It is published as one final, honest total. */}
+        <p className="mt-1 font-body text-xs text-muted-foreground">
+          {data.openMonth.month} is still running — its total is published on {data.openMonth.publishOn},
+          once the month is closed and final.
+        </p>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full min-w-[34rem] border-collapse font-body text-sm">
             <thead>
@@ -128,8 +136,8 @@ const ComposerEarnings = () => {
               {data.months.length === 0 && (
                 <tr>
                   <td colSpan={4} className="py-6 text-center text-muted-foreground">
-                    Nothing earned yet. Every subscriber who downloads one of your tracks, and every
-                    single-track license, shows up here.
+                    No closed month yet. Earnings appear here once a month ends — every subscriber who
+                    downloaded one of your tracks that month, and every single-track license.
                   </td>
                 </tr>
               )}
@@ -213,6 +221,11 @@ const ComposerEarnings = () => {
           <li>
             <span className="text-foreground">Single-track licenses</span> pay you 50% of the net of
             that sale, straight away.
+          </li>
+          <li>
+            <span className="text-foreground">One figure per month, published once.</span> A month's
+            total appears when the month closes — never as a live counter, because a number that moves
+            all day tells you nothing.
           </li>
           <li>
             <span className="text-foreground">Timing.</span> A month clears {policy.holdbackDays} days

@@ -51,20 +51,30 @@ export const onRequestGet = async (ctx: Ctx) => {
       paid_at: string | null;
     }>();
 
-  const rows = months.results.map((m) => {
-    const releaseDate = releaseDateOf(m.month, policy.holdbackDays);
-    const paid = m.status === "paid";
-    return {
-      month: m.month,
-      amountCents: m.amount ?? 0,
-      points: m.points ?? 0,
-      paid,
-      paidAt: m.paid_at,
-      releaseDate,
-      /** paid | payable | held — held = waiting out the refund window. */
-      state: paid ? "paid" : releaseDate <= today ? "payable" : "held",
-    };
-  });
+  // A composer only ever sees FINALISED months (owner's rule, and the standard
+  // practice on every stock/library platform). The running total of the current
+  // month would twitch every time some subscriber's cycle happens to close —
+  // a number that jumps around all day is not information, it is anxiety. The
+  // owner sees the live figures in the admin; the composer sees a closed book.
+  const openMonth = new Date().toISOString().slice(0, 7);
+  const publishOn = releaseDateOf(openMonth, 0); // = the 1st of next month
+
+  const rows = months.results
+    .filter((m) => m.month < openMonth)
+    .map((m) => {
+      const releaseDate = releaseDateOf(m.month, policy.holdbackDays);
+      const paid = m.status === "paid";
+      return {
+        month: m.month,
+        amountCents: m.amount ?? 0,
+        points: m.points ?? 0,
+        paid,
+        paidAt: m.paid_at,
+        releaseDate,
+        /** paid | payable | held — held = waiting out the refund window. */
+        state: paid ? "paid" : releaseDate <= today ? "payable" : "held",
+      };
+    });
 
   const lifetime = rows.reduce((sum, r) => sum + r.amountCents, 0);
   const paidOut = rows.filter((r) => r.paid).reduce((sum, r) => sum + r.amountCents, 0);
@@ -83,6 +93,7 @@ export const onRequestGet = async (ctx: Ctx) => {
          JOIN tracks t ON t.id = d.track_id
         WHERE d.composer_id = ?1
           AND (d.format IN ('wav','stems') OR (d.format = 'mp3' AND d.quality = 320))
+          AND (d.format IN ('wav','stems') OR (d.format = 'mp3' AND d.quality = 320))
         GROUP BY d.track_id
         ORDER BY points DESC
         LIMIT 20`,
@@ -96,6 +107,8 @@ export const onRequestGet = async (ctx: Ctx) => {
       holdbackDays: policy.holdbackDays,
       thresholdCents: policy.thresholdCents,
     },
+    /** The month still running — shown WITHOUT a figure, on purpose. */
+    openMonth: { month: openMonth, publishOn },
     totals: {
       lifetimeCents: lifetime,
       paidOutCents: paidOut,

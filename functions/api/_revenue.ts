@@ -52,6 +52,8 @@ export interface RevenueEventInput {
   periodEnd?: string | null;
   /** Single-track licenses only. */
   trackId?: string | null;
+  /** sync_orders.id — the licence this payment bought (so a refund can void it). */
+  orderId?: string | null;
   authorShareBps?: number;
 }
 
@@ -112,6 +114,19 @@ export const ensureRevenueTables = async (db: D1Database): Promise<void> => {
   } catch {
     // column already there
   }
+  // Which single-track licence a payment paid for — so a refund can VOID it.
+  try {
+    await db.prepare(`ALTER TABLE revenue_events ADD COLUMN order_id TEXT`).run();
+  } catch {
+    // column already there
+  }
+  // A refunded licence is dead: it stops unlocking WAV/stems, disappears from
+  // the customer's Licenses list and its PDF/code stops validating.
+  try {
+    await db.prepare(`ALTER TABLE sync_orders ADD COLUMN status TEXT`).run();
+  } catch {
+    // column already there
+  }
 };
 
 /**
@@ -140,8 +155,8 @@ export const recordRevenueEvent = async (
     .prepare(
       `INSERT INTO revenue_events
          (id, source, user_id, provider, provider_ref, gross_cents, tax_cents, fee_cents,
-          net_cents, currency, author_share_bps, period_start, period_end, track_id, status)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, 'pending')`,
+          net_cents, currency, author_share_bps, period_start, period_end, track_id, order_id, status)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, 'pending')`,
     )
     .bind(
       id,
@@ -158,6 +173,7 @@ export const recordRevenueEvent = async (
       input.periodStart ?? null,
       input.periodEnd ?? null,
       input.trackId ?? null,
+      input.orderId ?? null,
     )
     .run();
 
@@ -382,14 +398,24 @@ export const reverseEvent = async (
 
   const event = ref.eventId
     ? await db
-        .prepare(`SELECT id, status FROM revenue_events WHERE id = ?1`)
+        .prepare(`SELECT id, status, source, order_id FROM revenue_events WHERE id = ?1`)
         .bind(ref.eventId)
-        .first<{ id: string; status: string }>()
+        .first<{ id: string; status: string; source: string; order_id: string | null }>()
     : await db
-        .prepare(`SELECT id, status FROM revenue_events WHERE provider_ref = ?1`)
+        .prepare(`SELECT id, status, source, order_id FROM revenue_events WHERE provider_ref = ?1`)
         .bind(ref.providerRef ?? "")
-        .first<{ id: string; status: string }>();
+        .first<{ id: string; status: string; source: string; order_id: string | null }>();
   if (!event || event.status === "refunded") return false;
+
+  // The customer got his money back, so the licence he bought is void: it stops
+  // unlocking WAV/stems, leaves his Licenses list, and its PDF/code no longer
+  // validates. A licence you did not pay for is not a licence.
+  if (event.source === "license" && event.order_id) {
+    await db
+      .prepare(`UPDATE sync_orders SET status = 'refunded' WHERE id = ?1`)
+      .bind(event.order_id)
+      .run();
+  }
 
   const allocations = await db
     .prepare(

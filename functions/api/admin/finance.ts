@@ -7,6 +7,8 @@ import {
   reverseEvent,
   savePayoutPolicy,
 } from "../_revenue";
+import { stripeCall } from "../stripe/_stripe";
+import { paypalCall, paypalConfigured, paypalToken } from "../paypal/_paypal";
 
 // Admin finance report — the real numbers, straight from the revenue ledger.
 //
@@ -229,11 +231,74 @@ export const onRequestPost = async (ctx: Ctx) => {
     return json({ ok: true });
   }
 
-  // --- Refund / chargeback booked by hand (PayPal has no webhook here) ------
+  // --- Book a reversal that already happened elsewhere (no money moves here) -
   if (body?.action === "refund_event") {
     if (!body.eventId) return json({ error: "eventId required" }, 400);
     const done = await reverseEvent(db, { eventId: body.eventId });
     return json({ ok: true, reversed: done });
+  }
+
+  // --- REAL refund: send the money back through Stripe / PayPal -------------
+  // This actually moves money. The ledger reversal runs only after the provider
+  // confirms, so the books can never say "refunded" for money that never left.
+  if (body?.action === "refund_payment") {
+    if (!body.eventId) return json({ error: "eventId required" }, 400);
+
+    const event = await db
+      .prepare(
+        `SELECT id, provider, provider_ref, gross_cents, currency, status
+           FROM revenue_events WHERE id = ?1`,
+      )
+      .bind(body.eventId)
+      .first<{
+        id: string;
+        provider: string;
+        provider_ref: string;
+        gross_cents: number;
+        currency: string;
+        status: string;
+      }>();
+    if (!event) return json({ error: "Payment not found" }, 404);
+    if (event.status === "refunded") return json({ error: "Already refunded" }, 400);
+
+    try {
+      if (event.provider === "stripe") {
+        const key = ctx.env.STRIPE_SECRET_KEY;
+        if (!key) return json({ error: "Stripe is not configured" }, 503);
+        // provider_ref is the invoice id -> its charge -> refund the charge.
+        const invoice = await stripeCall<{ charge?: string | null }>(
+          key,
+          "GET",
+          `/invoices/${event.provider_ref}`,
+        );
+        if (!invoice.charge) return json({ error: "This invoice has no charge to refund" }, 400);
+        await stripeCall(key, "POST", "/refunds", { charge: invoice.charge });
+      } else if (event.provider === "paypal") {
+        if (!paypalConfigured(ctx.env)) return json({ error: "PayPal is not configured" }, 503);
+        // provider_ref = "<captureId>:<slug>:<tier>" — one capture can cover
+        // several licensed tracks, so we refund exactly this line's amount.
+        const captureId = event.provider_ref.split(":")[0];
+        const token = await paypalToken(ctx.env);
+        await paypalCall(ctx.env, token, "POST", `/v2/payments/captures/${captureId}/refund`, {
+          amount: {
+            value: (event.gross_cents / 100).toFixed(2),
+            currency_code: (event.currency || "usd").toUpperCase(),
+          },
+          note_to_payer: "Refund from TV Music Store",
+        });
+      } else {
+        return json({ error: `Unknown provider: ${event.provider}` }, 400);
+      }
+    } catch (e) {
+      return json(
+        { error: e instanceof Error ? e.message : "The payment provider refused the refund" },
+        502,
+      );
+    }
+
+    // Money is on its way back — now the books.
+    await reverseEvent(db, { eventId: event.id });
+    return json({ ok: true, refundedCents: event.gross_cents });
   }
 
   // --- Pay out a composer's whole released balance at once ------------------

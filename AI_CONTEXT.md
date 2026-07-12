@@ -2658,3 +2658,71 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   were removed from ComposerPanel.tsx (mockPayoutLines/mockPayoutPeriods imports dropped).
   Remaining in docs/REVENUE_SPLIT.md: the MoR/VAT decision (Paddle REJECTED the site — read Lemon
   Squeezy / FastSpring acceptable-use terms, compare against staying on Stripe + Stripe Tax).
+- **2026-07-12 (composer sees CLOSED months only + MoR research):**
+  (1) `functions/api/composer/earnings.ts` now filters out the CURRENT (still running) month:
+  a composer only ever sees FINALISED months. Reason (owner's, and it is right): allocation happens
+  when each subscriber's cycle closes, which happens on random days, so a live current-month total
+  would twitch all day — anxiety, not information. The response carries
+  `openMonth: {month, publishOn}` and ComposerEarnings.tsx shows "«2026-07» is still running — its
+  total is published on <1st of next month>" plus a new rule line ("one figure per month, published
+  once"). The OWNER still sees everything live in Admin → Finance. Totals (lifetime / payable /
+  held) are computed from closed months only.
+  (2) MoR RESEARCH (full write-up in docs/REVENUE_SPLIT.md §8): Lemon Squeezy explicitly ALLOWS
+  "Audio" but PROHIBITS "marketplaces — partnering to sell others' products" and "content for which
+  you do not hold proper licence or IP rights". So the blocker is the CONTRACT, not the product:
+  the composer agreement must grant TVMS an exclusive licence/assignment to license the works to end
+  customers — then TVMS is a production-music PUBLISHER selling its own catalogue (like Epidemic
+  Sound / Artlist) and the royalty is an internal supplier matter. Present it that way (never the
+  word "marketplace"; the homepage line "not a reseller, marketplace or aggregator" is an asset).
+  FastSpring is the better first application (its MoR model is literally "we buy from you and resell",
+  it serves audio companies, and it is a human process). Fallback that always works: stay on
+  Stripe + Stripe Tax and register/file himself.
+  (3) BACKLOG recorded in docs/REVENUE_SPLIT.md §8: **transactional emails are NOT built** — the only
+  mail the site sends today is the login code. Needed: licence purchase receipt + licence PDF attached
+  (functions/api/license-pdf.ts already exists), subscription started/renewed, refund issued,
+  subscription cancelled, payment failed (dunning). Resend is wired; root domain must be verified.
+  Customer-side refunds today = email contact@ (documented on /refunds); self-cancel = Stripe billing
+  portal. Nice-to-have: a "Request a refund" button in Account → Billing.
+- **2026-07-12 (real refunds from the admin + the exclusivity problem):**
+  (1) REFUNDS BY API: new admin action **`refund_payment`** in `functions/api/admin/finance.ts` —
+  it ACTUALLY sends the money back (Stripe: provider_ref = invoice → its charge → POST /refunds;
+  PayPal: provider_ref = "<captureId>:<slug>:<tier>" → POST /v2/payments/captures/{id}/refund with
+  that line's exact amount, because one capture can cover several licensed tracks). The ledger
+  reversal (`reverseEvent`) runs ONLY after the provider confirms, so the books can never say
+  "refunded" for money that never moved. The old `refund_event` stays as **"Mark only"** (records a
+  reversal for money returned elsewhere). AdminFinance shows both buttons with explicit confirms.
+  The owner no longer needs the Stripe/PayPal dashboards for a refund.
+  (2) ⚠️ EXCLUSIVITY — the owner revealed his composers' tracks are ALSO sold on other stock
+  libraries (NON-exclusive). Written up in docs/REVENUE_SPLIT.md §8: legally fine (a non-exclusive
+  licence is still a proper licence — Pond5/AudioJungle work this way); for the MoR application it
+  is a grey area that must be stated TRUTHFULLY (never claim exclusivity he does not have — that is
+  fraud against the payment provider); and — most important — the HOMEPAGE claims "Original, not
+  stock… not third-party stock" and "not a reseller, marketplace or aggregator" become MISLEADING TO
+  CUSTOMERS if the same track sits on three other stock sites. Owner must choose before launch:
+  (a) require exclusivity for tracks in the TVMS catalogue (best — protects the brand AND removes
+  the MoR problem), or (b) stay non-exclusive and rewrite those homepage lines honestly. NOT yet
+  decided — do not let this ship as-is.
+- **2026-07-12 (refund VOIDS the licence + honest non-exclusive copy):** owner chose **(b)**:
+  the catalogue IS non-exclusive (his friends' tracks are also on other stocks) and exclusivity is
+  not obtainable, so the site must stop implying it.
+  (1) REFUND NOW KILLS THE LICENCE. New lazy columns: `revenue_events.order_id` (which sync_orders
+  row a payment bought — set by paypal/capture.ts) and `sync_orders.status`. `reverseEvent()` sets
+  that order to `status='refunded'`, and everything that reads a licence now ignores refunded ones:
+  `download.ts` (no more WAV/stems unlock — with a fallback query for pre-column DBs), `licenses.ts`
+  (drops out of the customer's Licenses list), `license-pdf.ts` (returns 410 "refunded", so the
+  certificate/code no longer validates), `admin/licenses.ts` (tier shown as "commercial (refunded)"
+  so the owner can see the code is dead). Answer to the owner's question: yes — refund removes the
+  licence from the buyer's account and its code stops checking out.
+  (2) "Mark only" vs "Refund" (owner asked): **Refund** = calls Stripe/PayPal and really sends the
+  money back, then reverses the books. **Mark only** = records the reversal WITHOUT moving money —
+  for when the customer was already refunded outside the site (e.g. straight from the PayPal
+  dashboard, or a bank chargeback), so the ledger and the licence still get voided.
+  (3) HONEST COPY (non-exclusive). Removed every line that implied the music is unique to us:
+  Index hero "Original music from our own composers" → "Written by real composers"; trust point
+  "Original, not stock… not third-party stock" → "Written by humans — named composers with real
+  PRO/IPI registration, never AI-generated filler"; the "What is TV Music Store?" paragraph rewritten
+  (hand-picked library, we are the LICENSOR on your licence, cue-sheet data, whitelisting, 24h claim
+  removal, and plainly: "composers keep the copyright and may licence elsewhere too; your licence is
+  valid whatever they do"); Footer strapline; LicenseTerms §8 now states the authorisation is
+  NON-EXCLUSIVE instead of "not a reseller, marketplace or aggregator of third-party stock".
+  The guides already said royalty-free = non-exclusive, so they were already honest.

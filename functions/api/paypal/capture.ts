@@ -97,11 +97,14 @@ export const onRequestPost = async (ctx: Ctx) => {
         .first<{ id: string }>();
       const trackId = track?.id ?? item.slug;
 
+      // The licence row. Its id goes into the ledger event, so a refund can
+      // void exactly this licence (see reverseEvent).
+      const licenseId = newId("ord");
       await ctx.env.DB.prepare(
         `INSERT INTO sync_orders (id, user_id, track_id, tier, price, stripe_session_id)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
       )
-        .bind(newId("ord"), user.id, trackId, item.tier, item.priceCents / 100, orderId)
+        .bind(licenseId, user.id, trackId, item.tier, item.priceCents / 100, orderId)
         .run();
 
       // One ledger event per licensed TRACK — a cart with three tracks pays
@@ -125,6 +128,7 @@ export const onRequestPost = async (ctx: Ctx) => {
         feeCents: fee,
         currency,
         trackId,
+        orderId: licenseId,
       });
       // A one-off license has no cycle to wait for — split it right away.
       if (eventId) await allocateEvent(ctx.env.DB, eventId);

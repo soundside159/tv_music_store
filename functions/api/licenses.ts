@@ -16,12 +16,15 @@ export const onRequestGet = async (ctx: Ctx) => {
   const user = await getSessionUser(ctx);
   if (!user) return json({ error: "Not signed in" }, 401);
 
+  // Refunded licences are gone: the money went back, so did the rights.
+  // (Older DBs have no `status` column — COALESCE keeps them working.)
   const rows = await ctx.env.DB.prepare(
     `SELECT o.id, o.track_id, o.tier, o.price, o.license_r2_key, o.created_at,
             t.title AS track_title, t.slug AS track_slug
        FROM sync_orders o
        LEFT JOIN tracks t ON t.id = o.track_id
       WHERE o.user_id = ?1
+        AND COALESCE(o.status, 'active') <> 'refunded'
       ORDER BY o.created_at DESC
       LIMIT 200`,
   )

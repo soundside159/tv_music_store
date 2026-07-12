@@ -131,15 +131,28 @@ export const onRequestPost = async (ctx: Ctx) => {
   // One-time sync license for THIS track (any tier — all tiers include WAV).
   // sync_orders.track_id normally holds tracks.id, but the PayPal capture falls
   // back to the slug when the track row was missing at purchase time.
+  // A REFUNDED licence does not count — the money went back, so the rights did
+  // too. Older DBs have no `status` column, hence the fallback query.
   const licenseOrder = await (async () => {
     try {
       return await ctx.env.DB.prepare(
-        `SELECT id FROM sync_orders WHERE user_id = ?1 AND track_id IN (?2, ?3) LIMIT 1`,
+        `SELECT id FROM sync_orders
+          WHERE user_id = ?1 AND track_id IN (?2, ?3)
+            AND COALESCE(status, 'active') <> 'refunded'
+          LIMIT 1`,
       )
         .bind(user.id, track?.id ?? slug, slug)
         .first<{ id: string }>();
     } catch {
-      return null;
+      try {
+        return await ctx.env.DB.prepare(
+          `SELECT id FROM sync_orders WHERE user_id = ?1 AND track_id IN (?2, ?3) LIMIT 1`,
+        )
+          .bind(user.id, track?.id ?? slug, slug)
+          .first<{ id: string }>();
+      } catch {
+        return null;
+      }
     }
   })();
   const hasLicense = !!licenseOrder;
