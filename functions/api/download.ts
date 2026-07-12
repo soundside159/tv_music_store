@@ -1,4 +1,5 @@
 import { getSessionUser, json, type Ctx } from "./_utils";
+import { getOrCreatePlanLicense } from "./_licenses";
 import { crc32, parseManifest, streamZip, type ZipEntrySpec } from "./_zipStream";
 
 // POST { slug, versionId, format, src, title, label } -> checks the plan,
@@ -74,13 +75,15 @@ export const onRequestPost = async (ctx: Ctx) => {
   const quality = String(body?.quality) === "128" ? 128 : 320;
   if (!slug || !versionId) return json({ error: "slug and versionId required" }, 400);
 
-  // Current plan
+  // Current plan (the period end is snapshotted onto the licence code below).
   const sub = await ctx.env.DB.prepare(
-    `SELECT plan, status FROM subscriptions WHERE user_id = ?1 ORDER BY rowid DESC LIMIT 1`,
+    `SELECT plan, status, current_period_end FROM subscriptions
+      WHERE user_id = ?1 ORDER BY rowid DESC LIMIT 1`,
   )
     .bind(user.id)
-    .first<{ plan: string; status: string }>();
+    .first<{ plan: string; status: string; current_period_end: string | null }>();
   const plan = sub?.status === "active" || sub?.status === "canceled" ? sub.plan : "free";
+  const planPeriodEnd = sub?.current_period_end ?? null;
 
   // Resolve the track FIRST (needed for the one-time-license check below).
   // Select the newer columns defensively — older DBs may not have
@@ -418,6 +421,24 @@ export const onRequestPost = async (ctx: Ctx) => {
       // someone else added it in the meantime
     }
     await logDownload();
+  }
+
+  // Every track a PAID subscriber downloads gets its own licence code, minted
+  // here so it can be listed (and re-downloaded as a PDF) straight away. The
+  // code binds track + plan + period, so the admin can look it up and see both
+  // which track it covers and which subscription period issued it.
+  if (plan !== "free" && track?.id) {
+    try {
+      await getOrCreatePlanLicense(
+        ctx.env,
+        user.id,
+        track.id,
+        hasLicense ? "license" : plan,
+        planPeriodEnd,
+      );
+    } catch {
+      // never block a download over a certificate
+    }
   }
 
   const rawTitle = body?.title ?? track?.title ?? slug;

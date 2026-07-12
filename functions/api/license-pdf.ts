@@ -2,7 +2,8 @@ import { getSessionUser, json, OWNER_EMAIL, type Ctx, type D1Database } from "./
 import { buildPdf, textWidth, type PdfOp, type PdfImage, type Rgb } from "./_pdf";
 import { LOGO_ALPHA_B64, LOGO_HEIGHT, LOGO_RGB_B64, LOGO_WIDTH } from "./_logo";
 import { ASSETS } from "./_assets";
-import { getOrCreatePlanLicense, getOrCreateSubscriptionLicense } from "./_licenses";
+import { getOrCreatePlanLicense } from "./_licenses";
+import { getCertDetails, type CertDetails } from "./cert-details";
 
 // GET /api/license-pdf?order=<sync_order_id>  -> certificate for a purchased
 //     one-time license (Account -> Licenses "License PDF").
@@ -193,6 +194,11 @@ export interface CertData {
   notPermitted: string[];
   licenseeName: string;
   licenseeEmail: string;
+  /** Optional buyer details from "Edit PDF certificate" — printed when set. */
+  company?: string;
+  vat?: string;
+  address?: string;
+  project?: string;
   licenseNumber: string; // primary human-facing code (big box)
   paymentRef: string; // payment/transaction reference (second code)
   issued: string;
@@ -275,6 +281,20 @@ export const buildCertificate = (fields: CertData): Uint8Array => {
   kv(ops, L, 586, "Type", fields.typeLabel, { bold: true });
   kv(ops, midX, 646, "Licensee", fields.licenseeName, { bold: true, vx: midX + 66 });
   kv(ops, midX, 626, "Email", fields.licenseeEmail, { vx: midX + 66 });
+  // Optional buyer details ("Edit PDF certificate"): a freelancer can put his
+  // client's company, VAT and project on the certificate without asking us.
+  {
+    let y = 606;
+    const row = (label: string, value: string) => {
+      if (!value) return;
+      kv(ops, midX, y, label, value, { vx: midX + 66 });
+      y -= 14;
+    };
+    row("Company", fields.company ?? "");
+    row("VAT ID", fields.vat ?? "");
+    row("Address", fields.address ?? "");
+    row("Project", fields.project ?? "");
+  }
 
   ops.push({ op: "line", x1: L, y1: 570, x2: R, y2: 570, width: 0.7, color: RULE });
 
@@ -455,6 +475,24 @@ const fetchCue = async (db: D1Database, trackId: string | null | undefined): Pro
   }
 };
 
+// The buyer details from "Edit PDF certificate" (optional, all blank by default).
+type BuyerDetails = CertDetails;
+
+/** "Jane Doe" from the certificate details, or the account name as a fallback. */
+const buyerName = (b: BuyerDetails | undefined, fallback: string): string => {
+  const name = [b?.firstName, b?.lastName].filter(Boolean).join(" ").trim();
+  return name || fallback;
+};
+
+/** One-line address for the certificate; empty when nothing was filled in. */
+const buyerAddress = (b: BuyerDetails | undefined): string | undefined => {
+  const line = [b?.address1, b?.address2, b?.city, b?.region, b?.postcode, b?.country]
+    .map((x) => (x ?? "").trim())
+    .filter(Boolean)
+    .join(", ");
+  return line || undefined;
+};
+
 /** Build CertData for a subscription (plan) certificate. */
 const planCert = (
   info: LicenseInfo,
@@ -470,14 +508,19 @@ const planCert = (
     composer: string | null;
     paymentRef?: string;
     cue?: CertData["cue"];
+    buyer?: BuyerDetails;
   },
 ): CertData => ({
   title: info.name,
   scope: info.scope,
   permitted: info.permitted,
   notPermitted: info.notPermitted,
-  licenseeName: a.licenseeName,
+  licenseeName: buyerName(a.buyer, a.licenseeName),
   licenseeEmail: a.licenseeEmail,
+  company: a.buyer?.company || undefined,
+  vat: a.buyer?.vat || undefined,
+  address: buyerAddress(a.buyer),
+  project: a.buyer?.project || undefined,
   licenseNumber: a.code,
   paymentRef: a.paymentRef ?? "Subscription plan",
   issued: fmtDate(a.issued),
@@ -536,6 +579,8 @@ export const onRequestGet = async (ctx: Ctx) => {
   const trackId = url.searchParams.get("track");
   const licenseeName = user.name?.trim() || user.email;
   const isAdmin = user.role === "admin" || user.email === OWNER_EMAIL;
+  // Whatever the customer typed into "Edit PDF certificate" — printed as-is.
+  const buyer = await getCertDetails(db, user.id);
 
   // --- admin: open a customer's subscription certificate by its code -------
   if (codeParam) {
@@ -577,6 +622,7 @@ export const onRequestGet = async (ctx: Ctx) => {
         trackSlug: row.track_slug,
         composer: row.composer,
         cue: await fetchCue(db, row.track_id),
+        buyer,
       }),
     );
     return pdfResponse(bytes, `license-${row.id}.pdf`);
@@ -637,52 +683,6 @@ export const onRequestGet = async (ctx: Ctx) => {
     return pdfResponse(bytes, `license-${row.id}.pdf`);
   }
 
-  // --- the SUBSCRIPTION licence: ONE certificate for the whole library -------
-  // A subscriber holds a single licence covering everything he downloads while
-  // his period runs — not a separate certificate per track. It carries one code,
-  // valid until the period ends; a renewal issues a new code and the old one
-  // stays in the admin as history.
-  if (url.searchParams.get("subscription")) {
-    const sub = await db
-      .prepare(
-        `SELECT plan, status, current_period_end
-           FROM subscriptions WHERE user_id = ?1 ORDER BY rowid DESC LIMIT 1`,
-      )
-      .bind(user.id)
-      .first<{ plan: string; status: string | null; current_period_end: string | null }>();
-
-    const plan = sub?.status === "active" ? (sub.plan ?? "free") : "free";
-    if (plan === "free") {
-      return json(
-        { error: "The subscription licence comes with the Pro and Max plans", code: "plan" },
-        403,
-      );
-    }
-
-    const lic = await getOrCreateSubscriptionLicense(
-      ctx.env,
-      user.id,
-      plan,
-      sub?.current_period_end ?? null,
-    );
-    const info = PLAN_INFO[plan] ?? PLAN_INFO.free;
-
-    const bytes = buildCertificate(
-      planCert(info, plan, {
-        licenseeName,
-        licenseeEmail: user.email,
-        code: lic?.code ?? `${plan.toUpperCase()} PLAN`,
-        issued: fmtDate(lic?.createdAt),
-        periodEnd: lic?.periodEnd ?? sub?.current_period_end ?? null,
-        trackTitle: "Every track in the TV Music Store catalogue",
-        trackSlug: null,
-        composer: null,
-        cue: null,
-      }),
-    );
-    return pdfResponse(bytes, `tvmusicstore-subscription-license.pdf`);
-  }
-
   const trackRef = slug ?? trackId;
   if (trackRef) {
     const trackSql = `SELECT t.id, t.title, t.slug, c.display_name AS composer
@@ -703,7 +703,6 @@ export const onRequestGet = async (ctx: Ctx) => {
            FROM subscriptions WHERE user_id = ?1 ORDER BY rowid DESC LIMIT 1`,
       )
       .bind(user.id)
-      .bind(user.id)
       .first<{ plan: string; status: string | null; current_period_end: string | null }>();
     const plan = sub?.plan ?? "free";
     // Plan certificates are a Pro/Max perk (owner decision) — free accounts
@@ -715,9 +714,8 @@ export const onRequestGet = async (ctx: Ctx) => {
     const fileRef = track?.slug ?? trackRef;
     const licenseTrackId = track?.id ?? trackRef;
 
-    // Mint (or reuse) a persistent, signed code for this plan certificate so it
-    // can be verified in /admin -> Licenses. Falls back to a static label only
-    // if the DB write path throws (never blocks the download).
+    // Mint (or reuse) the persistent, signed code for THIS track on THIS plan —
+    // the code the customer sees in his Licenses list and the admin looks up.
     let code = `${plan.toUpperCase()} PLAN`;
     let issuedDate = fmtDate();
     let periodEnd = sub?.current_period_end ?? null;
@@ -742,6 +740,7 @@ export const onRequestGet = async (ctx: Ctx) => {
         trackSlug: track?.slug ?? (slug ?? null),
         composer: track?.composer ?? null,
         cue: await fetchCue(db, track?.id),
+        buyer,
       }),
     );
     return pdfResponse(bytes, `license-${fileRef}.pdf`);

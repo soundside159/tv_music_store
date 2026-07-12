@@ -23,6 +23,7 @@ import MyChannels from "@/components/MyChannels";
 import NotificationsSettings from "@/components/NotificationsSettings";
 import SupportSection from "@/components/SupportSection";
 import FavouritesSection from "@/components/FavouritesSection";
+import LicensesSection from "@/components/LicensesSection";
 import { logout, updateProfile } from "@/hooks/useAuth";
 import { BILLING_ENABLED, openBillingPortal, openPlanModal } from "@/lib/billing";
 import { downloadTrackVersion } from "@/lib/downloadTrack";
@@ -176,21 +177,6 @@ const Account = () => {
   const [dlPage, setDlPage] = useState(1);
   const { tracks: liveTracks } = useTracks();
 
-  // The single library-wide licence of the current subscription period.
-  const [subLicense, setSubLicense] = useState<{
-    code: string;
-    periodEnd: string | null;
-  } | null>(null);
-  useEffect(() => {
-    if (!user) return;
-    fetch("/api/my-subscription-license", { credentials: "include" })
-      .then(async (r) => {
-        if (!r.ok) return;
-        const d = (await r.json()) as { license?: { code: string; periodEnd: string | null } | null };
-        setSubLicense(d.license ?? null);
-      })
-      .catch(() => setSubLicense(null));
-  }, [user]);
   const downloadedTracks = useMemo(() => {
     const byId = new Map(liveTracks.map((t) => [t.id, t]));
     const seen = new Set<string>();
@@ -612,131 +598,9 @@ const Account = () => {
               </SectionCard>
             )}
 
-            {section === "license" && (
-              <>
-                {/* ONE licence covers the whole library for the period you paid
-                    for. It is re-issued with a new code on every renewal. */}
-                <SectionCard title="Subscription license">
-                  {subLicense ? (
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                      <div>
-                        <p className="font-body text-sm text-foreground">
-                          Covers every track in the catalogue while your plan is active.
-                        </p>
-                        <p className="mt-1 font-body text-xs text-muted-foreground">
-                          Code <span className="text-foreground">{subLicense.code}</span>
-                          {subLicense.periodEnd
-                            ? ` · valid until ${fmtDate(subLicense.periodEnd)}`
-                            : ""}
-                        </p>
-                      </div>
-                      <a
-                        href="/api/license-pdf?subscription=1"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="rounded-lg bg-[#F4C430] px-4 py-2 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
-                      >
-                        Download license
-                      </a>
-                    </div>
-                  ) : (
-                    <EmptyNote text="The subscription license comes with the Pro and Max plans." />
-                  )}
-                </SectionCard>
-
-                <SectionCard title="Your licensed tracks">
-                  <p className="font-body text-sm text-muted-foreground">
-                    Tracks you bought one by one — each with its own certificate.
-                  </p>
-                  {syncOrders.length === 0 ? (
-                    <div className="mt-3">
-                      <EmptyNote text="No licensed tracks yet." />
-                    </div>
-                  ) : (
-                    <ul className="divide-y divide-border/60">
-                      {syncOrders.map((o) => (
-                        <li
-                          key={o.id}
-                          className={`flex items-center justify-between gap-4 py-2.5 ${
-                            o.refunded ? "opacity-60" : ""
-                          }`}
-                        >
-                          <span className="min-w-0">
-                            <span className="block truncate font-body text-sm text-foreground">
-                              {o.trackTitle ?? trackTitle(o.trackId)}
-                              {" · "}
-                              <span className="capitalize text-muted-foreground">{o.tier}</span>
-                            </span>
-                            <span className="block font-body text-xs text-muted-foreground">
-                              {fmtDate(o.createdAt)}
-                              {o.price ? ` · $${o.price}` : ""}
-                            </span>
-                          </span>
-                          {/* Refunded = void: the purchase stays visible (so the
-                              customer knows what happened) but the file and the
-                              certificate are gone with the money. */}
-                          {o.refunded ? (
-                            <span className="flex shrink-0 items-center">
-                              <span className="rounded-full border border-red-400/40 px-2 py-0.5 font-body text-[10px] font-semibold uppercase tracking-wide text-red-400">
-                                Refunded
-                              </span>
-                            </span>
-                          ) : (
-                          <span className="flex shrink-0 items-center gap-3">
-                            {o.trackSlug && (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    void downloadTrackVersion({
-                                      slug: o.trackSlug!,
-                                      versionId: "main",
-                                      src: "",
-                                      title: o.trackTitle ?? trackTitle(o.trackId),
-                                      label: "Main",
-                                      format: "mp3",
-                                      quality: 320,
-                                    })
-                                  }
-                                  className="font-body text-xs font-semibold text-muted-foreground hover:text-foreground hover:underline"
-                                >
-                                  MP3 320
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    void downloadTrackVersion({
-                                      slug: o.trackSlug!,
-                                      versionId: "main",
-                                      src: "",
-                                      title: o.trackTitle ?? trackTitle(o.trackId),
-                                      label: "Main",
-                                      format: "wav",
-                                    })
-                                  }
-                                  className="font-body text-xs font-semibold text-muted-foreground hover:text-foreground hover:underline"
-                                >
-                                  WAV zip
-                                </button>
-                              </>
-                            )}
-                            <a
-                              href={`/api/license-pdf?order=${encodeURIComponent(o.id)}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="font-body text-xs font-semibold text-[#F4C430] hover:underline"
-                            >
-                              License PDF
-                            </a>
-                          </span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </SectionCard>
-              </>
-            )}
+            {/* Licenses: subscription-covered tracks + purchased ones, each
+                with audio, its PDF certificate and the Edit-certificate form. */}
+            {section === "license" && <LicensesSection />}
 
             {section === "whitelist" && <MyChannels />}
 
