@@ -242,7 +242,7 @@ const Account = () => {
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Could not send the request");
       setClaimUrl("");
       await loadClaims();
-      toast.success("Sent — the claim is released within one business day");
+      toast.success("Sent — we forward it for release within one business day");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not send the request");
     } finally {

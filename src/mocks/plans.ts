@@ -11,7 +11,7 @@ export const mockPlans: PlanConfig[] = [
     commercialLicense: false,
     whitelistSlots: 0,
     prioritySupport: false,
-    highlights: ["3 downloads / month", "Personal license", "Manual claim removal"],
+    highlights: ["3 downloads / month", "Personal license", "Claims sent for release on request"],
   },
   {
     id: "pro",

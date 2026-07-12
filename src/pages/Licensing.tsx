@@ -36,7 +36,7 @@ const faq = [
   },
   {
     q: "What happens if I get a Content ID claim?",
-    a: "All tracks are registered in Content ID by their composers — that is what stops other people stealing them, and it means a claim can still appear on your video. Add your channel to Whitelisting and we watch your new uploads and send them for release automatically. If a claim does land, paste the video link in your account: it is released within one business day (composers work weekdays). The video must be Public or Unlisted — a private video is invisible to YouTube's API, so no one can clear a claim on it.",
+    a: "All tracks are registered in Content ID by their composers — that is what stops other people stealing them, and it means a claim can still appear on your video. Add your channel to monitoring and we watch your new uploads and send them for release automatically. If a claim does land, paste the video link in your account: we send it for release within one business day (composers work weekdays). The release itself runs through YouTube's Content ID system, so the clock on YouTube is not ours to set — the request is. The video must be Public or Unlisted: a private video is invisible to YouTube's API, so no one can clear a claim on it.",
   },
   {
     q: "Can I use one subscription for multiple clients?",

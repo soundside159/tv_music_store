@@ -16,7 +16,7 @@ export const guidesRound2: Guide[] = [
     description:
       "Step by step: what to do when a Content ID claim appears on licensed music, how long each route takes, and how to make sure it never happens again.",
     tldr:
-      "Go to the library that licensed you the music — not to YouTube's dispute form. Send them the video URL and your license or account reference and ask them to release the claim and whitelist the channel. With TV Music Store, claims are released within one business day, and once your channel is whitelisted new uploads are not claimed at all. Disputing through YouTube alone can take up to 30 days, because YouTube gives the claimant that long to respond.",
+      "Go to the library that licensed you the music — not to YouTube's dispute form. Send them the video URL and your license or account reference and ask them to release the claim and add the channel to monitoring. With TV Music Store, a claim on a licensed use is sent for release within one business day, and monitored channels are sent automatically, before you ask. Disputing through YouTube alone can take up to 30 days, because YouTube gives the claimant that long to respond.",
     updated: "2026-07-11",
     readMinutes: 4,
     sections: [
@@ -27,8 +27,8 @@ export const guidesRound2: Guide[] = [
           rows: [
             [
               "Ask the library (right way)",
-              "They release the claim directly and whitelist your channel",
-              "Hours — about 24h on a paid plan with us",
+              "They send the release straight through the Content ID system and put your channel on monitoring",
+              "Request goes out within one business day with us",
             ],
             [
               "Dispute inside YouTube Studio",
@@ -56,17 +56,17 @@ export const guidesRound2: Guide[] = [
         ],
       },
       {
-        heading: "The permanent fix: whitelist first, publish second",
+        heading: "The real fix: register the channel before you publish, not after",
         paragraphs: [
-          "Whitelisting tells YouTube in advance that your channel is licensed. It is the only way to have zero claims rather than fast removals. Add every channel you publish on — your main one, a second brand channel, and a client's channel if you deliver to them.",
-          "On TV Music Store, whitelist slots come with the paid plans. Add the channels the day you subscribe, not the day you get claimed.",
+          "Registering your channel with the library means somebody is watching it for you: new uploads that use their music are sent for claim release automatically, without you noticing the claim and without you writing an email. That is the difference between a claim you never think about and a claim you spend an evening on.",
+          "On TV Music Store, monitored-channel slots come with the paid plans. Add the channels the day you subscribe, not the day you get claimed. And publish first — a private video is invisible to YouTube's API, so nobody can act on a claim on it.",
         ],
       },
     ],
     faq: [
       {
         q: "How long does it take to remove a Content ID claim?",
-        a: "Through the library that licensed you the track: usually within a day — TV Music Store releases claims within one business day. Through YouTube's own dispute process the claimant has up to 30 days to answer, so it can take weeks.",
+        a: "Through the library that licensed you the track it is fast: TV Music Store sends a claim on a licensed use for release within one business day, and the release then runs through the Content ID system, usually within a day. Through YouTube's own dispute process the claimant has up to 30 days to answer, so it can take weeks.",
       },
       {
         q: "Does the claim hurt my channel while it is open?",
@@ -74,7 +74,7 @@ export const guidesRound2: Guide[] = [
       },
       {
         q: "Will the claim come back on the next video?",
-        a: "It will, unless the channel is whitelisted. Whitelisting is the fix; releasing a claim only handles the video it was raised on.",
+        a: "It can — releasing a claim only handles the video it was raised on. That is why you register the channel: monitored channels get their new uploads sent for release automatically, so you do not have to report each one.",
       },
       {
         q: "Can I speed up a YouTube dispute?",

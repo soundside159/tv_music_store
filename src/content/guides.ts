@@ -56,7 +56,7 @@ export const guides: Guide[] = [
     description:
       "Yes — if the music is properly licensed. How royalty-free music works on YouTube, why Content ID claims still happen, and how to keep your video monetized.",
     tldr:
-      "Yes. Once you hold a valid license for a royalty-free track, you can publish it on YouTube and keep monetization. The one thing that trips people up is Content ID: the track is registered with YouTube's fingerprinting system to stop other people from stealing it, so a claim can still appear on your video. It is removed by whitelisting your channel — a one-off step, not a copyright strike.",
+      "Yes. Once you hold a valid license for a royalty-free track, you can publish it on YouTube and keep monetization. The one thing that trips people up is Content ID: the track is registered with YouTube's fingerprinting system to stop other people from stealing it, so a claim can still appear on your video. A claim is not a copyright strike — the library that licensed you sends it for release, and registering your channel with them keeps it from repeating.",
     updated: "2026-07-11",
     readMinutes: 5,
     sections: [
@@ -86,7 +86,7 @@ export const guides: Guide[] = [
       {
         heading: "What happens on TV Music Store",
         paragraphs: [
-          "Every plan lets you publish on YouTube. Paid plans include channel whitelisting — Pro covers a small number of channels, Max covers more and adds the commercial license needed for ads and client work. The Free plan gives you a limited number of downloads a month with claim removal handled manually on request.",
+          "Every plan lets you publish on YouTube. Paid plans include channel monitoring — we watch the channels you register and send claims on your new uploads for release automatically, within one business day, without you asking. Pro covers a small number of channels, Max covers more and adds the commercial license needed for ads and client work. On the Free plan you get a limited number of downloads a month and you report a claim yourself: paste the video link in your account and we send it for release the same way.",
           "See the current plan limits and prices on the pricing page.",
         ],
       },

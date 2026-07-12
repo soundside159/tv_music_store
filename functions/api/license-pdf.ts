@@ -273,27 +273,47 @@ export const buildCertificate = (fields: CertData): Uint8Array => {
   const midX = 300;
   ops.push({ op: "text", text: spaced("LICENSE DETAILS"), x: L, y: 668, size: 8.5, font: "helvB", color: GOLD_DARK });
   ops.push({ op: "text", text: spaced("LICENSED TO"), x: midX, y: 668, size: 8.5, font: "helvB", color: GOLD_DARK });
-  ops.push({ op: "line", x1: midX - 18, y1: 590, x2: midX - 18, y2: 660, width: 0.7, color: RULE_SOFT });
+  ops.push({ op: "line", x1: midX - 18, y1: 578, x2: midX - 18, y2: 660, width: 0.7, color: RULE_SOFT });
 
   kv(ops, L, 646, "Purchase Code", fields.paymentRef, { bold: true });
   kv(ops, L, 626, "Issued", fields.issued, { bold: true });
   kv(ops, L, 606, "Order", fields.orderNo, { bold: true });
   kv(ops, L, 586, "Type", fields.typeLabel, { bold: true });
-  kv(ops, midX, 646, "Licensee", fields.licenseeName, { bold: true, vx: midX + 66 });
-  kv(ops, midX, 626, "Email", fields.licenseeEmail, { vx: midX + 66 });
-  // Optional buyer details ("Edit PDF certificate"): a freelancer can put his
-  // client's company, VAT and project on the certificate without asking us.
+
+  // LICENSED TO — the two fixed rows plus whatever optional buyer details the
+  // customer filled in ("Edit PDF certificate"). The block must land ABOVE the
+  // rule at y=570, so the row step tightens as rows are added and long values
+  // are cut to the column width instead of running off the page.
   {
-    let y = 606;
-    const row = (label: string, value: string) => {
-      if (!value) return;
-      kv(ops, midX, y, label, value, { vx: midX + 66 });
-      y -= 14;
+    const vx = midX + 66;
+    const colW = R - vx;
+    const fit = (value: string, size: number, font?: "helvB") => {
+      if (textWidth(value, size, font) <= colW) return value;
+      let out = value;
+      while (out.length > 1 && textWidth(`${out}…`, size, font) > colW) out = out.slice(0, -1);
+      return `${out.trimEnd()}…`;
     };
-    row("Company", fields.company ?? "");
-    row("VAT ID", fields.vat ?? "");
-    row("Address", fields.address ?? "");
-    row("Project", fields.project ?? "");
+
+    const rows: Array<{ label: string; value: string; bold?: boolean }> = [
+      { label: "Licensee", value: fields.licenseeName, bold: true },
+      { label: "Email", value: fields.licenseeEmail },
+    ];
+    const optional: Array<[string, string | undefined]> = [
+      ["Company", fields.company],
+      ["VAT ID", fields.vat],
+      ["Address", fields.address],
+      ["Project", fields.project],
+    ];
+    for (const [label, value] of optional) if (value) rows.push({ label, value });
+
+    // 646 down to 581 at the tightest — 11pt of air above the rule.
+    const step = rows.length <= 4 ? 20 : rows.length === 5 ? 16 : 13;
+    rows.forEach((r, i) => {
+      kv(ops, midX, 646 - i * step, r.label, fit(r.value, 9.5, r.bold ? "helvB" : undefined), {
+        bold: r.bold,
+        vx,
+      });
+    });
   }
 
   ops.push({ op: "line", x1: L, y1: 570, x2: R, y2: 570, width: 0.7, color: RULE });

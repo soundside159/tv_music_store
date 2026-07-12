@@ -5,6 +5,27 @@
 > **After you make changes, append them to the "Progress Log" at the bottom of THIS file**
 > so the next session can continue seamlessly. The owner re-feeds this file to each new chat.
 
+> ### 🔔 Rule 0 — tell the owner when the chat is getting long
+> The owner works with one long chat per session and does not watch the context meter.
+> **When the conversation gets big (roughly: you are being auto-summarised, or you notice
+> you are re-reading files you already know), say so and offer to move to a NEW chat.**
+> Say it plainly, e.g. *"этот чат уже большой — давай продолжим в новом, я всё запишу в
+> AI_CONTEXT.md"*. Then, BEFORE he leaves: append everything that is not yet written down to
+> the Progress Log, so the new chat starts from this file and loses nothing. A fresh chat that
+> reads these .md files is always better than a stuffed one that half-remembers.
+
+> ### 🔔 Rule 1 — the honesty rules (never break, they are not style choices)
+> 1. **Non-exclusive catalogue.** Composers may licence the same track elsewhere. Never imply
+>    exclusivity, "only here", "original, not stock".
+> 2. **We promise the REQUEST, not the outcome:** *"we send it for release within one business
+>    day"*. NEVER "claims removed in 24h", never "claim-free", never a promise about how fast
+>    YouTube itself acts — removal happens inside Content ID and is not ours to promise.
+> 3. **"Whitelisting" = channel MONITORING.** We watch registered channels and send claims on
+>    new uploads for release automatically. It is not prevention.
+> 4. Older planning docs (`docs/SITE_OVERVIEW.md`, `docs/PAGES_SPEC.md`,
+>    `docs/TVMUSICSTORE_MASTER_PLAN.md`) still carry the old "removed within 24h" wording.
+>    They are historical. **This file and `AGENTS.md` win.**
+
 ---
 
 ## 1. Project
@@ -2749,7 +2770,9 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   BACKLOG (owner-requested, later):
   1. **Sound Effects as a separate product**: separate upload permission per composer (tracks vs SFX),
      an admin "Sound Effects" section next to Tracks Edit, its own categories, its own SEO pass (the
-     keyword research is already in docs/AI_VISIBILITY.md).
+     keyword research is already in docs/AI_VISIBILITY.md), **and its own PDF licence certificate**
+     (same builder as the track one, SFX scope wording, no Content ID / claim language — SFX are not
+     registered in Content ID and are never claimed; owner will share the reference wording).
   2. **Claim queue for composers**: a per-composer list of pending Content ID claims (video URL,
      licence ref, date) — in their dashboard, plus a daily digest email. Owner floated a Google Sheet;
      an in-site queue is better (it is already half-built: whitelist_channels + claim_requests).
@@ -2829,3 +2852,56 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   • The "Your plan limits" editor and the `POST /api/admin/usage` handler were DELETED (the limits it
     stored only existed to feed fake meters). `getUsageLimits`/`saveUsageLimits` remain in _usage.ts,
     unused, in case a real quota API ever appears.
+- **2026-07-12 (PDF certificate spacing, plan switching, "Welcome to Pro"):**
+  • **`functions/api/license-pdf.ts` — LICENSED TO block no longer overruns the rule.** The optional
+    buyer rows (Company / VAT ID / Address / Project, from "Edit PDF certificate") used to start at
+    y=606 and step −14, so with all four filled in the last ones crossed the section rule at y=570.
+    The block is now built as a ROW LIST: 2 fixed rows (Licensee, Email) + whatever optional rows the
+    customer filled in, with the step adapting to the count (≤4 rows → 20pt, 5 → 16pt, 6 → 13pt), so
+    the last row lands at y≥581 — always above the rule. Long values (a full address) are cut to the
+    column width with an ellipsis instead of running off the page. The soft vertical divider between
+    the two columns now runs down to y=578. Verified by rendering the worst case (all fields set) and
+    looking at the page.
+  • **Nobody can accidentally buy two subscriptions.** `PlanModal` and `/pricing` now know the ACTIVE
+    paid plan. Clicking another plan's button while subscribed does NOT open Stripe checkout — the
+    modal shows a gold note: "You already have an active subscription (Pro). Cancel it first, then
+    subscribe to the new plan — otherwise you'd be billed for both." + a "Manage subscription" button
+    (billing portal). On /pricing the same rule fires as a toast with a "Manage" action.
+  • Current plan renders PRESSED ("Your plan" on /pricing, "Manage plan" in the modal, gold-tinted).
+    On Max, the Pro card is disabled with "Included in your plan". Navigation's account popup:
+    free → "Upgrade", Pro → "Upgrade to Max", Max → no button.
+  • **`src/components/WelcomeModal.tsx` (new, mounted in App.tsx)** — fires on `?checkout=success`
+    (Stripe's return URL), strips the param from the URL, and polls `refreshSession()` for ~9s so the
+    plan name is right even if the webhook lands a second late. Own layout (gold rail down the left
+    edge, 2×2 perk grid), NOT a copy of anyone's: unlimited downloads / WAV-320-stems / commercial
+    license / PDF certificate per track. Ends with the credit note the owner asked for — "Credit is
+    optional now — but it means a lot to us" + a copyable one-liner ("Music from tvmusicstore.com").
+- **2026-07-12 (THE CLAIM PROMISE — we promise the REQUEST, not the removal):** the owner's call, and
+  it is the last honest step in this chain. Reasoning: the release is executed inside YouTube's Content
+  ID system; the composer can SEND it, nobody can GUARANTEE what YouTube does next. So the promise the
+  business makes is the one it fully controls.
+  • **New canonical wording everywhere: "we send it for release within one business day"** (was:
+    "the claim is released within one business day", earlier: "removed within 24h"). Changed in:
+    `Index.tsx` (trust point + "What is TV Music Store?"), `Pricing.tsx` (2 FAQs + the comparison row,
+    now "Claims sent for release in 1 business day"), `Licensing.tsx` FAQ, `LicenseTerms.tsx` §6,
+    `Account.tsx` (claim-submitted toast), `mocks/plans.ts` (Free highlight), `content/guides.ts` and
+    `content/guidesRound2.ts` (tldr, the route table, the FAQ answers, and the "whitelist first"
+    section, which now describes MONITORING, not zero claims).
+  • **REMOVED from LicenseTerms.tsx: the "claim still open after 14 days → refund" clause.** We do not
+    hold a deadline we cannot enforce against YouTube. In its place, §6 now has a short "What we commit
+    to" paragraph: the request within one business day, and "if a claim you reported is still open,
+    write to us and we will chase it". The ordinary refund policy (`/refunds`, faulty/undelivered
+    goods, UK CCR) is untouched and still protects the customer.
+  • **Composer agreement §6 rewritten** (`docs/COMPOSER_AGREEMENT_DRAFT.md`): §6.2 is now "submit a
+    release request … normally within one (1) business day" (best-effort SEND, not guaranteed removal),
+    with a note explaining that the site makes the customer the same promise in the same words. §6.5
+    (survival of the duty) stays. §6.6 lost the 5-business-day refund-clawback — TVMS may now simply
+    remove the Work from the catalogue if release requests stop going out; **composers are never
+    charged for a refund.** OLD §6.7 (the customer's 14-day refund right, deducted from the composer's
+    payouts) is **DELETED**. NEW §6.7: **sound effects are not in Content ID and carry no claim duties
+    at all** — §6 applies to musical Works only.
+  • `AGENTS.md` got a permanent "Copy rules" block, and this file got **Rule 0 / Rule 1** at the top.
+  BACKLOG ADDITION (owner): when Sound Effects ship, they need **their own PDF licence certificate**,
+  built the same way as the track one (`functions/api/license-pdf.ts` + `cert_details`), with SFX-
+  appropriate scope wording — no Content ID / claim language, since SFX are never claimed. The owner
+  will share the reference wording later.

@@ -159,69 +159,42 @@ order to pay you lawfully.
 keep them registered) under your own account or administrator. TV Music Store does not
 register them.
 
-**6.2 Your obligation.** When TV Music Store forwards you a claim raised against a customer
-whose use is covered by a valid TV Music Store licence, you will **release that claim within
-one (1) business day**. TV Music Store will give you the video URL and the licence reference.
+**6.2 Your obligation: send the release.** When TV Music Store forwards you a claim raised
+against a customer whose use is covered by a valid TV Music Store licence, you will **submit a
+release request for that claim** through your Content ID account or administrator, **without
+undue delay and normally within one (1) business day** of being asked. TV Music Store will give
+you the video URL and the licence reference.
+
+> **What you owe is the request, not the outcome.** The release is executed inside YouTube's
+> Content ID system; neither you nor TV Music Store controls how or how quickly YouTube
+> processes it. So this clause asks for the one thing you can actually deliver: that the request
+> goes out, promptly, every time. TV Music Store makes the customer the same promise in the same
+> words — it promises the request, not YouTube's clock.
 
 **6.3 Monitored channels.** Customers may register their YouTube channels with TV Music Store.
-TV Music Store watches those channels for new uploads and forwards them to you for
-pre-emptive claim release, so that most claims are cleared before the customer ever notices.
-This is monitoring, not prevention — a claim can still appear, and §6.2 still applies.
-(A video must be published — Public or Unlisted — before anyone can act on it.)
+TV Music Store watches those channels for new uploads and forwards them to you for pre-emptive
+claim release, so that most claims are dealt with before the customer ever notices. This is
+monitoring, not prevention — a claim can still appear, and §6.2 still applies. (A video must be
+published — Public or Unlisted — before anyone can act on it.)
 
 **6.4 No claiming licensed customers.** You will not strike, claim or monetise a video that
 holds a valid TV Music Store licence for that use.
 
-**6.5 ⚠️ This obligation SURVIVES.** Your duty to release claims under §6.2 continues **for
-as long as customer licences granted while your Work was in the catalogue remain in force —
-including after you withdraw the Work and after this Agreement ends.**
+**6.5 This obligation survives.** Your duty under §6.2 continues **for as long as customer
+licences granted while your Work was in the catalogue remain in force — including after you
+withdraw the Work and after this Agreement ends.** A customer's video can sit online for years;
+the licence he bought does not expire, so neither does the duty to send the release for it.
 
-**6.6 If you cannot act.** People fall ill, travel, and change their minds. If you have not
-released a claim within **five (5) business days**, TV Music Store may:
+**6.6 If you cannot act.** People fall ill, travel, and change their minds. If release requests
+for your Works repeatedly do not go out, TV Music Store may **remove the Work from the
+catalogue**, so that no new customer is exposed to the same problem. Where your Content ID
+provider allows it, you may also — if you wish — give TV Music Store or its nominated
+administrator **standing authority to send release requests on licensed uses only**. That is a
+convenience, not a condition.
 
-1. **refund the affected customer** and deduct that refund from your future payouts (§6.7);
-2. **remove the Work from the catalogue** so no new customer is exposed to the same problem.
-
-Where your Content ID provider allows it, you will — if asked — give TV Music Store or its
-nominated administrator **standing authority to release claims on licensed uses only**. This
-is a convenience, not a condition: if your provider does not allow it, §6.6(1) and (2) are
-what protect the customer.
-
-**6.7 The customer's 14-day refund right — and where it lands.** If a claim on a licensed
-customer's video is **still open fourteen (14) days** after the customer reported it to
-TV Music Store, that customer may claim a refund (the one-time licence, or the subscription
-payment for the affected period). Where the claim was yours to release, TV Music Store will
-**deduct the refunded amount from your future payouts**.
-
-> **Why 14 days and why it lands on the composer:** the customer paid for music that was safe
-> to use. If it turns out not to be, someone has to make him whole, and it cannot be the store
-> that merely relayed your promise. Fourteen days is deliberately generous — it survives a
-> holiday, a flu, a lost password. It is not generous enough to survive somebody simply
-> walking away, which is exactly the case it is written for.
->
-> **Note to the owner:** I removed the "binds your heirs and executors" wording you disliked.
-> You were right — you have no access to a composer's Content ID account, so a clause built on
-> access you do not have is a promise you cannot keep. The refund right (§6.7) plus removal of
-> the Work is the mechanism that actually works, because it only needs **your** hands. (The
-> standard "successors" boilerplate now sits in §9, where it belongs — it is about the
-> agreement, not about Content ID.)
-
-> ### ⚠️ Note to the owner — I did not write your "60 days" here, and here is why
->
-> You said the composer should keep clearing claims **for 60 days after a track is removed**.
-> That number protects the composer and **breaks the customer**.
->
-> A customer who downloaded the track under a valid subscription keeps a **perpetual licence
-> for that project**. His video may sit on YouTube for five years. If a claim lands in year
-> three and the composer's duty expired after 60 days, that customer is stuck with a claim on
-> a video he paid for and did nothing wrong — and he will, correctly, blame **you**, because
-> he bought from you.
->
-> So the withdrawal wind-down (§7) is 60 days — that is about **new** customers.
-> The claim-release duty has to survive as long as the licences do. It costs the composer
-> almost nothing (whitelisting means claims mostly never arise) and it is the single clause
-> that keeps your central promise true. **If a composer refuses this clause, do not take his
-> music** — you cannot sell "claim-free" music whose author can walk away from the claim.
+**6.7 Sound effects.** Sound effects are not registered in Content ID and are not claimed, so
+§§6.1–6.6 apply to **musical Works only**. Nothing in this section asks anything of you in
+respect of sound-effect Works.
 
 ## 7. Term, withdrawal and survival
 
@@ -235,8 +208,8 @@ payment for the affected period). Where the claim was yours to release, TV Music
   does not reach back into projects already made.
 - **What a new subscription covers:** the catalogue as it stands at the moment of each
   download. A withdrawn Work is simply no longer downloadable.
-- Your **§4 warranties**, your **§6 claim-release duty**, and any **payouts accrued** all
-  survive the end of this Agreement.
+- Your **§4 warranties**, your **§6.2 duty to send claim releases**, and any **payouts
+  accrued** all survive the end of this Agreement.
 
 ## 8. Relationship
 
@@ -271,12 +244,16 @@ Composer ([[name]]): ______________  Date: ________
 1. **Fill the `[[ ]]` blanks** — your entity details, payout method, effective date.
 2. **Have a UK solicitor read it.** Especially §4 (indemnity) and §6.5 (surviving duty) —
    those two clauses are the ones carrying your risk.
+   Note the deliberate shape of §6: the composer promises to **send the release request**, not
+   to guarantee that YouTube removes the claim. That is the only promise anyone in this chain
+   can actually keep — and it is exactly the promise the site makes to the customer, word for
+   word. Do not let anyone talk you into "guaranteed removal in 24h" in either document.
 3. **Decide the friend problem now, not later.** These are your friends; that is exactly why
    the paper matters. A signed agreement is not distrust — it is what lets a friendship
    survive a bad month, a chargeback, or a copyright claim.
-4. **Site copy must match §6.2.** The homepage promises claims "removed within 24 hours",
-   but composers clear claims on **business days** — so the honest promise is **"within one
-   business day"**. (I have already changed the copy; see the code.)
+4. **Site copy matches §6.2 — keep it that way.** Everywhere on the site the promise is now
+   *"we send it for release within one business day"*. Never *"removed in 24h"*: removal happens
+   inside YouTube's system and is not ours to promise. (The copy is already changed; see the code.)
 5. **e-Signature:** DocuSign works. Cheaper and equally valid for this: **Dropbox Sign**,
    **SignWell**, **PandaDoc**, or self-hosted **Documenso**. All produce a legally binding
    e-signature in the UK/EU. Pick on price — the document does the work, not the tool.

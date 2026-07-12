@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Check, Minus } from "lucide-react";
+import { toast } from "sonner";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import {
@@ -28,11 +29,11 @@ const faq: { q: string; a: string }[] = [
   },
   {
     q: "How does channel whitelisting work?",
-    a: "Add your YouTube channel in your account and we watch it: new uploads are sent for claim release automatically, so claims on our tracks are cleared within one business day — usually before you even see them. Pro covers 3 channels, Max covers 10.",
+    a: "Add your YouTube channel in your account and we watch it: new uploads are sent for claim release automatically, within one business day, without you asking. The release itself happens inside YouTube's Content ID system, so we cannot put a clock on YouTube — but the request goes out fast, usually before you even see the claim. Pro covers 3 channels, Max covers 10.",
   },
   {
     q: "What if I get a copyright claim?",
-    a: "Every track in the catalog is Content ID registered by its composer, so a claim can appear — it is not a strike and it does not hurt your channel. Paste the video link in your account and the claim is released within one business day, on any plan including Free. Adding your channel to Whitelisting is better still: we watch it and clear claims on new uploads without you asking.",
+    a: "Every track in the catalog is Content ID registered by its composer, so a claim can appear — it is not a strike and it does not hurt your channel. Paste the video link in your account and we send it for release within one business day, on any plan including Free. Adding your channel to monitoring is better still: we watch it and send claims on new uploads for release without you asking.",
   },
   {
     q: "What formats do I get?",
@@ -57,7 +58,7 @@ const compareRows: CompareRow[] = [
   { label: "Paid ads & sponsored content", values: { free: false, pro: false, max: true } },
   { label: "Client & commercial work", values: { free: false, pro: false, max: true } },
   { label: "Whitelisted YouTube channels", values: { free: "—", pro: "3", max: "10" } },
-  { label: "Claim removal within 24h", values: { free: true, pro: true, max: true } },
+  { label: "Claims sent for release in 1 business day", values: { free: true, pro: true, max: true } },
   { label: "Priority support", values: { free: false, pro: false, max: true } },
 ];
 
@@ -74,16 +75,25 @@ const PlanCard = ({
   plan,
   interval,
   isCurrent,
+  activePlan,
   isAuthed,
 }: {
   plan: PlanConfig;
   interval: BillingInterval;
   isCurrent: boolean;
+  /** The paid plan the visitor is subscribed to right now (null if none). */
+  activePlan: string | null;
   isAuthed: boolean;
 }) => {
   const [busy, setBusy] = useState(false);
   const isPro = plan.id === "pro";
   const price = interval === "annual" ? plan.priceAnnualPerMonth : plan.priceMonthly;
+
+  // Everything in Pro is already in Max — and nobody can hold two subscriptions
+  // at once, so a switch has to start with cancelling the current one.
+  const includedInCurrent = activePlan === "max" && plan.id === "pro";
+  const switchBlocked = !!activePlan && !isCurrent && !includedInCurrent;
+
   const cta =
     plan.id === "free"
       ? isAuthed
@@ -92,13 +102,23 @@ const PlanCard = ({
       : !BILLING_ENABLED
         ? "Coming soon"
         : isCurrent
-          ? "Manage subscription"
-          : busy
-            ? "Redirecting..."
-            : "Select plan";
+          ? "Your plan"
+          : includedInCurrent
+            ? "Included in your plan"
+            : busy
+              ? "Redirecting..."
+              : "Select plan";
 
   const onSelect = async () => {
-    if (plan.id === "free" || busy || !BILLING_ENABLED) return;
+    if (plan.id === "free" || busy || !BILLING_ENABLED || includedInCurrent) return;
+    if (switchBlocked) {
+      toast("You already have an active subscription", {
+        description:
+          "Cancel it in Plan & Billing first, then subscribe to the new plan — otherwise you'd be billed for both.",
+        action: { label: "Manage", onClick: () => void openBillingPortal() },
+      });
+      return;
+    }
     setBusy(true);
     try {
       if (isCurrent) await openBillingPortal();
@@ -152,12 +172,14 @@ const PlanCard = ({
       ) : (
         <button
           type="button"
-          disabled={busy || !BILLING_ENABLED}
+          disabled={busy || !BILLING_ENABLED || includedInCurrent}
           onClick={() => void onSelect()}
           className={`mt-8 rounded-lg py-2.5 text-center font-body text-sm font-semibold transition-colors duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${
-            isPro
-              ? "bg-[#F4C430] text-background hover:bg-[#F4C430]/85"
-              : "border border-border text-foreground hover:border-[#F4C430] hover:text-[#F4C430]"
+            isCurrent
+              ? "border border-[#F4C430]/60 bg-[#F4C430]/10 text-[#F4C430] shadow-inner"
+              : isPro
+                ? "bg-[#F4C430] text-background hover:bg-[#F4C430]/85"
+                : "border border-border text-foreground hover:border-[#F4C430] hover:text-[#F4C430]"
           }`}
         >
           {cta}
@@ -172,6 +194,13 @@ const Pricing = () => {
   const subscription = useSubscription();
   const { status } = useAuthSession();
   const [interval, setInterval] = useState<BillingInterval>("annual");
+  const activePlan =
+    status === "authed" &&
+    subscription &&
+    subscription.plan !== "free" &&
+    subscription.status === "active"
+      ? subscription.plan
+      : null;
 
   useSeo({
     title: "Plans & Pricing — Royalty-Free Music Subscription | TV Music Store",
@@ -230,6 +259,7 @@ const Pricing = () => {
                 subscription?.plan === p.id &&
                 subscription?.status === "active"
               }
+              activePlan={activePlan}
               isAuthed={status === "authed"}
             />
           ))}

@@ -6,7 +6,13 @@ This file is the quick working map for AI assistants and developers. The full pr
 
 TVMUSICSTORE is a cinematic music subscription site (model V2). Three composers, ~1000 tracks total. Monetization: Free (3 downloads/month) / Pro $7/mo annual / Max $15/mo annual subscriptions (Tunetank-style), plus one-time Sync licenses ($199/$399) and adaptation/custom services. Revenue: 50% platform, 50% author pool split by downloads.
 
-Core positioning: curated cinematic catalog from three real composers (no AI music), with Content ID claim removal within 24 hours and channel whitelisting as the trust hook.
+Core positioning: curated cinematic catalog from real, named composers (no AI music), licensed to you directly, with Content ID claims on licensed uses **sent for release within one business day** and channel monitoring as the trust hook.
+
+⚠️ **Copy rules — never break these (they are honesty rules, not style rules):**
+- The catalogue is **NON-EXCLUSIVE**. Composers may licence the same track elsewhere. Never imply exclusivity or "only here".
+- We promise the **request**, not the outcome: *"we send it for release within one business day"*. NEVER "claims removed in 24h", "claim-free", or any guarantee about YouTube's own processing time — removal happens inside Content ID and is not ours to promise.
+- "Whitelisting" on our side is **channel monitoring**: we watch registered channels and send claims on new uploads for release automatically. It is not prevention.
+- Older planning docs (`docs/SITE_OVERVIEW.md`, `docs/PAGES_SPEC.md`, `docs/TVMUSICSTORE_MASTER_PLAN.md`) still contain the old "removed within 24h" wording. They are historical — this file and `AI_CONTEXT.md` win.
 
 Full business model: `docs/TVMUSICSTORE_MASTER_PLAN.md` (V2). Page-by-page spec: `docs/PAGES_SPEC.md`.
 

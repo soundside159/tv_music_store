@@ -308,7 +308,7 @@ const ComposerPanel = ({ section }: { section: ComposerSectionId }) => {
 
       {section === "requests" && (
         <>
-          <Card title="Claim removals for my tracks">
+          <Card title="Claim releases to send for my tracks">
             {myClaims.length === 0 ? (
               <p className="font-body text-sm text-muted-foreground">No open claims. Nice and quiet.</p>
             ) : (

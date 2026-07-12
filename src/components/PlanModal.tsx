@@ -16,27 +16,45 @@ const PlanCard = ({
   plan,
   interval,
   isCurrent,
+  activePlan,
+  onBlocked,
   onDone,
 }: {
   plan: PlanConfig;
   interval: BillingInterval;
   isCurrent: boolean;
+  /** The paid plan the customer is subscribed to right now (null if none). */
+  activePlan: string | null;
+  onBlocked: () => void;
   onDone: () => void;
 }) => {
   const [busy, setBusy] = useState(false);
   const isMax = plan.id === "max";
   const price = interval === "annual" ? plan.priceAnnualPerMonth : plan.priceMonthly;
 
+  // A subscriber cannot simply buy a second subscription — Stripe would bill
+  // both. He has to cancel the current one first, so we say so instead of
+  // sending him to checkout. Max already includes everything in Pro, so the
+  // Pro card goes quiet for him.
+  const includedInCurrent = activePlan === "max" && plan.id === "pro";
+  const switchBlocked = !!activePlan && !isCurrent && !includedInCurrent;
+
   const cta = !BILLING_ENABLED
     ? "Coming soon"
     : isCurrent
       ? "Manage plan"
-      : busy
-        ? "Redirecting…"
-        : "Get plan";
+      : includedInCurrent
+        ? "Included in your plan"
+        : busy
+          ? "Redirecting…"
+          : "Get plan";
 
   const onClick = async () => {
-    if (!BILLING_ENABLED || busy) return;
+    if (!BILLING_ENABLED || busy || includedInCurrent) return;
+    if (switchBlocked) {
+      onBlocked();
+      return;
+    }
     setBusy(true);
     try {
       if (isCurrent) await openBillingPortal();
@@ -77,12 +95,14 @@ const PlanCard = ({
 
       <button
         type="button"
-        disabled={busy || !BILLING_ENABLED}
+        disabled={busy || !BILLING_ENABLED || includedInCurrent}
         onClick={() => void onClick()}
         className={`mt-5 rounded-lg py-3 text-center font-body text-sm font-semibold transition-colors duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${
-          isMax
-            ? "bg-[#F4C430] text-background hover:bg-[#F4C430]/85"
-            : "border border-border text-foreground hover:border-[#F4C430] hover:text-[#F4C430]"
+          isCurrent
+            ? "border border-[#F4C430]/60 bg-[#F4C430]/10 text-[#F4C430]"
+            : isMax
+              ? "bg-[#F4C430] text-background hover:bg-[#F4C430]/85"
+              : "border border-border text-foreground hover:border-[#F4C430] hover:text-[#F4C430]"
         }`}
       >
         {cta}
@@ -105,6 +125,7 @@ const PlanModal = () => {
   const subscription = useSubscription();
   const { status } = useAuthSession();
   const [open, setOpen] = useState(false);
+  const [blocked, setBlocked] = useState(false);
   const [interval, setInterval] = useState<BillingInterval>("annual");
   const [heading, setHeading] = useState<{ title: string; subtitle: string }>({
     title: "Pick a plan",
@@ -119,6 +140,7 @@ const PlanModal = () => {
         subtitle: ctx.subtitle || "Unlock unlimited downloads, lossless WAV & stems, and full commercial licensing.",
       });
       setInterval("annual");
+      setBlocked(false);
       setOpen(true);
     };
     window.addEventListener("tvms:pick-plan", show);
@@ -138,6 +160,14 @@ const PlanModal = () => {
 
   const close = () => setOpen(false);
   const paidPlans = plans.filter((p) => p.id !== "free");
+  const activePlan =
+    status === "authed" &&
+    subscription &&
+    subscription.plan !== "free" &&
+    subscription.status === "active"
+      ? subscription.plan
+      : null;
+  const activeName = activePlan ? activePlan.replace(/^\w/, (c) => c.toUpperCase()) : "";
 
   return (
     <div
@@ -208,13 +238,35 @@ const PlanModal = () => {
               key={p.id}
               plan={p}
               interval={interval}
-              isCurrent={
-                status === "authed" && subscription?.plan === p.id && subscription?.status === "active"
-              }
+              isCurrent={activePlan === p.id}
+              activePlan={activePlan}
+              onBlocked={() => setBlocked(true)}
               onDone={close}
             />
           ))}
         </div>
+
+        {blocked && (
+          <div
+            className="mt-5 rounded-xl border p-4 text-center"
+            style={{ borderColor: "rgba(244,196,48,0.4)", backgroundColor: "rgba(244,196,48,0.07)" }}
+          >
+            <p className="font-body text-sm font-semibold text-foreground">
+              You already have an active subscription{activeName ? ` (${activeName})` : ""}.
+            </p>
+            <p className="mx-auto mt-1 max-w-md font-body text-xs leading-5 text-muted-foreground">
+              Cancel it first, then subscribe to the new plan — otherwise you'd be billed for both.
+              You keep access until the end of the period you already paid for.
+            </p>
+            <button
+              type="button"
+              onClick={() => void openBillingPortal()}
+              className="mt-3 rounded-lg bg-[#F4C430] px-4 py-2 font-body text-sm font-bold text-background transition-colors hover:bg-[#F4C430]/85"
+            >
+              Manage subscription
+            </button>
+          </div>
+        )}
 
         <div className="mt-6 text-center">
           <Link

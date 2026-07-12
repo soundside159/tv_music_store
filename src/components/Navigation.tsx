@@ -193,7 +193,9 @@ const Navigation = () => {
                       >
                         {planLabel} plan
                       </span>
-                      {!isPaidPlan && (
+                      {/* Free → "Upgrade", Pro → "Upgrade to Max", Max → nothing
+                          left to sell. */}
+                      {plan !== "max" && (
                         <button
                           type="button"
                           onClick={() => {
@@ -202,7 +204,7 @@ const Navigation = () => {
                           }}
                           className="shrink-0 rounded-full bg-[#F4C430] px-2.5 py-0.5 font-body text-[10px] font-bold text-background transition-colors hover:bg-[#F4C430]/85"
                         >
-                          Upgrade
+                          {isPaidPlan ? "Upgrade to Max" : "Upgrade"}
                         </button>
                       )}
                     </div>
