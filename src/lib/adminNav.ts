@@ -120,5 +120,6 @@ export const composerNavItems: NavItem[] = [
   { id: "upload", label: "Upload", icon: UploadCloud },
   { id: "earnings", label: "Earnings", icon: DollarSign },
   { id: "requests", label: "Requests", icon: Inbox },
-  { id: "profile", label: "Profile", icon: UserRound },
+  // No "Profile" here — the composer's account profile lives in the Account
+  // menu; a second one would just be the same fields twice.
 ];

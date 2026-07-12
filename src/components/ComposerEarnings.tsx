@@ -51,7 +51,7 @@ const Stat = ({ label, value, hint }: { label: string; value: string; hint?: str
 const STATE_LABEL: Record<MonthRow["state"], string> = {
   paid: "Paid",
   payable: "Ready to pay",
-  held: "Clearing",
+  held: "Pending",
 };
 
 const ComposerEarnings = () => {
@@ -107,46 +107,38 @@ const ComposerEarnings = () => {
           }
         />
         <Stat
-          label="Clearing"
+          label="Pending"
           value={money(totals.heldCents)}
-          hint={`Held ${policy.holdbackDays} days after the month ends`}
+          hint={`Paid ${policy.holdbackDays} days after the month closes`}
         />
       </div>
 
       <div className="rounded-xl border border-border bg-card p-5">
         <h2 className="font-body text-sm font-semibold text-foreground">Earnings by month</h2>
-        {/* The running month is deliberately shown WITHOUT a figure: a number
-            that moves every time a subscriber's cycle closes is noise, not
-            information. It is published as one final, honest total. */}
+        {/* One final figure per month — never a live counter. */}
         <p className="mt-1 font-body text-xs text-muted-foreground">
-          {data.openMonth.month} is still running — its total is published on {data.openMonth.publishOn},
-          once the month is closed and final.
+          {data.openMonth.month} is still running — its total appears on {data.openMonth.publishOn}.
         </p>
         <div className="mt-3 overflow-x-auto">
-          <table className="w-full min-w-[34rem] border-collapse font-body text-sm">
+          <table className="w-full min-w-[28rem] border-collapse font-body text-sm">
             <thead>
               <tr className="border-b border-border/60 text-left">
                 <th className="py-2 pr-4 font-semibold text-muted-foreground">Month</th>
-                <th className="py-2 pr-4 text-right font-semibold text-muted-foreground">Points</th>
-                <th className="py-2 pr-4 text-right font-semibold text-muted-foreground">Amount</th>
+                <th className="py-2 pr-4 text-right font-semibold text-muted-foreground">Earned</th>
                 <th className="py-2 font-semibold text-muted-foreground">Status</th>
               </tr>
             </thead>
             <tbody>
               {data.months.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="py-6 text-center text-muted-foreground">
-                    No closed month yet. Earnings appear here once a month ends — every subscriber who
-                    downloaded one of your tracks that month, and every single-track license.
+                  <td colSpan={3} className="py-6 text-center text-muted-foreground">
+                    No closed month yet.
                   </td>
                 </tr>
               )}
               {data.months.map((m) => (
                 <tr key={m.month} className="border-b border-border/40 last:border-b-0">
                   <td className="py-2.5 pr-4 text-foreground">{m.month}</td>
-                  <td className="py-2.5 pr-4 text-right tabular-nums text-muted-foreground">
-                    {m.points}
-                  </td>
                   <td
                     className="py-2.5 pr-4 text-right font-semibold tabular-nums"
                     style={{ color: m.amountCents < 0 ? undefined : GOLD }}
@@ -160,13 +152,13 @@ const ComposerEarnings = () => {
                           ? "border-[#F4C430]/50 bg-[#F4C430]/10 text-[#F4C430]"
                           : "border-border text-muted-foreground"
                       }`}
-                      title={m.state === "held" ? `Clears on ${m.releaseDate}` : undefined}
+                      title={m.state === "held" ? `Paid out on ${m.releaseDate}` : undefined}
                     >
                       {STATE_LABEL[m.state]}
                     </span>
                     {m.state === "held" && (
                       <span className="ml-2 font-body text-[11px] text-muted-foreground/70">
-                        clears {m.releaseDate}
+                        {m.releaseDate}
                       </span>
                     )}
                   </td>
@@ -177,68 +169,6 @@ const ComposerEarnings = () => {
         </div>
       </div>
 
-      {data.tracks.length > 0 && (
-        <div className="rounded-xl border border-border bg-card p-5">
-          <h2 className="font-body text-sm font-semibold text-foreground">
-            Your tracks, by counted downloads
-          </h2>
-          <p className="mt-1 font-body text-xs text-muted-foreground">
-            Points, not dollars: what a download is worth depends on what that subscriber paid, so a
-            per-track amount would be made up.
-          </p>
-          <ul className="mt-3 divide-y divide-border/40">
-            {data.tracks.map((t) => (
-              <li key={t.slug} className="flex items-center justify-between py-2">
-                <span className="font-body text-sm text-foreground">{t.title}</span>
-                <span className="font-body text-sm tabular-nums text-muted-foreground">
-                  {t.points}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* The rules, in the composer's own words — no surprises at payout time. */}
-      <div className="rounded-xl border border-border bg-card p-5">
-        <h2 className="font-body text-sm font-semibold text-foreground">How this is calculated</h2>
-        <ul className="mt-3 space-y-2 font-body text-sm leading-6 text-muted-foreground">
-          <li>
-            <span className="text-foreground">50% of net revenue</span> goes to composers. Net = what
-            the customer paid, minus VAT (that money is the state's) and the payment fee.
-          </li>
-          <li>
-            <span className="text-foreground">Subscriptions follow the subscriber.</span> Each
-            subscription is split only between the composers that subscriber actually downloaded in
-            the cycle he paid for — not thrown into a shared pool.
-          </li>
-          <li>
-            <span className="text-foreground">One point per unique track, per subscriber, per
-            cycle.</span> Taking the WAV, the stems and the MP3 of the same track is still one point.
-            MP3 128 (the free format) does not count, and your own downloads of your own tracks count
-            for nothing.
-          </li>
-          <li>
-            <span className="text-foreground">Single-track licenses</span> pay you 50% of the net of
-            that sale, straight away.
-          </li>
-          <li>
-            <span className="text-foreground">One figure per month, published once.</span> A month's
-            total appears when the month closes — never as a live counter, because a number that moves
-            all day tells you nothing.
-          </li>
-          <li>
-            <span className="text-foreground">Timing.</span> A month clears {policy.holdbackDays} days
-            after it ends, so refunds and chargebacks settle first. Balances under {threshold} roll
-            over to the next payout instead of being wired for pennies.
-          </li>
-          <li>
-            <span className="text-foreground">Refunds.</span> If a customer is refunded after you were
-            already paid, we never take money back from your account — the amount is simply netted off
-            your next payout.
-          </li>
-        </ul>
-      </div>
     </div>
   );
 };

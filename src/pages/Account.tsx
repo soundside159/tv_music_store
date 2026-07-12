@@ -166,6 +166,16 @@ const Account = () => {
 
   const plan = plans.find((p) => p.id === subscription?.plan);
 
+  // Download history: 20 rows a page — a heavy user's list gets long fast.
+  const DOWNLOADS_PER_PAGE = 20;
+  const [dlPage, setDlPage] = useState(1);
+  const downloadPages = Math.max(1, Math.ceil(downloads.length / DOWNLOADS_PER_PAGE));
+  const safeDlPage = Math.min(dlPage, downloadPages);
+  const pagedDownloads = downloads.slice(
+    (safeDlPage - 1) * DOWNLOADS_PER_PAGE,
+    safeDlPage * DOWNLOADS_PER_PAGE,
+  );
+
   // Content ID claim requests — LIVE (/api/claims). The server checks the video
   // is actually visible on YouTube before accepting it: a private video cannot
   // have its claim released by anyone, so promising it would be a lie.
@@ -500,9 +510,6 @@ const Account = () => {
                     <span className="font-body text-sm text-foreground">{user.email}</span>
                   </div>
                 </div>
-                <p className="mt-3 font-body text-xs text-muted-foreground">
-                  Need to change your email? Contact us at contact@tvmusicstore.com.
-                </p>
 
                 {/* Self-delete — customers only. Admin and composer accounts
                     are removed by the owner (composer tracks must never be
@@ -546,7 +553,7 @@ const Account = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {downloads.map((d) => (
+                        {pagedDownloads.map((d) => (
                           <tr key={d.id} className="border-b border-border/50 last:border-0">
                             <td className="py-2.5 pr-4">
                               {d.trackSlug ? (
@@ -613,6 +620,31 @@ const Account = () => {
                         ))}
                       </tbody>
                     </table>
+
+                    {/* 20 per page — the history of a heavy user gets long fast. */}
+                    {downloadPages > 1 && (
+                      <div className="mt-4 flex items-center justify-center gap-1.5">
+                        <button
+                          type="button"
+                          disabled={safeDlPage === 1}
+                          onClick={() => setDlPage((p) => Math.max(1, p - 1))}
+                          className="h-8 rounded-lg border border-border px-3 font-body text-xs text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430] disabled:pointer-events-none disabled:opacity-40"
+                        >
+                          Prev
+                        </button>
+                        <span className="px-2 font-body text-xs text-muted-foreground">
+                          {safeDlPage} / {downloadPages}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={safeDlPage === downloadPages}
+                          onClick={() => setDlPage((p) => Math.min(downloadPages, p + 1))}
+                          className="h-8 rounded-lg border border-border px-3 font-body text-xs text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430] disabled:pointer-events-none disabled:opacity-40"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </SectionCard>
@@ -620,25 +652,14 @@ const Account = () => {
 
             {section === "license" && (
               <>
-                <SectionCard title="What your plan covers">
-                  {plan ? (
-                    <ul className="flex flex-col gap-2">
-                      {plan.highlights.map((h) => (
-                        <li key={h} className="font-body text-sm text-foreground/90">• {h}</li>
-                      ))}
-                      {!plan.commercialLicense && (
-                        <li className="mt-2 font-body text-xs text-muted-foreground">
-                          Paid ads and client work need the Max plan or a one-time sync license.
-                        </li>
-                      )}
-                    </ul>
-                  ) : (
-                    <EmptyNote text="No active plan." />
-                  )}
-                </SectionCard>
-                <SectionCard title="One-time sync licenses">
+                <SectionCard title="Your licensed tracks">
+                  <p className="font-body text-sm text-muted-foreground">
+                    Download the audio file, PDF certificate and receipt for each one.
+                  </p>
                   {syncOrders.length === 0 ? (
-                    <EmptyNote text="No sync licenses yet. They appear here with PDF certificates." />
+                    <div className="mt-3">
+                      <EmptyNote text="No licensed tracks yet." />
+                    </div>
                   ) : (
                     <ul className="divide-y divide-border/60">
                       {syncOrders.map((o) => (
@@ -817,14 +838,8 @@ const Account = () => {
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-border bg-card p-6">
-                  <p className="flex items-center gap-2 font-body text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    <span className="h-3 w-1 rounded-full" style={{ backgroundColor: GOLD }} /> Account details
-                  </p>
-                  <p className="mt-4 font-body text-base font-semibold text-foreground">{user.name || "—"}</p>
-                  <p className="font-body text-sm text-muted-foreground">{user.email}</p>
-                </div>
-
+                {/* No "Account details" card here — name and email already live
+                    in Profile; two places to read the same thing is one too many. */}
                 {!BILLING_ENABLED && (
                   <p className="font-body text-xs text-muted-foreground">
                     Subscription billing is moving to a new provider and will be available again soon.
