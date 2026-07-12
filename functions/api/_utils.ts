@@ -44,6 +44,10 @@ export interface Env {
   LICENSE_SIGNING_SECRET?: string; // HMAC secret for subscription license codes
   YOUTUBE_API_KEY?: string; // YouTube Data API v3 key for whitelist video monitoring
   OPENAI_API_KEY?: string; // OpenAI Images API (admin track-cover generation)
+  /** OpenAI ADMIN key (sk-admin-…) — read-only, used ONLY to fetch the real
+   *  spend for Admin → Usage (GET /v1/organization/costs). Different key from
+   *  OPENAI_API_KEY; create it in Settings → Organization → Admin keys. */
+  OPENAI_ADMIN_KEY?: string;
 }
 
 export interface Ctx {

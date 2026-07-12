@@ -1,5 +1,10 @@
 import { getSessionUser, json, OWNER_EMAIL, readJson, type Ctx } from "../_utils";
-import { getUsageReport, saveUsageLimits, type UsageLimits } from "../_usage";
+import {
+  fetchOpenAiSpend,
+  getUsageReport,
+  saveUsageLimits,
+  type UsageLimits,
+} from "../_usage";
 
 // Admin → Usage. What we have spent this month on Resend, the YouTube Data API
 // and OpenAI, against the limits the owner enters.
@@ -23,14 +28,20 @@ export const onRequestGet = async (ctx: Ctx) => {
 
   const report = await getUsageReport(ctx.env.DB);
 
+  // The REAL OpenAI bill when an Admin key is set; our own estimate otherwise —
+  // and the UI always says which of the two it is showing.
+  const openai = await fetchOpenAiSpend(ctx.env, report.month.openai.costCents);
+
   return json({
     ...report,
+    openaiSpend: openai,
     // Which providers are actually wired up — a zero next to a missing key means
     // "not configured", not "nothing spent".
     configured: {
       resend: !!ctx.env.RESEND_API_KEY,
       youtube: !!ctx.env.YOUTUBE_API_KEY,
       openai: !!ctx.env.OPENAI_API_KEY,
+      openaiAdmin: !!ctx.env.OPENAI_ADMIN_KEY,
     },
   });
 };

@@ -2799,3 +2799,18 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   and compare against limits the owner types in (site_config `usage_limits`). Bars go red at 85%.
   The provider dashboards remain the source of truth for the actual bill — the panel says so.
   Metering can never break the thing it measures (every bump is fire-and-forget, wrapped in try/catch).
+- **2026-07-12 (Usage panel: REAL OpenAI spend):** owner (rightly) called out that the AI meter showed
+  "$0.00 / $20.00" — the $20 was a DEFAULT I invented and the 0 was because the counter only starts
+  when the meter is deployed, so yesterday's real spend was invisible. Fixed properly:
+  **OpenAI publishes the real bill** — `GET /v1/organization/costs?start_time=<month>&bucket_width=1d`,
+  which needs an **Admin key** (`sk-admin-…`, different from OPENAI_API_KEY; platform.openai.com →
+  Settings → Organization → Admin keys). New `fetchOpenAiSpend()` in `functions/api/_usage.ts` sums the
+  daily buckets for the current month and returns `{centsThisMonth, source: "openai" | "estimate", note}`.
+  New env var **OPENAI_ADMIN_KEY** (typed in _utils Env). `admin/usage.ts` returns `openaiSpend` +
+  `configured.openaiAdmin`; AdminUsage.tsx shows the REAL figure when it is there ("real spend, straight
+  from OpenAI") and, when it is not, labels the number **"OUR ESTIMATE"** and prints a gold box with the
+  exact steps to add the Admin key. **Resend and YouTube have NO usage/quota endpoint at all** — for
+  those two the site can only count its own calls, and the panel now says so in plain words instead of
+  implying it knows the provider's balance.
+  OWNER ACTION: add OPENAI_ADMIN_KEY in Cloudflare → Pages → tv_music_store → Settings → Variables, then
+  redeploy; the AI meter switches to the real bill by itself.

@@ -21,7 +21,9 @@ interface Report {
   today: Record<"resend" | "youtube" | "openai", Bucket>;
   month: Record<"resend" | "youtube" | "openai", Bucket>;
   limits: { resendMonthly: number; youtubeDaily: number; openaiMonthlyCents: number };
-  configured: { resend: boolean; youtube: boolean; openai: boolean };
+  configured: { resend: boolean; youtube: boolean; openai: boolean; openaiAdmin: boolean };
+  /** OpenAI's OWN figure when an Admin key is set; our estimate otherwise. */
+  openaiSpend: { centsThisMonth: number; source: "openai" | "estimate"; note?: string };
 }
 
 const pct = (used: number, limit: number) =>
@@ -129,7 +131,8 @@ const AdminUsage = () => {
   const { limits } = report;
   const emails = report.month.resend.units;
   const ytToday = report.today.youtube.units;
-  const aiCents = report.month.openai.costCents;
+  const realAi = report.openaiSpend.source === "openai";
+  const aiCents = report.openaiSpend.centsThisMonth;
 
   const emailPct = pct(emails, limits.resendMonthly);
   const ytPct = pct(ytToday, limits.youtubeDaily);
@@ -140,7 +143,7 @@ const AdminUsage = () => {
       <div className="grid gap-4 md:grid-cols-3">
         <Meter
           title="Emails (Resend)"
-          subtitle="This month · 1 unit per email sent"
+          subtitle="This month · counted by this site"
           used={emails.toLocaleString("en-US")}
           limit={limits.resendMonthly.toLocaleString("en-US")}
           unit={emailPct}
@@ -149,7 +152,7 @@ const AdminUsage = () => {
         />
         <Meter
           title="YouTube API"
-          subtitle="Today · Google resets the quota every midnight PT"
+          subtitle="Today · counted by this site · quota resets midnight PT"
           used={ytToday.toLocaleString("en-US")}
           limit={limits.youtubeDaily.toLocaleString("en-US")}
           unit={ytPct}
@@ -158,7 +161,11 @@ const AdminUsage = () => {
         />
         <Meter
           title="AI generation (OpenAI)"
-          subtitle={`This month · ${report.month.openai.units} generations`}
+          subtitle={
+            realAi
+              ? "This month · real spend, straight from OpenAI"
+              : `This month · OUR ESTIMATE (${report.month.openai.units} generations)`
+          }
           used={`$${(aiCents / 100).toFixed(2)}`}
           limit={`$${(limits.openaiMonthlyCents / 100).toFixed(2)}`}
           unit={aiPct}
@@ -167,13 +174,35 @@ const AdminUsage = () => {
         />
       </div>
 
+      {/* If the real bill is not available, say exactly why and how to fix it —
+          a made-up number in a money panel is worse than no number. */}
+      {!realAi && (
+        <div className="rounded-xl border border-[#F4C430]/40 bg-[#F4C430]/[0.06] p-4">
+          <p className="font-body text-sm text-foreground">
+            The AI figure above is <strong>our own estimate</strong>, not OpenAI's bill — and it only
+            counts what this site generated after the meter was switched on, so anything you spent
+            earlier is not in it.
+          </p>
+          <p className="mt-2 font-body text-xs leading-5 text-muted-foreground">
+            To show the real number: create an <strong>Admin key</strong> at platform.openai.com →
+            Settings → Organization → Admin keys (it starts with <code>sk-admin-</code> and is not the
+            same key that generates the covers), then add it in Cloudflare → Pages → tv_music_store →
+            Settings → Variables as <strong>OPENAI_ADMIN_KEY</strong> and redeploy. This panel will
+            then read your actual spend from OpenAI's own Costs API.
+            {report.openaiSpend.note ? ` (${report.openaiSpend.note})` : ""}
+          </p>
+        </div>
+      )}
+
       <div className="rounded-xl border border-border bg-card p-5">
         <h2 className="font-body text-sm font-semibold text-foreground">Your plan limits</h2>
         <p className="mt-1 font-body text-xs leading-5 text-muted-foreground">
-          None of these providers lets us ask "how many credits are left", so the site counts what it
-          spends and compares it to the numbers you type here. Set them to whatever your plans
-          actually give you — the bars then tell you when to top up, and the provider's dashboard
-          stays the final word on the bill.
+          <strong className="text-foreground">Where each number comes from.</strong> OpenAI publishes
+          your real spend through its Costs API, so with an Admin key that meter is the truth.
+          <strong className="text-foreground"> Resend and YouTube do not</strong> expose a
+          "credits left" endpoint at all — for those two the site counts its own calls (every email
+          sent, every channel check) from the day the meter was switched on. Type your actual plan
+          limits below and the bars will warn you before you run out.
         </p>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -222,9 +251,8 @@ const AdminUsage = () => {
 
         <p className="mt-4 font-body text-[11px] leading-5 text-muted-foreground/80">
           Free YouTube quota is 10,000 units a day; one whitelisted channel costs 2 units per check,
-          so ~5,000 channel checks a day before Google says no. The AI figures are list-price
-          estimates (≈4¢ per cover, ≈1¢ per description) — close enough to warn you, not accurate
-          enough to do your accounting.
+          so about 5,000 channel checks a day before Google says no. For OpenAI, set the budget to
+          what you topped up — the meter then shows how much of it this month has eaten.
         </p>
       </div>
     </div>

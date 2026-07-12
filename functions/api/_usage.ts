@@ -1,4 +1,4 @@
-import type { D1Database } from "./_utils";
+import type { D1Database, Env } from "./_utils";
 
 // ---------------------------------------------------------------------------
 // SERVICE USAGE METER — "how much of my quota have I burned?"
@@ -97,6 +97,80 @@ export const saveUsageLimits = async (db: D1Database, limits: UsageLimits): Prom
     )
     .bind(JSON.stringify(limits))
     .run();
+};
+
+// ---------------------------------------------------------------------------
+// REAL spend from OpenAI (not our estimate).
+//
+// OpenAI DOES expose the money: GET /v1/organization/costs, daily buckets. It
+// needs an **Admin key** (sk-admin-…), which is a different key from the one that
+// generates the images — create it at platform.openai.com → Settings →
+// Organization → Admin keys, then add it to Cloudflare as OPENAI_ADMIN_KEY.
+//
+// Without that key we fall back to our own metered estimate and SAY SO in the
+// UI — a number that pretends to be the bill is worse than no number.
+// ---------------------------------------------------------------------------
+
+export interface OpenAiSpend {
+  /** Real money spent this calendar month, in cents. */
+  centsThisMonth: number;
+  /** "openai" = the provider's own figure. "estimate" = our own counter. */
+  source: "openai" | "estimate";
+  /** Why the real figure is unavailable, if it is. */
+  note?: string;
+}
+
+interface CostsBucket {
+  results?: { amount?: { value?: number; currency?: string } }[];
+}
+
+export const fetchOpenAiSpend = async (
+  env: Env,
+  fallbackCents: number,
+): Promise<OpenAiSpend> => {
+  const adminKey = env.OPENAI_ADMIN_KEY;
+  if (!adminKey) {
+    return {
+      centsThisMonth: fallbackCents,
+      source: "estimate",
+      note: "Add an OpenAI Admin key (OPENAI_ADMIN_KEY) to show the real bill instead of our estimate.",
+    };
+  }
+
+  // First second of the current month, UTC.
+  const now = new Date();
+  const monthStart = Math.floor(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1) / 1000,
+  );
+
+  try {
+    const res = await fetch(
+      `https://api.openai.com/v1/organization/costs?start_time=${monthStart}&bucket_width=1d&limit=31`,
+      { headers: { authorization: `Bearer ${adminKey}` } },
+    );
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return {
+        centsThisMonth: fallbackCents,
+        source: "estimate",
+        note: `OpenAI refused the Admin key (HTTP ${res.status}). ${detail.slice(0, 120)}`,
+      };
+    }
+    const data = (await res.json()) as { data?: CostsBucket[] };
+    let dollars = 0;
+    for (const bucket of data.data ?? []) {
+      for (const line of bucket.results ?? []) {
+        dollars += Number(line.amount?.value ?? 0);
+      }
+    }
+    return { centsThisMonth: Math.round(dollars * 100), source: "openai" };
+  } catch (e) {
+    return {
+      centsThisMonth: fallbackCents,
+      source: "estimate",
+      note: e instanceof Error ? e.message : "OpenAI unreachable",
+    };
+  }
 };
 
 export interface UsageReport {
