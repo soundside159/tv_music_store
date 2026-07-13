@@ -1,5 +1,18 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Check, Layers, Library, ListMusic, Music2, ShieldCheck, Users } from "lucide-react";
+import {
+  ArrowRight,
+  Check,
+  Clapperboard,
+  Layers,
+  LayoutGrid,
+  Library,
+  ListMusic,
+  Music2,
+  ShieldCheck,
+  Sparkles,
+  Users,
+} from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { TrackRowList, TrackRowSkeletonList } from "@/components/TrackRowPlayer";
@@ -19,11 +32,27 @@ const trustPoints = [
 /** Rows shown in "Trending tracks" — also the number of placeholders reserved. */
 const TRENDING_COUNT = 8;
 
+/** "Browse by" — one shelf, four ways in. Categories is the default: it is the
+ *  owner's own curation, the other three are the raw tag families. */
+type BrowseTab = "categories" | "useCase" | "genre" | "mood";
+const BROWSE_TABS: { id: BrowseTab; label: string; icon: typeof LayoutGrid }[] = [
+  { id: "categories", label: "Categories", icon: LayoutGrid },
+  { id: "useCase", label: "Use Case", icon: Clapperboard },
+  { id: "genre", label: "Genre", icon: Music2 },
+  { id: "mood", label: "Mood", icon: Sparkles },
+];
+
 const Index = () => {
   const plans = usePlans();
   const { tracks: trendingTracks, isLoading: tracksLoading } = useTrendingTracks(TRENDING_COUNT);
   const categories = useCategories();
-  const moods = useVocabularies().mood;
+  const vocab = useVocabularies();
+
+  const [browseTab, setBrowseTab] = useState<BrowseTab>("categories");
+  const browseItems =
+    browseTab === "categories"
+      ? categories.map((c) => ({ key: c.id, label: c.title, to: `/catalog?category=${c.id}` }))
+      : vocab[browseTab].map((v) => ({ key: v, label: v, to: discoverPath(browseTab, v) }));
 
   return (
     <div className="min-h-screen bg-background">
@@ -38,20 +67,6 @@ const Index = () => {
             Written by real composers, licensed to you directly.
             Monetization-safe, claims handled for you, licensed in one click.
           </p>
-          <div className="mt-6 flex flex-wrap items-center gap-2">
-            {categories.map((c) => (
-              <Link
-                key={c.id}
-                to={`/catalog?category=${c.id}`}
-                className="rounded-full border border-border px-4 py-1.5 font-body text-xs text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
-              >
-                {c.title}
-              </Link>
-            ))}
-            <span className="ml-1 font-body text-xs text-muted-foreground">
-              Start free — 3 downloads every month. No credit card.
-            </span>
-          </div>
         </section>
 
         {/* Section cards: Catalog / Collections / Playlists */}
@@ -105,19 +120,53 @@ const Index = () => {
           </div>
         </section>
 
-        {/* Browse by collection */}
+        {/* Browse by: one shelf, four ways in (Categories · Use Case · Genre · Mood) */}
         <section className="mx-auto w-full max-w-7xl px-4 pb-16 sm:px-6">
-          <h2 className="text-xl text-foreground md:text-2xl">Browse by mood</h2>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {moods.map((m) => (
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+            <h2 className="text-xl text-foreground md:text-2xl">Browse by</h2>
+
+            {/* Segmented control: the active tab is the only lit pill. */}
+            <div className="flex flex-wrap gap-1 rounded-full border border-border/70 bg-card/60 p-1">
+              {BROWSE_TABS.map((t) => {
+                const active = t.id === browseTab;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setBrowseTab(t.id)}
+                    aria-pressed={active}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 font-body text-xs font-semibold transition-all duration-200 ${
+                      active
+                        ? "bg-[#F4C430] text-background shadow-[0_0_20px_-2px_rgba(244,196,48,0.55)]"
+                        : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
+                    }`}
+                  >
+                    <t.icon className="h-3.5 w-3.5" />
+                    {t.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* The list re-mounts on every tab (key), so it fades in each time. */}
+          <div key={browseTab} className="mt-5 flex animate-fade-in flex-wrap gap-2">
+            {browseItems.map((item) => (
               <Link
-                key={m}
-                to={discoverPath("mood", m)}
-                className="rounded-full border border-border px-3 py-1 font-body text-xs text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
+                key={item.key}
+                to={item.to}
+                className="group inline-flex items-center gap-2 rounded-full border border-border bg-card/50 px-4 py-1.5 font-body text-xs text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:border-[#F4C430]/70 hover:bg-[#F4C430]/[0.07] hover:text-[#F4C430]"
               >
-                {m}
+                <span
+                  className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 transition-colors duration-200 group-hover:bg-[#F4C430]"
+                  aria-hidden
+                />
+                {item.label}
               </Link>
             ))}
+            {browseItems.length === 0 && (
+              <p className="font-body text-sm text-muted-foreground">Nothing here yet.</p>
+            )}
           </div>
         </section>
 

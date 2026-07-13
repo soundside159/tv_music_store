@@ -191,7 +191,11 @@ export const TrackRow = ({
     className="border-b border-border/30 last:border-b-0"
   >
     {/* Halved paddings (was px-4 py-3) — the cover art dominates the row now. */}
-    <div className="music-track-grid grid gap-2.5 rounded-lg px-2 py-1.5 transition-colors duration-150 hover:bg-foreground/[0.04] xl:items-center">
+    <div
+      className={`music-track-grid grid gap-2.5 rounded-lg px-2 py-1.5 transition-colors duration-150 hover:bg-foreground/[0.04] xl:items-center ${
+        hideTags ? "is-compact" : ""
+      }`}
+    >
       <button
         type="button"
         onClick={() => onPlayVersion(track, selectedVersion)}

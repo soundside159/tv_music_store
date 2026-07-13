@@ -181,6 +181,17 @@
       --track-action-col: 2.75rem;
     }
   }
+
+  /* Narrow containers (the account's Download history card is roughly half the
+     catalogue's width): no tag pills, so the tags column collapses to nothing
+     and its room goes to the title and the waveform. The empty cell STAYS —
+     removing it would shift every column after it out of line.
+     Higher specificity than the rules above, so it wins at every breakpoint. */
+  .music-track-grid.is-compact {
+    --track-tags-col: 0px;
+    --track-title-col: minmax(9rem, 1fr);
+    --track-waveform-col: 9rem;
+  }
 }
 
 @layer utilities {

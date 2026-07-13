@@ -88,7 +88,10 @@ const Artist = () => {
           </div>
         </section>
 
-        <section className="mt-14 rounded-xl border border-border bg-card p-6 md:flex md:items-center md:justify-between md:p-8">
+        {/* Held back until the tracks are in: the plaque used to pop in above a
+            skeleton list and then get pushed down when the rows arrived. */}
+        {!isLoading && (
+        <section className="mt-14 animate-fade-in rounded-xl border border-border bg-card p-6 md:flex md:items-center md:justify-between md:p-8">
           <div>
             <h2 className="font-display text-xl font-semibold text-foreground">
               License {composer.displayName}'s music
@@ -113,6 +116,7 @@ const Artist = () => {
             </Link>
           </div>
         </section>
+        )}
       </main>
       <Footer />
     </div>

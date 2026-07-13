@@ -3321,3 +3321,22 @@ untouched by it.
      same `text-2xl md:text-3xl`.
    Page-level h1s (Favourites, Licenses, Support, YouTube Whitelisting, Plan & Billing) stay as they
    are: they name the PAGE; `SectionHeading` names a block inside it.
+
+### 2026-07-13 — Download history layout · artist plaque timing · "Browse by" tabs on the home page
+1. **Download history row fits its card now.** Hiding the pills alone wasn't enough: the tags COLUMN
+   (up to 20rem) stayed and left a hole. New CSS modifier **`.music-track-grid.is-compact`**
+   (`src/index.css`) collapses `--track-tags-col` to 0 and gives the room to the title and waveform;
+   `TrackRow` adds the class when `hideTags` is set. The empty cell itself is kept on purpose —
+   removing a grid child would shift every column after it out of line with the other rows.
+2. **`/artist/:slug`** — the "License <name>'s music" plaque is rendered only once the tracks have
+   loaded (`!isLoading`) and fades in (`animate-fade-in`). It used to sit above the skeleton list and
+   get shoved down when the real rows arrived.
+3. **Home page: "Browse by mood" → "Browse by" with tabs** (`src/pages/Index.tsx`).
+   - A segmented control next to the heading: **Categories** (default — the owner's own curation) ·
+     **Use Case** · **Genre** · **Mood**, each with a lucide icon. The active tab is the only lit pill
+     (gold fill + soft glow, in the spirit of the reference pills the owner sent); the list below
+     re-mounts per tab (`key={browseTab}`) so it fades in on every switch. Values link where they
+     always did: categories → `/catalog?category=…`, the three tag families → `discoverPath()`.
+   - The **hero's category chips and the "Start free — 3 downloads every month. No credit card." line
+     are GONE** — the chips are what the new Categories tab does properly, and the free-plan pitch
+     already lives in the pricing section below. The hero is now just the title + the promise.
