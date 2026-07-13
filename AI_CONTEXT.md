@@ -3144,3 +3144,24 @@ named `…_stem(s)_…` is added as a **STEM**, anything else as a new **VERSION
   memoised) — how many tracks carry that tag.
 - Collections / Playlists / Categories: `item.trackIds.length`.
 Zero reads in a dimmer grey, so empty shelves are obvious at a glance.
+
+### 2026-07-13 — FIX (again): truncated zips / "Download failed" — the worker was being KILLED mid-stream
+Symptom: a 55 MB STEMS zip arrived as ~520 KB ("Unexpected end of archive"), MP3 sometimes failed
+outright, WAV sometimes worked. Not a zip-format bug (the writer was verified with `unzip -t`) —
+a **CPU** bug in `functions/api/_zipStream.ts`:
+- The old writer pulled every byte of every master through JS (`reader.read()` → `writer.write()`).
+  Copying 55 MB through the isolate burns real CPU time, and a Worker that exceeds its CPU budget is
+  **terminated mid-response** — the customer keeps whatever bytes already left the edge, which is
+  exactly the short, unopenable archive.
+- Bodies are now **`pipeTo()`-ed** straight into the output stream (`writer.releaseLock()` →
+  `body.pipeTo(writable, { preventClose: true })` → re-acquire the writer). The runtime moves the
+  bytes; the isolate only ever touches the ~100-byte local/central headers. CPU per download is now
+  flat, whatever the bundle weighs.
+- New **`zipSize(entries)`** computes the archive's exact byte length up front (STORE method, no
+  extras), and `streamZip(entries, total)` uses Cloudflare's **`FixedLengthStream`** when a length is
+  given. `functions/api/download.ts` sends it as **Content-Length** for both zip paths. Consequence:
+  the browser knows how big the file should be, shows real progress, and a cut transfer becomes a
+  FAILED download instead of a silently corrupt file — and `res.blob()` on the client now throws
+  instead of handing back a half zip.
+- Rule for anyone touching this file: **never loop file bytes through JS in a worker.** Headers in
+  JS, bodies through `pipeTo`.

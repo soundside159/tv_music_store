@@ -1,6 +1,6 @@
 import { getSessionUser, json, OWNER_EMAIL, type Ctx } from "./_utils";
 import { getOrCreatePlanLicense } from "./_licenses";
-import { crc32, parseManifest, streamZip, type ZipEntrySpec } from "./_zipStream";
+import { crc32, parseManifest, streamZip, zipSize, type ZipEntrySpec } from "./_zipStream";
 
 // POST { slug, versionId, format, src, title, label } -> checks the plan,
 // enforces limits, logs to download_log and streams the audio file back.
@@ -314,6 +314,8 @@ export const onRequestPost = async (ctx: Ctx) => {
   // Fetch the audio
   let audioBody: ReadableStream;
   let contentType = isZip ? "application/zip" : format === "wav" ? "audio/wav" : "audio/mpeg";
+  /** Exact byte length of a streamed zip (Content-Length), when we know it. */
+  let zipLength: number | null = null;
   if (manifestEntries && ctx.env.R2) {
     // v2: stream a zip straight out of the individual master files.
     const r2 = ctx.env.R2;
@@ -360,7 +362,10 @@ export const onRequestPost = async (ctx: Ctx) => {
         // no PDF — the bundle still delivers
       }
     }
-    audioBody = streamZip(zipEntries);
+    // Exact length up front → the response carries Content-Length, so a cut
+    // transfer fails visibly in the browser instead of saving a broken zip.
+    zipLength = zipSize(zipEntries);
+    audioBody = streamZip(zipEntries, zipLength);
     contentType = "application/zip";
   } else if (r2Key && ctx.env.R2) {
     const obj = await ctx.env.R2.get(r2Key);
@@ -410,7 +415,8 @@ export const onRequestPost = async (ctx: Ctx) => {
             body: pdf,
           });
         }
-        audioBody = streamZip(entries);
+        zipLength = zipSize(entries);
+        audioBody = streamZip(entries, zipLength);
         contentType = "application/zip";
         isZip = true;
       } catch {
@@ -480,12 +486,11 @@ export const onRequestPost = async (ctx: Ctx) => {
     ? `tvmusicstore.com_${trackCode}_${base}.${ext}`
     : `tvmusicstore.com_${base}.${ext}`;
 
-  return new Response(audioBody, {
-    status: 200,
-    headers: {
-      "content-type": contentType,
-      "content-disposition": `attachment; filename="${filename}"`,
-      "cache-control": "no-store",
-    },
-  });
+  const headers: Record<string, string> = {
+    "content-type": contentType,
+    "content-disposition": `attachment; filename="${filename}"`,
+    "cache-control": "no-store",
+  };
+  if (zipLength !== null) headers["content-length"] = String(zipLength);
+  return new Response(audioBody, { status: 200, headers });
 };

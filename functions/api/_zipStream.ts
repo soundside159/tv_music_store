@@ -4,31 +4,37 @@
 // into a STORE-method zip on the fly — headers + piped bodies + central
 // directory. No compression work, no buffering: memory and CPU stay tiny no
 // matter how big the bundle is, and the customer still gets one normal .zip.
+//
+// TWO RULES, both learned the hard way (truncated archives, "Unexpected end of
+// archive" in WinRAR):
+//
+//  1. NEVER copy the file bodies through JS. A `reader.read()` loop pulls every
+//     byte of a 55 MB master into the isolate and writes it back out — that is
+//     real CPU time, and a Worker that runs out of CPU is killed MID-RESPONSE:
+//     the customer keeps the half-written zip. Bodies are `pipeTo()`-ed into the
+//     output stream instead, so the runtime moves the bytes and the isolate only
+//     ever touches the ~100-byte headers.
+//
+//  2. Bodies are opened LAZILY, one at a time. Opening every R2 object up front
+//     leaves the later streams idle for minutes while the first file trickles
+//     down the customer's line — idle streams get closed under us, and the zip
+//     ends early.
 
 /** What a lazy opener hands back: the bytes plus the size R2 really has. */
 export interface ZipSource {
   body: ReadableStream<Uint8Array>;
-  /** Actual object size — wins over the manifest size if they ever disagree. */
+  /** Actual object size — must match the size declared in the entry. */
   size?: number;
 }
 
 export interface ZipEntrySpec {
   /** Filename inside the zip. */
   name: string;
-  /** Exact byte size (from the upload manifest). */
+  /** Exact byte size (R2 object size / the byte array's length). */
   size: number;
   /** CRC32 of the content (unsigned, from the upload manifest). */
   crc: number;
-  /**
-   * Raw bytes (license PDF), or a LAZY opener for storage objects.
-   *
-   * Lazy matters: a zip is written entry by entry at the speed of the customer's
-   * connection. If every R2 body is opened up front, the streams for the later
-   * files sit idle for minutes while the first one trickles out — they can be
-   * closed under us, and the customer gets a zip that ends early ("Unexpected
-   * end of archive"). Opening each object at the moment it is written keeps
-   * every stream short-lived.
-   */
+  /** Raw bytes (license PDF), or a LAZY opener for storage objects. */
   body: Uint8Array | (() => Promise<ZipSource | null>);
 }
 
@@ -53,15 +59,48 @@ export const crc32 = (data: Uint8Array): number => {
 const DOS_TIME = 0;
 const DOS_DATE = (2026 - 1980) << 9 | (1 << 5) | 1;
 
-export const streamZip = (entries: ZipEntrySpec[]): ReadableStream<Uint8Array> => {
-  const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
+const LOCAL_HEADER = 30;
+const CENTRAL_RECORD = 46;
+const EOCD = 22;
+
+/**
+ * Exact byte length of the zip these entries produce (STORE method, no extras).
+ * Lets the response carry a real Content-Length: the browser can show progress,
+ * and a truncated transfer becomes a FAILED download instead of a corrupt file
+ * the customer only discovers when the unzipper chokes on it.
+ */
+export const zipSize = (entries: ZipEntrySpec[]): number => {
+  const enc = new TextEncoder();
+  let total = EOCD;
+  for (const e of entries) {
+    const nameLen = enc.encode(e.name).length;
+    total += LOCAL_HEADER + nameLen + e.size + CENTRAL_RECORD + nameLen;
+  }
+  return total;
+};
+
+/** Cloudflare's FixedLengthStream — lets the response declare Content-Length. */
+const makeTransform = (total?: number): TransformStream<Uint8Array, Uint8Array> => {
+  const Fixed = (globalThis as unknown as {
+    FixedLengthStream?: new (len: number) => TransformStream<Uint8Array, Uint8Array>;
+  }).FixedLengthStream;
+  if (total !== undefined && typeof Fixed === "function") return new Fixed(total);
+  return new TransformStream<Uint8Array, Uint8Array>();
+};
+
+/**
+ * @param total  Pass `zipSize(entries)` to get a fixed-length (Content-Length)
+ *               response; omit for a chunked one.
+ */
+export const streamZip = (entries: ZipEntrySpec[], total?: number): ReadableStream<Uint8Array> => {
+  const { readable, writable } = makeTransform(total);
   void (async () => {
-    const w = writable.getWriter();
     const enc = new TextEncoder();
+    let writer = writable.getWriter();
     let offset = 0;
     const central: Uint8Array[] = [];
     const write = async (b: Uint8Array) => {
-      await w.write(b);
+      await writer.write(b);
       offset += b.length;
     };
     try {
@@ -75,7 +114,7 @@ export const streamZip = (entries: ZipEntrySpec[]): ReadableStream<Uint8Array> =
 
         const nameB = enc.encode(e.name);
         const localOffset = offset;
-        const h = new DataView(new ArrayBuffer(30));
+        const h = new DataView(new ArrayBuffer(LOCAL_HEADER));
         h.setUint32(0, 0x04034b50, true); // local file header
         h.setUint16(4, 20, true); // version needed
         h.setUint16(6, 0x0800, true); // flags: UTF-8 filenames
@@ -90,32 +129,18 @@ export const streamZip = (entries: ZipEntrySpec[]): ReadableStream<Uint8Array> =
         await write(new Uint8Array(h.buffer));
         await write(nameB);
 
-        let written = 0;
         if (raw) {
           await write(raw);
-          written = raw.length;
         } else {
-          const reader = (src as ZipSource).body.getReader();
-          for (;;) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            await write(value);
-            written += value.length;
-          }
-        }
-        // The stream ended early (storage hiccup): pad the entry so the zip
-        // stays readable — the customer gets a CRC warning on THAT file instead
-        // of a whole archive that won't open.
-        if (written < size) {
-          const pad = new Uint8Array(Math.min(size - written, 64 * 1024));
-          while (written < size) {
-            const chunk = size - written < pad.length ? pad.subarray(0, size - written) : pad;
-            await write(chunk);
-            written += chunk.length;
-          }
+          // The runtime moves these bytes, not the isolate (see rule 1 above).
+          // pipeTo needs the writable unlocked, so the writer steps aside.
+          writer.releaseLock();
+          await (src as ZipSource).body.pipeTo(writable, { preventClose: true });
+          writer = writable.getWriter();
+          offset += size;
         }
 
-        const c = new DataView(new ArrayBuffer(46));
+        const c = new DataView(new ArrayBuffer(CENTRAL_RECORD));
         c.setUint32(0, 0x02014b50, true); // central directory record
         c.setUint16(4, 20, true); // made by
         c.setUint16(6, 20, true); // version needed
@@ -128,24 +153,28 @@ export const streamZip = (entries: ZipEntrySpec[]): ReadableStream<Uint8Array> =
         c.setUint32(24, size >>> 0, true);
         c.setUint16(28, nameB.length, true);
         c.setUint32(42, localOffset >>> 0, true);
-        const rec = new Uint8Array(46 + nameB.length);
+        const rec = new Uint8Array(CENTRAL_RECORD + nameB.length);
         rec.set(new Uint8Array(c.buffer), 0);
-        rec.set(nameB, 46);
+        rec.set(nameB, CENTRAL_RECORD);
         central.push(rec);
       }
       const cdStart = offset;
       for (const rec of central) await write(rec);
       const cdSize = offset - cdStart;
-      const eocd = new DataView(new ArrayBuffer(22));
+      const eocd = new DataView(new ArrayBuffer(EOCD));
       eocd.setUint32(0, 0x06054b50, true); // end of central directory
       eocd.setUint16(8, entries.length, true);
       eocd.setUint16(10, entries.length, true);
       eocd.setUint32(12, cdSize >>> 0, true);
       eocd.setUint32(16, cdStart >>> 0, true);
-      await w.write(new Uint8Array(eocd.buffer));
-      await w.close();
+      await writer.write(new Uint8Array(eocd.buffer));
+      await writer.close();
     } catch (err) {
-      await w.abort(err);
+      try {
+        await writer.abort(err);
+      } catch {
+        // the writer was already released/errored — nothing left to abort
+      }
     }
   })();
   return readable;
