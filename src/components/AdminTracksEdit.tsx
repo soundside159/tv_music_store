@@ -28,6 +28,23 @@ export interface ContentItemLite {
   theme?: string;
 }
 
+/** One stem master file of a track (from tracks.stems_manifest). */
+interface StemFile {
+  key: string;
+  name: string;
+  size: number;
+}
+interface StemsInfo {
+  files: StemFile[];
+  /** Legacy track: one pre-packed stems zip, no per-file list to show. */
+  legacyZip: boolean;
+}
+
+const fmtSize = (bytes: number) =>
+  bytes >= 1024 * 1024
+    ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
+    : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+
 type TriState = "all" | "none" | "mixed";
 type FacetKey = "useCase" | "genre" | "mood";
 type SortMode = "default" | "trending";
@@ -765,7 +782,7 @@ const AdminTracksEdit = ({
   };
 
   const deleteStems = async (t: CatalogTrack) => {
-    if (!window.confirm(`Remove the stems bundle from "${t.title}"? The STEMS download option disappears.`)) return;
+    if (!window.confirm(`Remove ALL stems from "${t.title}"? The STEMS download option disappears.`)) return;
     setVersionBusy(`${t.id}:stems`);
     const ok = await run(
       { action: "bulk_update_tracks", trackIds: [t.id], fields: { clearStems: true } },
@@ -773,6 +790,52 @@ const AdminTracksEdit = ({
     );
     setVersionBusy(null);
     if (ok) {
+      setStems((s) => ({ ...s, [t.id]: { files: [], legacyZip: false } }));
+      onApplyOverrides({ [t.id]: { hasStems: false } });
+      onTracksReload?.();
+    }
+  };
+
+  // --- stems of the open row: individual master files, deletable one by one.
+  // Nothing is pre-packed any more — the STEMS .zip is built at download time,
+  // so the editor lists the actual files under the STEMS plaque. ---
+  const [stems, setStems] = useState<Record<string, StemsInfo>>({});
+  const [stemsLoading, setStemsLoading] = useState<string | null>(null);
+
+  useEffect(() => {
+    const id = versionsOpenId;
+    if (!id || stems[id]) return;
+    let cancelled = false;
+    setStemsLoading(id);
+    fetch(`/api/admin/stems?track=${encodeURIComponent(id)}`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("stems"))))
+      .then((d: { stems?: StemFile[]; legacyZip?: boolean }) => {
+        if (cancelled) return;
+        setStems((s) => ({ ...s, [id]: { files: d.stems ?? [], legacyZip: !!d.legacyZip } }));
+      })
+      .catch(() => {
+        // Legacy DB / network hiccup — fall back to the plain "bundle attached" row.
+        if (!cancelled) setStems((s) => ({ ...s, [id]: { files: [], legacyZip: true } }));
+      })
+      .finally(() => {
+        if (!cancelled) setStemsLoading(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [versionsOpenId, stems]);
+
+  const deleteStem = async (t: CatalogTrack, stem: StemFile) => {
+    if (!window.confirm(`Delete stem "${stem.name}" from "${t.title}"?`)) return;
+    setVersionBusy(`${t.id}:${stem.key}`);
+    const ok = await run({ action: "delete_stem", id: t.id, key: stem.key }, "Stem deleted");
+    setVersionBusy(null);
+    if (!ok) return;
+    const info = stems[t.id];
+    const left = (info?.files ?? []).filter((f) => f.key !== stem.key);
+    setStems((s) => ({ ...s, [t.id]: { files: left, legacyZip: info?.legacyZip ?? false } }));
+    // Last stem gone → the STEMS download option goes with it.
+    if (left.length === 0 && !info?.legacyZip) {
       onApplyOverrides({ [t.id]: { hasStems: false } });
       onTracksReload?.();
     }
@@ -1231,27 +1294,60 @@ const AdminTracksEdit = ({
                       );
                     })}
                     {t.hasStems && (
-                      <div
-                        className={`mt-1 flex items-center gap-2 rounded border-t border-border/30 px-1 py-1 ${
-                          versionBusy === `${t.id}:stems` ? "opacity-50" : ""
-                        }`}
-                      >
-                        <span className="shrink-0 rounded border border-[#F4C430]/60 bg-[#F4C430]/10 px-1.5 py-px font-body text-[9px] font-bold uppercase tracking-wide text-[#F4C430]">
-                          Stems
-                        </span>
-                        <span className="min-w-0 flex-1 truncate font-body text-xs text-muted-foreground">
-                          Stems ZIP attached (Max / license download)
-                        </span>
-                        <button
-                          type="button"
-                          disabled={versionBusy === `${t.id}:stems` || busy}
-                          onClick={() => void deleteStems(t)}
-                          title="Remove the stems bundle"
-                          aria-label={`Remove stems from ${t.title}`}
-                          className="shrink-0 text-muted-foreground transition-colors hover:text-red-400 disabled:opacity-30"
+                      <div className="mt-1 border-t border-border/30 pt-1">
+                        <div
+                          className={`flex items-center gap-2 px-1 py-1 ${
+                            versionBusy === `${t.id}:stems` ? "opacity-50" : ""
+                          }`}
                         >
-                          <X className="h-3 w-3" />
-                        </button>
+                          <span className="shrink-0 rounded border border-[#F4C430]/60 bg-[#F4C430]/10 px-1.5 py-px font-body text-[9px] font-bold uppercase tracking-wide text-[#F4C430]">
+                            Stems
+                          </span>
+                          <span className="min-w-0 flex-1 truncate font-body text-xs text-muted-foreground">
+                            {stemsLoading === t.id
+                              ? "Loading stems…"
+                              : (stems[t.id]?.files.length ?? 0) > 0
+                                ? `${stems[t.id].files.length} stem file${stems[t.id].files.length > 1 ? "s" : ""} — zipped on download (Max / license)`
+                                : "Stems bundle attached (Max / license download)"}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={versionBusy === `${t.id}:stems` || busy}
+                            onClick={() => void deleteStems(t)}
+                            title="Remove ALL stems from this track"
+                            aria-label={`Remove stems from ${t.title}`}
+                            className="shrink-0 text-muted-foreground transition-colors hover:text-red-400 disabled:opacity-30"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                        {(stems[t.id]?.files ?? []).map((sf) => {
+                          const sBusy = versionBusy === `${t.id}:${sf.key}`;
+                          return (
+                            <div
+                              key={sf.key}
+                              className={`flex items-center gap-2 rounded py-0.5 pl-5 pr-1 hover:bg-white/5 ${sBusy ? "opacity-50" : ""}`}
+                            >
+                              <Music className="h-3 w-3 shrink-0 text-muted-foreground/60" />
+                              <span className="min-w-0 flex-1 truncate font-body text-xs text-foreground">
+                                {sf.name}
+                              </span>
+                              <span className="shrink-0 font-body text-[10px] tabular-nums text-muted-foreground">
+                                {fmtSize(sf.size)}
+                              </span>
+                              <button
+                                type="button"
+                                disabled={sBusy || busy}
+                                onClick={() => void deleteStem(t, sf)}
+                                title="Delete this stem"
+                                aria-label={`Delete stem ${sf.name}`}
+                                className="shrink-0 text-muted-foreground transition-colors hover:text-red-400 disabled:opacity-30"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                     <p className="mt-1 font-body text-[10px] text-muted-foreground">

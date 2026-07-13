@@ -27,6 +27,8 @@ export interface R2Bucket {
     value: ReadableStream | ArrayBuffer | string,
     options?: { httpMetadata?: { contentType?: string } },
   ): Promise<unknown>;
+  /** Optional in the type only — the real Cloudflare binding always has it. */
+  delete?(key: string | string[]): Promise<void>;
 }
 
 export interface Env {

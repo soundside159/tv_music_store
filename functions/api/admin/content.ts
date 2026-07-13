@@ -13,6 +13,7 @@ import {
 } from "../_utils";
 import { seedCollections, seedTracks } from "./_seed_data";
 import { ensureTrackCodes, generateTrackCode } from "../_codes";
+import { parseManifest } from "../_zipStream";
 
 // Admin content editor API (collections, playlists, trending, track editing).
 // GET  -> { collections, playlists, trending } with ordered track ids.
@@ -524,6 +525,8 @@ export const onRequestPost = async (ctx: Ctx) => {
     composerId?: string;
     /** create_track: private stems zip key (masters/stems-…) — flips has_stems. */
     stemsKey?: string;
+    /** delete_stem: R2 key ("masters/…") of the single stem file to remove. */
+    key?: string;
     /** create_track v2: individual master files (zip is streamed at download). */
     wavManifest?: { key?: string; name?: string; size?: number; crc?: number }[];
     stemsManifest?: { key?: string; name?: string; size?: number; crc?: number }[];
@@ -838,7 +841,9 @@ export const onRequestPost = async (ctx: Ctx) => {
             next.has_stems = 1;
           }
           if (f.clearStems) {
+            // Drops BOTH the legacy pre-packed zip and the v2 per-file manifest.
             next.r2_key_stems = null;
+            next.stems_manifest = null;
             next.has_stems = 0;
           }
           if (f.status === "draft" || f.status === "published") {
@@ -1207,6 +1212,40 @@ export const onRequestPost = async (ctx: Ctx) => {
         .bind(trackId, target.duration ?? "")
         .run();
       return json({ ok: true });
+    }
+
+    case "delete_stem": {
+      // { id: trackId, key: "masters/…" } — drops ONE stem file: the entry
+      // leaves stems_manifest, the object leaves R2, and when the last stem is
+      // gone has_stems flips off (the STEMS download option disappears).
+      const trackId = body.id;
+      const key = typeof body.key === "string" ? body.key : "";
+      if (!trackId || !/^masters\//.test(key)) return json({ error: "id and key required" }, 400);
+      await ensureTrackCoverColumn(db);
+
+      const row = await db
+        .prepare(`SELECT r2_key_stems, stems_manifest FROM tracks WHERE id = ?1`)
+        .bind(trackId)
+        .first<{ r2_key_stems: string | null; stems_manifest: string | null }>();
+      if (!row) return json({ error: "Track not found" }, 404);
+
+      const manifest = parseManifest(row.stems_manifest) ?? [];
+      const next = manifest.filter((e) => e.key !== key);
+      if (next.length === manifest.length) return json({ error: "Stem not found on this track" }, 404);
+
+      const stillHasStems = next.length > 0 || !!row.r2_key_stems;
+      await db
+        .prepare(`UPDATE tracks SET stems_manifest = ?2, has_stems = ?3 WHERE id = ?1`)
+        .bind(trackId, next.length > 0 ? JSON.stringify(next) : null, stillHasStems ? 1 : 0)
+        .run();
+
+      // Best-effort storage cleanup — the DB is the source of truth either way.
+      try {
+        await ctx.env.R2?.delete?.(key);
+      } catch {
+        // object already gone / binding without delete — ignore
+      }
+      return json({ ok: true, remaining: next.length, hasStems: stillHasStems });
     }
 
     case "delete_track": {

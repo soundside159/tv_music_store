@@ -20,6 +20,7 @@ import {
 } from "@/hooks/useMockData";
 import { toast } from "sonner";
 import MyChannels from "@/components/MyChannels";
+import CancelSubscriptionModal from "@/components/CancelSubscriptionModal";
 import NotificationsSettings from "@/components/NotificationsSettings";
 import SupportSection from "@/components/SupportSection";
 import FavouritesSection from "@/components/FavouritesSection";
@@ -75,6 +76,15 @@ const fmtDate = (iso: string) => {
   return Number.isNaN(d.getTime())
     ? "—"
     : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+};
+
+/** "Aug 13, 2026" — used in the Cancel Subscription copy. */
+const fmtDateUS = (iso?: string | null) => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? null
+    : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 };
 
 const SectionCard = ({ title, children }: { title: string; children: React.ReactNode }) => (
@@ -249,6 +259,12 @@ const Account = () => {
       setClaimBusy(false);
     }
   };
+  // Cancel Subscription card (paid plans only) — benefits run to the end of the
+  // paid period, so we surface subscription.currentPeriodEnd.
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const isPaidPlan = !!plan && plan.id !== "free";
+  const benefitsUntil = fmtDateUS(subscription?.currentPeriodEnd);
+
   const planSubtitle =
     plan?.id === "max"
       ? "Full access — unlimited downloads, WAV, stems & commercial license"
@@ -693,6 +709,37 @@ const Account = () => {
                     </div>
                   </div>
                 </div>
+
+                {isPaidPlan && (
+                  <div className="rounded-xl border border-border bg-card p-6">
+                    <p className="flex items-center gap-2 font-body text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      <span className="h-3 w-1 rounded-full" style={{ backgroundColor: GOLD }} />{" "}
+                      Cancel Subscription
+                    </p>
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
+                      <p className="max-w-lg font-body text-sm text-muted-foreground">
+                        Cancel anytime.
+                        {benefitsUntil
+                          ? ` Your premium benefits will continue until ${benefitsUntil}.`
+                          : " Your premium benefits will continue until the end of your current billing period."}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setCancelOpen(true)}
+                        className="rounded-lg border border-border px-4 py-2 font-body text-sm font-semibold text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
+                      >
+                        Cancel subscription
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <CancelSubscriptionModal
+                  open={cancelOpen}
+                  onClose={() => setCancelOpen(false)}
+                  planName={plan?.name ?? "Pro"}
+                  until={benefitsUntil ?? "the end of your current billing period"}
+                />
 
                 {/* No "Account details" card here — name and email already live
                     in Profile; two places to read the same thing is one too many. */}

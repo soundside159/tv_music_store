@@ -254,6 +254,9 @@ const AdminBulkUpload = () => {
             if (stem) existing.stems = [...existing.stems, qf];
             else existing.files = [...existing.files, qf];
           }
+          // A file named ..._main... stars itself on drop, so the Main version
+          // is visible in the queue before anything is uploaded.
+          if (!stem && !existing.mainName && isMainFile(file.name)) existing.mainName = file.name;
           existing.status = "queued";
           existing.note = "";
           existing.error = undefined;
@@ -263,7 +266,7 @@ const AdminBulkUpload = () => {
             title,
             files: stem ? [] : [qf],
             stems: stem ? [qf] : [],
-            mainName: null,
+            mainName: !stem && isMainFile(file.name) ? file.name : null,
             status: "queued",
             note: "",
             error: undefined,

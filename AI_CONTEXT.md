@@ -2905,3 +2905,59 @@ Breadcrumb: no "TV" tile; "Home" and "Music Library" are clickable, gold on hove
   built the same way as the track one (`functions/api/license-pdf.ts` + `cert_details`), with SFX-
   appropriate scope wording — no Content ID / claim language, since SFX are never claimed. The owner
   will share the reference wording later.
+
+### 2026-07-13 — Plan & Billing: "Cancel Subscription" card + "Before you cancel" modal
+- `src/pages/Account.tsx`, billing section: **new card directly under "Your plan"**, header
+  "Cancel Subscription" (same gold-bar/uppercase label style as "Your plan"). Body copy:
+  *"Cancel anytime. Your premium benefits will continue until {date}."* The date comes from
+  `subscription.currentPeriodEnd` and is formatted **en-US, "Aug 13, 2026"** by a new local
+  helper `fmtDateUS()` (the existing `fmtDate()` is en-GB "13 Aug 2026" and is left alone).
+  If `currentPeriodEnd` is missing, the copy falls back to "…until the end of your current
+  billing period". The card renders **only for paid plans** (`plan && plan.id !== "free"`).
+- Card has a "Cancel subscription" button (neutral border, turns `destructive` on hover) which
+  opens **`src/components/CancelSubscriptionModal.tsx`** (new). The modal is a plain
+  open/onClose props component (not an event-bus modal like AttributionModal — it is used only
+  here). It shows "Before you cancel — By ending your {plan} subscription, you'll lose:" and a
+  gold-bulleted list: unlimited access to music and SFX / premium MP3 + WAV downloads / personal
+  licensing / YouTube whitelisting for claim-free publishing / included PDF license certificates.
+  Then a note that benefits stay active until {date}, and two buttons: **"Keep my plan"** (gold,
+  primary, just closes) and **"Cancel subscription"** (secondary) which calls `openBillingPortal()`
+  from `src/lib/billing.ts` — i.e. the actual cancellation still happens in the **Stripe Billing
+  Portal**; there is no own cancel endpoint (`functions/api/stripe/` has only checkout/portal/webhook).
+- Verified: `npm run lint` → 0 errors, and `npx tsc --noEmit -p tsconfig.app.json` → clean.
+  (`npm run build` inside the Linux sandbox fails only when emptying `dist/` on the mounted
+  Windows folder — a permissions artefact of the mount, not a code problem; build on Windows is fine.)
+
+### 2026-07-13 — Bulk Upload: `_main` auto-star · Tracks Edit: per-file stems list
+**1. Bulk Upload (`src/components/AdminBulkUpload.tsx`).** A dropped file whose name matches
+`isMainFile()` (…_main…) now **stars itself in the queue** — `mainName` is set when the group is
+created and when the file joins an existing group (only if nothing is starred yet; the owner can
+still click another star, and clicking the gold star returns the group to "main: longest (auto)").
+Upload-time resolution was already "starred → …_main… → longest"; this only makes the choice
+VISIBLE before upload.
+
+**2. Stems are files now, not a zip — Tracks Edit shows them.** The "Stems ZIP attached
+(Max / license download)" line was left over from the old pipeline (a pre-packed zip in
+`tracks.r2_key_stems`). Since v2, stems upload as **individual master files** listed in
+`tracks.stems_manifest` (JSON `[{key,name,size,crc}]`) and the .zip is streamed at download time.
+- **NEW `functions/api/admin/stems.ts`** — `GET /api/admin/stems?track=<id>` (admin only) returns
+  `{ hasStems, legacyZip, stems: [{key,name,size}] }` from `stems_manifest`. `legacyZip: true`
+  means an old pre-packed zip with no per-file list.
+- **NEW action `delete_stem`** in `functions/api/admin/content.ts` — `{ id, key }`: removes that
+  entry from `stems_manifest`, best-effort-deletes the R2 object (`R2Bucket.delete?()` was added to
+  the type in `functions/api/_utils.ts`), and flips `has_stems` off when the last stem is gone.
+- `bulk_update_tracks` → `fields.clearStems` now also **nulls `stems_manifest`** (it only cleared
+  the legacy `r2_key_stems` before, so the STEMS download could survive a "remove stems").
+- `AdminTracksEdit.tsx`: opening a track's versions expander lazily fetches its stems (cached per
+  track id in `stems` state). Under the gold **STEMS** plaque each stem file is now its own row —
+  music icon, filename, size, and an **× that deletes just that stem**, exactly like the version
+  rows above it. The plaque line reads "N stem files — zipped on download"; the plaque's own ×
+  still removes ALL stems at once. Legacy zip tracks keep the old single "Stems bundle attached" row.
+
+⚠️ **Tooling note for the next AI session:** on this Windows mount the Edit/Write tools **silently
+truncated the tails** of `AdminBulkUpload.tsx`, `AdminTracksEdit.tsx`, `content.ts` and `_utils.ts`
+(files lost their last ~15 lines, lint reported "Parsing error: '}' expected"). Recovery:
+`git show HEAD:<path> > <path>` (plain `git checkout --` fails — the mount forbids unlink), then
+re-apply edits with a small python `read → str.replace → write` script and re-run lint. **After any
+edit to this repo, check `npm run lint` for 0 errors and that the file still ends with its
+`export default …`.**
