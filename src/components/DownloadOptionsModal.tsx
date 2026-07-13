@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, Download, X } from "lucide-react";
+import { Check, Download, Loader2, X } from "lucide-react";
 import { refreshSession, useAuthSession } from "@/hooks/useAuth";
 import {
   cleanVersionLabel,
@@ -258,7 +258,11 @@ const DownloadOptionsModal = () => {
           onClick={() => void act()}
           className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#F4C430] py-3 font-body text-sm font-bold text-background transition-colors hover:bg-[#F4C430]/85 disabled:opacity-60"
         >
-          {!locked && <Download className="h-4 w-4" />}
+          {busy ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            !locked && <Download className="h-4 w-4" />
+          )}
           {cta}
         </button>
       </div>

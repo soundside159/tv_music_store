@@ -94,6 +94,39 @@ const TriCheckbox = ({
   </button>
 );
 
+/** Same checkbox in a DIFFERENT colour — used for the "own Description as the
+ *  prompt" switch, which changes where the AI reads from (not what it writes). */
+const BLUE = "#5BA8FF";
+const AltCheckbox = ({
+  label,
+  checked,
+  onToggle,
+}: {
+  label: string;
+  checked: boolean;
+  onToggle: () => void;
+}) => (
+  <button
+    type="button"
+    onClick={onToggle}
+    className="flex w-full min-w-0 items-center gap-2 rounded-md px-1 py-1 text-left transition-colors hover:bg-foreground/[0.04]"
+  >
+    <span
+      className="flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors"
+      style={
+        checked
+          ? { borderColor: BLUE, backgroundColor: `${BLUE}26` }
+          : { borderColor: "hsl(var(--border))" }
+      }
+    >
+      {checked && <Check className="h-3 w-3" style={{ color: BLUE }} />}
+    </span>
+    <span className="truncate font-body text-xs" style={checked ? { color: BLUE } : undefined}>
+      {label}
+    </span>
+  </button>
+);
+
 /** Plain selection checkbox for table rows / header. */
 const RowCheckbox = ({ state, onToggle, label }: { state: TriState; onToggle: () => void; label: string }) => (
   <button
@@ -368,15 +401,146 @@ const AdminTracksEdit = ({
     extraTags: false,
     description: false,
   });
+  // "Use each track's own Description as the prompt": the prompt box disappears
+  // and every selected track is tagged from ITS OWN description text.
+  const [aiUseTrackDesc, setAiUseTrackDesc] = useState(false);
+  const [aiBatch, setAiBatch] = useState<{ done: number; total: number } | null>(null);
+
+  interface AiResult {
+    ok?: boolean;
+    error?: string;
+    useCase?: string[];
+    genre?: string[];
+    mood?: string[];
+    collectionIds?: string[];
+    playlistIds?: string[];
+    categoryIds?: string[];
+    extraTags?: string[];
+  }
+
+  const askAi = async (prompt: string, trackTitle?: string): Promise<AiResult> => {
+    const res = await fetch("/api/admin/suggest-tags", {
+      method: "POST",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      // Variation salt: the same prompt on different tracks must not yield
+      // carbon-copy picks — the model varies borderline calls by the title.
+      body: JSON.stringify({ prompt, include: aiInclude, trackTitle }),
+    });
+    const d = (await res.json().catch(() => ({}))) as AiResult;
+    if (!res.ok || !d.ok) throw new Error(d.error ?? "AI suggestion failed");
+    return d;
+  };
+
+  /** Vocab options the AI picked, in the vocabulary's own casing. */
+  const matchVocab = (key: FacetKey, vals?: string[]) => {
+    const picked = new Set((vals ?? []).map((v) => v.toLowerCase()));
+    return vocabularies[key].filter((o) => picked.has(o.toLowerCase()));
+  };
+  /** Authoritative membership delta: what the AI picked in, everything else out. */
+  const membershipDelta = (ids: string[] | undefined, items: ContentItemLite[]) => {
+    const picked = new Set(ids ?? []);
+    return {
+      add: items.filter((i) => picked.has(i.id)).map((i) => i.id),
+      remove: items.filter((i) => !picked.has(i.id)).map((i) => i.id),
+    };
+  };
+
+  // MANY tracks: there is no shared panel state that could hold a different
+  // answer per track, so each track is tagged AND SAVED on its own — one AI
+  // call per track (own description or the shared prompt), applied immediately.
+  const runAiSuggestBatch = async () => {
+    const targets = selTracks;
+    setAiPromptBusy(true);
+    setAiBatch({ done: 0, total: targets.length });
+    let okCount = 0;
+    let skipped = 0;
+    try {
+      for (let i = 0; i < targets.length; i++) {
+        const t = targets[i];
+        const prompt = (aiUseTrackDesc ? (t.description ?? "") : aiPrompt).trim();
+        if (!prompt) {
+          skipped += 1;
+          setAiBatch({ done: i + 1, total: targets.length });
+          continue;
+        }
+        try {
+          const d = await askAi(prompt, t.title);
+          const payload: Record<string, unknown> = {
+            action: "bulk_update_tracks",
+            trackIds: [t.id],
+          };
+          if (aiInclude.tags) {
+            const facets: Record<string, { add: string[]; remove: string[] }> = {};
+            for (const key of ["useCase", "genre", "mood"] as FacetKey[]) {
+              const add = matchVocab(key, d[key]);
+              const addSet = new Set(add.map((v) => v.toLowerCase()));
+              facets[key] = {
+                add,
+                remove: vocabularies[key].filter((o) => !addSet.has(o.toLowerCase())),
+              };
+            }
+            payload.facets = facets;
+          }
+          if (aiInclude.collections) payload.collectionChanges = membershipDelta(d.collectionIds, collections);
+          if (aiInclude.playlists) payload.playlistChanges = membershipDelta(d.playlistIds, playlists);
+          if (aiInclude.categories) payload.categoryChanges = membershipDelta(d.categoryIds, categories);
+
+          const fieldsPatch: Record<string, unknown> = {};
+          if (aiInclude.extraTags && d.extraTags && d.extraTags.length > 0) {
+            fieldsPatch.tags = d.extraTags;
+          }
+          // Never rewrite the description when it IS the prompt source.
+          if (aiInclude.description && !aiUseTrackDesc) {
+            try {
+              fieldsPatch.description = await generateDescriptionApi({
+                useCase: [...new Set([...splitFilterValues(t.useCase), ...(d.useCase ?? [])])],
+                genre: [...new Set([...splitFilterValues(t.genre), ...(d.genre ?? [])])],
+                mood: [...new Set([...splitFilterValues(t.mood), ...(d.mood ?? [])])],
+              });
+            } catch {
+              // description is a bonus — tagging still lands
+            }
+          }
+          if (Object.keys(fieldsPatch).length > 0) payload.fields = fieldsPatch;
+
+          const res = await fetch("/api/admin/content", {
+            method: "POST",
+            credentials: "include",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const saved = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+          if (!res.ok || !saved.ok) throw new Error(saved.error ?? "Save failed");
+          okCount += 1;
+        } catch (e) {
+          toast.error(`${t.title}: ${e instanceof Error ? e.message : "AI failed"}`);
+        }
+        setAiBatch({ done: i + 1, total: targets.length });
+      }
+      const bits = [`${okCount} track${okCount === 1 ? "" : "s"} tagged & saved`];
+      if (skipped > 0) bits.push(`${skipped} skipped (no description)`);
+      toast.success(`AI: ${bits.join(" · ")}`);
+      if (okCount > 0) onTracksReload?.();
+    } finally {
+      setAiPromptBusy(false);
+      setAiBatch(null);
+    }
+  };
+
   const runAiSuggest = async () => {
     setAiPromptBusy(true);
     try {
+      // Single track: the answer is STAGED in the panel for review (Apply saves).
+      const promptText = (
+        aiUseTrackDesc && selTracks.length === 1 ? (selTracks[0].description ?? "") : aiPrompt
+      ).trim();
       const res = await fetch("/api/admin/suggest-tags", {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          prompt: aiPrompt,
+          prompt: promptText,
           include: aiInclude,
           // Variation salt: same description on different tracks should not
           // yield carbon-copy picks — the model varies borderline calls by it.
@@ -1461,19 +1625,47 @@ const AdminTracksEdit = ({
                   stems here.
                 </p>
               )}
-              {single && (
+              {selTracks.length > 0 && (
                 <div className="mb-4 rounded-lg border border-[#F4C430]/30 bg-[#F4C430]/[0.04] p-3">
                   <p className="flex items-center gap-1.5 font-body text-xs font-semibold text-foreground">
                     <Sparkles className="h-3.5 w-3.5 text-[#F4C430]" />
                     AI tagging by prompt
+                    {selTracks.length > 1 && (
+                      <span className="rounded border border-[#F4C430]/50 px-1 py-px font-body text-[10px] text-[#F4C430]">
+                        {selTracks.length} tracks
+                      </span>
+                    )}
                   </p>
-                  <textarea
-                    value={aiPrompt}
-                    onChange={(e) => setAiPrompt(e.target.value)}
-                    rows={3}
-                    placeholder='Describe the track in your own words — e.g. "gentle guitars, warm, good for travel videos"'
-                    className={`${inputCls} mt-2 w-full resize-y`}
-                  />
+                  {/* Prompt source: the box below, or each track's own Description. */}
+                  <div className="mt-2">
+                    <AltCheckbox
+                      label="Use each track's own Description as the prompt"
+                      checked={aiUseTrackDesc}
+                      onToggle={() => setAiUseTrackDesc((v) => !v)}
+                    />
+                  </div>
+                  {aiUseTrackDesc ? (
+                    <p className="mt-1 rounded-lg border border-dashed border-border/70 bg-background/40 p-2 font-body text-[11px] leading-snug text-muted-foreground">
+                      Each selected track is tagged from the text in ITS OWN Description field
+                      (the one next to Extra tags) — one AI pass per track, so every track gets its
+                      own ticks. Tracks with an empty description are skipped.
+                    </p>
+                  ) : (
+                    <textarea
+                      value={aiPrompt}
+                      onChange={(e) => setAiPrompt(e.target.value)}
+                      rows={3}
+                      placeholder='Describe the track in your own words — e.g. "gentle guitars, warm, good for travel videos"'
+                      className={`${inputCls} mt-1 w-full resize-y`}
+                    />
+                  )}
+                  {selTracks.length > 1 && (
+                    <p className="mt-1.5 font-body text-[10px] leading-tight text-muted-foreground">
+                      With several tracks selected the AI runs once PER TRACK and saves each one
+                      straight away (no Apply step) — same prompt, but the ticks are decided per
+                      track.
+                    </p>
+                  )}
                   <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-0.5">
                     <TriCheckbox
                       label="Tags (Usage/Mood/Genre)"
@@ -1500,18 +1692,20 @@ const AdminTracksEdit = ({
                       state={aiInclude.extraTags ? "all" : "none"}
                       onToggle={() => setAiInclude((p) => ({ ...p, extraTags: !p.extraTags }))}
                     />
-                    <TriCheckbox
-                      label="Description"
-                      state={aiInclude.description ? "all" : "none"}
-                      onToggle={() => setAiInclude((p) => ({ ...p, description: !p.description }))}
-                    />
+                    {!aiUseTrackDesc && (
+                      <TriCheckbox
+                        label="Description"
+                        state={aiInclude.description ? "all" : "none"}
+                        onToggle={() => setAiInclude((p) => ({ ...p, description: !p.description }))}
+                      />
+                    )}
                   </div>
                   <div className="mt-2 flex items-center gap-3">
                     <button
                       type="button"
                       disabled={
                         aiPromptBusy ||
-                        !aiPrompt.trim() ||
+                        (!aiUseTrackDesc && !aiPrompt.trim()) ||
                         !(
                           aiInclude.tags ||
                           aiInclude.collections ||
@@ -1521,14 +1715,21 @@ const AdminTracksEdit = ({
                           aiInclude.description
                         )
                       }
-                      onClick={() => void runAiSuggest()}
+                      onClick={() =>
+                        void (selTracks.length > 1 ? runAiSuggestBatch() : runAiSuggest())
+                      }
                       className={`${goldBtnCls} px-3 py-1.5 text-xs`}
                     >
-                      {aiPromptBusy ? "Thinking…" : "AI Magic"}
+                      {aiPromptBusy
+                        ? aiBatch
+                          ? `Thinking… ${aiBatch.done}/${aiBatch.total}`
+                          : "Thinking…"
+                        : "AI Magic"}
                     </button>
                     <span className="font-body text-[10px] leading-tight text-muted-foreground">
-                      Sets the panels on the right (also unticks what doesn't fit) — review, then
-                      press Apply.
+                      {selTracks.length > 1
+                        ? "Tags and SAVES every selected track, one by one."
+                        : "Sets the panels on the right (also unticks what doesn't fit) — review, then press Apply."}
                     </span>
                   </div>
                 </div>

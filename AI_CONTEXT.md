@@ -3056,3 +3056,31 @@ Two bugs, both in the download path:
    archive stays openable (one CRC warning on that file instead of a dead zip).
 The zip writer itself was verified independently (masters-only / masters+PDF / single-entry) with
 `unzip -t` — the format is correct.
+
+### 2026-07-13 — Download spinner · per-version download · AI Magic on many tracks
+1. **`DownloadOptionsModal.tsx`**: while the download is being prepared the button's Download icon
+   is swapped for a spinning `Loader2` next to "Preparing…".
+2. **`src/pages/TrackDetail.tsx` → Versions tab**: every alternate version row now ends with a
+   Download icon that opens the normal download dialog for THAT version (`onDownload` prop on
+   `TrackVersionRow`; grid gained a 2rem column). Versions were previously undownloadable from the
+   track page — only the main version had a button.
+3. **`AdminTracksEdit.tsx` — AI tagging now works on a MULTI-selection**:
+   - The AI box is rendered whenever ≥1 track is selected (it used to vanish on multi-select) and
+     shows an "N tracks" chip.
+   - New **blue** checkbox (`AltCheckbox`, `#5BA8FF` — deliberately a different colour from the gold
+     ones, because it changes where the AI READS from, not what it writes): **"Use each track's own
+     Description as the prompt"**. When ticked the prompt textarea disappears and each track is
+     tagged from the text in its own Description field (the one next to Extra tags). The "Description"
+     include-checkbox is hidden while it is on — the description is the source, we never overwrite it.
+     Tracks with an empty description are skipped and counted in the final toast.
+   - **≥2 tracks selected → `runAiSuggestBatch()`**: one AI call PER TRACK (own description, or the
+     shared prompt typed in the box) and each result is SAVED immediately via
+     `bulk_update_tracks` on that single track id — there is no shared panel state that could hold a
+     different answer per track, so there is no Apply step here. Facets/collections/playlists/
+     categories are applied authoritatively (picked = add, everything else = remove), extra tags
+     replace the field, and the description is regenerated only when its checkbox is on AND the
+     blue switch is off. The button shows live progress ("Thinking… 3/12"), errors are per-track
+     toasts, and the table reloads once at the end. Same prompt on many tracks still yields
+     per-track differences (the track title is sent as a variation salt).
+   - **1 track selected → unchanged**: the answer is staged in the panel for review, Apply saves it.
+     With the blue switch on, that single track's own description is used as the prompt.

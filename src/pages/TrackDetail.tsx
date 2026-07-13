@@ -457,6 +457,16 @@ const TrackDetail = () => {
                         isPlaying={active && isPlaying}
                         onPlay={() => playVersion(track, version)}
                         onSeek={(nextProgress) => playVersion(track, version, nextProgress)}
+                        onDownload={() =>
+                          openDownloadOptions({
+                            slug: track.slug,
+                            versionId: version.id,
+                            src: version.src,
+                            title: track.title,
+                            label: version.label,
+                            hasStems: track.hasStems,
+                          })
+                        }
                         progress={active ? progress : 0}
                         version={version}
                         trackTitle={track.title}
@@ -581,6 +591,7 @@ const TrackVersionRow = ({
   isPlaying,
   onPlay,
   onSeek,
+  onDownload,
   progress,
   version,
   trackTitle,
@@ -590,11 +601,13 @@ const TrackVersionRow = ({
   isPlaying: boolean;
   onPlay: () => void;
   onSeek: (progress: number) => void;
+  /** Opens the download dialog for THIS version (each one is downloadable). */
+  onDownload: () => void;
   progress: number;
   version: TrackAudioVersion;
   trackTitle: string;
 }) => (
-  <div className="grid gap-4 border-b border-border/40 py-4 last:border-b-0 md:grid-cols-[2rem_minmax(10rem,16rem)_minmax(0,1fr)_3.5rem] md:items-center">
+  <div className="grid gap-4 border-b border-border/40 py-4 last:border-b-0 md:grid-cols-[2rem_minmax(10rem,16rem)_minmax(0,1fr)_3.5rem_2rem] md:items-center">
     <button
       type="button"
       onClick={onPlay}
@@ -608,6 +621,15 @@ const TrackVersionRow = ({
     </span>
     <WaveformPreview active={isPlaying} bars={360} onSeek={onSeek} progress={progress} src={version.src} className="h-9" />
     <span className="font-body text-xs text-muted-foreground">{version.duration}</span>
+    <button
+      type="button"
+      onClick={onDownload}
+      title="Download this version"
+      aria-label={`Download ${displayVersionLabel(version.label, trackTitle)}`}
+      className="justify-self-end text-muted-foreground transition-colors hover:text-[#F4C430]"
+    >
+      <Download className="h-4 w-4" />
+    </button>
   </div>
 );
 
