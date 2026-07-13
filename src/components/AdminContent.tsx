@@ -1596,6 +1596,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
           run={run}
           uploadCover={uploadCover}
           onTracksReload={() => void reloadTracks()}
+          onContentReload={() => reload()}
           onApplyOverrides={(overrides) =>
             setTrackOverrides((prev) => {
               const next = { ...prev };

@@ -3097,3 +3097,27 @@ imported from a sheet keeps its line breaks instead of showing the escape codes.
   new AI box with it (owner: "Track details тухнет, не могу нажать AI"). It is now `dimIf(hasSelection)`
   — the panel stays live for 2+ tracks (AI box clickable); the single-track fields below simply
   don't render, and the note tells the owner how many tracks the AI will cover.
+
+### 2026-07-13 — Account dropdown solid · AI tagging: playlists fixed + batching made efficient
+1. **`Navigation.tsx`**: the account dropdown was `bg-card/95 backdrop-blur-xl` and text from the
+   page showed through it. Now a solid `bg-card` (shadow + border unchanged).
+2. **Playlists never got ticked on a multi-track AI run — two causes, both fixed:**
+   - The client batch wrote membership straight to D1 (`bulk_update_tracks`) with a raw `fetch`,
+     bypassing the parent's `run()` — so `reload()` never fired and the CONTENT data (which is where
+     playlist/collection/category membership lives) stayed stale in the panels. New
+     **`onContentReload`** prop on `AdminTracksEdit` (wired to `AdminContent`'s `reload()`), called
+     once after a batch finishes, alongside `onTracksReload`.
+   - The model itself was under-filling playlists: in one big "answer every list" call it kept
+     spending its attention on the first theme (owner saw only *Video & Social* + *Events*) and left
+     *Business & Product*, *Film & Trailer*, *Fashion*, *Gaming*, *Podcast*, *Nature*, *Fitness*
+     empty. **Playlists now get their OWN model call** (`PLAYLIST_SYSTEM_PROMPT`) with the list
+     **grouped by theme** and an explicit "walk EVERY theme, judge every playlist on its own merit,
+     never leave a theme empty just because another fits better" instruction. It runs in parallel
+     with the main call, so it costs no extra wall-clock time.
+3. **Batching is now server-side and parallel** (`functions/api/admin/suggest-tags.ts`):
+   `{ tracks: [{id, title, prompt}], include }` → `{ ok, results: [{ id, … }] }`. The vocabularies,
+   collections, playlists, categories and the tags base are read from D1 **once per request**, and
+   the tracks run through the model in a bounded pool (`CONCURRENCY = 3` tracks, each firing its
+   main + playlist call together). The client used to loop N tracks × 1 full round trip each,
+   sequentially — that was the "AI thinks forever" wait. Single-track mode keeps the old flat
+   response shape, so the review-then-Apply panel flow is untouched.

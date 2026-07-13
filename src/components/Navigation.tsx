@@ -177,7 +177,9 @@ const Navigation = () => {
               {user && acctOpen && (
                 <div
                   role="menu"
-                  className="absolute right-0 top-full z-50 mt-3 w-60 overflow-hidden rounded-xl border border-border/70 bg-card/95 py-1.5 shadow-[0_20px_40px_-16px_rgba(0,0,0,0.7)] backdrop-blur-xl animate-fade-in"
+                  // Solid card background — the menu sits over track rows and text was
+                  // showing through the translucent panel.
+                  className="absolute right-0 top-full z-50 mt-3 w-60 overflow-hidden rounded-xl border border-border/70 bg-card py-1.5 shadow-[0_20px_40px_-16px_rgba(0,0,0,0.7)] animate-fade-in"
                 >
                   {/* Identity block: email on top, plan chip + Upgrade on one row,
                       separated from the menu items by a rule. */}

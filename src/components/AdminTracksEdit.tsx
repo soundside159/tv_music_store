@@ -173,6 +173,7 @@ const AdminTracksEdit = ({
   run,
   uploadCover,
   onTracksReload,
+  onContentReload,
   onApplyOverrides,
   onSelectionChange,
   selectionResetKey,
@@ -196,6 +197,9 @@ const AdminTracksEdit = ({
   uploadCover: (file: File, apply: (path: string) => void) => Promise<void> | void;
   /** Refetch /api/tracks (after version set-main/delete in the table). */
   onTracksReload?: () => void;
+  /** Refetch the CONTENT data (collections/playlists/categories memberships) —
+   *  needed after a batch AI run, which writes membership straight to the DB. */
+  onContentReload?: () => void;
   onApplyOverrides: (overrides: Record<string, Partial<CatalogTrack>>) => void;
   onSelectionChange?: (ids: string[]) => void;
   selectionResetKey?: number;
@@ -447,25 +451,53 @@ const AdminTracksEdit = ({
   };
 
   // MANY tracks: there is no shared panel state that could hold a different
-  // answer per track, so each track is tagged AND SAVED on its own — one AI
-  // call per track (own description or the shared prompt), applied immediately.
+  // answer per track, so each track is tagged AND SAVED on its own. The AI part
+  // is ONE request: the server reads the vocabularies / playlists / tags base
+  // once and runs the tracks through the model in parallel (the old version
+  // paid a full round trip per track, one after the other — that was the wait).
   const runAiSuggestBatch = async () => {
     const targets = selTracks;
+    const asks = targets
+      .map((t) => ({
+        id: t.id,
+        title: t.title,
+        prompt: (aiUseTrackDesc ? (t.description ?? "") : aiPrompt).trim(),
+      }))
+      .filter((a) => a.prompt);
+    const skipped = targets.length - asks.length;
+    if (asks.length === 0) {
+      toast.error("Nothing to work with — those tracks have no description");
+      return;
+    }
+
     setAiPromptBusy(true);
-    setAiBatch({ done: 0, total: targets.length });
+    setAiBatch({ done: 0, total: asks.length });
     let okCount = 0;
-    let skipped = 0;
     try {
-      for (let i = 0; i < targets.length; i++) {
-        const t = targets[i];
-        const prompt = (aiUseTrackDesc ? (t.description ?? "") : aiPrompt).trim();
-        if (!prompt) {
-          skipped += 1;
-          setAiBatch({ done: i + 1, total: targets.length });
+      const res = await fetch("/api/admin/suggest-tags", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ tracks: asks, include: aiInclude }),
+      });
+      const d = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        results?: (AiResult & { id: string })[];
+      };
+      if (!res.ok || !d.ok) throw new Error(d.error ?? "AI suggestion failed");
+
+      const results = d.results ?? [];
+      for (let i = 0; i < results.length; i++) {
+        const r = results[i];
+        const t = targets.find((x) => x.id === r.id);
+        if (!t) continue;
+        if (r.error) {
+          toast.error(`${t.title}: ${r.error}`);
+          setAiBatch({ done: i + 1, total: results.length });
           continue;
         }
         try {
-          const d = await askAi(prompt, t.title);
           const payload: Record<string, unknown> = {
             action: "bulk_update_tracks",
             trackIds: [t.id],
@@ -473,7 +505,7 @@ const AdminTracksEdit = ({
           if (aiInclude.tags) {
             const facets: Record<string, { add: string[]; remove: string[] }> = {};
             for (const key of ["useCase", "genre", "mood"] as FacetKey[]) {
-              const add = matchVocab(key, d[key]);
+              const add = matchVocab(key, r[key]);
               const addSet = new Set(add.map((v) => v.toLowerCase()));
               facets[key] = {
                 add,
@@ -482,21 +514,21 @@ const AdminTracksEdit = ({
             }
             payload.facets = facets;
           }
-          if (aiInclude.collections) payload.collectionChanges = membershipDelta(d.collectionIds, collections);
-          if (aiInclude.playlists) payload.playlistChanges = membershipDelta(d.playlistIds, playlists);
-          if (aiInclude.categories) payload.categoryChanges = membershipDelta(d.categoryIds, categories);
+          if (aiInclude.collections) payload.collectionChanges = membershipDelta(r.collectionIds, collections);
+          if (aiInclude.playlists) payload.playlistChanges = membershipDelta(r.playlistIds, playlists);
+          if (aiInclude.categories) payload.categoryChanges = membershipDelta(r.categoryIds, categories);
 
           const fieldsPatch: Record<string, unknown> = {};
-          if (aiInclude.extraTags && d.extraTags && d.extraTags.length > 0) {
-            fieldsPatch.tags = d.extraTags;
+          if (aiInclude.extraTags && r.extraTags && r.extraTags.length > 0) {
+            fieldsPatch.tags = r.extraTags;
           }
           // Never rewrite the description when it IS the prompt source.
           if (aiInclude.description && !aiUseTrackDesc) {
             try {
               fieldsPatch.description = await generateDescriptionApi({
-                useCase: [...new Set([...splitFilterValues(t.useCase), ...(d.useCase ?? [])])],
-                genre: [...new Set([...splitFilterValues(t.genre), ...(d.genre ?? [])])],
-                mood: [...new Set([...splitFilterValues(t.mood), ...(d.mood ?? [])])],
+                useCase: [...new Set([...splitFilterValues(t.useCase), ...(r.useCase ?? [])])],
+                genre: [...new Set([...splitFilterValues(t.genre), ...(r.genre ?? [])])],
+                mood: [...new Set([...splitFilterValues(t.mood), ...(r.mood ?? [])])],
               });
             } catch {
               // description is a bonus — tagging still lands
@@ -504,24 +536,33 @@ const AdminTracksEdit = ({
           }
           if (Object.keys(fieldsPatch).length > 0) payload.fields = fieldsPatch;
 
-          const res = await fetch("/api/admin/content", {
+          const saveRes = await fetch("/api/admin/content", {
             method: "POST",
             credentials: "include",
             headers: { "content-type": "application/json" },
             body: JSON.stringify(payload),
           });
-          const saved = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-          if (!res.ok || !saved.ok) throw new Error(saved.error ?? "Save failed");
+          const saved = (await saveRes.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+          if (!saveRes.ok || !saved.ok) throw new Error(saved.error ?? "Save failed");
           okCount += 1;
         } catch (e) {
-          toast.error(`${t.title}: ${e instanceof Error ? e.message : "AI failed"}`);
+          toast.error(`${t.title}: ${e instanceof Error ? e.message : "Save failed"}`);
         }
-        setAiBatch({ done: i + 1, total: targets.length });
+        setAiBatch({ done: i + 1, total: results.length });
       }
+
       const bits = [`${okCount} track${okCount === 1 ? "" : "s"} tagged & saved`];
       if (skipped > 0) bits.push(`${skipped} skipped (no description)`);
       toast.success(`AI: ${bits.join(" · ")}`);
-      if (okCount > 0) onTracksReload?.();
+      if (okCount > 0) {
+        // Playlist / collection / category membership lives in the CONTENT data,
+        // not in the tracks list — without this reload the panels on the right
+        // still showed the old (empty) ticks after a batch run.
+        onContentReload?.();
+        onTracksReload?.();
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "AI suggestion failed");
     } finally {
       setAiPromptBusy(false);
       setAiBatch(null);
