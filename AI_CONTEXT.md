@@ -3084,3 +3084,11 @@ The zip writer itself was verified independently (masters-only / masters+PDF / s
      per-track differences (the track title is sent as a variation salt).
    - **1 track selected → unchanged**: the answer is staged in the panel for review, Apply saves it.
      With the blue switch on, that single track's own description is used as the prompt.
+
+### 2026-07-13 — FIX: `_x000D_` litter in descriptions imported from .xlsx
+`src/lib/xlsxRead.ts`: Excel stores control characters inside cells as `_xHHHH_` escapes, so every
+line break in a multi-line cell arrives as **`_x000D_`** (carriage return) and was landing verbatim
+in imported track descriptions. New `decodeXlsxText()` runs on shared strings and inline strings:
+it turns `_xHHHH_` into the real character, keeps a literally-typed "_x000D_" intact (Excel
+double-escapes that as `_x005F_x000D_`), and normalises CR / CRLF to plain `\n` — so a description
+imported from a sheet keeps its line breaks instead of showing the escape codes.

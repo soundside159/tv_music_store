@@ -5,6 +5,21 @@ import { unzipBlob } from "@/lib/audioEncoding";
 // the FIRST worksheet + sharedStrings with DOMParser. Good for normal tables
 // (text/numbers); no formulas evaluation (cached values are read), no styles.
 
+/**
+ * Excel stores control characters as `_xHHHH_` escapes — a line break inside a
+ * cell arrives as `_x000D_` (carriage return), which is what showed up verbatim
+ * in imported descriptions. A cell that literally contains the text "_x000D_"
+ * is stored double-escaped as "_x005F_x000D_", so that form is unescaped back
+ * to plain text instead of being turned into a control character.
+ * Line endings are then normalised to plain "\n".
+ */
+const decodeXlsxText = (s: string): string =>
+  s
+    .replace(/_x005F_x([0-9A-Fa-f]{4})_|_x([0-9A-Fa-f]{4})_/g, (_m, literal: string, code: string) =>
+      literal ? `_x${literal}_` : String.fromCharCode(parseInt(code, 16)),
+    )
+    .replace(/\r\n?/g, "\n");
+
 const colIndex = (ref: string): number => {
   const letters = ref.replace(/\d+$/, "");
   let idx = 0;
@@ -27,7 +42,7 @@ export const parseXlsx = async (file: Blob): Promise<string[][]> => {
       let s = "";
       const ts = sis[i].getElementsByTagName("t");
       for (let j = 0; j < ts.length; j++) s += ts[j].textContent ?? "";
-      shared.push(s);
+      shared.push(decodeXlsxText(s));
     }
   }
 
@@ -50,6 +65,7 @@ export const parseXlsx = async (file: Blob): Promise<string[][]> => {
       if (type === "inlineStr") {
         const ts = cell.getElementsByTagName("t");
         for (let j = 0; j < ts.length; j++) val += ts[j].textContent ?? "";
+        val = decodeXlsxText(val);
       } else {
         const v = cell.getElementsByTagName("v")[0]?.textContent ?? "";
         val = type === "s" ? (shared[Number(v)] ?? "") : v;
