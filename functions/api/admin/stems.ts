@@ -23,10 +23,15 @@ export const onRequestGet = async (ctx: Ctx) => {
   const row = await (async () => {
     try {
       return await ctx.env.DB.prepare(
-        `SELECT has_stems, r2_key_stems, stems_manifest FROM tracks WHERE id = ?1`,
+        `SELECT has_stems, r2_key_stems, stems_manifest, wav_manifest FROM tracks WHERE id = ?1`,
       )
         .bind(trackId)
-        .first<{ has_stems: number; r2_key_stems: string | null; stems_manifest: string | null }>();
+        .first<{
+          has_stems: number;
+          r2_key_stems: string | null;
+          stems_manifest: string | null;
+          wav_manifest: string | null;
+        }>();
     } catch {
       return null; // legacy DB without the columns
     }
@@ -34,9 +39,13 @@ export const onRequestGet = async (ctx: Ctx) => {
   if (!row) return json({ error: "Track not found" }, 404);
 
   const manifest = parseManifest(row.stems_manifest) ?? [];
+  // The WAV masters ride along so the editor can say "this file is already on
+  // the track" before it spends minutes encoding and uploading a duplicate.
+  const masters = parseManifest(row.wav_manifest) ?? [];
   return json({
     hasStems: !!row.has_stems,
     legacyZip: manifest.length === 0 && !!row.r2_key_stems,
     stems: manifest.map((e) => ({ key: e.key, name: e.name, size: e.size })),
+    masters: masters.map((e) => ({ key: e.key, name: e.name, size: e.size })),
   });
 };

@@ -3121,3 +3121,26 @@ imported from a sheet keeps its line breaks instead of showing the escape codes.
    main + playlist call together). The client used to loop N tracks × 1 full round trip each,
    sequentially — that was the "AI thinks forever" wait. Single-track mode keeps the old flat
    response shape, so the review-then-Apply panel flow is untouched.
+
+### 2026-07-13 — Tracks Edit: drop files into an open row · counts next to every tag/playlist
+**1. Add files without leaving Tracks Edit.** The versions expander (the ×N button on a row) now
+ends with a **drop zone** (click to pick, or drag files onto it). Same rule as Bulk Upload: a file
+named `…_stem(s)_…` is added as a **STEM**, anything else as a new **VERSION**.
+- **Duplicate guard (before any encoding/upload):** the row already knows the track's stem files AND
+  its WAV masters (`/api/admin/stems` now returns `masters` too, from `wav_manifest`). A re-dropped
+  file is refused by filename, and a version is also refused when the label its filename would
+  produce already exists ("This track already has a version called X — skipped").
+- **WAV versions keep the v2 storage in sync**: the file is uploaded as a `master` and appended to
+  `wav_manifest`, so the customer's WAV zip contains the new version. (The track-page panel still
+  uses the LEGACY pre-packed-zip path for adding versions — for v2 tracks it does not add the master.
+  Prefer this drop zone; the track page's Add-version is due the same treatment.)
+- **New/changed server actions in `functions/api/admin/content.ts`**: `add_version` accepts
+  `masterEntry {key,name,size,crc}` (appended to `wav_manifest`); new **`add_stems`** action takes
+  `{ id, stems: [{key,name,size,crc}] }`, merges them into `stems_manifest` (same filename = the new
+  file wins) and flips `has_stems` on. `cleanManifest()` was hoisted to module scope so all three
+  actions (create_track / add_version / add_stems) share it.
+**2. Counts next to every checkbox (admin only).** `TriCheckbox` takes an optional `count`:
+- Use Case / Genre / Mood: computed over the WHOLE catalogue from the tracks list (`facetCounts`,
+  memoised) — how many tracks carry that tag.
+- Collections / Playlists / Categories: `item.trackIds.length`.
+Zero reads in a dimmer grey, so empty shelves are obvious at a glance.

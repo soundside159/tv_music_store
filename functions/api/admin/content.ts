@@ -152,6 +152,31 @@ const repairSlashVocabValues = async (db: D1Database, vocab: Record<VocabFacet, 
   }
 };
 
+// v2 storage: individual master files with client-computed CRCs; the download
+// endpoint streams a zip from these manifests on the fly. Used by create_track,
+// add_version (WAV master of a new version) and add_stems (dropped stem files).
+const cleanManifest = (raw: unknown) => {
+  if (!Array.isArray(raw)) return null;
+  const out: { key: string; name: string; size: number; crc: number }[] = [];
+  for (const e of raw.slice(0, 40) as { key?: string; name?: string; size?: number; crc?: number }[]) {
+    if (
+      typeof e?.key !== "string" ||
+      !/^masters\//.test(e.key) ||
+      typeof e.name !== "string" ||
+      !Number.isFinite(e.size) ||
+      !Number.isFinite(e.crc)
+    )
+      return null;
+    out.push({
+      key: e.key,
+      name: e.name.replace(/[^\w\s\-().]/g, "_").slice(0, 120),
+      size: Math.round(e.size as number),
+      crc: (e.crc as number) >>> 0,
+    });
+  }
+  return out.length > 0 ? out : null;
+};
+
 /** Adds newer track columns on first use — saves the owner wrangler migrations. */
 const ensureTrackCoverColumn = async (db: D1Database) => {
   const alters = [
@@ -527,6 +552,10 @@ export const onRequestPost = async (ctx: Ctx) => {
     stemsKey?: string;
     /** delete_stem: R2 key ("masters/…") of the single stem file to remove. */
     key?: string;
+    /** add_version: the version's WAV master, appended to wav_manifest (v2). */
+    masterEntry?: { key?: string; name?: string; size?: number; crc?: number };
+    /** add_stems: stem master files appended to stems_manifest (v2). */
+    stems?: { key?: string; name?: string; size?: number; crc?: number }[];
     /** create_track v2: individual master files (zip is streamed at download). */
     wavManifest?: { key?: string; name?: string; size?: number; crc?: number }[];
     stemsManifest?: { key?: string; name?: string; size?: number; crc?: number }[];
@@ -973,29 +1002,6 @@ export const onRequestPost = async (ctx: Ctx) => {
         typeof body.stemsKey === "string" && /^masters\//.test(body.stemsKey)
           ? body.stemsKey
           : null;
-      // v2 storage: individual master files with client-computed CRCs; the
-      // download endpoint streams a zip from these manifests on the fly.
-      const cleanManifest = (raw: unknown) => {
-        if (!Array.isArray(raw)) return null;
-        const out: { key: string; name: string; size: number; crc: number }[] = [];
-        for (const e of raw.slice(0, 40) as { key?: string; name?: string; size?: number; crc?: number }[]) {
-          if (
-            typeof e?.key !== "string" ||
-            !/^masters\//.test(e.key) ||
-            typeof e.name !== "string" ||
-            !Number.isFinite(e.size) ||
-            !Number.isFinite(e.crc)
-          )
-            return null;
-          out.push({
-            key: e.key,
-            name: e.name.replace(/[^\w\s\-().]/g, "_").slice(0, 120),
-            size: Math.round(e.size!),
-            crc: e.crc! >>> 0,
-          });
-        }
-        return out.length > 0 ? out : null;
-      };
       const wavManifest = cleanManifest(body.wavManifest);
       const stemsManifest = cleanManifest(body.stemsManifest);
       // Composer picker: validate the profile exists (NULL = house/TVMUSICSTORE).
@@ -1114,7 +1120,48 @@ export const onRequestPost = async (ctx: Ctx) => {
       if (typeof body.wavZipKey === "string" && /^masters\//.test(body.wavZipKey)) {
         await db.prepare(`UPDATE tracks SET r2_key_wav_zip = ?2 WHERE id = ?1`).bind(trackId, body.wavZipKey).run();
       }
+      // v2 storage: the new version's WAV master joins wav_manifest, so the
+      // customer's WAV zip (streamed at download time) contains it too.
+      const me = cleanManifest(body.masterEntry ? [body.masterEntry] : undefined);
+      if (me) {
+        const row = await db
+          .prepare(`SELECT wav_manifest FROM tracks WHERE id = ?1`)
+          .bind(trackId)
+          .first<{ wav_manifest: string | null }>();
+        const current = parseManifest(row?.wav_manifest) ?? [];
+        const merged = [...current.filter((e) => e.key !== me[0].key), ...me];
+        await db
+          .prepare(`UPDATE tracks SET wav_manifest = ?2 WHERE id = ?1`)
+          .bind(trackId, JSON.stringify(merged))
+          .run();
+      }
       return json({ ok: true, versionId });
+    }
+
+    case "add_stems": {
+      // { id, stems: [{key,name,size,crc}] } — appends stem masters to the
+      // track (v2 storage; the STEMS zip is streamed at download time) and
+      // switches the STEMS download option on.
+      const trackId = body.id;
+      const incoming = cleanManifest(body.stems);
+      if (!trackId || !incoming) return json({ error: "id and stems required" }, 400);
+      await ensureTrackCoverColumn(db);
+
+      const row = await db
+        .prepare(`SELECT stems_manifest FROM tracks WHERE id = ?1`)
+        .bind(trackId)
+        .first<{ stems_manifest: string | null }>();
+      if (!row) return json({ error: "Track not found" }, 404);
+
+      const current = parseManifest(row.stems_manifest) ?? [];
+      // Same filename twice = the owner re-dropped a file; the newer one wins.
+      const byName = new Set(incoming.map((e) => e.name.toLowerCase()));
+      const merged = [...current.filter((e) => !byName.has(e.name.toLowerCase())), ...incoming];
+      await db
+        .prepare(`UPDATE tracks SET stems_manifest = ?2, has_stems = 1 WHERE id = ?1`)
+        .bind(trackId, JSON.stringify(merged))
+        .run();
+      return json({ ok: true, stems: merged.length });
     }
 
     case "delete_version": {

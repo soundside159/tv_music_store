@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, ChevronLeft, ChevronRight, ExternalLink, Minus, Music, Pause, Play, Search, Sparkles, Star, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, ExternalLink, Loader2, Minus, Music, Pause, Play, Search, Sparkles, Star, UploadCloud, X } from "lucide-react";
 import { toast } from "sonner";
 import WaveformPreview from "@/components/WaveformPreview";
 import { generateDescriptionApi } from "@/lib/coverArt";
 import { renameWavInBundle } from "@/lib/wavBundle";
+import { decodeAudio, encodeMp3, formatDuration, wavToMp3Pair } from "@/lib/audioEncoding";
+import { crc32File } from "@/lib/crc32";
+import { cleanVersionLabel } from "@/lib/downloadTrack";
 import { parseXlsx } from "@/lib/xlsxRead";
 import { usePlayer } from "@/components/playerContext";
 import { splitFilterValues } from "@/components/TrackRowPlayer";
@@ -38,7 +41,40 @@ interface StemsInfo {
   files: StemFile[];
   /** Legacy track: one pre-packed stems zip, no per-file list to show. */
   legacyZip: boolean;
+  /** WAV masters already on the track — used to spot re-dropped duplicates. */
+  masters: StemFile[];
 }
+
+/** "Epic Battle_Stems_Drums.wav" is a STEM, not a version (same rule as Bulk Upload). */
+const isStemFile = (filename: string) =>
+  /(^|[_\s(-])stems?([_\s).-]|$)/i.test(filename.replace(/\.[a-z0-9]+$/i, "").trim());
+const isMp3File = (filename: string) => /\.mp3$/i.test(filename);
+const isAudioFile = (filename: string) => /\.(wav|mp3)$/i.test(filename);
+
+/** POST one audio file to the admin upload endpoint. */
+const uploadAudioApi = async (
+  file: Blob,
+  kind: "preview" | "preview128" | "master",
+  filename: string,
+): Promise<{ key: string; path: string | null }> => {
+  const base = filename.replace(/\.[^.]+$/, "");
+  const res = await fetch(`/api/admin/upload-audio?kind=${kind}&filename=${encodeURIComponent(base)}`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "content-type": file.type || (kind === "master" ? "audio/wav" : "audio/mpeg"),
+    },
+    body: file,
+  });
+  const d = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    key?: string;
+    path?: string | null;
+    error?: string;
+  };
+  if (!res.ok || !d.ok || !d.key) throw new Error(d.error ?? "Upload failed");
+  return { key: d.key, path: d.path ?? null };
+};
 
 const fmtSize = (bytes: number) =>
   bytes >= 1024 * 1024
@@ -67,15 +103,19 @@ const FACETS: Array<{ key: FacetKey; label: string }> = [
 const facetValue = (track: CatalogTrack, key: FacetKey) =>
   key === "useCase" ? track.useCase : key === "genre" ? track.genre : track.mood;
 
-/** Checkbox that can render a "mixed" (dash) state, like the OS ones. */
+/** Checkbox that can render a "mixed" (dash) state, like the OS ones.
+ *  `count` = how many tracks in the whole catalogue carry this tag / sit in this
+ *  playlist — admin-only bookkeeping, so the owner sees what is empty. */
 const TriCheckbox = ({
   label,
   state,
   onToggle,
+  count,
 }: {
   label: string;
   state: TriState;
   onToggle: () => void;
+  count?: number;
 }) => (
   <button
     type="button"
@@ -91,6 +131,15 @@ const TriCheckbox = ({
       {state === "mixed" && <Minus className="h-3 w-3 text-[#F4C430]" />}
     </span>
     <span className="truncate font-body text-xs text-foreground/90">{label}</span>
+    {count !== undefined && (
+      <span
+        className={`shrink-0 font-body text-[10px] tabular-nums ${
+          count === 0 ? "text-muted-foreground/50" : "text-muted-foreground"
+        }`}
+      >
+        {count}
+      </span>
+    )}
   </button>
 );
 
@@ -995,7 +1044,7 @@ const AdminTracksEdit = ({
     );
     setVersionBusy(null);
     if (ok) {
-      setStems((s) => ({ ...s, [t.id]: { files: [], legacyZip: false } }));
+      setStems((s) => ({ ...s, [t.id]: { files: [], legacyZip: false, masters: s[t.id]?.masters ?? [] } }));
       onApplyOverrides({ [t.id]: { hasStems: false } });
       onTracksReload?.();
     }
@@ -1014,13 +1063,18 @@ const AdminTracksEdit = ({
     setStemsLoading(id);
     fetch(`/api/admin/stems?track=${encodeURIComponent(id)}`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("stems"))))
-      .then((d: { stems?: StemFile[]; legacyZip?: boolean }) => {
+      .then((d: { stems?: StemFile[]; legacyZip?: boolean; masters?: StemFile[] }) => {
         if (cancelled) return;
-        setStems((s) => ({ ...s, [id]: { files: d.stems ?? [], legacyZip: !!d.legacyZip } }));
+        setStems((s) => ({
+          ...s,
+          [id]: { files: d.stems ?? [], legacyZip: !!d.legacyZip, masters: d.masters ?? [] },
+        }));
       })
       .catch(() => {
         // Legacy DB / network hiccup — fall back to the plain "bundle attached" row.
-        if (!cancelled) setStems((s) => ({ ...s, [id]: { files: [], legacyZip: true } }));
+        if (!cancelled) {
+          setStems((s) => ({ ...s, [id]: { files: [], legacyZip: true, masters: [] } }));
+        }
       })
       .finally(() => {
         if (!cancelled) setStemsLoading(null);
@@ -1038,11 +1092,146 @@ const AdminTracksEdit = ({
     if (!ok) return;
     const info = stems[t.id];
     const left = (info?.files ?? []).filter((f) => f.key !== stem.key);
-    setStems((s) => ({ ...s, [t.id]: { files: left, legacyZip: info?.legacyZip ?? false } }));
+    setStems((s) => ({
+      ...s,
+      [t.id]: { files: left, legacyZip: info?.legacyZip ?? false, masters: info?.masters ?? [] },
+    }));
     // Last stem gone → the STEMS download option goes with it.
     if (left.length === 0 && !info?.legacyZip) {
       onApplyOverrides({ [t.id]: { hasStems: false } });
       onTracksReload?.();
+    }
+  };
+
+  // --- Drop files straight into an open versions row -------------------------
+  // Same rules as Bulk Upload: a file named …_stem(s)_… is a STEM, anything else
+  // is a new VERSION. Files that are already on the track are refused BEFORE
+  // any encoding/upload happens (matched on filename, and on the version label
+  // the filename would produce — a re-drop is almost always a mistake).
+  const [dropBusy, setDropBusy] = useState<string | null>(null);
+  const [dropNote, setDropNote] = useState("");
+  const [dragOver, setDragOver] = useState<string | null>(null);
+
+  const refreshStems = async (trackId: string) => {
+    try {
+      const r = await fetch(`/api/admin/stems?track=${encodeURIComponent(trackId)}`, {
+        credentials: "include",
+      });
+      if (!r.ok) return;
+      const d = (await r.json()) as { stems?: StemFile[]; legacyZip?: boolean; masters?: StemFile[] };
+      setStems((s) => ({
+        ...s,
+        [trackId]: { files: d.stems ?? [], legacyZip: !!d.legacyZip, masters: d.masters ?? [] },
+      }));
+    } catch {
+      // the row just keeps the list it had
+    }
+  };
+
+  const addFilesToTrack = async (t: CatalogTrack, files: File[]) => {
+    const audio = files.filter((f) => isAudioFile(f.name));
+    if (audio.length === 0) {
+      toast.error("No audio files there (.wav or .mp3)");
+      return;
+    }
+    const info = stems[t.id];
+    const knownNames = new Set(
+      [...(info?.files ?? []), ...(info?.masters ?? [])].map((f) => f.name.toLowerCase()),
+    );
+    const knownLabels = new Set(
+      t.audioVersions.map((v) => (cleanVersionLabel(v.label, t.title) || v.label).toLowerCase()),
+    );
+
+    setDropBusy(t.id);
+    let added = 0;
+    let addedStems = 0;
+    try {
+      for (const file of audio) {
+        const base = file.name.replace(/\.[a-z0-9]+$/i, "");
+        const stem = isStemFile(file.name);
+
+        // --- duplicate guard ---------------------------------------------
+        if (knownNames.has(file.name.toLowerCase())) {
+          toast.error(`"${file.name}" is already on this track — skipped`);
+          continue;
+        }
+        const label = cleanVersionLabel(base, t.title) || `Version ${t.audioVersions.length + 1}`;
+        if (!stem && knownLabels.has(label.toLowerCase())) {
+          toast.error(`This track already has a version called "${label}" — skipped`);
+          continue;
+        }
+
+        if (stem) {
+          setDropNote(`Checksumming ${file.name}…`);
+          const crc = await crc32File(file);
+          setDropNote(`Uploading stem ${file.name}…`);
+          const up = await uploadAudioApi(file, "master", file.name);
+          const ok = await run(
+            {
+              action: "add_stems",
+              id: t.id,
+              stems: [{ key: up.key, name: file.name, size: file.size, crc }],
+            },
+            `Stem "${file.name}" added`,
+          );
+          if (ok) {
+            addedStems += 1;
+            knownNames.add(file.name.toLowerCase());
+          }
+          continue;
+        }
+
+        // --- new version --------------------------------------------------
+        setDropNote(`Encoding ${file.name}…`);
+        let previews: { mp3_320: Blob; mp3_128: Blob; duration: number };
+        if (isMp3File(file.name)) {
+          // An MP3 is used AS-IS for the 320 preview; only the 128 copy is made.
+          const buffer = await decodeAudio(file);
+          previews = { mp3_320: file, mp3_128: encodeMp3(buffer, 128), duration: buffer.duration };
+        } else {
+          previews = await wavToMp3Pair(file);
+        }
+        setDropNote(`Uploading previews for ${file.name}…`);
+        const p320 = await uploadAudioApi(previews.mp3_320, "preview", file.name);
+        const p128 = await uploadAudioApi(previews.mp3_128, "preview128", file.name).catch(() => null);
+
+        // WAV versions carry a master (v2 storage) — it joins the track's WAV
+        // manifest so the customer's zip contains the new version too.
+        let masterEntry: { key: string; name: string; size: number; crc: number } | undefined;
+        if (!isMp3File(file.name)) {
+          setDropNote(`Uploading master ${file.name}…`);
+          const crc = await crc32File(file);
+          const up = await uploadAudioApi(file, "master", file.name);
+          masterEntry = { key: up.key, name: file.name, size: file.size, crc };
+        }
+
+        const ok = await run(
+          {
+            action: "add_version",
+            id: t.id,
+            label,
+            previewSrc: p320.path,
+            preview128: p128?.path ?? undefined,
+            duration: formatDuration(previews.duration),
+            masterEntry,
+          },
+          `Version "${label}" added`,
+        );
+        if (ok) {
+          added += 1;
+          knownNames.add(file.name.toLowerCase());
+          knownLabels.add(label.toLowerCase());
+        }
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setDropBusy(null);
+      setDropNote("");
+      if (added > 0 || addedStems > 0) {
+        await refreshStems(t.id);
+        onTracksReload?.();
+      }
     }
   };
 
@@ -1128,6 +1317,7 @@ const AdminTracksEdit = ({
                   onToggle={() =>
                     setDelta((prev) => ({ ...prev, [item.id]: nextState(memberDisplay(delta, item)) }))
                   }
+                  count={item.trackIds.length}
                 />
               ))}
             </div>
@@ -1139,6 +1329,27 @@ const AdminTracksEdit = ({
       </div>
     );
   };
+
+  // How many tracks carry each tag / sit in each playlist-collection-category.
+  // Counted over the WHOLE catalogue (not the current filter) — it is a
+  // bookkeeping number for the owner, shown next to every checkbox.
+  const facetCounts = useMemo(() => {
+    const out: Record<FacetKey, Map<string, number>> = {
+      useCase: new Map(),
+      genre: new Map(),
+      mood: new Map(),
+    };
+    for (const t of tracks) {
+      for (const key of ["useCase", "genre", "mood"] as FacetKey[]) {
+        for (const v of splitFilterValues(facetValue(t, key))) {
+          const k = v.trim().toLowerCase();
+          if (!k) continue;
+          out[key].set(k, (out[key].get(k) ?? 0) + 1);
+        }
+      }
+    }
+    return out;
+  }, [tracks]);
 
   const hasSelection = selTracks.length > 0;
   const single = selTracks.length === 1;
@@ -1555,8 +1766,58 @@ const AdminTracksEdit = ({
                         })}
                       </div>
                     )}
+                    {/* Drop new files right here: …_stem(s)_… lands as a STEM,
+                        anything else as a new VERSION. Duplicates are refused. */}
+                    <label
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setDragOver(t.id);
+                      }}
+                      onDragLeave={() => setDragOver((d) => (d === t.id ? null : d))}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setDragOver(null);
+                        if (dropBusy || busy) return;
+                        void addFilesToTrack(t, [...e.dataTransfer.files]);
+                      }}
+                      className={`mt-2 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-2 text-center transition-colors ${
+                        dragOver === t.id
+                          ? "border-[#F4C430] bg-[#F4C430]/10"
+                          : "border-border/70 hover:border-[#F4C430]/60"
+                      } ${dropBusy === t.id ? "opacity-70" : ""}`}
+                    >
+                      <input
+                        type="file"
+                        multiple
+                        accept=".wav,.mp3,audio/wav,audio/mpeg"
+                        disabled={dropBusy === t.id || busy}
+                        className="hidden"
+                        onChange={(e) => {
+                          const files = [...(e.target.files ?? [])];
+                          e.target.value = "";
+                          if (files.length > 0) void addFilesToTrack(t, files);
+                        }}
+                      />
+                      {dropBusy === t.id ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-[#F4C430]" />
+                          <span className="font-body text-[11px] text-foreground">
+                            {dropNote || "Working…"}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <UploadCloud className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="font-body text-[11px] text-muted-foreground">
+                            Drop WAV / MP3 here to add a version — files named{" "}
+                            <span className="text-foreground">…_stem(s)_…</span> are added as stems.
+                            Files already on the track are skipped.
+                          </span>
+                        </>
+                      )}
+                    </label>
                     <p className="mt-1 font-body text-[10px] text-muted-foreground">
-                      Add / rename versions (and WAV-bundle rebuild) — on the{" "}
+                      Rename versions (and the WAV-bundle rebuild) — on the{" "}
                       <Link to={`/track/${t.slug}`} target="_blank" rel="noopener noreferrer" className="text-[#F4C430] hover:underline">
                         track page
                       </Link>
@@ -1919,6 +2180,7 @@ const AdminTracksEdit = ({
                   label={opt}
                   state={facetDisplay(key, opt)}
                   onToggle={() => toggleFacet(key, opt)}
+                  count={facetCounts[key].get(opt.trim().toLowerCase()) ?? 0}
                 />
               ))}
             </div>
