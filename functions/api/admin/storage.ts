@@ -160,8 +160,41 @@ export const onRequestPost = async (ctx: Ctx) => {
   if (!ctx.env.DB) return json({ error: "DB not bound" }, 503);
   if (!ctx.env.R2?.list || !ctx.env.R2?.delete) return json({ error: "R2 not bound" }, 503);
 
-  const body = await readJson<{ confirm?: boolean; wipeTracks?: boolean }>(ctx.request);
+  const body = await readJson<{
+    confirm?: boolean;
+    wipeTracks?: boolean;
+    wipeTransactions?: boolean;
+  }>(ctx.request);
   if (!body?.confirm) return json({ error: "confirm required" }, 400);
+
+  // TEST-DATA RESET (pre-launch only): the rows produced while playing with the
+  // Stripe TEST keys have no accounting value — they only skew the revenue
+  // engine, the composer payouts and the download counters. SUBSCRIPTIONS are
+  // deliberately NOT touched: dropping them would silently demote a live paying
+  // account to Free while its subscription keeps billing at the provider.
+  if (body.wipeTransactions) {
+    const db = ctx.env.DB;
+    const cleared: Record<string, boolean> = {};
+    for (const table of [
+      "download_log", // download history + the Free-tier monthly counter
+      "plan_licenses", // per-track licence codes minted for subscribers
+      "subscription_licenses",
+      "sync_orders", // one-time track licences (purchases)
+      "revenue_events", // money booked into the payout engine
+      "revenue_allocations", // its per-composer split
+      "payout_runs",
+    ]) {
+      try {
+        await db.prepare(`DELETE FROM ${table}`).run();
+        cleared[table] = true;
+      } catch {
+        cleared[table] = false; // table not created yet — nothing to clear
+      }
+    }
+    if (!body.wipeTracks) {
+      return json({ ok: true, clearedTransactions: cleared });
+    }
+  }
 
   // FULL RESET (owner: "clean everything before I stock the real catalogue").
   // Deletes every TRACK — rows, memberships, and then, as orphans, all of their

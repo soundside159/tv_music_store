@@ -113,7 +113,7 @@ const AdminUsage = () => {
     sample: { key: string; size: number }[];
   }
   const [storage, setStorage] = useState<StorageReport | null>(null);
-  const [storageBusy, setStorageBusy] = useState<"scan" | "clean" | "wipe" | null>(null);
+  const [storageBusy, setStorageBusy] = useState<"scan" | "clean" | "wipe" | "tx" | null>(null);
   const mb = (bytes: number) =>
     bytes >= 1024 ** 3
       ? `${(bytes / 1024 ** 3).toFixed(2)} GB`
@@ -170,6 +170,31 @@ const AdminUsage = () => {
       await scanStorage();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Reset failed");
+    } finally {
+      setStorageBusy(null);
+    }
+  };
+
+  // Test transactions: download history, licence codes, one-time orders, booked
+  // revenue and payout runs. Subscriptions are NOT touched (see the API note).
+  const wipeTransactions = async () => {
+    const typed = window.prompt(
+      "Delete ALL test transaction records?\n\n• download history (and the Free-tier counters)\n• licence codes and one-time orders\n• booked revenue and composer payout runs\n\nSubscriptions, accounts, tracks and files are KEPT.\nThis cannot be undone.\n\nType DELETE to confirm:",
+    );
+    if (typed !== "DELETE") return;
+    setStorageBusy("tx");
+    try {
+      const res = await fetch("/api/admin/storage", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ confirm: true, wipeTransactions: true }),
+      });
+      const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !d.ok) throw new Error(d.error ?? "Cleanup failed");
+      toast.success("Test transaction records cleared");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Cleanup failed");
     } finally {
       setStorageBusy(null);
     }
@@ -398,6 +423,29 @@ const AdminUsage = () => {
             )}
           </div>
         )}
+
+        {/* Test records from the Stripe TEST era: no accounting value, but they
+            skew revenue, payouts and the Free-tier counters. */}
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-400/30 bg-red-400/[0.04] p-3">
+          <p className="max-w-lg font-body text-[11px] text-muted-foreground">
+            <span className="font-semibold text-red-400">Clear test transactions:</span> download
+            history, licence codes, one-time orders, booked revenue and payout runs. Subscriptions,
+            accounts, tracks and files are kept.
+          </p>
+          <button
+            type="button"
+            disabled={storageBusy !== null}
+            onClick={() => void wipeTransactions()}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-red-400/60 px-3 py-1.5 font-body text-xs font-semibold text-red-400 transition-colors hover:bg-red-400/10 disabled:opacity-50"
+          >
+            {storageBusy === "tx" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="h-3.5 w-3.5" />
+            )}
+            Clear test transactions
+          </button>
+        </div>
       </div>
     </div>
   );

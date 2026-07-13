@@ -3280,3 +3280,16 @@ Owner's scan read "54 files · 275 MB · 0 unused" and he asked what those megab
   survive** — the shelves stay, only the records leave them. In Admin → Usage → Storage cleanup it
   is a red "Delete all tracks & files" button behind a `window.prompt` that requires typing DELETE.
   Made for exactly one moment: wiping the test catalogue before the real stock goes in.
+
+### 2026-07-13 — "Clear test transactions" (pre-launch reset of the money tables)
+Owner: the records made while testing with the Stripe TEST keys have no accounting value. Agreed —
+and they are not neutral: they skew the revenue engine, the composer payout runs and the Free-tier
+download counters. `POST /api/admin/storage { confirm: true, wipeTransactions: true }` clears
+**download_log · plan_licenses · subscription_licenses · sync_orders · revenue_events ·
+revenue_allocations · payout_runs**.
+**`subscriptions` is deliberately NOT in that list.** Dropping it would demote a paying account to
+Free in our DB while the subscription keeps billing at the provider — a mismatch that is far worse
+than a stale test row. Test subscriptions are cancelled in the Stripe test dashboard, not here.
+UI: a separate red **"Clear test transactions"** button in Admin → Usage → Storage cleanup (typed
+DELETE confirmation), independent of "Delete all tracks & files" — tracks, files and accounts are
+untouched by it.
