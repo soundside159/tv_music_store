@@ -166,8 +166,12 @@ export const onRequestPost = async (ctx: Ctx) => {
   })();
   const hasLicense = !!licenseOrder;
 
-  // Composer name for filenames inside zips — the cue-sheet name (next to the
-  // PRO fields) when set, else the public pseudonym. Best-effort.
+  // Composer name for filenames inside zips = the PUBLIC PSEUDONYM
+  // (composers.display_name — the "Composer" column in Admin → Users), NOT the
+  // cue-sheet legal name. The customer sees this name on every file he unzips,
+  // so it has to be the artist name, not the passport one. `cue_name` stays a
+  // fallback for old profiles that never got a pseudonym, and it is still what
+  // the licence PDF / cue sheet prints. Best-effort.
   const composerName = await (async () => {
     if (!track?.composer_id) return "";
     try {
@@ -176,7 +180,7 @@ export const onRequestPost = async (ctx: Ctx) => {
       )
         .bind(track.composer_id)
         .first<{ cue_name: string | null; display_name: string | null }>();
-      return (c?.cue_name || c?.display_name || "").trim();
+      return (c?.display_name || c?.cue_name || "").trim();
     } catch {
       try {
         const c = await ctx.env.DB.prepare(`SELECT display_name FROM composers WHERE id = ?1`)

@@ -3013,3 +3013,26 @@ button is **disabled while `composerId` is empty** (tooltip "Pick the composer f
 first"), the select gets a red border until a composer is chosen, a red "Pick a composer to start"
 hint sits next to it, and `start()` refuses with a toast even if it is somehow called. The empty
 option now reads "No composer — pick one (required)".
+
+### 2026-07-13 — Bulk Upload: live per-FILE progress in the queue
+The queue only showed one line per TRACK ("Encoding 1/3…"), so when a run stalled the owner could
+not tell which file was stuck. `src/components/AdminBulkUpload.tsx` now tracks each file:
+- `Group.fileProgress: Record<fileName, { stage, pct? }>` with stages **reading · encoding ·
+  encoded · bpm · checksum · uploading-preview · uploading-master · done · error**, updated by a new
+  `patchFile(groupKey, fileName, progress)` helper at every step of `processGroup()`.
+- New `<FileStatus>` chip renders next to each version AND each stem row: a spinner + label while
+  busy ("encoding MP3…", "uploading preview 62%", "checksum…", "uploading master 41%"), a gold
+  check + "uploaded" when the file is finished. Preview uploads now pass their XHR progress
+  callback through too (they used to upload silently).
+- MP3 versions are marked `done` right after their previews (they have no master to sell); WAV
+  versions go back to `encoded` and finish on their master upload.
+The track-level note line is unchanged — it still shows the current phase for the whole group.
+
+### 2026-07-13 — Download filenames use the composer's PSEUDONYM, not the legal name
+`functions/api/download.ts`: the name baked into every file inside a WAV/STEMS zip
+("tvmusicstore.com_2385_<Composer>_Title.wav") came from `composers.cue_name` first — that field is
+the **legal / cue-sheet name** ("Composer (legal name)" in Admin → Users), so customers were getting
+the composer's passport name on their files. It now takes **`composers.display_name`** (the public
+pseudonym — the "Composer" nickname column in Admin → Users) and only falls back to `cue_name` for
+old profiles that have no pseudonym. The licence PDF / cue sheet still prints `cue_name` — that one
+must stay legal.

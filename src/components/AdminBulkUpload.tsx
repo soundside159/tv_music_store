@@ -36,6 +36,24 @@ interface QueuedFile {
 
 type GroupStatus = "queued" | "working" | "done" | "error";
 
+/** What is happening to ONE file right now (shown next to it in the queue). */
+type FileStage =
+  | "reading"
+  | "encoding"
+  | "encoded"
+  | "bpm"
+  | "checksum"
+  | "uploading-preview"
+  | "uploading-master"
+  | "done"
+  | "error";
+
+interface FileProgress {
+  stage: FileStage;
+  /** 0-100 for the upload stages. */
+  pct?: number;
+}
+
 interface Group {
   key: string;
   title: string;
@@ -47,7 +65,43 @@ interface Group {
   status: GroupStatus;
   note: string;
   error?: string;
+  /** Per-file live status, keyed by file.name — nothing here = still waiting. */
+  fileProgress: Record<string, FileProgress>;
 }
+
+/** Short human label for the chip next to a file in the queue. */
+const stageLabel = (p: FileProgress | undefined): string => {
+  if (!p) return "";
+  switch (p.stage) {
+    case "reading":
+      return "reading…";
+    case "encoding":
+      return "encoding MP3…";
+    case "encoded":
+      return "encoded";
+    case "bpm":
+      return "detecting BPM…";
+    case "checksum":
+      return "checksum…";
+    case "uploading-preview":
+      return `uploading preview ${p.pct ?? 0}%`;
+    case "uploading-master":
+      return `uploading master ${p.pct ?? 0}%`;
+    case "done":
+      return "uploaded";
+    case "error":
+      return "failed";
+  }
+};
+
+const STAGE_BUSY: FileStage[] = [
+  "reading",
+  "encoding",
+  "bpm",
+  "checksum",
+  "uploading-preview",
+  "uploading-master",
+];
 
 const baseName = (filename: string) => filename.replace(/\.[a-z0-9]+$/i, "").trim();
 
@@ -190,6 +244,29 @@ const createTrack = async (payload: Record<string, unknown>): Promise<void> => {
 
 // -----------------------------------------------------------------------------
 
+/** The little live-status chip next to a file: "encoding MP3…", "uploading master 42%", "uploaded". */
+const FileStatus = ({ p }: { p?: FileProgress }) => {
+  if (!p) return null;
+  const busy = STAGE_BUSY.includes(p.stage);
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap font-body text-[10px] tabular-nums ${
+        p.stage === "error"
+          ? "text-red-400"
+          : p.stage === "done"
+            ? "text-[#F4C430]"
+            : busy
+              ? "text-foreground"
+              : "text-muted-foreground"
+      }`}
+    >
+      {busy && <Loader2 className="h-3 w-3 animate-spin" />}
+      {p.stage === "done" && <CheckCircle2 className="h-3 w-3" />}
+      {stageLabel(p)}
+    </span>
+  );
+};
+
 const AdminBulkUpload = () => {
   const [groups, setGroups] = useState<Group[]>([]);
   const [running, setRunning] = useState(false);
@@ -224,6 +301,14 @@ const AdminBulkUpload = () => {
 
   const patch = (key: string, p: Partial<Group>) =>
     setGroups((gs) => gs.map((g) => (g.key === key ? { ...g, ...p } : g)));
+
+  /** Live per-file status — this is what tells the owner WHERE a run is stuck. */
+  const patchFile = (key: string, name: string, p: FileProgress) =>
+    setGroups((gs) =>
+      gs.map((g) =>
+        g.key === key ? { ...g, fileProgress: { ...g.fileProgress, [name]: p } } : g,
+      ),
+    );
 
   const addIncoming = (list: Incoming[]) => {
     const wavs = list.filter((x) => isAudioFile(x.file.name));
@@ -270,6 +355,7 @@ const AdminBulkUpload = () => {
             status: "queued",
             note: "",
             error: undefined,
+            fileProgress: {},
           });
         }
       }
@@ -350,8 +436,10 @@ const AdminBulkUpload = () => {
     const encoded: { qf: QueuedFile; mp3_320: Blob; mp3_128: Blob; duration: number }[] = [];
     for (let i = 0; i < group.files.length; i++) {
       const qf = group.files[i];
-      if (isMp3(qf.file.name)) {
-        patch(group.key, { note: `Reading MP3 ${i + 1}/${group.files.length}: ${qf.file.name}` });
+      const name = qf.file.name;
+      if (isMp3(name)) {
+        patch(group.key, { note: `Reading MP3 ${i + 1}/${group.files.length}: ${name}` });
+        patchFile(group.key, name, { stage: "reading" });
         const buffer = await decodeAudio(qf.file);
         encoded.push({
           qf,
@@ -360,10 +448,12 @@ const AdminBulkUpload = () => {
           duration: buffer.duration,
         });
       } else {
-        patch(group.key, { note: `Encoding ${i + 1}/${group.files.length}: ${qf.file.name}` });
+        patch(group.key, { note: `Encoding ${i + 1}/${group.files.length}: ${name}` });
+        patchFile(group.key, name, { stage: "encoding" });
         const pair = await wavToMp3Pair(qf.file);
         encoded.push({ qf, ...pair });
       }
+      patchFile(group.key, name, { stage: "encoded" });
     }
 
     // 2. Main = the starred file → a file named …_main… → else the longest.
@@ -379,20 +469,25 @@ const AdminBulkUpload = () => {
     // 2b. Tempo of the Main version — saved into the draft so the owner
     // doesn't have to type it during tagging.
     patch(group.key, { note: "Detecting BPM…" });
+    patchFile(group.key, ordered[0].qf.file.name, { stage: "bpm" });
     let bpmDetected: number | null = null;
     try {
       bpmDetected = await detectBpm(await decodeAudio(ordered[0].qf.file));
     } catch {
       // no beat found — BPM stays empty
     }
+    patchFile(group.key, ordered[0].qf.file.name, { stage: "encoded" });
 
     // 3. Upload previews (320 + 128) per version.
     const versions: { label: string; previewSrc: string; preview128?: string; duration: string }[] = [];
     for (let i = 0; i < ordered.length; i++) {
       const e = ordered[i];
+      const name = e.qf.file.name;
       patch(group.key, { note: `Uploading version ${i + 1}/${ordered.length}…` });
-      const p320 = await uploadAudio(e.mp3_320, "preview", e.qf.file.name);
-      const p128 = await uploadAudio(e.mp3_128, "preview128", e.qf.file.name);
+      const onPct = (pct: number) => patchFile(group.key, name, { stage: "uploading-preview", pct });
+      onPct(0);
+      const p320 = await uploadAudio(e.mp3_320, "preview", name, onPct);
+      const p128 = await uploadAudio(e.mp3_128, "preview128", name, onPct);
       // A "…_main…" filename shouldn't leak "main" into the site label.
       const clean = isMainFile(e.qf.file.name) ? "" : labelOf(group, e.qf);
       versions.push({
@@ -401,6 +496,9 @@ const AdminBulkUpload = () => {
         preview128: p128.path ?? undefined,
         duration: formatDuration(e.duration),
       });
+      // MP3 versions have no master to sell — they are finished here. WAVs still
+      // have their master upload ahead of them.
+      patchFile(group.key, name, { stage: isMp3(name) ? "done" : "encoded" });
     }
 
     // 4. Master files go up INDIVIDUALLY (v2 storage) — each stays under the
@@ -416,12 +514,15 @@ const AdminBulkUpload = () => {
       for (let i = 0; i < files.length; i++) {
         const { file } = files[i];
         patch(group.key, { note: `Checksumming ${label} ${i + 1}/${files.length}…` });
+        patchFile(group.key, file.name, { stage: "checksum" });
         const crc = await crc32File(file);
-        const up = await uploadAudio(file, "master", file.name, (pct) =>
+        const up = await uploadAudio(file, "master", file.name, (pct) => {
           patch(group.key, {
             note: `Uploading ${label} ${i + 1}/${files.length} (${mb(file.size)})… ${pct}%`,
-          }),
-        );
+          });
+          patchFile(group.key, file.name, { stage: "uploading-master", pct });
+        });
+        patchFile(group.key, file.name, { stage: "done" });
         manifest.push({ key: up.key, name: file.name, size: file.size, crc });
       }
       return manifest;
@@ -695,6 +796,7 @@ const AdminBulkUpload = () => {
                               {qf.file.name}
                               <span className="ml-2 text-foreground/80">→ {label}</span>
                             </span>
+                            <FileStatus p={g.fileProgress[qf.file.name]} />
                             {g.status !== "working" && g.files.length > 1 && (
                               <button
                                 type="button"
@@ -716,6 +818,7 @@ const AdminBulkUpload = () => {
                           <span className="min-w-0 flex-1 truncate font-body text-xs text-muted-foreground">
                             {qf.file.name}
                           </span>
+                          <FileStatus p={g.fileProgress[qf.file.name]} />
                           {g.status !== "working" && (
                             <button
                               type="button"
