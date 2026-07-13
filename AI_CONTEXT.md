@@ -2961,3 +2961,27 @@ truncated the tails** of `AdminBulkUpload.tsx`, `AdminTracksEdit.tsx`, `content.
 re-apply edits with a small python `read → str.replace → write` script and re-run lint. **After any
 edit to this repo, check `npm run lint` for 0 errors and that the file still ends with its
 `export default …`.**
+
+### 2026-07-13 — Download dialog: "Include PDF License" is now one optional checkbox for ALL formats
+- **`src/components/DownloadOptionsModal.tsx`**: the checkbox used to appear for MP3 only, while
+  WAV/STEMS showed a fixed line "The license PDF is included in this archive automatically" (the PDF
+  was force-packed server-side). Now there is **one checkbox, shown for every format** (MP3 320 /
+  WAV / STEMS) and it drives all of them. New derived values: `canPdf = authed && (plan !== "free" ||
+  license)` and `pdfTargetLabel` ("zip" / "WAV zip" / "STEMS zip") for the sub-label.
+- **Free plan / signed-out users now SEE the checkbox, greyed out and disabled** (owner: hiding it
+  was dumb — they should know the certificate exists). Sub-label: "Comes with Pro, Max or a one-time
+  license for this track."
+- **`functions/api/download.ts`**: in the v2 manifest branch (WAV + STEMS zips streamed from the
+  individual masters) the certificate PDF is now added **only when `body.includeLicense === true`**
+  and the plan allows it (`plan !== "free" || hasLicense`). It used to be unconditional. The MP3
+  branch already worked this way. Default in the dialog = unchecked, so a plain WAV/STEMS zip
+  now contains audio only unless the customer asks for the licence.
+- **Note on STEMS "SOON":** stems ALREADY stream as a zip (`stems_manifest` → `streamZip`, same
+  pipeline as WAV). The SOON badge is purely `!args.hasStems` — it shows on tracks that have no
+  stems uploaded yet. Upload stems for a track (Bulk Upload …_stem(s)_… files) and the option
+  unlocks by itself for Max / licence holders.
+- **"SOON" is gone from the download dialog.** The STEMS row is no longer rendered at all when the
+  track has no stems (`.filter((o) => o.id !== "stems" || !!args.hasStems)`); the `soon` flag was
+  removed from `FormatOption` entirely. Owner: a greyed-out SOON badge reads to the customer like
+  an unfinished site, not like "this particular track has no stems". Tracks WITH stems show the
+  normal MAX/LICENSED row.

@@ -70,7 +70,9 @@ export interface DownloadArgs {
   quality?: 128 | 320;
   /** Enables the STEMS option in the download dialog (stems zip uploaded). */
   hasStems?: boolean;
-  /** MP3 only: server packs the MP3 + license PDF into one zip. */
+  /** "Include PDF License": the server adds the certificate to the download —
+   *  an MP3 turns into a zip (mp3 + PDF); WAV/STEMS get the PDF in their zip.
+   *  Needs a paid plan or a one-time license for the track. */
   includeLicense?: boolean;
 }
 

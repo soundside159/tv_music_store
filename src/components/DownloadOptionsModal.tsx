@@ -25,14 +25,13 @@ interface FormatOption {
   description: string;
   need: "free" | "pro" | "max";
   badge?: "PRO" | "MAX";
-  soon?: boolean;
 }
 
 const options: FormatOption[] = [
   { id: "mp3-128", title: "MP3 128 Kbps", description: "Light file for rough cuts and previews.", need: "free" },
   { id: "mp3-320", title: "MP3 320 Kbps", description: "Full-quality MP3 for your final edit.", need: "pro", badge: "PRO" },
   { id: "wav", title: "WAV 44.1 kHz", description: "Uncompressed master for the edit suite.", need: "max", badge: "MAX" },
-  { id: "stems", title: "STEMS", description: "Separated layers to remix and re-balance.", need: "max", badge: "MAX", soon: true },
+  { id: "stems", title: "STEMS", description: "Separated layers to remix and re-balance.", need: "max", badge: "MAX" },
 ];
 
 const planRank: Record<string, number> = { free: 0, pro: 1, max: 2 };
@@ -101,13 +100,18 @@ const DownloadOptionsModal = () => {
   // Pro/Max (and license owners) get full quality anyway — the 128 kbps
   // option would only be clutter, so it disappears for them.
   const hide128 = planRank[plan] >= 1 || !!license;
-  // STEMS unlocks per track once a stems zip is uploaded; otherwise stays SOON.
+  // No stems uploaded for this track? The option simply isn't there — a
+  // greyed-out "SOON" row reads like a broken site, not like a missing file.
   const availableOptions = options
     .filter((o) => !(o.id === "mp3-128" && hide128))
-    .map((o) => (o.id === "stems" ? { ...o, soon: !args.hasStems } : o));
+    .filter((o) => o.id !== "stems" || !!args.hasStems);
   const option = availableOptions.find((o) => o.id === selected) ?? availableOptions[0];
   // A purchased one-time license unlocks every available format for its track.
   const locked = planRank[plan] < planRank[option.need] && !license;
+  // The license certificate is a paid-plan / bought-license perk — Free users
+  // still see the option, greyed out, so they know what they're missing.
+  const canPdf = status === "authed" && (plan !== "free" || !!license);
+  const pdfTargetLabel = option.id === "stems" ? "STEMS zip" : option.id === "wav" ? "WAV zip" : "zip";
   const freeLeft = Math.max(0, 3 - downloadsUsedThisMonth);
 
   const close = () => setArgs(null);
@@ -124,10 +128,9 @@ const DownloadOptionsModal = () => {
         ...args,
         format: option.id === "wav" ? "wav" : option.id === "stems" ? "stems" : "mp3",
         quality: option.id === "mp3-128" ? 128 : 320,
-        // MP3 + the checkbox = the server packs ONE zip (mp3 + license PDF).
-        // WAV/stems bundles get the PDF inside automatically server-side.
-        includeLicense:
-          includePdf && option.id.startsWith("mp3") && status === "authed" && (plan !== "free" || !!license),
+        // The checkbox decides for EVERY format: MP3 gets packed into a zip
+        // with the certificate, WAV/STEMS get the PDF added to their bundle.
+        includeLicense: includePdf && canPdf,
       };
       const ok = await downloadTrackVersion(dl);
       // Refresh the session so the free-downloads counter reflects this download.
@@ -184,23 +187,17 @@ const DownloadOptionsModal = () => {
               <button
                 key={o.id}
                 type="button"
-                disabled={o.soon}
                 onClick={() => setSelected(o.id)}
                 className={`flex items-center gap-3 rounded-xl border p-3.5 text-left transition-colors ${
                   isActive
                     ? "border-[#F4C430] bg-[#F4C430]/10"
                     : "border-border bg-background/40 hover:border-[#F4C430]/50"
-                } ${o.soon ? "cursor-not-allowed opacity-50" : ""}`}
+                }`}
               >
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">
                     <span className="font-body text-sm font-semibold text-foreground">{o.title}</span>
-                    {o.badge && <Badge label={license && !o.soon ? "LICENSED" : o.badge} />}
-                    {o.soon && (
-                      <span className="rounded-full border border-border px-2 py-0.5 font-body text-[10px] text-muted-foreground">
-                        SOON
-                      </span>
-                    )}
+                    {o.badge && <Badge label={license ? "LICENSED" : o.badge} />}
                   </span>
                   <span className="mt-0.5 block font-body text-xs text-muted-foreground">{o.description}</span>
                 </span>
@@ -210,37 +207,36 @@ const DownloadOptionsModal = () => {
           })}
         </div>
 
-        {status === "authed" && (plan !== "free" || license) && !option.soon && (
-          option.id === "wav" || option.id === "stems" ? (
-            /* Bundles always carry the certificate — nothing to tick. */
-            <p className="mt-4 rounded-xl border border-border/60 bg-background/40 p-3 font-body text-[11px] text-muted-foreground">
-              <Check className="mr-1 inline h-3.5 w-3.5" style={{ color: GOLD }} />
-              The license PDF is included in this archive automatically.
-            </p>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setIncludePdf((v) => !v)}
-              className="mt-4 flex w-full items-center gap-2.5 rounded-xl border border-border bg-background/40 p-3 text-left transition-colors hover:border-[#F4C430]/50"
-            >
-              <span
-                className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                  includePdf ? "border-[#F4C430] bg-[#F4C430]" : "border-border"
-                }`}
-              >
-                {includePdf && <Check className="h-3 w-3 text-background" />}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block font-body text-xs font-semibold text-foreground">Include PDF License</span>
-                <span className="block font-body text-[11px] text-muted-foreground">
-                  {license
-                    ? "Packs the MP3 + your purchase certificate into one zip."
-                    : "Packs the MP3 + your plan certificate into one zip."}
-                </span>
-              </span>
-            </button>
-          )
-        )}
+        {/* One checkbox for every format. Free / signed-out users SEE it (so they
+            know the certificate exists) but can't tick it — it needs a paid plan
+            or a one-time license for the track. */}
+        <button
+          type="button"
+          disabled={!canPdf}
+          onClick={() => setIncludePdf((v) => !v)}
+          title={canPdf ? undefined : "The license certificate comes with Pro, Max or a one-time license"}
+          className={`mt-4 flex w-full items-center gap-2.5 rounded-xl border border-border bg-background/40 p-3 text-left transition-colors ${
+            canPdf ? "hover:border-[#F4C430]/50" : "cursor-not-allowed opacity-60"
+          }`}
+        >
+          <span
+            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+              includePdf && canPdf ? "border-[#F4C430] bg-[#F4C430]" : "border-border"
+            }`}
+          >
+            {includePdf && canPdf && <Check className="h-3 w-3 text-background" />}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-body text-xs font-semibold text-foreground">Include PDF License</span>
+            <span className="block font-body text-[11px] text-muted-foreground">
+              {!canPdf
+                ? "Comes with Pro, Max or a one-time license for this track."
+                : license
+                  ? `Adds your purchase certificate to the ${pdfTargetLabel}.`
+                  : `Adds your plan certificate to the ${pdfTargetLabel}.`}
+            </span>
+          </span>
+        </button>
 
         {license ? (
           <p className="mt-4 text-center font-body text-xs" style={{ color: GOLD }}>

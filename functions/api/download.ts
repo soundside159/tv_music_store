@@ -312,26 +312,30 @@ export const onRequestPost = async (ctx: Ctx) => {
       if (!obj) return json({ error: `File missing in storage (${m.name})`, code: "nofile" }, 404);
       zipEntries.push({ name: niceZipEntryName(m.name), size: m.size, crc: m.crc, body: obj.body });
     }
-    // Drop the license certificate PDF into the bundle too (owner request) —
-    // best-effort: the zip still ships if the PDF endpoint hiccups.
-    try {
-      const licPath = licenseOrder
-        ? `/api/license-pdf?order=${encodeURIComponent(licenseOrder.id)}`
-        : `/api/license-pdf?slug=${encodeURIComponent(slug)}`;
-      const licRes = await fetch(new URL(licPath, new URL(ctx.request.url).origin).toString(), {
-        headers: { cookie: ctx.request.headers.get("cookie") ?? "" },
-      });
-      if (licRes.ok) {
-        const pdf = new Uint8Array(await licRes.arrayBuffer());
-        zipEntries.push({
-          name: `LICENSE - ${sanitizeFilename(tidyTitle(track?.title ?? slug))}.pdf`,
-          size: pdf.length,
-          crc: crc32(pdf),
-          body: pdf,
+    // The license certificate PDF rides along ONLY when the customer ticked
+    // "Include PDF License" in the download dialog (WAV / STEMS / MP3 alike).
+    // Best-effort: the zip still ships if the PDF endpoint hiccups.
+    const wantsPdf = body?.includeLicense === true && (plan !== "free" || hasLicense);
+    if (wantsPdf) {
+      try {
+        const licPath = licenseOrder
+          ? `/api/license-pdf?order=${encodeURIComponent(licenseOrder.id)}`
+          : `/api/license-pdf?slug=${encodeURIComponent(slug)}`;
+        const licRes = await fetch(new URL(licPath, new URL(ctx.request.url).origin).toString(), {
+          headers: { cookie: ctx.request.headers.get("cookie") ?? "" },
         });
+        if (licRes.ok) {
+          const pdf = new Uint8Array(await licRes.arrayBuffer());
+          zipEntries.push({
+            name: `LICENSE - ${sanitizeFilename(tidyTitle(track?.title ?? slug))}.pdf`,
+            size: pdf.length,
+            crc: crc32(pdf),
+            body: pdf,
+          });
+        }
+      } catch {
+        // no PDF — the bundle still delivers
       }
-    } catch {
-      // no PDF — bundle still delivers
     }
     audioBody = streamZip(zipEntries);
     contentType = "application/zip";
