@@ -46,7 +46,10 @@ const referencedKeys = async (db: D1Database): Promise<Set<string>> => {
       }>();
     for (const r of rows.results) {
       for (const e of parseManifest(r.wav_manifest) ?? []) keep.add(e.key);
-      for (const e of parseManifest(r.stems_manifest) ?? []) keep.add(e.key);
+      for (const e of parseManifest(r.stems_manifest) ?? []) {
+        keep.add(e.key);
+        add(e.preview); // the stem's streaming MP3 (mini-DAW layers)
+      }
       add(r.r2_key_wav_zip);
       add(r.r2_key_stems);
       add(r.cover);
@@ -122,12 +125,30 @@ export const onRequestGet = async (ctx: Ctx) => {
   const orphans = objects.filter((o) => !keep.has(o.key));
   const bytes = orphans.reduce((n, o) => n + o.size, 0);
 
+  // What the megabytes actually ARE. (Licence PDFs are NOT in here — they are
+  // generated on the fly per download and never stored.)
+  const group = (prefix: string) => {
+    const list = objects.filter((o) => o.key.startsWith(prefix));
+    return { files: list.length, bytes: list.reduce((n, o) => n + o.size, 0) };
+  };
+  const breakdown = {
+    previews: group("previews/"), // MP3 320 + 128 per version, MP3 320 per stem
+    masters: group("masters/"), // WAV versions + WAV stems (what customers download)
+    covers: group("covers/"), // track / collection / playlist artwork
+  };
+
+  const trackCount = await ctx.env.DB.prepare(`SELECT COUNT(*) AS n FROM tracks`)
+    .first<{ n: number }>()
+    .catch(() => null);
+
   return json({
     ok: true,
     total: objects.length,
     totalBytes: objects.reduce((n, o) => n + o.size, 0),
     orphans: orphans.length,
     orphanBytes: bytes,
+    breakdown,
+    tracks: trackCount?.n ?? 0,
     // A sample, so the owner can eyeball what would go before pressing delete.
     sample: orphans.slice(0, 20).map((o) => ({ key: o.key, size: o.size })),
   });
@@ -139,8 +160,42 @@ export const onRequestPost = async (ctx: Ctx) => {
   if (!ctx.env.DB) return json({ error: "DB not bound" }, 503);
   if (!ctx.env.R2?.list || !ctx.env.R2?.delete) return json({ error: "R2 not bound" }, 503);
 
-  const body = await readJson<{ confirm?: boolean }>(ctx.request);
+  const body = await readJson<{ confirm?: boolean; wipeTracks?: boolean }>(ctx.request);
   if (!body?.confirm) return json({ error: "confirm required" }, 400);
+
+  // FULL RESET (owner: "clean everything before I stock the real catalogue").
+  // Deletes every TRACK — rows, memberships, and then, as orphans, all of their
+  // audio. Collections / playlists / categories / vocabularies / users survive:
+  // the shelves stay, only the records leave them.
+  if (body.wipeTracks) {
+    const db = ctx.env.DB;
+    for (const sql of [
+      `DELETE FROM track_versions`,
+      `DELETE FROM collection_tracks`,
+      `DELETE FROM playlist_tracks`,
+      `DELETE FROM category_tracks`,
+      `DELETE FROM favourites`,
+      `DELETE FROM tracks`,
+    ]) {
+      try {
+        await db.prepare(sql).run();
+      } catch {
+        // table not there (older DB) — nothing to clear in it
+      }
+    }
+    try {
+      await db
+        .prepare(
+          `INSERT INTO site_config (key, value) VALUES ('trending_track_ids', '[]')
+           ON CONFLICT(key) DO UPDATE SET value = '[]'`,
+        )
+        .run();
+    } catch {
+      // no site_config — fine
+    }
+    // With no tracks left, EVERY audio file is an orphan; the sweep below now
+    // deletes the whole lot (covers of collections/playlists stay referenced).
+  }
 
   const keep = await referencedKeys(ctx.env.DB);
   const objects = await bucketObjects(ctx.env.R2);
@@ -157,5 +212,5 @@ export const onRequestPost = async (ctx: Ctx) => {
       // already gone — fine
     }
   }
-  return json({ ok: true, deleted, bytes });
+  return json({ ok: true, deleted, bytes, wiped: !!body.wipeTracks });
 };

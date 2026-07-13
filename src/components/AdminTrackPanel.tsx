@@ -575,13 +575,20 @@ const VersionsBlock = ({
         const label = cleanVersionLabel(base, track.title) || `Version ${versions.length + 1}`;
 
         if (isStemName(file.name)) {
+          // WAV master + a streaming MP3 320 for the layer (mini-DAW, later).
+          let preview: string | undefined;
+          if (!isMp3Name(file.name)) {
+            setBusy(`Encoding MP3 for ${file.name}…`);
+            const { mp3_320 } = await wavToMp3Pair(file);
+            preview = (await uploadAudioApi(mp3_320, "preview", file.name)).path ?? undefined;
+          }
           setBusy(`Uploading stem ${file.name}…`);
           const crc = await crc32File(file);
           const up = await uploadAudioApi(file, "master", file.name);
           const ok = await run({
             action: "add_stems",
             id: track.id,
-            stems: [{ key: up.key, name: file.name, size: file.size, crc }],
+            stems: [{ key: up.key, name: file.name, size: file.size, crc, preview }],
           });
           if (ok) {
             toast.success(`Stem "${file.name}" added`);

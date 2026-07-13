@@ -3220,3 +3220,63 @@ The owner asked how to get rid of everything he uploaded and deleted before the 
 - **UI: Admin → Usage → "Storage cleanup" card** (`src/components/AdminUsage.tsx`): "Scan storage"
   shows totals + a sample of the unused files, then a red "Delete N unused files" button appears
   (with a confirm). Safe to run any time.
+
+### 2026-07-13 — FIX: adding a version to an existing track silently failed (SQL aggregate bug)
+Owner's report: he dropped a new version + a new stem onto an existing track; the files uploaded, but
+the new version never appeared in the WAV zip, and Storage-cleanup showed its previews and master as
+ORPHANS (nothing in the DB pointed at them).
+Cause, in `add_version` (`functions/api/admin/content.ts`):
+```sql
+SELECT version_id, COALESCE(MAX(sort), -1) AS maxsort FROM track_versions WHERE track_id = ?1
+```
+A bare column next to an aggregate — SQLite collapses that to **ONE row**, whatever the track has.
+So `usedIds` held a single id, the next version always tried to be **"v2"**, and on any track that
+already had a v2 the INSERT hit the primary key `trackId:v2` and threw: D1 raised, the endpoint
+returned a bare 500 ("Request failed" in the UI), the row never appeared — and the previews/master
+uploaded seconds earlier became orphans. Now the rows are read properly (`SELECT version_id, sort`)
+and both the free id and `maxSort` are computed from them. The INSERT is also wrapped so a database
+error comes back as a readable JSON message instead of an HTML 500.
+Note on file naming (owner asked): the code in the download filenames (`tvmusicstore.com_2445_…`) is
+taken from the TRACK's slug at download time, not from the file — so anything added to an existing
+track automatically carries that track's code. Nothing to fix there.
+
+### 2026-07-13 — Version MP3s are deleted with the version · every stem now carries an MP3 320
+1. **The MP3s went with nothing before.** `delete_version` removed the row and (since today) the WAV
+   master, but the version's **preview MP3s (320 + 128) stayed in R2 forever**. They are deleted with
+   the version now (`preview_src`, `preview_128` → `r2KeyOf()` → `R2.delete`). Same for stems:
+   `delete_stem` now deletes the stem's MP3 alongside its master, and `delete_track` collects the
+   stem previews too. Nothing a track owns survives its deletion.
+2. **Stems get an MP3 320 at upload time** (owner's plan: a mini-DAW on the track page — the WAV
+   button opens the stems as layers you can solo / mute / balance; rendering the MP3s now means we
+   never have to decode the WAV masters again later).
+   - `ManifestEntry` (in `_zipStream.ts`) gained an optional **`preview`** field — the public path of
+     that stem's MP3 (`/api/file/previews/…`). It is metadata only: the STEMS zip still ships the
+     WAV masters, untouched.
+   - `cleanManifest()` in the admin API validates and keeps it; `/api/admin/stems` returns it;
+     the storage sweep counts it as REFERENCED (so the cleanup never eats a stem's MP3).
+   - All three upload paths render it: **Bulk Upload** (`uploadMasters(…, withPreview)`), the
+     **Tracks Edit drop zone**, and the **track-page Add button**. Stems that are already MP3s are
+     used as-is (no re-encode).
+   - Cost: one extra MP3 encode + upload per stem at import time. Nothing else in the app reads
+     `preview` yet — the mini-DAW is the next consumer.
+- Follow-up: the track page no longer numbers the alternate versions ("1. 30sec" → "30sec") —
+  `TrackVersionRow` lost its `index` prop.
+- Confirmed for the record (owner asked): **every VERSION stores two MP3s** — 320 (Pro/Max + the
+  paid formats) and 128 (the Free tier's only download) — and BOTH are deleted with the version.
+  **STEMS store one MP3 (320) only**, which is right: stems are a Max/licence perk, they are never
+  served to Free, and the 320 exists purely to stream the layers in the future mini-DAW.
+
+### 2026-07-13 — Storage: breakdown by kind + "Delete all tracks & files" (factory reset)
+Owner's scan read "54 files · 275 MB · 0 unused" and he asked what those megabytes are.
+- **Licence PDFs are NOT in storage** — they are generated per download (`/api/license-pdf`), never
+  written to R2. The bucket only ever holds three kinds of file, and the scan now says so:
+  `GET /api/admin/storage` returns a **breakdown** — `masters/` (WAV versions + WAV stems: what the
+  customer downloads, by far the heaviest), `previews/` (MP3 320 + 128 per version, MP3 320 per
+  stem) and `covers/` (artwork) — plus the current track count. The UI prints it under the totals.
+- **New full reset**: `POST /api/admin/storage { confirm: true, wipeTracks: true }` deletes every
+  TRACK (tracks, track_versions, collection/playlist/category memberships, favourites, trending
+  list) and then, because nothing references them any more, sweeps ALL their audio out of R2 in the
+  same request. **Collections, playlists, categories, vocabularies, the tags base and all accounts
+  survive** — the shelves stay, only the records leave them. In Admin → Usage → Storage cleanup it
+  is a red "Delete all tracks & files" button behind a `window.prompt` that requires typing DELETE.
+  Made for exactly one moment: wiping the test catalogue before the real stock goes in.

@@ -186,6 +186,14 @@ export interface ManifestEntry {
   name: string;
   size: number;
   crc: number;
+  /**
+   * STEMS only: public path of an MP3 320 rendered from this file at upload
+   * time (`/api/file/previews/…`). The zip always ships the WAV master — this
+   * is for STREAMING the layer in the browser (the planned mini-DAW: solo /
+   * mute / balance the stems on the track page). Rendering it now means we
+   * never have to decode the WAVs again later.
+   */
+  preview?: string;
 }
 
 export const parseManifest = (raw: string | null | undefined): ManifestEntry[] | null => {

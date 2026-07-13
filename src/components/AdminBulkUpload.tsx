@@ -512,14 +512,28 @@ const AdminBulkUpload = () => {
     // ~95 MB per-upload cap no matter how many stems/versions a track has.
     // The customer's zip is assembled ON DOWNLOAD from these files (with the
     // license PDF dropped in), using the checksums computed here.
-    type ManifestEntry = { key: string; name: string; size: number; crc: number };
+    type ManifestEntry = { key: string; name: string; size: number; crc: number; preview?: string };
     const uploadMasters = async (
       files: QueuedFile[],
       label: string,
+      /** Stems also get a streamable MP3 320 (future mini-DAW: solo/mute layers).
+       *  Rendering it at upload time means we never decode the WAVs again. */
+      withPreview = false,
     ): Promise<ManifestEntry[]> => {
       const manifest: ManifestEntry[] = [];
       for (let i = 0; i < files.length; i++) {
         const { file } = files[i];
+        let preview: string | undefined;
+        if (withPreview && !isMp3(file.name)) {
+          patch(group.key, { note: `Encoding ${label} MP3 ${i + 1}/${files.length}…` });
+          patchFile(group.key, file.name, { stage: "encoding" });
+          const { mp3_320 } = await wavToMp3Pair(file);
+          patchFile(group.key, file.name, { stage: "uploading-preview", pct: 0 });
+          const up320 = await uploadAudio(mp3_320, "preview", file.name, (pct) =>
+            patchFile(group.key, file.name, { stage: "uploading-preview", pct }),
+          );
+          preview = up320.path ?? undefined;
+        }
         patch(group.key, { note: `Checksumming ${label} ${i + 1}/${files.length}…` });
         patchFile(group.key, file.name, { stage: "checksum" });
         const crc = await crc32File(file);
@@ -530,7 +544,7 @@ const AdminBulkUpload = () => {
           patchFile(group.key, file.name, { stage: "uploading-master", pct });
         });
         patchFile(group.key, file.name, { stage: "done" });
-        manifest.push({ key: up.key, name: file.name, size: file.size, crc });
+        manifest.push({ key: up.key, name: file.name, size: file.size, crc, preview });
       }
       return manifest;
     };
@@ -547,7 +561,7 @@ const AdminBulkUpload = () => {
       }
     }
     const stemsManifest =
-      group.stems.length > 0 ? await uploadMasters(group.stems, "stem") : undefined;
+      group.stems.length > 0 ? await uploadMasters(group.stems, "stem", true) : undefined;
 
     // 5. Create the draft track.
     patch(group.key, { note: "Creating track…" });

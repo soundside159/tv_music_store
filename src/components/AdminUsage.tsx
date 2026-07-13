@@ -99,15 +99,21 @@ const AdminUsage = () => {
   // --- Orphaned files in R2 -------------------------------------------------
   // Until 2026-07-13 deleting a track left its audio in the bucket. This scans
   // storage against the database and can delete whatever nothing points at.
+  interface StorageGroup {
+    files: number;
+    bytes: number;
+  }
   interface StorageReport {
     total: number;
     totalBytes: number;
     orphans: number;
     orphanBytes: number;
+    tracks: number;
+    breakdown: { previews: StorageGroup; masters: StorageGroup; covers: StorageGroup };
     sample: { key: string; size: number }[];
   }
   const [storage, setStorage] = useState<StorageReport | null>(null);
-  const [storageBusy, setStorageBusy] = useState<"scan" | "clean" | null>(null);
+  const [storageBusy, setStorageBusy] = useState<"scan" | "clean" | "wipe" | null>(null);
   const mb = (bytes: number) =>
     bytes >= 1024 ** 3
       ? `${(bytes / 1024 ** 3).toFixed(2)} GB`
@@ -130,6 +136,40 @@ const AdminUsage = () => {
       );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Scan failed");
+    } finally {
+      setStorageBusy(null);
+    }
+  };
+
+  // Full reset before the real catalogue goes in: every TRACK and every audio
+  // file. Shelves (collections/playlists/categories), vocabularies and users
+  // stay — only the records leave them.
+  const wipeTracks = async () => {
+    const typed = window.prompt(
+      `This deletes ALL ${storage?.tracks ?? 0} track(s) and EVERY audio file in storage (${mb(
+        storage?.totalBytes ?? 0,
+      )}).\n\nCollections, playlists, categories, tags and accounts are kept.\nThis cannot be undone.\n\nType DELETE to confirm:`,
+    );
+    if (typed !== "DELETE") return;
+    setStorageBusy("wipe");
+    try {
+      const res = await fetch("/api/admin/storage", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ confirm: true, wipeTracks: true }),
+      });
+      const d = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        deleted?: number;
+        bytes?: number;
+        error?: string;
+      };
+      if (!res.ok || !d.ok) throw new Error(d.error ?? "Reset failed");
+      toast.success(`Catalogue cleared · ${d.deleted ?? 0} file(s) deleted, ${mb(d.bytes ?? 0)} freed`);
+      await scanStorage();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Reset failed");
     } finally {
       setStorageBusy(null);
     }
@@ -303,6 +343,17 @@ const AdminUsage = () => {
                 {storage.orphans} unused ({mb(storage.orphanBytes)})
               </span>
             </p>
+            {/* What the megabytes actually are. Licence PDFs are NOT stored —
+                they are generated per download. */}
+            <p className="mt-1 font-body text-[11px] text-muted-foreground">
+              {storage.tracks} track(s) ·{" "}
+              <span className="text-foreground">masters</span> (WAV + stems){" "}
+              {storage.breakdown.masters.files} / {mb(storage.breakdown.masters.bytes)} ·{" "}
+              <span className="text-foreground">previews</span> (MP3 320 + 128){" "}
+              {storage.breakdown.previews.files} / {mb(storage.breakdown.previews.bytes)} ·{" "}
+              <span className="text-foreground">covers</span> {storage.breakdown.covers.files} /{" "}
+              {mb(storage.breakdown.covers.bytes)}
+            </p>
             {storage.sample.length > 0 && (
               <ul className="mt-2 flex flex-col gap-0.5">
                 {storage.sample.map((o) => (
@@ -319,6 +370,31 @@ const AdminUsage = () => {
                   </li>
                 )}
               </ul>
+            )}
+
+            {/* Factory reset — for wiping the test catalogue before the real
+                one goes in. Deliberately behind a typed confirmation. */}
+            {storage.total > 0 && (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-400/30 bg-red-400/[0.04] p-3">
+                <p className="max-w-lg font-body text-[11px] text-muted-foreground">
+                  <span className="font-semibold text-red-400">Start from scratch:</span> deletes ALL
+                  tracks and every audio file. Collections, playlists, categories, tags and accounts
+                  are kept — only the tracks leave them.
+                </p>
+                <button
+                  type="button"
+                  disabled={storageBusy !== null}
+                  onClick={() => void wipeTracks()}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-red-400/60 px-3 py-1.5 font-body text-xs font-semibold text-red-400 transition-colors hover:bg-red-400/10 disabled:opacity-50"
+                >
+                  {storageBusy === "wipe" ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5" />
+                  )}
+                  Delete all tracks &amp; files
+                </button>
+              </div>
             )}
           </div>
         )}

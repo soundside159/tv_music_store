@@ -155,10 +155,17 @@ const repairSlashVocabValues = async (db: D1Database, vocab: Record<VocabFacet, 
 // v2 storage: individual master files with client-computed CRCs; the download
 // endpoint streams a zip from these manifests on the fly. Used by create_track,
 // add_version (WAV master of a new version) and add_stems (dropped stem files).
+const PREVIEW_PATH = /^\/(api\/file\/previews|audio\/previews)\//;
 const cleanManifest = (raw: unknown) => {
   if (!Array.isArray(raw)) return null;
-  const out: { key: string; name: string; size: number; crc: number }[] = [];
-  for (const e of raw.slice(0, 40) as { key?: string; name?: string; size?: number; crc?: number }[]) {
+  const out: { key: string; name: string; size: number; crc: number; preview?: string }[] = [];
+  for (const e of raw.slice(0, 40) as {
+    key?: string;
+    name?: string;
+    size?: number;
+    crc?: number;
+    preview?: string;
+  }[]) {
     if (
       typeof e?.key !== "string" ||
       !/^masters\//.test(e.key) ||
@@ -172,9 +179,21 @@ const cleanManifest = (raw: unknown) => {
       name: e.name.replace(/[^\w\s\-().]/g, "_").slice(0, 120),
       size: Math.round(e.size as number),
       crc: (e.crc as number) >>> 0,
+      // Stems carry a streamable MP3 alongside the master (see ManifestEntry).
+      ...(typeof e.preview === "string" && PREVIEW_PATH.test(e.preview)
+        ? { preview: e.preview }
+        : {}),
     });
   }
   return out.length > 0 ? out : null;
+};
+
+/** "/api/file/previews/x.mp3" (or a bare key) -> "previews/x.mp3" (else null). */
+const r2KeyOf = (v: string | null | undefined): string | null => {
+  if (!v) return null;
+  const m = v.match(/^\/api\/file\/(.+)$/);
+  const key = m ? m[1] : v;
+  return /^(previews|masters|covers)\//.test(key) ? key : null;
 };
 
 /** Adds newer track columns on first use — saves the owner wrangler migrations. */
@@ -1093,36 +1112,53 @@ export const onRequestPost = async (ctx: Ctx) => {
         return json({ error: "id and an uploaded previewSrc required" }, 400);
       }
       await ensureTrackCoverColumn(db);
+      // NOTE: this used to be `SELECT version_id, COALESCE(MAX(sort), -1) …` —
+      // an aggregate next to a bare column, so SQLite returned ONE row however
+      // many versions the track had. `usedIds` then held a single id, the new
+      // version always tried to be "v2", and on any track that already had a v2
+      // the INSERT died on the primary key: the previews were already uploaded,
+      // the row never appeared, and the file became an orphan in R2. Read the
+      // rows properly and compute both values from them.
       const existing = await db
-        .prepare(`SELECT version_id, COALESCE(MAX(sort), -1) AS maxsort FROM track_versions WHERE track_id = ?1`)
+        .prepare(`SELECT version_id, sort FROM track_versions WHERE track_id = ?1`)
         .bind(trackId)
-        .all<{ version_id: string; maxsort: number }>();
-      const usedIds = new Set(existing.results.map((r) => r.version_id));
-      let n = existing.results.length + 1;
+        .all<{ version_id: string; sort: number | null }>();
+      const rows = existing.results;
+      const usedIds = new Set(rows.map((r) => r.version_id));
+      let n = rows.length + 1;
       while (usedIds.has(`v${n}`)) n += 1;
       const versionId = `v${n}`;
-      const maxSort = existing.results[0]?.maxsort ?? -1;
+      const maxSort = rows.reduce((m, r) => Math.max(m, r.sort ?? 0), -1);
       const preview128 =
         body.preview128 && /^\/(api\/file\/previews|audio\/previews)\//.test(body.preview128)
           ? body.preview128
           : null;
-      await db
-        .prepare(
-          `INSERT INTO track_versions
-             (id, track_id, version_id, label, duration, preview_src, preview_128, r2_key_wav, sort)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL, ?8)`,
-        )
-        .bind(
-          `${trackId}:${versionId}`,
-          trackId,
-          versionId,
-          body.label?.trim() || `Version ${n}`,
-          body.duration ?? "",
-          previewSrc,
-          preview128,
-          maxSort + 1,
-        )
-        .run();
+      try {
+        await db
+          .prepare(
+            `INSERT INTO track_versions
+               (id, track_id, version_id, label, duration, preview_src, preview_128, r2_key_wav, sort)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL, ?8)`,
+          )
+          .bind(
+            `${trackId}:${versionId}`,
+            trackId,
+            versionId,
+            body.label?.trim() || `Version ${n}`,
+            body.duration ?? "",
+            previewSrc,
+            preview128,
+            maxSort + 1,
+          )
+          .run();
+      } catch (e) {
+        // A raw D1 throw becomes an HTML 500 and the client only sees "Request
+        // failed" — while the previews it just uploaded sit orphaned in R2.
+        return json(
+          { error: `Could not add the version: ${e instanceof Error ? e.message : "database error"}` },
+          500,
+        );
+      }
       if (typeof body.wavZipKey === "string" && /^masters\//.test(body.wavZipKey)) {
         await db.prepare(`UPDATE tracks SET r2_key_wav_zip = ?2 WHERE id = ?1`).bind(trackId, body.wavZipKey).run();
       }
@@ -1198,9 +1234,17 @@ export const onRequestPost = async (ctx: Ctx) => {
       // have no key, so we fall back to matching the manifest filename against
       // the version label (e.g. "…_30sec.wav" for the "30sec" version).
       const gone = await db
-        .prepare(`SELECT label, r2_key_wav FROM track_versions WHERE track_id = ?1 AND version_id = ?2`)
+        .prepare(
+          `SELECT label, r2_key_wav, preview_src, preview_128
+             FROM track_versions WHERE track_id = ?1 AND version_id = ?2`,
+        )
         .bind(trackId, versionId)
-        .first<{ label: string; r2_key_wav: string | null }>();
+        .first<{
+          label: string;
+          r2_key_wav: string | null;
+          preview_src: string | null;
+          preview_128: string | null;
+        }>();
       const trackRow = await db
         .prepare(`SELECT title, wav_manifest FROM tracks WHERE id = ?1`)
         .bind(trackId)
@@ -1244,6 +1288,18 @@ export const onRequestPost = async (ctx: Ctx) => {
               // object already gone — the manifest is the source of truth
             }
           }
+        }
+      }
+
+      // The version's MP3 previews (320 + 128) are its files too — delete a
+      // version and NOTHING of it should be left paying rent in storage.
+      for (const p of [gone?.preview_src, gone?.preview_128]) {
+        const k = r2KeyOf(p);
+        if (!k) continue;
+        try {
+          await ctx.env.R2?.delete?.(k);
+        } catch {
+          // already gone — fine
         }
       }
 
@@ -1352,10 +1408,16 @@ export const onRequestPost = async (ctx: Ctx) => {
         .run();
 
       // Best-effort storage cleanup — the DB is the source of truth either way.
-      try {
-        await ctx.env.R2?.delete?.(key);
-      } catch {
-        // object already gone / binding without delete — ignore
+      // The stem's streaming MP3 goes with its master; leaving it behind is how
+      // the bucket fills up with files nothing points at.
+      const goneStem = manifest.find((e) => e.key === key);
+      for (const k of [key, r2KeyOf(goneStem?.preview)]) {
+        if (!k) continue;
+        try {
+          await ctx.env.R2?.delete?.(k);
+        } catch {
+          // object already gone / binding without delete — ignore
+        }
       }
       return json({ ok: true, remaining: next.length, hasStems: stillHasStems });
     }
@@ -1399,7 +1461,11 @@ export const onRequestPost = async (ctx: Ctx) => {
           }>();
         for (const r of rows.results) {
           for (const e of parseManifest(r.wav_manifest) ?? []) doomedKeys.add(e.key);
-          for (const e of parseManifest(r.stems_manifest) ?? []) doomedKeys.add(e.key);
+          for (const e of parseManifest(r.stems_manifest) ?? []) {
+            doomedKeys.add(e.key);
+            const pk = toKey(e.preview); // the stem's streaming MP3
+            if (pk) doomedKeys.add(pk);
+          }
           for (const v of [r.r2_key_wav_zip, r.r2_key_stems, r.cover, r.cover_thumb]) {
             const k = toKey(v);
             if (k) doomedKeys.add(k);

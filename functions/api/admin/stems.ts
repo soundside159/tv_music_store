@@ -45,7 +45,7 @@ export const onRequestGet = async (ctx: Ctx) => {
   return json({
     hasStems: !!row.has_stems,
     legacyZip: manifest.length === 0 && !!row.r2_key_stems,
-    stems: manifest.map((e) => ({ key: e.key, name: e.name, size: e.size })),
+    stems: manifest.map((e) => ({ key: e.key, name: e.name, size: e.size, preview: e.preview ?? null })),
     masters: masters.map((e) => ({ key: e.key, name: e.name, size: e.size })),
   });
 };

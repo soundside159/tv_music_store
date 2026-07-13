@@ -447,13 +447,12 @@ const TrackDetail = () => {
                     </p>
                   )}
                   {/* Main plays in the big waveform card above — list alternates only. */}
-                  {track.audioVersions.slice(1).map((version, index) => {
+                  {track.audioVersions.slice(1).map((version) => {
                     const active = activePlayer?.trackId === track.id && activePlayer.versionId === version.id;
                     return (
                       <TrackVersionRow
                         key={version.id}
                         active={active}
-                        index={index}
                         isPlaying={active && isPlaying}
                         onPlay={() => playVersion(track, version)}
                         onSeek={(nextProgress) => playVersion(track, version, nextProgress)}
@@ -587,7 +586,6 @@ const TabButton = ({ active, children, onClick }: { active: boolean; children: R
 
 const TrackVersionRow = ({
   active,
-  index,
   isPlaying,
   onPlay,
   onSeek,
@@ -597,7 +595,6 @@ const TrackVersionRow = ({
   trackTitle,
 }: {
   active: boolean;
-  index: number;
   isPlaying: boolean;
   onPlay: () => void;
   onSeek: (progress: number) => void;
@@ -617,7 +614,7 @@ const TrackVersionRow = ({
       {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
     </button>
     <span className={`font-body text-sm ${active ? "text-foreground" : "text-muted-foreground"}`}>
-      {index + 1}. {displayVersionLabel(version.label, trackTitle)}
+      {displayVersionLabel(version.label, trackTitle)}
     </span>
     <WaveformPreview active={isPlaying} bars={360} onSeek={onSeek} progress={progress} src={version.src} className="h-9" />
     <span className="font-body text-xs text-muted-foreground">{version.duration}</span>

@@ -1162,6 +1162,15 @@ const AdminTracksEdit = ({
         }
 
         if (stem) {
+          // A stem ships as a WAV master AND as an MP3 320 for streaming (the
+          // planned mini-DAW plays the layers in the browser) — same as Bulk Upload.
+          let preview: string | undefined;
+          if (!isMp3File(file.name)) {
+            setDropNote(`Encoding MP3 for ${file.name}…`);
+            const { mp3_320 } = await wavToMp3Pair(file);
+            setDropNote(`Uploading stem preview ${file.name}…`);
+            preview = (await uploadAudioApi(mp3_320, "preview", file.name)).path ?? undefined;
+          }
           setDropNote(`Checksumming ${file.name}…`);
           const crc = await crc32File(file);
           setDropNote(`Uploading stem ${file.name}…`);
@@ -1170,7 +1179,7 @@ const AdminTracksEdit = ({
             {
               action: "add_stems",
               id: t.id,
-              stems: [{ key: up.key, name: file.name, size: file.size, crc }],
+              stems: [{ key: up.key, name: file.name, size: file.size, crc, preview }],
             },
             `Stem "${file.name}" added`,
           );
