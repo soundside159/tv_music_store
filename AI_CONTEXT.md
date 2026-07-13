@@ -3036,3 +3036,23 @@ the composer's passport name on their files. It now takes **`composers.display_n
 pseudonym — the "Composer" nickname column in Admin → Users) and only falls back to `cue_name` for
 old profiles that have no pseudonym. The licence PDF / cue sheet still prints `cue_name` — that one
 must stay legal.
+
+### 2026-07-13 — FIX: broken WAV/STEMS zips ("Unexpected end of archive")
+Two bugs, both in the download path:
+1. **`functions/api/download.ts` was throwing a ReferenceError**: the admin-access change earlier
+   today used `OWNER_EMAIL` without importing it (`import { getSessionUser, json, OWNER_EMAIL, type
+   Ctx } from "./_utils"` — the import is there now). ⚠️ **Lesson: `npm run lint` does NOT typecheck
+   `functions/` — it only parses it.** Typecheck the worker code explicitly after editing it:
+   `npx tsc --noEmit --skipLibCheck --target es2022 --lib es2022,dom --module esnext
+   --moduleResolution bundler --strict $(git ls-files 'functions/**/*.ts')`
+   (ignore the `Cannot find name 'D1Database'` ambient-type noise — everything else is real).
+2. **`functions/api/_zipStream.ts` — R2 bodies were opened up front and went stale.** The old code
+   did `R2.get()` for EVERY manifest entry before writing the zip, so the streams for files 2..N sat
+   idle for as long as the customer needed to download file 1; a stalled/closed stream ends the zip
+   early. `ZipEntrySpec.body` is now `Uint8Array | (() => Promise<ZipSource | null>)` — a **lazy
+   opener** called right before that entry is written, so every R2 stream is short-lived. The local
+   header + central record now also declare the **actual object size** (`obj.size`, manifest size as
+   fallback), and if a body still ends early the entry is zero-padded to the declared length so the
+   archive stays openable (one CRC warning on that file instead of a dead zip).
+The zip writer itself was verified independently (masters-only / masters+PDF / single-entry) with
+`unzip -t` — the format is correct.

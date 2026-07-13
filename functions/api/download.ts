@@ -1,4 +1,4 @@
-import { getSessionUser, json, type Ctx } from "./_utils";
+import { getSessionUser, json, OWNER_EMAIL, type Ctx } from "./_utils";
 import { getOrCreatePlanLicense } from "./_licenses";
 import { crc32, parseManifest, streamZip, type ZipEntrySpec } from "./_zipStream";
 
@@ -316,11 +316,24 @@ export const onRequestPost = async (ctx: Ctx) => {
   let contentType = isZip ? "application/zip" : format === "wav" ? "audio/wav" : "audio/mpeg";
   if (manifestEntries && ctx.env.R2) {
     // v2: stream a zip straight out of the individual master files.
+    const r2 = ctx.env.R2;
     const zipEntries: ZipEntrySpec[] = [];
     for (const m of manifestEntries) {
-      const obj = await ctx.env.R2.get(m.key);
-      if (!obj) return json({ error: `File missing in storage (${m.name})`, code: "nofile" }, 404);
-      zipEntries.push({ name: niceZipEntryName(m.name), size: m.size, crc: m.crc, body: obj.body });
+      // Presence check only — the body is opened LAZILY, right before this entry
+      // is written into the zip. Holding every R2 stream open while the customer
+      // slowly downloads the first file is what truncated the archives.
+      const head = await r2.get(m.key);
+      if (!head) return json({ error: `File missing in storage (${m.name})`, code: "nofile" }, 404);
+      void head.body.cancel().catch(() => undefined);
+      zipEntries.push({
+        name: niceZipEntryName(m.name),
+        size: head.size || m.size,
+        crc: m.crc,
+        body: async () => {
+          const obj = await r2.get(m.key);
+          return obj ? { body: obj.body, size: obj.size || m.size } : null;
+        },
+      });
     }
     // The license certificate PDF rides along ONLY when the customer ticked
     // "Include PDF License" in the download dialog (WAV / STEMS / MP3 alike).

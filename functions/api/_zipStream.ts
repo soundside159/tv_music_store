@@ -5,6 +5,13 @@
 // directory. No compression work, no buffering: memory and CPU stay tiny no
 // matter how big the bundle is, and the customer still gets one normal .zip.
 
+/** What a lazy opener hands back: the bytes plus the size R2 really has. */
+export interface ZipSource {
+  body: ReadableStream<Uint8Array>;
+  /** Actual object size — wins over the manifest size if they ever disagree. */
+  size?: number;
+}
+
 export interface ZipEntrySpec {
   /** Filename inside the zip. */
   name: string;
@@ -12,8 +19,17 @@ export interface ZipEntrySpec {
   size: number;
   /** CRC32 of the content (unsigned, from the upload manifest). */
   crc: number;
-  /** File content — an R2 body stream or raw bytes (license PDF). */
-  body: ReadableStream<Uint8Array> | Uint8Array;
+  /**
+   * Raw bytes (license PDF), or a LAZY opener for storage objects.
+   *
+   * Lazy matters: a zip is written entry by entry at the speed of the customer's
+   * connection. If every R2 body is opened up front, the streams for the later
+   * files sit idle for minutes while the first one trickles out — they can be
+   * closed under us, and the customer gets a zip that ends early ("Unexpected
+   * end of archive"). Opening each object at the moment it is written keeps
+   * every stream short-lived.
+   */
+  body: Uint8Array | (() => Promise<ZipSource | null>);
 }
 
 /** Table-based CRC32 (for small server-side entries like the license PDF). */
@@ -50,6 +66,13 @@ export const streamZip = (entries: ZipEntrySpec[]): ReadableStream<Uint8Array> =
     };
     try {
       for (const e of entries) {
+        // Open the source FIRST — the header must declare the size the bytes
+        // actually have, or every unzipper reads past the end of the file.
+        const raw = e.body instanceof Uint8Array ? e.body : null;
+        const src = raw ? null : await (e.body as () => Promise<ZipSource | null>)();
+        if (!raw && !src) throw new Error(`Missing file in storage: ${e.name}`);
+        const size = raw ? raw.length : (src?.size ?? e.size);
+
         const nameB = enc.encode(e.name);
         const localOffset = offset;
         const h = new DataView(new ArrayBuffer(30));
@@ -60,21 +83,35 @@ export const streamZip = (entries: ZipEntrySpec[]): ReadableStream<Uint8Array> =
         h.setUint16(10, DOS_TIME, true);
         h.setUint16(12, DOS_DATE, true);
         h.setUint32(14, e.crc >>> 0, true);
-        h.setUint32(18, e.size >>> 0, true);
-        h.setUint32(22, e.size >>> 0, true);
+        h.setUint32(18, size >>> 0, true);
+        h.setUint32(22, size >>> 0, true);
         h.setUint16(26, nameB.length, true);
         h.setUint16(28, 0, true); // extra length
         await write(new Uint8Array(h.buffer));
         await write(nameB);
 
-        if (e.body instanceof Uint8Array) {
-          await write(e.body);
+        let written = 0;
+        if (raw) {
+          await write(raw);
+          written = raw.length;
         } else {
-          const reader = e.body.getReader();
+          const reader = (src as ZipSource).body.getReader();
           for (;;) {
             const { done, value } = await reader.read();
             if (done) break;
             await write(value);
+            written += value.length;
+          }
+        }
+        // The stream ended early (storage hiccup): pad the entry so the zip
+        // stays readable — the customer gets a CRC warning on THAT file instead
+        // of a whole archive that won't open.
+        if (written < size) {
+          const pad = new Uint8Array(Math.min(size - written, 64 * 1024));
+          while (written < size) {
+            const chunk = size - written < pad.length ? pad.subarray(0, size - written) : pad;
+            await write(chunk);
+            written += chunk.length;
           }
         }
 
@@ -87,8 +124,8 @@ export const streamZip = (entries: ZipEntrySpec[]): ReadableStream<Uint8Array> =
         c.setUint16(12, DOS_TIME, true);
         c.setUint16(14, DOS_DATE, true);
         c.setUint32(16, e.crc >>> 0, true);
-        c.setUint32(20, e.size >>> 0, true);
-        c.setUint32(24, e.size >>> 0, true);
+        c.setUint32(20, size >>> 0, true);
+        c.setUint32(24, size >>> 0, true);
         c.setUint16(28, nameB.length, true);
         c.setUint32(42, localOffset >>> 0, true);
         const rec = new Uint8Array(46 + nameB.length);
