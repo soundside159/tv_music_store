@@ -3092,3 +3092,8 @@ in imported track descriptions. New `decodeXlsxText()` runs on shared strings an
 it turns `_xHHHH_` into the real character, keeps a literally-typed "_x000D_" intact (Excel
 double-escapes that as `_x005F_x000D_`), and normalises CR / CRLF to plain `\n` — so a description
 imported from a sheet keeps its line breaks instead of showing the escape codes.
+- **Follow-up fix:** the whole "Track details" aside was dimmed with
+  `dimIf(single)` → `pointer-events-none opacity-40` on ANY multi-selection, which greyed out the
+  new AI box with it (owner: "Track details тухнет, не могу нажать AI"). It is now `dimIf(hasSelection)`
+  — the panel stays live for 2+ tracks (AI box clickable); the single-track fields below simply
+  don't render, and the note tells the owner how many tracks the AI will cover.

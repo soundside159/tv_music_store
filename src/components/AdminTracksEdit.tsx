@@ -1595,10 +1595,14 @@ const AdminTracksEdit = ({
         </div>
       </div>
 
-      {/* ===== Track details: title/BPM/description/tags/cover/stems (single) ===== */}
+      {/* ===== Track details: AI tagging (any selection) + title/BPM/description/
+          tags/cover/stems (single track only) =====
+          The panel stays LIVE for a multi-selection — only the single-track
+          fields below are hidden. Dimming the whole panel used to kill the AI
+          box with it, so batch tagging was unreachable. */}
       <aside
         className={`mt-6 flex flex-col rounded-xl border border-[#F4C430]/30 bg-card transition-opacity xl:sticky xl:top-24 xl:mt-0 xl:max-h-[calc(100vh-7rem)] ${dimIf(
-          single,
+          hasSelection,
         )}`}
       >
           <div className="flex items-center justify-between border-b border-border/60 px-4 py-3.5">
@@ -1621,8 +1625,9 @@ const AdminTracksEdit = ({
             <div className="flex-1 overflow-y-auto px-4 py-4">
               {!(single && fields) && (
                 <p className="font-body text-xs text-muted-foreground">
-                  Select exactly one track to edit its title, BPM, description, tags, cover and
-                  stems here.
+                  {selTracks.length > 1
+                    ? `${selTracks.length} tracks selected — AI tagging above works on all of them. Select exactly one track to edit its title, BPM, description, tags, cover and stems.`
+                    : "Select exactly one track to edit its title, BPM, description, tags, cover and stems here."}
                 </p>
               )}
               {selTracks.length > 0 && (
