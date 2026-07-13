@@ -3293,3 +3293,9 @@ than a stale test row. Test subscriptions are cancelled in the Stripe test dashb
 UI: a separate red **"Clear test transactions"** button in Admin → Usage → Storage cleanup (typed
 DELETE confirmation), independent of "Delete all tracks & files" — tracks, files and accounts are
 untouched by it.
+- **REVERTED the same day: "Delete all tracks & files" is GONE** (owner: too dangerous, he spent
+  real time building the playlists/collections and one mis-click could take them with it). The
+  `wipeTracks` branch was removed from `/api/admin/storage` entirely — the endpoint can no longer do
+  it at all, not just the button. Tracks are deleted deliberately, one by one or by selection, in
+  Tracks Edit; their files go with them (delete_track cleans R2). **"Clear test transactions" stays**
+  — it only touches the money/history tables, never the catalogue.

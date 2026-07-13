@@ -113,7 +113,7 @@ const AdminUsage = () => {
     sample: { key: string; size: number }[];
   }
   const [storage, setStorage] = useState<StorageReport | null>(null);
-  const [storageBusy, setStorageBusy] = useState<"scan" | "clean" | "wipe" | "tx" | null>(null);
+  const [storageBusy, setStorageBusy] = useState<"scan" | "clean" | "tx" | null>(null);
   const mb = (bytes: number) =>
     bytes >= 1024 ** 3
       ? `${(bytes / 1024 ** 3).toFixed(2)} GB`
@@ -136,40 +136,6 @@ const AdminUsage = () => {
       );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Scan failed");
-    } finally {
-      setStorageBusy(null);
-    }
-  };
-
-  // Full reset before the real catalogue goes in: every TRACK and every audio
-  // file. Shelves (collections/playlists/categories), vocabularies and users
-  // stay — only the records leave them.
-  const wipeTracks = async () => {
-    const typed = window.prompt(
-      `This deletes ALL ${storage?.tracks ?? 0} track(s) and EVERY audio file in storage (${mb(
-        storage?.totalBytes ?? 0,
-      )}).\n\nCollections, playlists, categories, tags and accounts are kept.\nThis cannot be undone.\n\nType DELETE to confirm:`,
-    );
-    if (typed !== "DELETE") return;
-    setStorageBusy("wipe");
-    try {
-      const res = await fetch("/api/admin/storage", {
-        method: "POST",
-        credentials: "include",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ confirm: true, wipeTracks: true }),
-      });
-      const d = (await res.json().catch(() => ({}))) as {
-        ok?: boolean;
-        deleted?: number;
-        bytes?: number;
-        error?: string;
-      };
-      if (!res.ok || !d.ok) throw new Error(d.error ?? "Reset failed");
-      toast.success(`Catalogue cleared · ${d.deleted ?? 0} file(s) deleted, ${mb(d.bytes ?? 0)} freed`);
-      await scanStorage();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Reset failed");
     } finally {
       setStorageBusy(null);
     }
@@ -397,30 +363,6 @@ const AdminUsage = () => {
               </ul>
             )}
 
-            {/* Factory reset — for wiping the test catalogue before the real
-                one goes in. Deliberately behind a typed confirmation. */}
-            {storage.total > 0 && (
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-400/30 bg-red-400/[0.04] p-3">
-                <p className="max-w-lg font-body text-[11px] text-muted-foreground">
-                  <span className="font-semibold text-red-400">Start from scratch:</span> deletes ALL
-                  tracks and every audio file. Collections, playlists, categories, tags and accounts
-                  are kept — only the tracks leave them.
-                </p>
-                <button
-                  type="button"
-                  disabled={storageBusy !== null}
-                  onClick={() => void wipeTracks()}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-red-400/60 px-3 py-1.5 font-body text-xs font-semibold text-red-400 transition-colors hover:bg-red-400/10 disabled:opacity-50"
-                >
-                  {storageBusy === "wipe" ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-3.5 w-3.5" />
-                  )}
-                  Delete all tracks &amp; files
-                </button>
-              </div>
-            )}
           </div>
         )}
 

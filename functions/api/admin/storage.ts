@@ -1,8 +1,15 @@
 import { getSessionUser, json, OWNER_EMAIL, readJson, type Ctx, type D1Database } from "../_utils";
 import { parseManifest } from "../_zipStream";
 
-// GET  /api/admin/storage  -> what is in R2 that NOTHING in the database points at.
-// POST /api/admin/storage { confirm: true } -> deletes exactly those objects.
+// GET  /api/admin/storage -> what is in R2 that NOTHING in the database points at.
+// POST { confirm: true } -> deletes exactly those orphans.
+// POST { confirm: true, wipeTransactions: true } -> clears the TEST money tables
+//      (download history, licence codes, one-time orders, revenue, payout runs).
+//
+// There is deliberately NO "delete everything" action here: the owner spent real
+// time building the playlists/collections and the tags, and one mis-click must
+// never be able to take the catalogue with it. Tracks are deleted one by one (or
+// by selection) in Tracks Edit, and their files go with them.
 //
 // Why this exists: until 2026-07-13 deleting a track (or a version, or stems)
 // only removed the DATABASE rows — the audio stayed in the bucket forever. This
@@ -160,11 +167,7 @@ export const onRequestPost = async (ctx: Ctx) => {
   if (!ctx.env.DB) return json({ error: "DB not bound" }, 503);
   if (!ctx.env.R2?.list || !ctx.env.R2?.delete) return json({ error: "R2 not bound" }, 503);
 
-  const body = await readJson<{
-    confirm?: boolean;
-    wipeTracks?: boolean;
-    wipeTransactions?: boolean;
-  }>(ctx.request);
+  const body = await readJson<{ confirm?: boolean; wipeTransactions?: boolean }>(ctx.request);
   if (!body?.confirm) return json({ error: "confirm required" }, 400);
 
   // TEST-DATA RESET (pre-launch only): the rows produced while playing with the
@@ -191,43 +194,7 @@ export const onRequestPost = async (ctx: Ctx) => {
         cleared[table] = false; // table not created yet — nothing to clear
       }
     }
-    if (!body.wipeTracks) {
-      return json({ ok: true, clearedTransactions: cleared });
-    }
-  }
-
-  // FULL RESET (owner: "clean everything before I stock the real catalogue").
-  // Deletes every TRACK — rows, memberships, and then, as orphans, all of their
-  // audio. Collections / playlists / categories / vocabularies / users survive:
-  // the shelves stay, only the records leave them.
-  if (body.wipeTracks) {
-    const db = ctx.env.DB;
-    for (const sql of [
-      `DELETE FROM track_versions`,
-      `DELETE FROM collection_tracks`,
-      `DELETE FROM playlist_tracks`,
-      `DELETE FROM category_tracks`,
-      `DELETE FROM favourites`,
-      `DELETE FROM tracks`,
-    ]) {
-      try {
-        await db.prepare(sql).run();
-      } catch {
-        // table not there (older DB) — nothing to clear in it
-      }
-    }
-    try {
-      await db
-        .prepare(
-          `INSERT INTO site_config (key, value) VALUES ('trending_track_ids', '[]')
-           ON CONFLICT(key) DO UPDATE SET value = '[]'`,
-        )
-        .run();
-    } catch {
-      // no site_config — fine
-    }
-    // With no tracks left, EVERY audio file is an orphan; the sweep below now
-    // deletes the whole lot (covers of collections/playlists stay referenced).
+    return json({ ok: true, clearedTransactions: cleared });
   }
 
   const keep = await referencedKeys(ctx.env.DB);
@@ -245,5 +212,5 @@ export const onRequestPost = async (ctx: Ctx) => {
       // already gone — fine
     }
   }
-  return json({ ok: true, deleted, bytes, wiped: !!body.wipeTracks });
+  return json({ ok: true, deleted, bytes });
 };
