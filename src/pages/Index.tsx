@@ -53,7 +53,7 @@ const EditorPickCard = ({ playlist }: { playlist: LivePlaylist }) => (
   <Link to={`/playlist/${playlist.slug}`} className="group block">
     <div
       style={{ transform: "skewX(-9deg)" }}
-      className="relative aspect-square w-full overflow-hidden rounded-xl border border-white/15 bg-white/[0.04] transition-colors duration-300 group-hover:border-[#F4C430]/60"
+      className="skew-aa relative aspect-square w-full overflow-hidden rounded-xl border border-white/15 bg-white/[0.04] transition-colors duration-300 group-hover:border-[#F4C430]/60"
     >
       {playlist.image && (
         <img

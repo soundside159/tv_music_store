@@ -44,7 +44,7 @@ const PlaylistCard = ({ playlist, tracks }: { playlist: LivePlaylist; tracks: Ca
     <Link to={`/playlist/${playlist.slug}`} className="group block">
       <div
         style={{ transform: "skewX(-9deg)" }}
-        className="relative h-64 w-full overflow-hidden rounded-lg border border-white/15 bg-white/[0.04] shadow-[inset_0_0_16px_-8px_rgba(255,255,255,0.3)]"
+        className="skew-aa relative h-64 w-full overflow-hidden rounded-lg border border-white/15 bg-white/[0.04] shadow-[inset_0_0_16px_-8px_rgba(255,255,255,0.3)]"
       >
         {playlist.image && (
           <img
@@ -128,7 +128,7 @@ const PlaylistCard = ({ playlist, tracks }: { playlist: LivePlaylist; tracks: Ca
 const SkeletonCard = () => (
   <div
     style={{ transform: "skewX(-9deg)" }}
-    className="h-64 w-full animate-pulse rounded-lg border border-white/10 bg-white/[0.05]"
+    className="skew-aa h-64 w-full animate-pulse rounded-lg border border-white/10 bg-white/[0.05]"
   />
 );
 
@@ -161,7 +161,7 @@ const GhostCreateCard = ({ theme, admin }: { theme: string; admin: ContentAdmin 
   return (
     <div
       style={{ transform: "skewX(-9deg)" }}
-      className="flex h-64 w-full items-center justify-center rounded-lg border border-dashed border-[#F4C430]/40 bg-[#F4C430]/[0.03] transition-colors hover:border-[#F4C430]/70"
+      className="skew-aa flex h-64 w-full items-center justify-center rounded-lg border border-dashed border-[#F4C430]/40 bg-[#F4C430]/[0.03] transition-colors hover:border-[#F4C430]/70"
     >
       <div style={{ transform: "skewX(9deg)" }} className="w-full px-4 text-center">
         {open ? (

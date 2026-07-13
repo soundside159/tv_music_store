@@ -3376,3 +3376,15 @@ untouched by it.
   handle, a gold ring on the row you're hovering and the dragged row dimmed. Stems reorder
   optimistically (the list moves at once, the save follows; a failure re-fetches). Hint under the
   expander: "Drag rows to reorder — the top version becomes Main."
+
+### 2026-07-13 — Skewed cards: the jagged diagonal edges are antialiased now
+Owner saw a pixel staircase on the slanted borders of the playlist / collection cards. Cause: a
+transformed box with `overflow: hidden` is rasterised by Blink/WebKit **without antialiasing on its
+clipped edges** — the diagonal border comes out as steps.
+New utility **`.skew-aa`** in `src/index.css`: a fully-opaque `mask-image` (the classic
+`-webkit-radial-gradient(white, black)` trick) puts the element on its own compositing layer, where
+the compositor DOES antialias the edges; plus `backface-visibility: hidden` + `will-change:
+transform`. Nothing is hidden or blurred — the art is untouched, only the frame gets smooth.
+Applied to every skewed frame: the tall playlist cards + their skeleton/ghost cards
+(`Playlists.tsx`), the catalog's collection rail cards (`Catalog.tsx`), the playlist-page header
+thumb + its skeleton (`PlaylistDetail.tsx`) and the home page's Editor Picks tiles (`Index.tsx`).

@@ -471,7 +471,7 @@ const CollectionStrip = ({
                   type="button"
                   onClick={() => onSelectCollection(collection.id)}
                   style={{ transform: "skewX(-9deg)" }}
-                  className={`group relative h-64 w-full overflow-hidden rounded-lg border bg-white/[0.04] text-left transition-[border-color,box-shadow] duration-300 ${
+                  className={`skew-aa group relative h-64 w-full overflow-hidden rounded-lg border bg-white/[0.04] text-left transition-[border-color,box-shadow] duration-300 ${
                     active
                       ? "border-white/20 shadow-[inset_0_0_16px_-8px_rgba(255,255,255,0)]"
                       : "border-white/15 shadow-[inset_0_0_16px_-8px_rgba(255,255,255,0.3)] hover:border-white/35"

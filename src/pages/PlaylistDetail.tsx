@@ -19,7 +19,7 @@ const DetailSkeleton = () => (
     <div className="flex flex-col gap-6 md:flex-row md:items-center">
       <div
         style={{ transform: "skewX(-9deg)" }}
-        className="ml-2 h-40 w-40 shrink-0 animate-pulse rounded-xl border border-white/10 bg-white/[0.05]"
+        className="skew-aa ml-2 h-40 w-40 shrink-0 animate-pulse rounded-xl border border-white/10 bg-white/[0.05]"
       />
       <div className="flex min-w-0 flex-1 flex-col gap-3">
         <div className="h-3 w-24 animate-pulse rounded bg-white/[0.07]" />
@@ -88,7 +88,7 @@ const PlaylistDetail = () => {
               kind="playlist"
               id={playlist.id}
               admin={admin}
-              className="h-40 w-40 overflow-hidden rounded-xl border border-white/15 bg-white/[0.04] [transform:skewX(-9deg)]"
+              className="skew-aa h-40 w-40 overflow-hidden rounded-xl border border-white/15 bg-white/[0.04] [transform:skewX(-9deg)]"
             >
               {playlist.image ? (
                 <img
