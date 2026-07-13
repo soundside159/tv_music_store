@@ -17,15 +17,19 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { TrackRowList, TrackRowSkeletonList } from "@/components/TrackRowPlayer";
 import { discoverPath } from "@/lib/discovery";
-import { useCategories, useTrendingTracks, useVocabularies } from "@/hooks/useContent";
+import CardCarousel from "@/components/CardCarousel";
+import { useCategories, usePlaylists, useTrendingTracks, useVocabularies } from "@/hooks/useContent";
+import type { LivePlaylist } from "@/hooks/useContent";
 import { usePlans } from "@/hooks/useMockData";
 
 const GOLD = "#F4C430";
 
 const trustPoints = [
-  { icon: ShieldCheck, label: "Content ID handled", text: "Add your channel and we watch new uploads: every claim on our music is sent for release within one business day." },
-  { icon: Users, label: "Written by humans", text: "Named composers with real PRO/IPI registration — never AI-generated filler." },
-  { icon: Music2, label: "Versions included", text: "Cut-downs and alternate mixes with every track." },
+  // NOTE (honesty rule): we promise the REQUEST, not YouTube's outcome — hence
+  // "send claims for release", never "claims removed".
+  { icon: ShieldCheck, label: "Content ID handled", text: "Add your channel and we send claims on our music for release." },
+  { icon: Users, label: "Written by humans", text: "100% human-made music — never AI-generated." },
+  { icon: Layers, label: "Stems included", text: "Includes separate stems for easy editing." },
   { icon: Check, label: "License instantly", text: "Clear licenses, PDF certificate right after download." },
 ];
 
@@ -42,11 +46,53 @@ const BROWSE_TABS: { id: BrowseTab; label: string; icon: typeof LayoutGrid }[] =
   { id: "mood", label: "Mood", icon: Sparkles },
 ];
 
+/** Editor Picks card: the SMALL playlist tile (the square parallelogram from the
+ *  playlist page header), not the tall shelf card used on /playlists. Title and
+ *  track count sit under the art, so the picture stays clean. */
+const EditorPickCard = ({ playlist }: { playlist: LivePlaylist }) => (
+  <Link to={`/playlist/${playlist.slug}`} className="group block">
+    <div
+      style={{ transform: "skewX(-9deg)" }}
+      className="relative aspect-square w-full overflow-hidden rounded-xl border border-white/15 bg-white/[0.04] transition-colors duration-300 group-hover:border-[#F4C430]/60"
+    >
+      {playlist.image && (
+        <img
+          src={playlist.image}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onLoad={(event) => {
+            event.currentTarget.style.opacity = "1";
+          }}
+          style={{
+            transform: "skewX(9deg) scale(1.32) translateZ(0)",
+            backfaceVisibility: "hidden",
+            opacity: 0,
+            transition: "opacity 0.5s ease",
+          }}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      )}
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+    </div>
+    <p className="mt-3 truncate font-body text-sm font-semibold text-foreground transition-colors duration-200 group-hover:text-[#F4C430]">
+      {playlist.title}
+    </p>
+    <p className="font-body text-xs text-muted-foreground">
+      {playlist.trackIds.length} track{playlist.trackIds.length === 1 ? "" : "s"}
+    </p>
+  </Link>
+);
+
 const Index = () => {
   const plans = usePlans();
   const { tracks: trendingTracks, isLoading: tracksLoading } = useTrendingTracks(TRENDING_COUNT);
   const categories = useCategories();
   const vocab = useVocabularies();
+
+  // Editor Picks: the first six playlists, in the order the owner arranged them
+  // in the admin. Six keeps the rail to (almost) one screen — no endless scroll.
+  const editorPicks = usePlaylists().slice(0, 6);
 
   const [browseTab, setBrowseTab] = useState<BrowseTab>("categories");
   const browseItems =
@@ -170,6 +216,28 @@ const Index = () => {
           </div>
         </section>
 
+        {/* Editor Picks — small playlist tiles on a rail (max 6). */}
+        {editorPicks.length > 0 && (
+          <section className="mx-auto w-full max-w-7xl px-4 pb-16 sm:px-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl text-foreground md:text-2xl">Editor Picks</h2>
+              <Link
+                to="/playlists"
+                className="inline-flex items-center gap-1 font-body text-sm text-muted-foreground transition-colors hover:text-[#F4C430]"
+              >
+                View all <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+            <div className="mt-4">
+              <CardCarousel>
+                {editorPicks.map((p) => (
+                  <EditorPickCard key={p.id} playlist={p} />
+                ))}
+              </CardCarousel>
+            </div>
+          </section>
+        )}
+
         {/* Plans teaser */}
         <section className="border-y border-border bg-card/50">
           <div className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6">
@@ -207,8 +275,18 @@ const Index = () => {
           </div>
         </section>
 
-        {/* Trust — the four pillars converge into the brand */}
+        {/* Trust — the four pillars converge into the brand.
+            The "What is TV Music Store?" paragraph now HEADS this block (owner). */}
         <section className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6">
+          <div className="mb-10 max-w-3xl">
+            <h2 className="text-xl text-foreground md:text-2xl">What is TV Music Store?</h2>
+            <p className="mt-3 font-body text-sm leading-relaxed text-muted-foreground">
+              TV Music Store is a premium library of royalty-free music for videos, films, games and
+              advertising. Every track is professionally produced, easy to license and ready for
+              commercial use.
+            </p>
+          </div>
+
           <div className="grid items-center gap-4 lg:grid-cols-[minmax(0,1fr)_170px_minmax(0,22rem)]">
             {/* Left: the four pillars */}
             <div className="flex flex-col gap-3">
@@ -271,23 +349,6 @@ const Index = () => {
               />
               <p className="mt-4 font-body text-xs text-muted-foreground">Real composers, licensed clean.</p>
             </div>
-          </div>
-          {/* HONEST COPY (2026-07-12): the catalogue is NON-EXCLUSIVE — the same
-              track may also be licensed elsewhere by its composer. So we promise
-              what is actually true (human composers, direct licence, cue-sheet
-              data, claim removal) and never imply the music is unique to us. */}
-          <div className="mt-14 max-w-3xl">
-            <h2 className="text-xl text-foreground">What is TV Music Store?</h2>
-            <p className="mt-3 font-body text-sm leading-relaxed text-muted-foreground">
-              TV Music Store is an independent, hand-picked music library. Every track is written by a
-              named human composer we work with under agreement — no AI-generated filler — and we
-              license it to you directly: we are the licensor on your licence, not a middleman passing
-              you someone else's terms. Each track ships with cut-down versions, the cue-sheet data you
-              need for broadcast (composer, PRO, IPI), channel monitoring, and every Content ID claim on a
-              licensed use sent for release within one business day. Composers keep the copyright in their
-              work and may licence it elsewhere too;
-              what you buy from us is a licence to use the music, and it is valid whatever they do.
-            </p>
           </div>
         </section>
       </main>

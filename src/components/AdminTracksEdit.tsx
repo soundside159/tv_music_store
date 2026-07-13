@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, ChevronLeft, ChevronRight, ExternalLink, Loader2, Minus, Music, Pause, Play, Search, Sparkles, Star, UploadCloud, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, ExternalLink, GripVertical, Loader2, Minus, Music, Pause, Play, Search, Sparkles, Star, UploadCloud, X } from "lucide-react";
 import { toast } from "sonner";
 import WaveformPreview from "@/components/WaveformPreview";
 import { generateDescriptionApi } from "@/lib/coverArt";
@@ -1103,6 +1103,63 @@ const AdminTracksEdit = ({
     }
   };
 
+  // --- Drag & drop reorder (versions AND stems) ------------------------------
+  // The list the owner arranges IS the list the customer gets: the top version
+  // becomes Main (same rule as the star), and the stem order is the order the
+  // files land in the STEMS zip.
+  const [dragItem, setDragItem] = useState<{ trackId: string; kind: "version" | "stem"; id: string } | null>(null);
+  const [dragOverItem, setDragOverItem] = useState<string | null>(null);
+
+  const reorder = <T,>(list: T[], from: number, to: number): T[] => {
+    const next = [...list];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    return next;
+  };
+
+  const dropOn = async (t: CatalogTrack, kind: "version" | "stem", targetId: string) => {
+    const src = dragItem;
+    setDragItem(null);
+    setDragOverItem(null);
+    if (!src || src.trackId !== t.id || src.kind !== kind || src.id === targetId) return;
+
+    if (kind === "version") {
+      // TrackVersion is a union of legacy literals — the live ids are plain
+      // strings ("main", "v2"…), so compare as strings.
+      const ids = t.audioVersions.map((v) => String(v.id));
+      const from = ids.indexOf(src.id);
+      const to = ids.indexOf(targetId);
+      if (from < 0 || to < 0) return;
+      setVersionBusy(`${t.id}:${src.id}`);
+      const ok = await run(
+        { action: "reorder_versions", id: t.id, versionIds: reorder(ids, from, to) },
+        "Order saved",
+      );
+      setVersionBusy(null);
+      if (ok) onTracksReload?.();
+      return;
+    }
+
+    const files = stems[t.id]?.files ?? [];
+    const keys = files.map((f) => f.key);
+    const from = keys.indexOf(src.id);
+    const to = keys.indexOf(targetId);
+    if (from < 0 || to < 0) return;
+    const next = reorder(files, from, to);
+    // Optimistic: the row shows the new order while the save runs.
+    setStems((st) => ({
+      ...st,
+      [t.id]: { files: next, legacyZip: st[t.id]?.legacyZip ?? false, masters: st[t.id]?.masters ?? [] },
+    }));
+    setVersionBusy(`${t.id}:${src.id}`);
+    const ok = await run(
+      { action: "reorder_stems", id: t.id, keys: next.map((f) => f.key) },
+      "Stem order saved",
+    );
+    setVersionBusy(null);
+    if (!ok) void refreshStems(t.id);
+  };
+
   // --- Drop files straight into an open versions row -------------------------
   // Same rules as Bulk Upload: a file named …_stem(s)_… is a STEM, anything else
   // is a new VERSION. Files that are already on the track are refused BEFORE
@@ -1655,8 +1712,32 @@ const AdminTracksEdit = ({
                       return (
                         <div
                           key={v.id}
-                          className={`flex items-center gap-2 rounded px-1 py-0.5 hover:bg-white/5 ${vBusy ? "opacity-50" : ""}`}
+                          draggable={!vBusy && !busy}
+                          onDragStart={() => setDragItem({ trackId: t.id, kind: "version", id: v.id })}
+                          onDragOver={(e) => {
+                            if (dragItem?.trackId !== t.id || dragItem.kind !== "version") return;
+                            e.preventDefault();
+                            setDragOverItem(v.id);
+                          }}
+                          onDragLeave={() => setDragOverItem((d) => (d === v.id ? null : d))}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            void dropOn(t, "version", v.id);
+                          }}
+                          onDragEnd={() => {
+                            setDragItem(null);
+                            setDragOverItem(null);
+                          }}
+                          className={`flex items-center gap-2 rounded px-1 py-0.5 hover:bg-white/5 ${
+                            vBusy ? "opacity-50" : ""
+                          } ${dragOverItem === v.id ? "ring-1 ring-[#F4C430]/70" : ""} ${
+                            dragItem?.id === v.id ? "opacity-40" : ""
+                          }`}
                         >
+                          <GripVertical
+                            className="h-3 w-3 shrink-0 cursor-grab text-muted-foreground/50 active:cursor-grabbing"
+                            aria-hidden
+                          />
                           <button
                             type="button"
                             disabled={vi === 0 || vBusy || busy}
@@ -1751,8 +1832,32 @@ const AdminTracksEdit = ({
                           return (
                             <div
                               key={sf.key}
-                              className={`flex items-center gap-2 rounded py-0.5 pl-5 pr-1 hover:bg-white/5 ${sBusy ? "opacity-50" : ""}`}
+                              draggable={!sBusy && !busy}
+                              onDragStart={() => setDragItem({ trackId: t.id, kind: "stem", id: sf.key })}
+                              onDragOver={(e) => {
+                                if (dragItem?.trackId !== t.id || dragItem.kind !== "stem") return;
+                                e.preventDefault();
+                                setDragOverItem(sf.key);
+                              }}
+                              onDragLeave={() => setDragOverItem((d) => (d === sf.key ? null : d))}
+                              onDrop={(e) => {
+                                e.preventDefault();
+                                void dropOn(t, "stem", sf.key);
+                              }}
+                              onDragEnd={() => {
+                                setDragItem(null);
+                                setDragOverItem(null);
+                              }}
+                              className={`flex items-center gap-2 rounded py-0.5 pl-2 pr-1 hover:bg-white/5 ${
+                                sBusy ? "opacity-50" : ""
+                              } ${dragOverItem === sf.key ? "ring-1 ring-[#F4C430]/70" : ""} ${
+                                dragItem?.id === sf.key ? "opacity-40" : ""
+                              }`}
                             >
+                              <GripVertical
+                                className="h-3 w-3 shrink-0 cursor-grab text-muted-foreground/50 active:cursor-grabbing"
+                                aria-hidden
+                              />
                               <Music className="h-3 w-3 shrink-0 text-muted-foreground/60" />
                               <span className="min-w-0 flex-1 truncate font-body text-xs text-foreground">
                                 {sf.name}
@@ -1826,7 +1931,7 @@ const AdminTracksEdit = ({
                       )}
                     </label>
                     <p className="mt-1 font-body text-[10px] text-muted-foreground">
-                      Rename versions (and the WAV-bundle rebuild) — on the{" "}
+                      Drag rows to reorder — the top version becomes Main. Rename versions — on the{" "}
                       <Link to={`/track/${t.slug}`} target="_blank" rel="noopener noreferrer" className="text-[#F4C430] hover:underline">
                         track page
                       </Link>

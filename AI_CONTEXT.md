@@ -3340,3 +3340,39 @@ untouched by it.
    - The **hero's category chips and the "Start free — 3 downloads every month. No credit card." line
      are GONE** — the chips are what the new Categories tab does properly, and the free-plan pitch
      already lives in the pricing section below. The hero is now just the title + the promise.
+- **Home page: new "Editor Picks" section** right under Browse by (`src/pages/Index.tsx`). The first
+  **6 playlists** (the owner's own order from the admin) on a `CardCarousel` rail, with **View all →
+  /playlists** on the right of the heading. The tile is the SMALL square parallelogram from the
+  playlist-page header (`EditorPickCard`) — not the tall h-64 shelf card used on /playlists: art on
+  top, title + track count underneath, gold border/title on hover. Six items ≈ one screen on the
+  rail, so there is barely anything to scroll.
+
+### 2026-07-13 — Home copy: new "What is TV Music Store?" (moved up) + reworded pillars
+`src/pages/Index.tsx`:
+- **"What is TV Music Store?"** is now the short marketing line the owner wrote ("a premium library
+  of royalty-free music for videos, films, games and advertising… professionally produced, easy to
+  license and ready for commercial use") and it **heads the trust block** (above "Content ID
+  handled") instead of sitting at the very bottom of the page.
+- Pillars: *Content ID handled* → "Add your channel and we send claims on our music for release."
+  *Written by humans* → "100% human-made music — never AI-generated." *Versions included* →
+  **Stems included** ("Includes separate stems for easy editing.", icon swapped to `Layers`).
+- ⚠️ **Honesty rule kept:** the owner's draft said "we'll release claims on our music". Claims are
+  released inside Content ID, which is not ours to promise (Rule 1.2 at the top of this file), so the
+  line says **"we send claims on our music for release"** — same brevity, no promise we can't keep.
+  Flagged to the owner.
+
+### 2026-07-13 — Drag & drop reorder for versions and stems (both admin surfaces)
+- **Server (`functions/api/admin/content.ts`), two new actions:**
+  - **`reorder_versions`** `{ id, versionIds: [...] }` — rewrites `track_versions` in the given order
+    (`version_id` = "main", "v2", "v3"…, `sort` = index), carrying `label`, `duration`, previews and
+    `r2_key_wav` across, and updates the track's headline `duration` to the new Main. **The FIRST row
+    becomes the Main version** — the same rule the star already follows, so "what the owner arranges
+    top-to-bottom is what the customer gets". Ids the client didn't send keep their old relative
+    place at the end, so a stale list can never drop a version.
+  - **`reorder_stems`** `{ id, keys: [...] }` — reorders `stems_manifest`; that order is the order the
+    files land in the customer's STEMS zip.
+- **UI:** rows in **Tracks Edit** (the versions expander: versions AND stem files) and on the
+  **track page** admin panel (`AdminTrackPanel` → VersionsBlock) are now `draggable`, with a grip
+  handle, a gold ring on the row you're hovering and the dragged row dimmed. Stems reorder
+  optimistically (the list moves at once, the save follows; a failure re-fetches). Hint under the
+  expander: "Drag rows to reorder — the top version becomes Main."

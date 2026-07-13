@@ -575,6 +575,10 @@ export const onRequestPost = async (ctx: Ctx) => {
     masterEntry?: { key?: string; name?: string; size?: number; crc?: number };
     /** add_stems: stem master files appended to stems_manifest (v2). */
     stems?: { key?: string; name?: string; size?: number; crc?: number }[];
+    /** reorder_versions: the version ids in their NEW order (first = Main). */
+    versionIds?: string[];
+    /** reorder_stems: the stems' R2 keys in their NEW order. */
+    keys?: string[];
     /** create_track v2: individual master files (zip is streamed at download). */
     wavManifest?: { key?: string; name?: string; size?: number; crc?: number }[];
     stemsManifest?: { key?: string; name?: string; size?: number; crc?: number }[];
@@ -1378,6 +1382,100 @@ export const onRequestPost = async (ctx: Ctx) => {
       await db
         .prepare(`UPDATE tracks SET duration = ?2 WHERE id = ?1`)
         .bind(trackId, target.duration ?? "")
+        .run();
+      return json({ ok: true });
+    }
+
+    case "reorder_versions": {
+      // { id, versionIds: [...] } — drag & drop order from the admin. The FIRST
+      // one becomes the Main version (same rule the star already follows), so
+      // the list the owner sees IS the list the customer gets, top to bottom.
+      const trackId = body.id;
+      const wanted = Array.isArray(body.versionIds)
+        ? body.versionIds.filter((x): x is string => typeof x === "string" && !!x)
+        : [];
+      if (!trackId || wanted.length === 0) return json({ error: "id and versionIds required" }, 400);
+
+      const rows = await db
+        .prepare(
+          `SELECT version_id, label, duration, preview_src, preview_128, r2_key_wav
+             FROM track_versions WHERE track_id = ?1 ORDER BY sort ASC`,
+        )
+        .bind(trackId)
+        .all<{
+          version_id: string;
+          label: string;
+          duration: string | null;
+          preview_src: string;
+          preview_128: string | null;
+          r2_key_wav: string | null;
+        }>();
+      if (rows.results.length === 0) return json({ error: "Track has no versions" }, 404);
+
+      // Anything the client didn't mention keeps its old relative place at the
+      // end — a stale list can never silently drop a version.
+      const byId = new Map(rows.results.map((r) => [r.version_id, r]));
+      const ordered = [
+        ...wanted.map((id) => byId.get(id)).filter((r): r is NonNullable<typeof r> => !!r),
+        ...rows.results.filter((r) => !wanted.includes(r.version_id)),
+      ];
+
+      await db.prepare(`DELETE FROM track_versions WHERE track_id = ?1`).bind(trackId).run();
+      for (let i = 0; i < ordered.length; i++) {
+        const v = ordered[i];
+        const vid = i === 0 ? "main" : `v${i + 1}`;
+        await db
+          .prepare(
+            `INSERT INTO track_versions
+               (id, track_id, version_id, label, duration, preview_src, preview_128, r2_key_wav, sort)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`,
+          )
+          .bind(
+            `${trackId}:${vid}`,
+            trackId,
+            vid,
+            v.label,
+            v.duration ?? "",
+            v.preview_src,
+            v.preview_128,
+            v.r2_key_wav,
+            i,
+          )
+          .run();
+      }
+      // The track's headline duration follows its Main version.
+      await db
+        .prepare(`UPDATE tracks SET duration = ?2 WHERE id = ?1`)
+        .bind(trackId, ordered[0].duration ?? "")
+        .run();
+      return json({ ok: true });
+    }
+
+    case "reorder_stems": {
+      // { id, keys: [...] } — same drag & drop, for the stem files. The order is
+      // the order they land in the customer's STEMS zip.
+      const trackId = body.id;
+      const wanted = Array.isArray(body.keys)
+        ? body.keys.filter((x): x is string => typeof x === "string" && /^masters\//.test(x))
+        : [];
+      if (!trackId || wanted.length === 0) return json({ error: "id and keys required" }, 400);
+      await ensureTrackCoverColumn(db);
+
+      const row = await db
+        .prepare(`SELECT stems_manifest FROM tracks WHERE id = ?1`)
+        .bind(trackId)
+        .first<{ stems_manifest: string | null }>();
+      const manifest = parseManifest(row?.stems_manifest);
+      if (!manifest) return json({ error: "This track has no stem files" }, 404);
+
+      const byKey = new Map(manifest.map((e) => [e.key, e]));
+      const next = [
+        ...wanted.map((k) => byKey.get(k)).filter((e): e is NonNullable<typeof e> => !!e),
+        ...manifest.filter((e) => !wanted.includes(e.key)),
+      ];
+      await db
+        .prepare(`UPDATE tracks SET stems_manifest = ?2 WHERE id = ?1`)
+        .bind(trackId, JSON.stringify(next))
         .run();
       return json({ ok: true });
     }

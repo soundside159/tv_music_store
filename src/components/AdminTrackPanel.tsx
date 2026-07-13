@@ -6,6 +6,7 @@ import {
   ArrowUp,
   Check,
   ChevronDown,
+  GripVertical,
   ImageUp,
   Music2,
   Pause,
@@ -691,6 +692,53 @@ const VersionsBlock = ({
     }
   };
 
+  // --- Drag & drop reorder (versions and stems) ------------------------------
+  // The order here IS the order the customer sees: the top version becomes Main,
+  // and the stems keep this order inside the STEMS zip.
+  const [drag, setDrag] = useState<{ kind: "version" | "stem"; id: string } | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
+
+  const move = <T,>(list: T[], from: number, to: number): T[] => {
+    const next = [...list];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    return next;
+  };
+
+  const dropOn = async (kind: "version" | "stem", targetId: string) => {
+    const src = drag;
+    setDrag(null);
+    setDragOver(null);
+    if (!src || src.kind !== kind || src.id === targetId) return;
+
+    if (kind === "version") {
+      const ids = versions.map((v) => String(v.id));
+      const from = ids.indexOf(src.id);
+      const to = ids.indexOf(targetId);
+      if (from < 0 || to < 0) return;
+      setPendingId(src.id);
+      const ok = await run({ action: "reorder_versions", id: track.id, versionIds: move(ids, from, to) });
+      setPendingId(null);
+      if (ok) {
+        toast.success("Order saved");
+        onTracksChanged();
+      }
+      return;
+    }
+
+    const keys = stems.map((f) => f.key);
+    const from = keys.indexOf(src.id);
+    const to = keys.indexOf(targetId);
+    if (from < 0 || to < 0) return;
+    const next = move(stems, from, to);
+    setStems(next); // optimistic — the list shows the new order right away
+    setPendingId(src.id);
+    const ok = await run({ action: "reorder_stems", id: track.id, keys: next.map((f) => f.key) });
+    setPendingId(null);
+    if (ok) toast.success("Stem order saved");
+    else await loadStems();
+  };
+
   const setMain = async (v: TrackAudioVersion) => {
     setPendingId(v.id);
     const ok = await run({ action: "set_main_version", id: track.id, versionId: v.id });
@@ -742,8 +790,32 @@ const VersionsBlock = ({
           return (
             <div
               key={v.id}
-              className={`flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-white/5 ${rowBusy ? "opacity-50" : ""}`}
+              draggable={!rowBusy && !busy}
+              onDragStart={() => setDrag({ kind: "version", id: String(v.id) })}
+              onDragOver={(e) => {
+                if (drag?.kind !== "version") return;
+                e.preventDefault();
+                setDragOver(String(v.id));
+              }}
+              onDragLeave={() => setDragOver((d) => (d === String(v.id) ? null : d))}
+              onDrop={(e) => {
+                e.preventDefault();
+                void dropOn("version", String(v.id));
+              }}
+              onDragEnd={() => {
+                setDrag(null);
+                setDragOver(null);
+              }}
+              className={`flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-white/5 ${
+                rowBusy ? "opacity-50" : ""
+              } ${dragOver === String(v.id) ? "ring-1 ring-[#F4C430]/70" : ""} ${
+                drag?.id === String(v.id) ? "opacity-40" : ""
+              }`}
             >
+              <GripVertical
+                className="h-3 w-3 shrink-0 cursor-grab text-muted-foreground/50 active:cursor-grabbing"
+                aria-hidden
+              />
               <button
                 type="button"
                 disabled={isMain || rowBusy || !!busy}
@@ -823,10 +895,32 @@ const VersionsBlock = ({
             {stems.map((sf) => (
               <div
                 key={sf.key}
+                draggable={pendingId !== sf.key && !busy}
+                onDragStart={() => setDrag({ kind: "stem", id: sf.key })}
+                onDragOver={(e) => {
+                  if (drag?.kind !== "stem") return;
+                  e.preventDefault();
+                  setDragOver(sf.key);
+                }}
+                onDragLeave={() => setDragOver((d) => (d === sf.key ? null : d))}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  void dropOn("stem", sf.key);
+                }}
+                onDragEnd={() => {
+                  setDrag(null);
+                  setDragOver(null);
+                }}
                 className={`flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-white/5 ${
                   pendingId === sf.key ? "opacity-50" : ""
+                } ${dragOver === sf.key ? "ring-1 ring-[#F4C430]/70" : ""} ${
+                  drag?.id === sf.key ? "opacity-40" : ""
                 }`}
               >
+                <GripVertical
+                  className="h-3 w-3 shrink-0 cursor-grab text-muted-foreground/50 active:cursor-grabbing"
+                  aria-hidden
+                />
                 <Music2 className="h-3 w-3 shrink-0 text-muted-foreground/60" />
                 <span className="min-w-0 flex-1 truncate font-body text-xs text-foreground" title={sf.name}>
                   {sf.name}
