@@ -568,6 +568,9 @@ export const onRequestPost = async (ctx: Ctx) => {
       previewSrc?: string;
       preview128?: string;
       duration?: string;
+      /** R2 key of THIS version's WAV master (links the row to wav_manifest,
+       *  so deleting the version can drop its file from the download zip). */
+      wavKey?: string;
     }[];
     // bulk_update_tracks fields (trackIds shared with set_tracks above)
     facets?: Partial<Record<"useCase" | "genre" | "mood", { add?: string[]; remove?: string[] }>>;
@@ -1055,11 +1058,13 @@ export const onRequestPost = async (ctx: Ctx) => {
         const v = versions[i];
         const versionId = i === 0 ? "main" : `v${i + 1}`;
         const preview128 = isPreviewPath(v.preview128) ? v.preview128 : null;
+        const vWavKey =
+          typeof v.wavKey === "string" && /^masters\//.test(v.wavKey) ? v.wavKey : null;
         await db
           .prepare(
             `INSERT INTO track_versions
                (id, track_id, version_id, label, duration, preview_src, preview_128, r2_key_wav, sort)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL, ?8)`,
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`,
           )
           .bind(
             `${trackId}:${versionId}`,
@@ -1069,6 +1074,7 @@ export const onRequestPost = async (ctx: Ctx) => {
             v.duration ?? "",
             v.previewSrc,
             preview128,
+            vWavKey,
             i,
           )
           .run();
@@ -1134,6 +1140,12 @@ export const onRequestPost = async (ctx: Ctx) => {
           .prepare(`UPDATE tracks SET wav_manifest = ?2 WHERE id = ?1`)
           .bind(trackId, JSON.stringify(merged))
           .run();
+        // Link the row to its file: deleting this version later must be able to
+        // drop exactly this master from the customer's WAV zip.
+        await db
+          .prepare(`UPDATE track_versions SET r2_key_wav = ?3 WHERE track_id = ?1 AND version_id = ?2`)
+          .bind(trackId, versionId, me[0].key)
+          .run();
       }
       return json({ ok: true, versionId });
     }
@@ -1178,10 +1190,63 @@ export const onRequestPost = async (ctx: Ctx) => {
         .bind(trackId)
         .first<{ n: number }>();
       if ((count?.n ?? 0) <= 1) return json({ error: "A track needs at least one version" }, 400);
+      await ensureTrackCoverColumn(db);
+
+      // What the customer downloads must mirror what the track actually HAS:
+      // the deleted version's WAV master leaves wav_manifest (and R2) too.
+      // Preferred link: track_versions.r2_key_wav (set on upload). Older rows
+      // have no key, so we fall back to matching the manifest filename against
+      // the version label (e.g. "…_30sec.wav" for the "30sec" version).
+      const gone = await db
+        .prepare(`SELECT label, r2_key_wav FROM track_versions WHERE track_id = ?1 AND version_id = ?2`)
+        .bind(trackId, versionId)
+        .first<{ label: string; r2_key_wav: string | null }>();
+      const trackRow = await db
+        .prepare(`SELECT title, wav_manifest FROM tracks WHERE id = ?1`)
+        .bind(trackId)
+        .first<{ title: string; wav_manifest: string | null }>();
+
       await db
         .prepare(`DELETE FROM track_versions WHERE track_id = ?1 AND version_id = ?2`)
         .bind(trackId, versionId)
         .run();
+
+      const manifest = parseManifest(trackRow?.wav_manifest);
+      if (manifest && gone) {
+        const norm = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, "");
+        let next = manifest;
+        if (gone.r2_key_wav) next = manifest.filter((e) => e.key !== gone.r2_key_wav);
+        if (next.length === manifest.length) {
+          // No stored key — match the file to the version by name. Only act on
+          // an UNAMBIGUOUS single hit; never guess with a whole bundle at stake.
+          const title = norm(trackRow?.title ?? "");
+          const label = norm(gone.label ?? "");
+          const suffix = (name: string) => {
+            const base = norm(name.replace(/\.[a-z0-9]+$/i, ""));
+            const i = title ? base.indexOf(title) : -1;
+            return i >= 0 ? base.slice(i + title.length) : base;
+          };
+          if (label && label !== "main") {
+            const hits = manifest.filter((e) => suffix(e.name) === label);
+            if (hits.length === 1) next = manifest.filter((e) => e.key !== hits[0].key);
+          }
+        }
+        if (next.length !== manifest.length) {
+          const removed = manifest.filter((e) => !next.some((n) => n.key === e.key));
+          await db
+            .prepare(`UPDATE tracks SET wav_manifest = ?2 WHERE id = ?1`)
+            .bind(trackId, next.length > 0 ? JSON.stringify(next) : null)
+            .run();
+          for (const e of removed) {
+            try {
+              await ctx.env.R2?.delete?.(e.key);
+            } catch {
+              // object already gone — the manifest is the source of truth
+            }
+          }
+        }
+      }
+
       if (typeof body.wavZipKey === "string" && /^masters\//.test(body.wavZipKey)) {
         await db.prepare(`UPDATE tracks SET r2_key_wav_zip = ?2 WHERE id = ?1`).bind(trackId, body.wavZipKey).run();
       }
@@ -1303,6 +1368,58 @@ export const onRequestPost = async (ctx: Ctx) => {
           : [];
       if (ids.length === 0) return json({ error: "trackIds required" }, 400);
       const marks = ids.map((_, i) => `?${i + 1}`).join(", ");
+      await ensureTrackCoverColumn(db);
+
+      // Collect every FILE these tracks own BEFORE the rows go — otherwise the
+      // audio stays in R2 forever and the owner keeps paying for tracks that no
+      // longer exist. Covers: previews (public), WAV + stem masters (private),
+      // the legacy pre-packed zips, and the cover images we uploaded ourselves.
+      const doomedKeys = new Set<string>();
+      /** "/api/file/previews/x.mp3" (or a bare key) -> "previews/x.mp3". */
+      const toKey = (v: string | null | undefined) => {
+        if (!v) return null;
+        const m = v.match(/^\/api\/file\/(.+)$/);
+        const key = m ? m[1] : v;
+        return /^(previews|masters|covers)\//.test(key) ? key : null;
+      };
+      try {
+        const rows = await db
+          .prepare(
+            `SELECT wav_manifest, stems_manifest, r2_key_wav_zip, r2_key_stems, cover, cover_thumb
+               FROM tracks WHERE id IN (${marks})`,
+          )
+          .bind(...ids)
+          .all<{
+            wav_manifest: string | null;
+            stems_manifest: string | null;
+            r2_key_wav_zip: string | null;
+            r2_key_stems: string | null;
+            cover: string | null;
+            cover_thumb: string | null;
+          }>();
+        for (const r of rows.results) {
+          for (const e of parseManifest(r.wav_manifest) ?? []) doomedKeys.add(e.key);
+          for (const e of parseManifest(r.stems_manifest) ?? []) doomedKeys.add(e.key);
+          for (const v of [r.r2_key_wav_zip, r.r2_key_stems, r.cover, r.cover_thumb]) {
+            const k = toKey(v);
+            if (k) doomedKeys.add(k);
+          }
+        }
+        const vrows = await db
+          .prepare(
+            `SELECT preview_src, preview_128, r2_key_wav FROM track_versions WHERE track_id IN (${marks})`,
+          )
+          .bind(...ids)
+          .all<{ preview_src: string | null; preview_128: string | null; r2_key_wav: string | null }>();
+        for (const v of vrows.results) {
+          for (const p of [v.preview_src, v.preview_128, v.r2_key_wav]) {
+            const k = toKey(p);
+            if (k) doomedKeys.add(k);
+          }
+        }
+      } catch {
+        // legacy DB without some column — delete what we could read
+      }
 
       await db.prepare(`DELETE FROM track_versions WHERE track_id IN (${marks})`).bind(...ids).run();
       await db.prepare(`DELETE FROM collection_tracks WHERE track_id IN (${marks})`).bind(...ids).run();
@@ -1333,7 +1450,19 @@ export const onRequestPost = async (ctx: Ctx) => {
       }
 
       await db.prepare(`DELETE FROM tracks WHERE id IN (${marks})`).bind(...ids).run();
-      return json({ ok: true, deleted: ids.length });
+
+      // Storage cleanup last: the DB is the source of truth, so a hiccup here
+      // never blocks the delete — it only leaves an orphaned object behind.
+      let filesDeleted = 0;
+      for (const key of doomedKeys) {
+        try {
+          await ctx.env.R2?.delete?.(key);
+          filesDeleted += 1;
+        } catch {
+          // already gone / no delete binding — carry on
+        }
+      }
+      return json({ ok: true, deleted: ids.length, filesDeleted });
     }
 
     case "add_vocab":

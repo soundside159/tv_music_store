@@ -29,6 +29,12 @@ export interface R2Bucket {
   ): Promise<unknown>;
   /** Optional in the type only — the real Cloudflare binding always has it. */
   delete?(key: string | string[]): Promise<void>;
+  /** Ditto — used by the orphaned-files sweep (/api/admin/storage). */
+  list?(options?: { prefix?: string; cursor?: string; limit?: number }): Promise<{
+    objects: { key: string; size: number }[];
+    truncated: boolean;
+    cursor?: string;
+  }>;
 }
 
 export interface Env {

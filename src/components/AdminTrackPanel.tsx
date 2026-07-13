@@ -23,10 +23,10 @@ import { splitFilterValues } from "@/components/TrackRowPlayer";
 import WaveformPreview from "@/components/WaveformPreview";
 import { usePlayer } from "@/components/playerContext";
 import { refreshContent } from "@/hooks/useContent";
-import { formatDuration, makeThumbnail, unzipBlob, wavToMp3Pair, zipEntries } from "@/lib/audioEncoding";
-import { brandCover } from "@/lib/coverArt";
-import { renameWavInBundle } from "@/lib/wavBundle";
+import { decodeAudio, encodeMp3, formatDuration, makeThumbnail, wavToMp3Pair } from "@/lib/audioEncoding";
+import { crc32File } from "@/lib/crc32";
 import { cleanVersionLabel } from "@/lib/downloadTrack";
+import { brandCover } from "@/lib/coverArt";
 import type { Vocabularies } from "@/lib/tagOptions";
 
 // Admin-only side panels for the public track page (/track/:slug).
@@ -38,7 +38,6 @@ import type { Vocabularies } from "@/lib/tagOptions";
 
 const GOLD = "#F4C430";
 // Same default cover the public collection/playlist pages fall back to.
-const FALLBACK_COVER = "/images/collections/orchestral.jpg";
 
 export interface AdminContentItem {
   id: string;
@@ -476,31 +475,42 @@ const PanelShell = ({ children, headerAction }: { children: ReactNode; headerAct
 
 const uploadAudioApi = async (
   file: Blob,
-  kind: "preview" | "preview128" | "wavzip",
+  kind: "preview" | "preview128" | "master",
   filename: string,
 ): Promise<{ key: string; path: string | null }> => {
   const base = filename.replace(/\.[^.]+$/, "");
   const res = await fetch(`/api/admin/upload-audio?kind=${kind}&filename=${encodeURIComponent(base)}`, {
     method: "POST",
     credentials: "include",
-    headers: { "content-type": file.type || (kind === "wavzip" ? "application/zip" : "audio/mpeg") },
+    headers: { "content-type": file.type || (kind === "master" ? "audio/wav" : "audio/mpeg") },
     body: file,
   });
-  const d = (await res.json().catch(() => ({}))) as { ok?: boolean; key?: string; path?: string | null; error?: string };
+  const d = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    key?: string;
+    path?: string | null;
+    error?: string;
+  };
   if (!res.ok || !d.ok || !d.key) throw new Error(d.error ?? "Upload failed");
   return { key: d.key, path: d.path ?? null };
 };
 
-/** The track's current WAV bundle unpacked, or null when there is none. */
-const fetchZipEntries = async (trackId: string): Promise<Record<string, Uint8Array> | null> => {
-  const r = await fetch(`/api/admin/master?track=${encodeURIComponent(trackId)}`, { credentials: "include" });
-  if (!r.ok) return null;
-  try {
-    return await unzipBlob(await r.blob());
-  } catch {
-    return null;
-  }
-};
+/** Same rules as Bulk Upload: …_stem(s)_… = a stem, anything else = a version. */
+const isStemName = (filename: string) =>
+  /(^|[_\s(-])stems?([_\s).-]|$)/i.test(filename.replace(/\.[a-z0-9]+$/i, "").trim());
+const isMp3Name = (filename: string) => /\.mp3$/i.test(filename);
+const isAudioName = (filename: string) => /\.(wav|mp3)$/i.test(filename);
+
+interface StemFile {
+  key: string;
+  name: string;
+  size: number;
+}
+
+const fmtSize = (bytes: number) =>
+  bytes >= 1024 * 1024
+    ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
+    : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 
 const VersionsBlock = ({
   track,
@@ -519,85 +529,156 @@ const VersionsBlock = ({
   const fileRef = useRef<HTMLInputElement>(null);
 
   const versions = track.audioVersions;
-  const norm = (s: string) => (cleanVersionLabel(s, track.title) || s).trim().toLowerCase();
 
-  const addVersion = async (file: File) => {
-    setBusy("Encoding MP3…");
+  // The track's stem files + WAV masters (the masters only power the duplicate
+  // check — a re-picked file is refused before any encoding happens).
+  const [stems, setStems] = useState<StemFile[]>([]);
+  const [masters, setMasters] = useState<StemFile[]>([]);
+  const loadStems = useCallback(async () => {
     try {
-      const { mp3_320, mp3_128, duration } = await wavToMp3Pair(file);
-      setBusy("Uploading previews…");
-      const p320 = await uploadAudioApi(mp3_320, "preview", file.name);
-      const p128 = await uploadAudioApi(mp3_128, "preview128", file.name).catch(() => null);
-
-      // Rebuild the WAV bundle with the new file inside (when a bundle exists).
-      let wavZipKey: string | undefined;
-      setBusy("Updating WAV bundle…");
-      const entries = await fetchZipEntries(track.id);
-      if (entries) {
-        let name = file.name.replace(/[^\w.\- ]+/g, "_");
-        if (!/\.wav$/i.test(name)) name += ".wav";
-        let unique = name;
-        let k = 2;
-        while (Object.keys(entries).some((e) => e.toLowerCase() === unique.toLowerCase())) {
-          unique = name.replace(/\.wav$/i, ` (${k++}).wav`);
-        }
-        entries[unique] = new Uint8Array(await file.arrayBuffer());
-        const blob = await zipEntries(entries);
-        const up = await uploadAudioApi(blob, "wavzip", track.title);
-        wavZipKey = up.key;
-      }
-
-      const base = file.name.replace(/\.[a-z0-9]+$/i, "");
-      const label = cleanVersionLabel(base, track.title) || `Version ${versions.length + 1}`;
-      const ok = await run({
-        action: "add_version",
-        id: track.id,
-        label,
-        previewSrc: p320.path,
-        preview128: p128?.path ?? undefined,
-        duration: formatDuration(duration),
-        wavZipKey,
+      const r = await fetch(`/api/admin/stems?track=${encodeURIComponent(track.id)}`, {
+        credentials: "include",
       });
-      if (ok) {
-        toast.success(`Version "${label}" added`);
-        onTracksChanged();
+      if (!r.ok) return;
+      const d = (await r.json()) as { stems?: StemFile[]; masters?: StemFile[] };
+      setStems(d.stems ?? []);
+      setMasters(d.masters ?? []);
+    } catch {
+      // keep whatever we had
+    }
+  }, [track.id]);
+  useEffect(() => {
+    void loadStems();
+  }, [loadStems]);
+
+  // Add files (v2 storage): a WAV/MP3 becomes a new VERSION, a …_stem_… file
+  // becomes a STEM. WAV versions upload their master too, so the customer's
+  // download zip contains exactly what the track has.
+  const addFiles = async (files: File[]) => {
+    const audio = files.filter((f) => isAudioName(f.name));
+    if (audio.length === 0) {
+      toast.error("Pick a WAV or MP3 file");
+      return;
+    }
+    const knownNames = new Set([...stems, ...masters].map((f) => f.name.toLowerCase()));
+    const knownLabels = new Set(
+      versions.map((v) => (cleanVersionLabel(v.label, track.title) || v.label).toLowerCase()),
+    );
+    let touched = false;
+    try {
+      for (const file of audio) {
+        if (knownNames.has(file.name.toLowerCase())) {
+          toast.error(`"${file.name}" is already on this track — skipped`);
+          continue;
+        }
+        const base = file.name.replace(/\.[a-z0-9]+$/i, "");
+        const label = cleanVersionLabel(base, track.title) || `Version ${versions.length + 1}`;
+
+        if (isStemName(file.name)) {
+          setBusy(`Uploading stem ${file.name}…`);
+          const crc = await crc32File(file);
+          const up = await uploadAudioApi(file, "master", file.name);
+          const ok = await run({
+            action: "add_stems",
+            id: track.id,
+            stems: [{ key: up.key, name: file.name, size: file.size, crc }],
+          });
+          if (ok) {
+            toast.success(`Stem "${file.name}" added`);
+            knownNames.add(file.name.toLowerCase());
+            touched = true;
+          }
+          continue;
+        }
+
+        if (knownLabels.has(label.toLowerCase())) {
+          toast.error(`This track already has a version called "${label}" — skipped`);
+          continue;
+        }
+
+        setBusy(`Encoding ${file.name}…`);
+        let mp3_320: Blob;
+        let mp3_128: Blob;
+        let duration: number;
+        if (isMp3Name(file.name)) {
+          const buffer = await decodeAudio(file);
+          mp3_320 = file;
+          mp3_128 = encodeMp3(buffer, 128);
+          duration = buffer.duration;
+        } else {
+          const pair = await wavToMp3Pair(file);
+          mp3_320 = pair.mp3_320;
+          mp3_128 = pair.mp3_128;
+          duration = pair.duration;
+        }
+        setBusy("Uploading previews…");
+        const p320 = await uploadAudioApi(mp3_320, "preview", file.name);
+        const p128 = await uploadAudioApi(mp3_128, "preview128", file.name).catch(() => null);
+
+        let masterEntry: { key: string; name: string; size: number; crc: number } | undefined;
+        if (!isMp3Name(file.name)) {
+          setBusy(`Uploading master ${file.name}…`);
+          const crc = await crc32File(file);
+          const up = await uploadAudioApi(file, "master", file.name);
+          masterEntry = { key: up.key, name: file.name, size: file.size, crc };
+        }
+
+        const ok = await run({
+          action: "add_version",
+          id: track.id,
+          label,
+          previewSrc: p320.path,
+          preview128: p128?.path ?? undefined,
+          duration: formatDuration(duration),
+          masterEntry,
+        });
+        if (ok) {
+          toast.success(`Version "${label}" added`);
+          knownNames.add(file.name.toLowerCase());
+          knownLabels.add(label.toLowerCase());
+          touched = true;
+        }
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Add version failed");
+      toast.error(e instanceof Error ? e.message : "Upload failed");
     } finally {
       setBusy(null);
+      if (touched) {
+        await loadStems();
+        onTracksChanged();
+      }
     }
   };
 
+  // The server drops the version's WAV master from the download bundle with it,
+  // so what the customer downloads always mirrors what the track has.
   const deleteVersion = async (v: TrackAudioVersion) => {
     if (!window.confirm(`Delete version "${v.label}"?`)) return;
     setPendingId(v.id);
     try {
-      // Try to drop the matching WAV from the bundle (matched by label).
-      let wavZipKey: string | undefined;
-      const entries = await fetchZipEntries(track.id);
-      if (entries) {
-        const match = Object.keys(entries).find(
-          (name) => norm(name.replace(/\.wav$/i, "")) === norm(v.label),
-        );
-        if (match) {
-          delete entries[match];
-          const blob = await zipEntries(entries);
-          const up = await uploadAudioApi(blob, "wavzip", track.title);
-          wavZipKey = up.key;
-        } else {
-          toast("WAV bundle unchanged", {
-            description: "Couldn't match this version's file inside the zip.",
-          });
-        }
-      }
-      const ok = await run({ action: "delete_version", id: track.id, versionId: v.id, wavZipKey });
+      const ok = await run({ action: "delete_version", id: track.id, versionId: v.id });
       if (ok) {
         toast.success("Version deleted");
+        await loadStems();
         onTracksChanged();
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setPendingId(null);
+    }
+  };
+
+  const deleteStem = async (stem: StemFile) => {
+    if (!window.confirm(`Delete stem "${stem.name}"?`)) return;
+    setPendingId(stem.key);
+    try {
+      const ok = await run({ action: "delete_stem", id: track.id, key: stem.key });
+      if (ok) {
+        toast.success("Stem deleted");
+        await loadStems();
+        onTracksChanged();
+      }
     } finally {
       setPendingId(null);
     }
@@ -619,17 +700,7 @@ const VersionsBlock = ({
     if (!t || t === v.label) return;
     setPendingId(v.id);
     try {
-      // Rename the matching WAV inside the master bundle too, so customer WAV
-      // downloads carry the new name (previews get the new label from the DB).
-      let wavZipKey: string | undefined;
-      try {
-        wavZipKey = (await renameWavInBundle(track.id, track.title, v.label, t)) ?? undefined;
-      } catch {
-        toast("WAV bundle unchanged", {
-          description: "Couldn't rename this version's file inside the zip.",
-        });
-      }
-      const ok = await run({ action: "rename_version", id: track.id, versionId: v.id, label: t, wavZipKey });
+      const ok = await run({ action: "rename_version", id: track.id, versionId: v.id, label: t });
       if (ok) onTracksChanged();
     } finally {
       setPendingId(null);
@@ -644,6 +715,7 @@ const VersionsBlock = ({
           type="button"
           disabled={!!busy}
           onClick={() => fileRef.current?.click()}
+          title="Add a WAV/MP3 — a file named …_stem(s)_… is added as a stem"
           className="inline-flex items-center gap-1 rounded-md border border-[#F4C430]/50 px-2 py-0.5 font-body text-[11px] font-semibold text-[#F4C430] transition-colors hover:bg-[#F4C430]/10 disabled:opacity-50"
         >
           <Plus className="h-3 w-3" />
@@ -729,15 +801,58 @@ const VersionsBlock = ({
           );
         })}
       </div>
+
+      {/* Stems: the actual files, deletable one by one (the STEMS zip is built
+          at download time — nothing is pre-packed). */}
+      {stems.length > 0 && (
+        <div className="mt-2 border-t border-border/40 pt-2">
+          <p className="flex items-center gap-1.5 font-body text-[11px] font-semibold text-foreground">
+            <span className="rounded border border-[#F4C430]/60 bg-[#F4C430]/10 px-1 py-px font-body text-[9px] font-bold uppercase tracking-wide text-[#F4C430]">
+              Stems
+            </span>
+            {stems.length} file{stems.length > 1 ? "s" : ""}
+          </p>
+          <div className="mt-1 flex flex-col gap-0.5">
+            {stems.map((sf) => (
+              <div
+                key={sf.key}
+                className={`flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-white/5 ${
+                  pendingId === sf.key ? "opacity-50" : ""
+                }`}
+              >
+                <Music2 className="h-3 w-3 shrink-0 text-muted-foreground/60" />
+                <span className="min-w-0 flex-1 truncate font-body text-xs text-foreground" title={sf.name}>
+                  {sf.name}
+                </span>
+                <span className="shrink-0 font-body text-[10px] tabular-nums text-muted-foreground">
+                  {fmtSize(sf.size)}
+                </span>
+                <button
+                  type="button"
+                  disabled={pendingId === sf.key || !!busy}
+                  onClick={() => void deleteStem(sf)}
+                  title="Delete this stem"
+                  aria-label={`Delete stem ${sf.name}`}
+                  className="shrink-0 text-muted-foreground transition-colors hover:text-red-400 disabled:opacity-30"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <input
         ref={fileRef}
         type="file"
-        accept=".wav,audio/wav,audio/x-wav"
+        multiple
+        accept=".wav,.mp3,audio/wav,audio/x-wav,audio/mpeg"
         className="hidden"
         onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) void addVersion(f);
+          const files = [...(e.target.files ?? [])];
           e.target.value = "";
+          if (files.length > 0) void addFiles(files);
         }}
       />
     </div>
@@ -998,17 +1113,21 @@ const MembershipList = ({
         const busy = pendingId === item.id;
         return (
           <div key={item.id} className="flex items-center gap-2 rounded px-1 py-1 hover:bg-white/5">
-            {/* Same fallback image the public pages use, so the thumb never looks empty. */}
+            {/* No cover on the item = a plain music-note tile. It used to fall
+                back to a real cover from the catalogue, which read as "this
+                playlist HAS that picture" — it doesn't. */}
             <span className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded bg-background/60">
               <Music2 className="absolute h-3.5 w-3.5 text-muted-foreground" />
-              <img
-                src={item.image || FALLBACK_COVER}
-                alt=""
-                className="relative h-8 w-8 object-cover"
-                onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).style.display = "none";
-                }}
-              />
+              {item.image && (
+                <img
+                  src={item.image}
+                  alt=""
+                  className="relative h-8 w-8 object-cover"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.display = "none";
+                  }}
+                />
+              )}
             </span>
             <Link
               to={`${linkBase}/${item.id}`}

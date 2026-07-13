@@ -3165,3 +3165,58 @@ a **CPU** bug in `functions/api/_zipStream.ts`:
   instead of handing back a half zip.
 - Rule for anyone touching this file: **never loop file bytes through JS in a worker.** Headers in
   JS, bodies through `pipeTo`.
+
+### 2026-07-13 — The download bundle now MIRRORS the track (delete a version → it leaves the zip)
+**The bug the owner hit:** he deleted a version, downloaded the WAV zip, and the deleted version was
+still inside. `delete_version` only removed the `track_versions` row — `tracks.wav_manifest` (the
+list the download zip is streamed from) was never touched, so the file kept shipping. Same class of
+problem the other way round: versions added on the TRACK PAGE used the legacy "rebuild the pre-packed
+zip" path, which is a no-op for v2 tracks, so a newly added version never reached the customer's zip.
+Fixed end to end:
+- **Every version row now knows its own master file.** `track_versions.r2_key_wav` is filled with the
+  R2 key of that version's WAV: `create_track` takes `versions[].wavKey` (Bulk Upload maps each
+  version to its uploaded master by filename), and `add_version` takes `masterEntry` and stores its
+  key. `set_main_version` already carried `r2_key_wav` through its rewrite.
+- **`delete_version`** drops that master from `wav_manifest` and deletes the R2 object. Rows uploaded
+  before this change have no key, so it falls back to matching the manifest filename against the
+  version label (normalised, title stripped) and acts only on an unambiguous single hit — never
+  guesses with a whole bundle at stake.
+- **Track page (`AdminTrackPanel` → VersionsBlock) rewritten onto the v2 path**: the **Add** button
+  takes WAV *or* MP3 (multi-select), a file named `…_stem(s)_…` is added as a **stem**, everything
+  else as a **version** (WAV versions upload their master into `wav_manifest`). Duplicate files /
+  duplicate version labels are refused before any encoding. The legacy zip rebuild
+  (`unzipBlob`/`zipEntries`/`renameWavInBundle`) is gone from this panel.
+- **Stems are visible on the track page** now too: under the versions list (i.e. above the Trending
+  box), each stem file with its size and an × that deletes just that file.
+- **Playlists/collections in the track-page side panel** no longer borrow a random catalogue cover
+  (`FALLBACK_COVER`) when they have no image — an item without a cover shows a plain music-note tile.
+
+### 2026-07-13 — Deleting a track now deletes its FILES too (it didn't)
+Owner asked whether deleting a track removes its files from storage. It did **not** — `delete_track`
+only dropped the DB rows, so every preview, WAV master, stem and cover stayed in R2 forever (paid
+storage for tracks that no longer exist; the same was true for R2 objects of deleted versions before
+today's fix). `delete_track` now collects, BEFORE the rows go: `wav_manifest` + `stems_manifest`
+keys, `r2_key_wav_zip`, `r2_key_stems`, `cover`, `cover_thumb`, and every version's `preview_src` /
+`preview_128` / `r2_key_wav` (paths like `/api/file/previews/…` are mapped back to their R2 key;
+only the `previews|masters|covers` prefixes are ever touched). The objects are deleted AFTER the DB
+rows — the DB is the source of truth, so a storage hiccup can never block the delete, it can only
+leave an orphan. Response reports `filesDeleted`.
+⚠️ Files uploaded before today are still orphaned in R2 for tracks/versions deleted in the past —
+if the bucket looks fat, that is why. A one-off sweep script (list R2 keys, keep only those
+referenced by D1) would clean it up; not written yet.
+
+### 2026-07-13 — Storage cleanup for the files orphaned by past deletes
+The owner asked how to get rid of everything he uploaded and deleted before the fix above.
+- **NEW `functions/api/admin/storage.ts`** (admin only):
+  - `GET /api/admin/storage` — lists R2 under `previews/`, `masters/`, `covers/`, builds the set of
+    keys the DATABASE still references (tracks: wav_manifest, stems_manifest, r2_key_wav_zip,
+    r2_key_stems, cover, cover_thumb; track_versions: preview_src, preview_128, r2_key_wav;
+    collections/playlists/categories images; composer avatars) and reports what nothing points at:
+    `{ total, totalBytes, orphans, orphanBytes, sample[] }`.
+  - `POST` with `{ confirm: true }` deletes exactly those objects.
+  - The rule is deliberately blunt: an object is an orphan ONLY if no D1 row references its key, so
+    the worst a bug here can do is SKIP a file, never delete a live one.
+  - `R2Bucket` in `functions/api/_utils.ts` gained an optional `list()` for this.
+- **UI: Admin → Usage → "Storage cleanup" card** (`src/components/AdminUsage.tsx`): "Scan storage"
+  shows totals + a sample of the unused files, then a red "Delete N unused files" button appears
+  (with a confirm). Safe to run any time.

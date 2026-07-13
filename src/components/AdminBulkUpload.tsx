@@ -479,7 +479,14 @@ const AdminBulkUpload = () => {
     patchFile(group.key, ordered[0].qf.file.name, { stage: "encoded" });
 
     // 3. Upload previews (320 + 128) per version.
-    const versions: { label: string; previewSrc: string; preview128?: string; duration: string }[] = [];
+    const versions: {
+      label: string;
+      previewSrc: string;
+      preview128?: string;
+      duration: string;
+      /** R2 key of this version's WAV master (filled after the masters upload). */
+      wavKey?: string;
+    }[] = [];
     for (let i = 0; i < ordered.length; i++) {
       const e = ordered[i];
       const name = e.qf.file.name;
@@ -531,6 +538,14 @@ const AdminBulkUpload = () => {
     // WAV versions only — MP3 versions have no master to sell.
     const wavFiles = group.files.filter(({ file }) => !isMp3(file.name));
     const wavManifest = wavFiles.length > 0 ? await uploadMasters(wavFiles, "WAV") : undefined;
+    // Link each version row to its own master file: deleting a version later
+    // must drop exactly that WAV from the customer's download zip.
+    if (wavManifest) {
+      for (let i = 0; i < ordered.length; i++) {
+        const hit = wavManifest.find((m) => m.name === ordered[i].qf.file.name);
+        if (hit) versions[i].wavKey = hit.key;
+      }
+    }
     const stemsManifest =
       group.stems.length > 0 ? await uploadMasters(group.stems, "stem") : undefined;
 

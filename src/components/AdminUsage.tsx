@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, HardDrive, Loader2, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 // Services & credits — rendered at the bottom of Admin → Dashboard.
 //
@@ -95,6 +96,77 @@ const AdminUsage = () => {
   const realAi = report?.openaiSpend.source === "openai";
   const aiCents = report?.openaiSpend.centsThisMonth ?? 0;
 
+  // --- Orphaned files in R2 -------------------------------------------------
+  // Until 2026-07-13 deleting a track left its audio in the bucket. This scans
+  // storage against the database and can delete whatever nothing points at.
+  interface StorageReport {
+    total: number;
+    totalBytes: number;
+    orphans: number;
+    orphanBytes: number;
+    sample: { key: string; size: number }[];
+  }
+  const [storage, setStorage] = useState<StorageReport | null>(null);
+  const [storageBusy, setStorageBusy] = useState<"scan" | "clean" | null>(null);
+  const mb = (bytes: number) =>
+    bytes >= 1024 ** 3
+      ? `${(bytes / 1024 ** 3).toFixed(2)} GB`
+      : `${Math.round(bytes / 1024 / 1024)} MB`;
+
+  const scanStorage = async () => {
+    setStorageBusy("scan");
+    try {
+      const res = await fetch("/api/admin/storage", { credentials: "include" });
+      const d = (await res.json().catch(() => ({}))) as StorageReport & {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!res.ok || !d.ok) throw new Error(d.error ?? "Scan failed");
+      setStorage(d);
+      toast.success(
+        d.orphans === 0
+          ? "Storage is clean — every file belongs to a track"
+          : `${d.orphans} unused file(s) · ${mb(d.orphanBytes)}`,
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Scan failed");
+    } finally {
+      setStorageBusy(null);
+    }
+  };
+
+  const cleanStorage = async () => {
+    if (!storage || storage.orphans === 0) return;
+    if (
+      !window.confirm(
+        `Delete ${storage.orphans} unused file(s) (${mb(storage.orphanBytes)}) from storage?\n\nOnly files that NO track, version, stem or cover in the database points at are removed. This cannot be undone.`,
+      )
+    )
+      return;
+    setStorageBusy("clean");
+    try {
+      const res = await fetch("/api/admin/storage", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ confirm: true }),
+      });
+      const d = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        deleted?: number;
+        bytes?: number;
+        error?: string;
+      };
+      if (!res.ok || !d.ok) throw new Error(d.error ?? "Cleanup failed");
+      toast.success(`Deleted ${d.deleted ?? 0} file(s) · freed ${mb(d.bytes ?? 0)}`);
+      await scanStorage();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Cleanup failed");
+    } finally {
+      setStorageBusy(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div>
@@ -178,6 +250,77 @@ const AdminUsage = () => {
             what="Cover art and descriptions. Add an OPENAI_ADMIN_KEY in Cloudflare and the real monthly spend appears here instead of this link."
             configured={!!report?.configured.openai}
           />
+        )}
+      </div>
+
+      {/* ===== Storage: files in R2 that nothing in the database points at ===== */}
+      <div className="rounded-xl border border-border bg-card p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="flex items-center gap-2 font-body text-sm font-semibold text-foreground">
+              <HardDrive className="h-4 w-4" style={{ color: GOLD }} />
+              Storage cleanup
+            </h3>
+            <p className="mt-1 max-w-xl font-body text-xs text-muted-foreground">
+              Deleting a track used to leave its audio in storage. This scans the bucket against the
+              database and removes only files that no track, version, stem or cover points at.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={storageBusy !== null}
+              onClick={() => void scanStorage()}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 font-body text-xs font-semibold text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430] disabled:opacity-50"
+            >
+              {storageBusy === "scan" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {storageBusy === "scan" ? "Scanning…" : "Scan storage"}
+            </button>
+            {storage && storage.orphans > 0 && (
+              <button
+                type="button"
+                disabled={storageBusy !== null}
+                onClick={() => void cleanStorage()}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-red-400/50 px-3 py-1.5 font-body text-xs font-semibold text-red-400 transition-colors hover:bg-red-400/10 disabled:opacity-50"
+              >
+                {storageBusy === "clean" ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="h-3.5 w-3.5" />
+                )}
+                Delete {storage.orphans} unused file{storage.orphans === 1 ? "" : "s"}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {storage && (
+          <div className="mt-4 border-t border-border/60 pt-3">
+            <p className="font-body text-xs text-muted-foreground">
+              <span className="text-foreground">{storage.total}</span> files in storage ·{" "}
+              {mb(storage.totalBytes)} total ·{" "}
+              <span style={{ color: storage.orphans > 0 ? GOLD : undefined }}>
+                {storage.orphans} unused ({mb(storage.orphanBytes)})
+              </span>
+            </p>
+            {storage.sample.length > 0 && (
+              <ul className="mt-2 flex flex-col gap-0.5">
+                {storage.sample.map((o) => (
+                  <li
+                    key={o.key}
+                    className="truncate font-body text-[11px] tabular-nums text-muted-foreground"
+                  >
+                    {o.key} · {Math.max(1, Math.round(o.size / 1024))} KB
+                  </li>
+                ))}
+                {storage.orphans > storage.sample.length && (
+                  <li className="font-body text-[11px] text-muted-foreground/70">
+                    …and {storage.orphans - storage.sample.length} more
+                  </li>
+                )}
+              </ul>
+            )}
+          </div>
         )}
       </div>
     </div>
