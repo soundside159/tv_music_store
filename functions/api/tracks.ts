@@ -18,6 +18,7 @@ interface TrackRow {
   cover_thumb: string | null;
   code: number | null;
   has_stems: number;
+  import_no?: string | null;
   created_at: string | null;
   status?: string;
   moderation_status?: string;
@@ -55,7 +56,7 @@ export const onRequestGet = async (ctx: Ctx) => {
   let tracks: { results: TrackRow[] };
   try {
     tracks = await ctx.env.DB.prepare(
-      `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, cover, cover_thumb, code, has_stems, created_at, status, moderation_status
+      `SELECT id, slug, title, composer_id, category, genre, mood, use_case, bpm, duration, description, tags, cover, cover_thumb, code, has_stems, import_no, created_at, status, moderation_status
          FROM tracks ${WHERE}`,
     ).all<TrackRow>();
   } catch {

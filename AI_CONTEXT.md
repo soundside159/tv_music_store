@@ -3388,3 +3388,16 @@ transform`. Nothing is hidden or blurred — the art is untouched, only the fram
 Applied to every skewed frame: the tall playlist cards + their skeleton/ghost cards
 (`Playlists.tsx`), the catalog's collection rail cards (`Catalog.tsx`), the playlist-page header
 thumb + its skeleton (`PlaylistDetail.tsx`) and the home page's Editor Picks tiles (`Index.tsx`).
+
+### 2026-07-13 — Tracks Edit: an ID column fed by the spreadsheet's "#"
+Groundwork for the owner's plan to set release dates by "newness" from his source sheet.
+- **New column `tracks.import_no` (TEXT)** — added lazily by `ensureTrackCoverColumn()`. It is **NOT
+  unique**: several tracks may legitimately share a number (that is the point — it groups releases).
+  Set through `bulk_update_tracks` → `fields.importNo` ("" clears it), exposed by `/api/tracks`
+  (`import_no`) and mapped to `CatalogTrack.importNo` in `useTracks`.
+- **Admin → Import** (`AdminImport.tsx`) got an **"# (ID)"** column picker (auto-guessed from headers
+  `#`, `№`, `no`, `num`, `id`); the value rides along with description/tags/BPM when Apply runs.
+- **Admin → Tracks Edit**: a new **ID** column sits left of TRACK (right after the play button) and
+  shows the number ("—" when the track has none). Its header is **clickable and sorts by it**, the
+  same way the Trending header does (`SortMode` gained `"id"`); numeric where it can be, tracks
+  without a number sink to the bottom instead of pretending to be 0.

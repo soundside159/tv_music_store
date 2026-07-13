@@ -21,6 +21,7 @@ type ApiTrack = {
   cover_thumb?: string | null;
   code?: number | null;
   has_stems?: number;
+  import_no?: string | null;
   created_at?: string | null;
   downloads?: number;
   status?: string;
@@ -53,6 +54,7 @@ const mapTrack = (t: ApiTrack): CatalogTrack => ({
   coverThumb: t.cover_thumb || undefined,
   code: t.code ?? undefined,
   hasStems: !!t.has_stems,
+  importNo: t.import_no ?? undefined,
   createdAt: t.created_at ?? undefined,
   downloads: t.downloads ?? 0,
   status: t.status ?? undefined,

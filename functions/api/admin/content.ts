@@ -208,6 +208,10 @@ const ensureTrackCoverColumn = async (db: D1Database) => {
     `ALTER TABLE tracks ADD COLUMN wav_manifest TEXT`,
     `ALTER TABLE tracks ADD COLUMN stems_manifest TEXT`,
     `ALTER TABLE track_versions ADD COLUMN preview_128 TEXT`,
+    // The "#" column of the owner's source spreadsheet. NOT unique: several
+    // tracks can share a number (it groups releases, and will drive the
+    // "newness" dates later). Kept as TEXT — it is a label, not a key.
+    `ALTER TABLE tracks ADD COLUMN import_no TEXT`,
   ];
   for (const sql of alters) {
     try {
@@ -617,6 +621,8 @@ export const onRequestPost = async (ctx: Ctx) => {
       /** Small square thumb for track rows (regenerated with the cover). */
       coverThumb?: string;
       tags?: string[];
+      /** The "#" from the imported spreadsheet ("" clears it). */
+      importNo?: string;
       hasStems?: boolean;
       /** R2 masters/ key of the stems zip; setting it also flips has_stems on. */
       stemsKey?: string;
@@ -889,6 +895,7 @@ export const onRequestPost = async (ctx: Ctx) => {
           if (typeof f.cover === "string") next.cover = f.cover;
           if (typeof f.coverThumb === "string") next.cover_thumb = f.coverThumb;
           if (Array.isArray(f.tags)) next.tags = JSON.stringify(f.tags.slice(0, 50));
+          if (typeof f.importNo === "string") next.import_no = f.importNo.trim().slice(0, 20) || null;
           if (typeof f.hasStems === "boolean") next.has_stems = f.hasStems ? 1 : 0;
           // Stems bundle: storing the key also switches the STEMS badge on.
           if (typeof f.stemsKey === "string" && /^masters\//.test(f.stemsKey)) {

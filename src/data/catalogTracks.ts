@@ -54,6 +54,9 @@ export interface CatalogTrack {
   categoryIds?: string[];
   /** True when the track ships stems (shown as a STEMS badge; Max-plan download). */
   hasStems?: boolean;
+  /** The "#" from the owner's source spreadsheet (admin only, NOT unique —
+   *  several tracks may share one). Imported via Admin → Import. */
+  importNo?: string;
   /** ISO date the track row was created (live API only; drives the "New" sort). */
   createdAt?: string;
   /** All-time download count from download_log (live API only; drives "Popular"). */

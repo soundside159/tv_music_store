@@ -96,7 +96,7 @@ const similarity = (a: string, b: string): number => {
 
 // ---------------------------------------------------------------------------
 
-type ColKey = "title" | "description" | "tags" | "bpm";
+type ColKey = "title" | "description" | "tags" | "bpm" | "importNo";
 
 interface PreviewRow {
   i: number;
@@ -104,6 +104,9 @@ interface PreviewRow {
   description: string;
   tags: string;
   bpm: string;
+  /** The sheet's "#" — stored on the track as-is (not unique; drives the
+   *  release-date ordering the owner will set up later). */
+  importNo: string;
   trackId: string | null;
   matchTitle: string;
   exact: boolean;
@@ -119,6 +122,8 @@ const HEADER_GUESSES: Record<ColKey, RegExp> = {
   description: /^(desc|about|опис)/i,
   tags: /^(tags?|keywords?|теги|ключ)/i,
   bpm: /^(bpm|tempo|темп)/i,
+  // The "#" column of the owner's sheet (also "no", "num", "id", "№").
+  importNo: /^\s*(#|№|no\.?|num(ber)?|id)\s*$/i,
 };
 
 const AdminImport = () => {
@@ -202,6 +207,7 @@ const AdminImport = () => {
           description: cols.description !== undefined ? (r[cols.description] ?? "").trim() : "",
           tags: cols.tags !== undefined ? (r[cols.tags] ?? "").trim() : "",
           bpm: cols.bpm !== undefined ? (r[cols.bpm] ?? "").replace(/[^0-9]/g, "") : "",
+          importNo: cols.importNo !== undefined ? (r[cols.importNo] ?? "").trim().slice(0, 20) : "",
           trackId: exact ? best!.t.id : null,
           matchTitle: exact ? best!.t.title : "",
           exact,
@@ -283,6 +289,7 @@ const AdminImport = () => {
         if (r.description) fields.description = r.description;
         if (r.tags) fields.tags = r.tags.split(",").map((s) => s.trim()).filter(Boolean).slice(0, 12);
         if (r.bpm) fields.bpm = Number(r.bpm);
+        if (r.importNo) fields.importNo = r.importNo;
         const res = await fetch("/api/admin/content", {
           method: "POST",
           credentials: "include",
@@ -384,6 +391,7 @@ const AdminImport = () => {
             {colPicker("description", "Description")}
             {colPicker("tags", "Tags")}
             {colPicker("bpm", "BPM")}
+            {colPicker("importNo", "# (ID)")}
             <button
               type="button"
               disabled={busy || cols.title === undefined}

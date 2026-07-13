@@ -83,7 +83,7 @@ const fmtSize = (bytes: number) =>
 
 type TriState = "all" | "none" | "mixed";
 type FacetKey = "useCase" | "genre" | "mood";
-type SortMode = "default" | "trending";
+type SortMode = "default" | "trending" | "id";
 
 const inputCls =
   "rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none";
@@ -821,6 +821,20 @@ const AdminTracksEdit = ({
       const set = new Set(trending);
       list = [...list].sort((a, b) => (set.has(b.id) ? 1 : 0) - (set.has(a.id) ? 1 : 0));
     }
+    if (sort === "id") {
+      // The spreadsheet "#" — numeric when it can be, text otherwise; tracks
+      // without a number sink to the bottom instead of pretending to be 0.
+      const num = (t: CatalogTrack) => {
+        const raw = (t.importNo ?? "").trim();
+        if (!raw) return Number.POSITIVE_INFINITY;
+        const n = Number(raw);
+        return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY;
+      };
+      list = [...list].sort((a, b) => {
+        const d = num(a) - num(b);
+        return d !== 0 ? d : a.title.localeCompare(b.title);
+      });
+    }
     return list;
   }, [tracks, search, composer, sort, trending, statusTab]);
 
@@ -1555,11 +1569,23 @@ const AdminTracksEdit = ({
       <div className="min-w-0">
         <div className="overflow-x-auto rounded-lg border border-border/60">
           <div className="min-w-[44rem]">
-            <div className="grid grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_4.5rem_7rem_4.5rem_5rem] items-center gap-2 border-b border-border/60 bg-secondary/40 px-3 py-2.5">
+            <div className="grid grid-cols-[2.5rem_2.5rem_3.25rem_minmax(0,1fr)_4.5rem_7rem_4.5rem_5rem] items-center gap-2 border-b border-border/60 bg-secondary/40 px-3 py-2.5">
               <span className="flex justify-center">
                 <RowCheckbox state={pageState} onToggle={togglePage} label="Select all visible" />
               </span>
               <span />
+              {/* The "#" from the imported spreadsheet — NOT unique, and it will
+                  drive the release dates later. Click to sort by it. */}
+              <button
+                type="button"
+                onClick={() => setSort((s) => (s === "id" ? "default" : "id"))}
+                title="Sort by the spreadsheet #"
+                className={`text-left font-body text-xs uppercase tracking-wide transition-colors hover:text-[#F4C430] ${
+                  sort === "id" ? "text-[#F4C430]" : "text-muted-foreground"
+                }`}
+              >
+                ID
+              </button>
               <span className="font-body text-xs uppercase tracking-wide text-muted-foreground">Track</span>
               <span className="text-center font-body text-xs uppercase tracking-wide text-muted-foreground">Ver.</span>
               <span className="font-body text-xs uppercase tracking-wide text-muted-foreground">Composer</span>
@@ -1587,7 +1613,7 @@ const AdminTracksEdit = ({
               return (
                 <div key={t.id} className="border-b border-border/40 last:border-b-0">
                 <div
-                  className={`grid grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_4.5rem_7rem_4.5rem_5rem] items-center gap-2 px-3 py-2 transition-colors ${
+                  className={`grid grid-cols-[2.5rem_2.5rem_3.25rem_minmax(0,1fr)_4.5rem_7rem_4.5rem_5rem] items-center gap-2 px-3 py-2 transition-colors ${
                     isSelected ? "bg-[#F4C430]/[0.06]" : "hover:bg-foreground/[0.03]"
                   }`}
                 >
@@ -1610,6 +1636,16 @@ const AdminTracksEdit = ({
                   >
                     {active ? <Pause className="h-3.5 w-3.5" /> : <Play className="ml-0.5 h-3.5 w-3.5" />}
                   </button>
+
+                  {/* Spreadsheet "#" — several tracks may legitimately share one. */}
+                  <span
+                    className={`truncate font-body text-xs tabular-nums ${
+                      t.importNo ? "text-foreground/80" : "text-muted-foreground/40"
+                    }`}
+                    title={t.importNo ? `Spreadsheet #${t.importNo}` : "No # imported yet"}
+                  >
+                    {t.importNo || "—"}
+                  </span>
 
                   <div className="flex min-w-0 items-center gap-3">
                     <span className="group/aithumb relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/50 bg-secondary">
