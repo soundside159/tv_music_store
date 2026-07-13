@@ -262,7 +262,10 @@ const Account = () => {
   // Cancel Subscription card (paid plans only) — benefits run to the end of the
   // paid period, so we surface subscription.currentPeriodEnd.
   const [cancelOpen, setCancelOpen] = useState(false);
-  const isPaidPlan = !!plan && plan.id !== "free";
+  // Admins get Max-level access by role, not by paying (see hooks/useAuth.ts) —
+  // no upgrade button, nothing to cancel, no billing period to show.
+  const adminAccess = user?.role === "admin";
+  const isPaidPlan = !adminAccess && !!plan && plan.id !== "free";
   const benefitsUntil = fmtDateUS(subscription?.currentPeriodEnd);
 
   const planSubtitle =
@@ -683,12 +686,16 @@ const Account = () => {
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
                     <div>
                       <p className="font-body text-xl font-semibold text-foreground">
-                        {plan?.name ?? "Free"} Plan
+                        {adminAccess ? "Admin access" : `${plan?.name ?? "Free"} Plan`}
                       </p>
-                      <p className="mt-1 font-body text-sm text-muted-foreground">{planSubtitle}</p>
+                      <p className="mt-1 font-body text-sm text-muted-foreground">
+                        {adminAccess
+                          ? "Full access by role — every format and unlimited downloads, no subscription."
+                          : planSubtitle}
+                      </p>
                     </div>
                     <div className="flex gap-2">
-                      {BILLING_ENABLED && plan && plan.id !== "free" && (
+                      {!adminAccess && BILLING_ENABLED && plan && plan.id !== "free" && (
                         <button
                           type="button"
                           onClick={() => void openBillingPortal()}
@@ -697,7 +704,7 @@ const Account = () => {
                           Manage billing
                         </button>
                       )}
-                      {plan?.id !== "max" && (
+                      {!adminAccess && plan?.id !== "max" && (
                         <button
                           type="button"
                           onClick={() => openPlanModal()}

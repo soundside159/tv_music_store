@@ -56,10 +56,15 @@ const mapSession = (data: ApiMeResponse): AuthSession => {
     role: (u.role as User["role"]) ?? "customer",
     createdAt: "",
   };
+  // Admins get Max-level access without a subscription — the same rule the
+  // server applies in /api/download, so every plan gate in the UI (formats,
+  // PDF certificate, download limit) matches what the API will actually do.
+  // Account → Plan & Billing shows this as "Admin access", not a fake plan.
+  const isAdmin = user.role === "admin";
   const subscription: Subscription = {
     id: `live_${u.id}`,
     userId: u.id,
-    plan: (s?.plan as Subscription["plan"]) ?? "free",
+    plan: isAdmin ? "max" : ((s?.plan as Subscription["plan"]) ?? "free"),
     interval: (s?.interval as Subscription["interval"]) ?? null,
     status: (s?.status as Subscription["status"]) ?? "active",
     currentPeriodEnd: s?.current_period_end ?? "",

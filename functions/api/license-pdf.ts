@@ -724,7 +724,8 @@ export const onRequestGet = async (ctx: Ctx) => {
       )
       .bind(user.id)
       .first<{ plan: string; status: string | null; current_period_end: string | null }>();
-    const plan = sub?.plan ?? "free";
+    // Admins have Max-level access without a subscription (test downloads).
+    const plan = isAdmin && (!sub || sub.plan === "free") ? "max" : (sub?.plan ?? "free");
     // Plan certificates are a Pro/Max perk (owner decision) — free accounts
     // don't get one. Purchased one-time licenses (?order=) are unaffected.
     if (plan === "free" && !isAdmin) {

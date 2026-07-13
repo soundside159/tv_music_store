@@ -2985,3 +2985,23 @@ edit to this repo, check `npm run lint` for 0 errors and that the file still end
   removed from `FormatOption` entirely. Owner: a greyed-out SOON badge reads to the customer like
   an unfinished site, not like "this particular track has no stems". Tracks WITH stems show the
   normal MAX/LICENSED row.
+
+### 2026-07-13 — Admins download at MAX level (no test subscription needed)
+Owner testing downloads had to sign in with a Stripe-test Pro account. Now the **admin role itself
+grants Max-level access** — every format, no free-tier limit — on both sides:
+- **`functions/api/download.ts`**: `isAdmin = user.role === "admin" || user.email === OWNER_EMAIL`
+  → `plan = "max"` (the real subscription is still read into `realPlan`). Their rows go into
+  `download_log` with **`plan_at_download = 'admin'`**, so test downloads can never be mistaken for
+  customer revenue (the payout engine only counts a payer's own cycles anyway, and admins have no
+  revenue_events — the marker is belt-and-braces).
+- **`functions/api/license-pdf.ts`**: an admin with no paid subscription now gets the **Max** plan
+  certificate instead of a "Free Plan" one (there was already an `isAdmin` bypass of the free-plan
+  block, but `plan` stayed "free" and the PDF said so).
+- **`src/hooks/useAuth.ts` (`mapSession`)**: for `role === "admin"` the session's
+  `subscription.plan` is reported as **"max"**, so every UI gate (download dialog formats, PDF
+  checkbox, Navigation badge, PlanModal/Pricing "current plan") matches what the API will do.
+- **`src/pages/Account.tsx` → Plan & Billing**: admins see **"Admin access — Full access by role…
+  no subscription"** instead of a fake Max plan; the Upgrade / Manage-billing buttons and the whole
+  Cancel Subscription card are hidden for them (`adminAccess` flag).
+Note: MP3 128 is hidden for Pro+ users, so it is hidden for admins too — test the free tier with a
+normal customer account.

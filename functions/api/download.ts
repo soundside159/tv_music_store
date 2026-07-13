@@ -82,7 +82,13 @@ export const onRequestPost = async (ctx: Ctx) => {
   )
     .bind(user.id)
     .first<{ plan: string; status: string; current_period_end: string | null }>();
-  const plan = sub?.status === "active" || sub?.status === "canceled" ? sub.plan : "free";
+  const realPlan = sub?.status === "active" || sub?.status === "canceled" ? sub.plan : "free";
+  // The owner/admin needs to test every format without keeping a paid test
+  // account around, so an admin session downloads at MAX level (all formats,
+  // no free-tier limit). Their rows are logged as plan_at_download='admin' so
+  // test downloads never look like customer revenue.
+  const isAdmin = user.role === "admin" || user.email === OWNER_EMAIL;
+  const plan = isAdmin ? "max" : realPlan;
   const planPeriodEnd = sub?.current_period_end ?? null;
 
   // Resolve the track FIRST (needed for the one-time-license check below).
@@ -410,7 +416,7 @@ export const onRequestPost = async (ctx: Ctx) => {
         user.id,
         track?.id ?? slug,
         track?.composer_id ?? null,
-        hasLicense ? "license" : plan,
+        isAdmin ? "admin" : hasLicense ? "license" : plan,
         format,
         format === "mp3" ? quality : null,
       )
