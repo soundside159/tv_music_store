@@ -453,6 +453,12 @@ const AdminBulkUpload = () => {
       stopRef.current = true;
       return;
     }
+    // Belt and braces — the button is disabled without a composer, but a batch
+    // created with no attribution is a mess to fix afterwards.
+    if (!composerId) {
+      toast.error("Pick the composer for this batch first");
+      return;
+    }
     stopRef.current = false;
     setRunning(true);
     const queue = groups.filter((g) => g.status === "queued" || g.status === "error");
@@ -562,8 +568,13 @@ const AdminBulkUpload = () => {
             <button
               type="button"
               onClick={() => void start()}
-              disabled={!running && queuedCount === 0}
-              className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 font-body text-sm font-bold transition-colors disabled:opacity-40 ${
+              disabled={!running && (queuedCount === 0 || !composerId)}
+              title={
+                !running && !composerId
+                  ? "Pick the composer for this batch first"
+                  : undefined
+              }
+              className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 font-body text-sm font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                 running
                   ? "border border-red-400/50 text-red-400 hover:bg-red-400/10"
                   : "bg-[#F4C430] text-background hover:bg-[#F4C430]/85"
@@ -584,9 +595,11 @@ const AdminBulkUpload = () => {
               onChange={(e) => setComposerId(e.target.value)}
               aria-label="Composer for this batch"
               title="Every track created in this run is credited to this composer"
-              className="rounded-lg border border-border bg-background px-2.5 py-2 font-body text-xs text-foreground focus:border-[#F4C430] focus:outline-none disabled:opacity-50"
+              className={`rounded-lg border bg-background px-2.5 py-2 font-body text-xs text-foreground focus:border-[#F4C430] focus:outline-none disabled:opacity-50 ${
+                composerId ? "border-border" : "border-red-400/60"
+              }`}
             >
-              <option value="">No composer — pick one (TVMUSICSTORE house)</option>
+              <option value="">No composer — pick one (required)</option>
               {[...composers]
                 .sort(
                   (a, b) =>
@@ -600,6 +613,9 @@ const AdminBulkUpload = () => {
                   </option>
                 ))}
             </select>
+            {!composerId && !running && (
+              <span className="font-body text-xs text-red-400">Pick a composer to start</span>
+            )}
             <span className="font-body text-xs text-muted-foreground">
               {groups.length} track{groups.length > 1 ? "s" : ""} in the list · {doneCount} done
             </span>

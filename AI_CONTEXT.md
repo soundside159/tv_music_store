@@ -3005,3 +3005,11 @@ grants Max-level access** — every format, no free-tier limit — on both sides
   Cancel Subscription card are hidden for them (`adminAccess` flag).
 Note: MP3 128 is hidden for Pro+ users, so it is hidden for admins too — test the free tier with a
 normal customer account.
+
+### 2026-07-13 — Bulk Upload: a composer must be picked before Start upload
+`src/components/AdminBulkUpload.tsx`: the batch composer `<select>` defaulted to "" ("No composer")
+and **Start upload** was still clickable — a whole batch could land unattributed. Now: the Start
+button is **disabled while `composerId` is empty** (tooltip "Pick the composer for this batch
+first"), the select gets a red border until a composer is chosen, a red "Pick a composer to start"
+hint sits next to it, and `start()` refuses with a toast even if it is somehow called. The empty
+option now reads "No composer — pick one (required)".
