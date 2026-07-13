@@ -3299,3 +3299,25 @@ untouched by it.
   it at all, not just the button. Tracks are deleted deliberately, one by one or by selection, in
   Tracks Edit; their files go with them (delete_track cleans R2). **"Clear test transactions" stays**
   — it only touches the money/history tables, never the catalogue.
+
+### 2026-07-13 — Account area: one heading style everywhere · Download history fits again
+1. **Download history row was spilling out of its card** (the account card is far narrower than the
+   catalogue). `TrackRow` / `TrackRowList` gained a **`hideTags`** prop — the Use Case / Genre / Mood
+   pills are dropped (the grid COLUMN stays, so the row keeps its shape and the waveform, duration,
+   BPM and the action icons all fit). Used by Account → Download history; every other list keeps its
+   pills.
+2. **One section heading across the account** (owner liked the Notifications groups: a small gold bar,
+   then the name). New **`src/components/SectionHeading.tsx`** exports `SectionHeading` (bar + title +
+   optional right-hand slot, bottom border) and `SectionPanel` (that heading on a card with a padded
+   body). Now used by:
+   - `Account.tsx` → `SectionCard` (Personal Profile / Download history / Content ID claims) and the
+     billing cards **Your plan** + **Cancel Subscription** (they had a tiny uppercase label instead);
+   - `NotificationsSettings` → its `GroupHeader` IS this component now (Marketing / Other unchanged
+     visually — it was the model);
+   - `SupportSection` → new "Contact" panel + "Your conversation" (its Priority badge moved into the
+     heading's right slot);
+   - `MyChannels` → "Your channels" (with the channel-count badge on the right) + "Add a channel".
+   - `LicensesSection` page title lost its stray `font-display` — every account page title is now the
+     same `text-2xl md:text-3xl`.
+   Page-level h1s (Favourites, Licenses, Support, YouTube Whitelisting, Plan & Billing) stay as they
+   are: they name the PAGE; `SectionHeading` names a block inside it.

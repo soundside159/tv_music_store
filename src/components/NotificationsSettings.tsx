@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { SectionHeading } from "@/components/SectionHeading";
 
 // Account -> Notifications. The Marketing toggle is real (controls the newsletter
 // subscription for this account); the "Other" toggles are stored locally as
@@ -79,12 +80,9 @@ const Row = ({
   </div>
 );
 
-const GroupHeader = ({ label }: { label: string }) => (
-  <p className="flex items-center gap-2 border-b border-border/60 px-5 py-3 font-body text-sm font-semibold text-foreground">
-    <span className="h-3 w-1 rounded-full" style={{ backgroundColor: "#F4C430" }} />
-    {label}
-  </p>
-);
+/** The heading these groups always had — now shared with every other section
+ *  in the account area (src/components/SectionHeading.tsx). */
+const GroupHeader = ({ label }: { label: string }) => <SectionHeading title={label} />;
 
 const loadOther = (): Record<OtherKey, boolean> => {
   try {

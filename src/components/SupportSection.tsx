@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Check, Copy, Mail, Send } from "lucide-react";
 import { toast } from "sonner";
+import { SectionHeading, SectionPanel } from "@/components/SectionHeading";
 
 // Account -> Support. Free plan: contact email. Pro/Max (priority support): an
 // internal ticket chat backed by /api/support (shows up in /admin -> Inbox with
@@ -92,7 +93,8 @@ const SupportSection = () => {
       </div>
 
       {/* Contact card (always) */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-5">
+      <SectionPanel title="Contact">
+        <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground">
             <Mail className="h-5 w-5" />
@@ -112,17 +114,23 @@ const SupportSection = () => {
           {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
           {copied ? "Copied" : "Copy email"}
         </button>
-      </div>
+        </div>
+      </SectionPanel>
 
       {/* Priority ticket chat (paid plans) */}
       {isPaid && (
         <div className="rounded-xl border border-border bg-card">
-          <div className="flex items-center gap-2 border-b border-border/60 px-5 py-3">
-            <span className="rounded-full px-2 py-0.5 font-body text-[10px] font-bold uppercase tracking-wide text-background" style={{ backgroundColor: "#F4C430" }}>
-              Priority
-            </span>
-            <p className="font-body text-sm font-semibold text-foreground">Your conversation</p>
-          </div>
+          <SectionHeading
+            title="Your conversation"
+            right={
+              <span
+                className="shrink-0 rounded-full px-2 py-0.5 font-body text-[10px] font-bold uppercase tracking-wide text-background"
+                style={{ backgroundColor: "#F4C430" }}
+              >
+                Priority
+              </span>
+            }
+          />
 
           <div className="flex max-h-[45vh] flex-col gap-3 overflow-y-auto p-5">
             {messages.length === 0 ? (

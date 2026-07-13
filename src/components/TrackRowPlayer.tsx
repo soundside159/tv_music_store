@@ -114,6 +114,7 @@ export const TrackRow = ({
   expanded,
   globalIsPlaying,
   globalProgress,
+  hideTags,
   index,
   mainIsPlaying,
   onPlayVersion,
@@ -127,6 +128,10 @@ export const TrackRow = ({
   expanded: boolean;
   globalIsPlaying: boolean;
   globalProgress: number;
+  /** Drops the Use Case / Genre / Mood pills — for narrow places (the account's
+   *  Download history sat in a half-width card and the row spilled out of it).
+   *  The column itself stays, so the grid keeps its shape. */
+  hideTags?: boolean;
   index: number;
   mainIsPlaying: boolean;
   onPlayVersion: (track: CatalogTrack, version: TrackAudioVersion, seekTo?: number | null) => void;
@@ -261,15 +266,16 @@ export const TrackRow = ({
           clipped pill out softly instead of a hard cut. -ml pulls the pills a
           bit left (into the column gap) so the third pill fits more often. */}
       <div className="hidden min-w-0 items-center gap-2 overflow-hidden pr-4 [mask-image:linear-gradient(to_right,#000_calc(100%-1.25rem),transparent)] xl:-ml-2 xl:flex">
-        {rowTags.map((tag) => (
-          <Link
-            key={tag.to}
-            to={tag.to}
-            className="whitespace-nowrap rounded-md border border-white/10 bg-white/[0.03] px-2 py-0.5 font-body text-xs text-muted-foreground transition-colors duration-200 hover:border-[#F4C430]/60 hover:text-[#F4C430]"
-          >
-            {tag.label}
-          </Link>
-        ))}
+        {!hideTags &&
+          rowTags.map((tag) => (
+            <Link
+              key={tag.to}
+              to={tag.to}
+              className="whitespace-nowrap rounded-md border border-white/10 bg-white/[0.03] px-2 py-0.5 font-body text-xs text-muted-foreground transition-colors duration-200 hover:border-[#F4C430]/60 hover:text-[#F4C430]"
+            >
+              {tag.label}
+            </Link>
+          ))}
       </div>
 
       <button
@@ -680,10 +686,13 @@ export const TrackRowSkeletonList = ({ count = 8 }: { count?: number }) => (
 export const TrackRowList = ({
   tracks,
   adminRemove,
+  hideTags,
 }: {
   tracks: CatalogTrack[];
   /** Admin-only: renders a small X at the right of every row (remove from list). */
   adminRemove?: ((trackId: string) => void) | null;
+  /** Hides the tag pills (tight containers — e.g. the account's Download history). */
+  hideTags?: boolean;
 }) => {
   const engine = usePlayer();
   const staggerDone = useEntranceStagger();
@@ -706,6 +715,7 @@ export const TrackRowList = ({
             expanded={expanded}
             globalIsPlaying={engine.isPlaying}
             globalProgress={engine.progress}
+            hideTags={hideTags}
             index={index}
             mainIsPlaying={mainIsPlaying}
             // Playing from THIS list makes it the prev/next queue.

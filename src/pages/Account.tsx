@@ -20,6 +20,7 @@ import {
 } from "@/hooks/useMockData";
 import { toast } from "sonner";
 import MyChannels from "@/components/MyChannels";
+import { SectionPanel } from "@/components/SectionHeading";
 import CancelSubscriptionModal from "@/components/CancelSubscriptionModal";
 import NotificationsSettings from "@/components/NotificationsSettings";
 import SupportSection from "@/components/SupportSection";
@@ -87,14 +88,10 @@ const fmtDateUS = (iso?: string | null) => {
     : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 };
 
+/** Every block in the account area gets the SAME heading (gold bar + name) —
+ *  the one from Notifications, which the owner liked. See SectionHeading.tsx. */
 const SectionCard = ({ title, children }: { title: string; children: React.ReactNode }) => (
-  <div className="rounded-xl border border-border bg-card p-6">
-    <h2 className="flex items-center gap-2 font-body text-base font-semibold text-foreground">
-      <span className="h-4 w-1 rounded-full" style={{ backgroundColor: GOLD }} />
-      {title}
-    </h2>
-    <div className="mt-4">{children}</div>
-  </div>
+  <SectionPanel title={title}>{children}</SectionPanel>
 );
 
 const EmptyNote = ({ text }: { text: string }) => (
@@ -586,7 +583,9 @@ const Account = () => {
                         row per track (re-downloads don't duplicate it), newest
                         first. No per-track licence link here: a subscriber has a
                         single library-wide licence in the Licenses tab. */}
-                    <TrackRowList tracks={pagedDownloadTracks} />
+                    {/* No tag pills here: the card is half the catalogue's width
+                        and the row spilled out of it. */}
+                    <TrackRowList tracks={pagedDownloadTracks} hideTags />
 
                     {/* 20 per page — the history of a heavy user gets long fast. */}
                     {downloadPages > 1 && (
@@ -679,11 +678,8 @@ const Account = () => {
                   <p className="mt-1 font-body text-sm text-muted-foreground">Manage your subscription</p>
                 </div>
 
-                <div className="rounded-xl border border-border bg-card p-6">
-                  <p className="flex items-center gap-2 font-body text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    <span className="h-3 w-1 rounded-full" style={{ backgroundColor: GOLD }} /> Your plan
-                  </p>
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
+                <SectionPanel title="Your plan">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
                     <div>
                       <p className="font-body text-xl font-semibold text-foreground">
                         {adminAccess ? "Admin access" : `${plan?.name ?? "Free"} Plan`}
@@ -715,15 +711,11 @@ const Account = () => {
                       )}
                     </div>
                   </div>
-                </div>
+                </SectionPanel>
 
                 {isPaidPlan && (
-                  <div className="rounded-xl border border-border bg-card p-6">
-                    <p className="flex items-center gap-2 font-body text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      <span className="h-3 w-1 rounded-full" style={{ backgroundColor: GOLD }} />{" "}
-                      Cancel Subscription
-                    </p>
-                    <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
+                  <SectionPanel title="Cancel Subscription">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
                       <p className="max-w-lg font-body text-sm text-muted-foreground">
                         Cancel anytime.
                         {benefitsUntil
@@ -738,7 +730,7 @@ const Account = () => {
                         Cancel subscription
                       </button>
                     </div>
-                  </div>
+                  </SectionPanel>
                 )}
 
                 <CancelSubscriptionModal

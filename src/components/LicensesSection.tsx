@@ -259,7 +259,8 @@ const LicensesSection = () => {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="font-display text-2xl font-semibold text-foreground">Licenses</h1>
+        {/* Same page title as every other account section (was font-display). */}
+        <h1 className="text-2xl font-semibold text-foreground md:text-3xl">Licenses</h1>
         <p className="mt-1 font-body text-sm text-muted-foreground">
           Tracks you've licensed — download the audio and the PDF certificate for each one.
         </p>

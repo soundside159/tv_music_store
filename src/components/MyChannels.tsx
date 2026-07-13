@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { openPlanModal } from "@/lib/billing";
+import { SectionHeading, SectionPanel } from "@/components/SectionHeading";
 
 // Customer "YouTube Whitelisting" — live channel whitelist backed by /api/whitelist.
 // Upgrade prompts open the shared plan popup with a whitelisting-specific heading.
@@ -133,7 +134,9 @@ const MyChannels = () => {
 
       {/* Existing channels */}
       {data && data.channels.length > 0 && (
-        <ul className="divide-y divide-border/60 rounded-xl border border-border bg-card">
+        <div className="rounded-xl border border-border bg-card">
+          <SectionHeading title="Your channels" right={channelsBadge} />
+        <ul className="divide-y divide-border/60">
           {data.channels.map((c) => (
             <li key={c.id} className="flex items-center justify-between gap-3 px-4 py-3">
               <span className="truncate font-body text-sm text-foreground">{c.channel_url}</span>
@@ -148,15 +151,12 @@ const MyChannels = () => {
             </li>
           ))}
         </ul>
+        </div>
       )}
 
       {/* Add a channel */}
       {canAdd ? (
-        <div className="rounded-xl border border-border bg-card p-5">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <p className="font-body text-sm font-semibold text-foreground">Add a channel</p>
-            {channelsBadge}
-          </div>
+        <SectionPanel title="Add a channel">
           <form onSubmit={add} className="flex flex-col gap-3 sm:flex-row">
             <input
               value={url}
@@ -172,7 +172,7 @@ const MyChannels = () => {
               <Plus className="h-4 w-4" /> {busy ? "Adding…" : "Add channel"}
             </button>
           </form>
-        </div>
+        </SectionPanel>
       ) : (
         data && (
           <button
