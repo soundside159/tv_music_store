@@ -120,42 +120,69 @@ const facetValue = (track: CatalogTrack, key: FacetKey) =>
 
 /** Checkbox that can render a "mixed" (dash) state, like the OS ones.
  *  `count` = how many tracks in the whole catalogue carry this tag / sit in this
- *  playlist — admin-only bookkeeping, so the owner sees what is empty. */
+ *  playlist — admin-only bookkeeping, so the owner sees what is empty.
+ *  `onShow` adds a little SHOW button (visible on row hover, or always while
+ *  active) that filters the track table down to this tag's tracks — the owner
+ *  listens through e.g. every "Epic" track and prunes the ones that don't fit. */
 const TriCheckbox = ({
   label,
   state,
   onToggle,
   count,
+  onShow,
+  showActive = false,
 }: {
   label: string;
   state: TriState;
   onToggle: () => void;
   count?: number;
+  onShow?: () => void;
+  showActive?: boolean;
 }) => (
-  <button
-    type="button"
-    onClick={onToggle}
-    className="flex min-w-0 items-center gap-2 rounded-md px-1 py-1 text-left transition-colors hover:bg-foreground/[0.04]"
-  >
-    <span
-      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
-        state === "none" ? "border-border" : "border-[#F4C430] bg-[#F4C430]/15"
-      }`}
+  <div className="group/tri flex min-w-0 items-center">
+    <button
+      type="button"
+      onClick={onToggle}
+      className="flex min-w-0 items-center gap-2 rounded-md px-1 py-1 text-left transition-colors hover:bg-foreground/[0.04]"
     >
-      {state === "all" && <Check className="h-3 w-3 text-[#F4C430]" />}
-      {state === "mixed" && <Minus className="h-3 w-3 text-[#F4C430]" />}
-    </span>
-    <span className="truncate font-body text-xs text-foreground/90">{label}</span>
-    {count !== undefined && (
       <span
-        className={`shrink-0 font-body text-[10px] tabular-nums ${
-          count === 0 ? "text-muted-foreground/50" : "text-muted-foreground"
+        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
+          state === "none" ? "border-border" : "border-[#F4C430] bg-[#F4C430]/15"
         }`}
       >
-        {count}
+        {state === "all" && <Check className="h-3 w-3 text-[#F4C430]" />}
+        {state === "mixed" && <Minus className="h-3 w-3 text-[#F4C430]" />}
       </span>
+      <span className="truncate font-body text-xs text-foreground/90">{label}</span>
+      {count !== undefined && (
+        <span
+          className={`shrink-0 font-body text-[10px] tabular-nums ${
+            count === 0 ? "text-muted-foreground/50" : "text-muted-foreground"
+          }`}
+        >
+          {count}
+        </span>
+      )}
+    </button>
+    {onShow && (
+      <button
+        type="button"
+        onClick={onShow}
+        title={
+          showActive
+            ? "Stop filtering the table by this"
+            : "Show only this tag's tracks in the table"
+        }
+        className={`ml-1 shrink-0 rounded px-1 py-0.5 font-body text-[9px] font-bold uppercase tracking-wide transition-all ${
+          showActive
+            ? "bg-[#F4C430] text-background opacity-100"
+            : "text-muted-foreground/80 opacity-0 hover:text-[#F4C430] group-hover/tri:opacity-100"
+        }`}
+      >
+        Show
+      </button>
     )}
-  </button>
+  </div>
 );
 
 /** Same checkbox in a DIFFERENT colour — used for the "own Description as the
@@ -1107,13 +1134,45 @@ const AdminTracksEdit = ({
     return c;
   }, [tracks]);
 
+  // ---- "Show" tag filter: a SHOW button next to any checkbox narrows the
+  // table to that tag's / playlist's tracks, so the owner can audit them by
+  // ear. While it is on, every row grows an X ("Remove from selected") that
+  // takes the track OUT of the filtered tag — see removeFromTagFilter.
+  const [tagFilter, setTagFilter] = useState<
+    | { kind: "facet"; key: FacetKey; option: string }
+    | { kind: "playlist" | "collection" | "category"; id: string; title: string }
+    | null
+  >(null);
+  const tagFilterLabel = tagFilter
+    ? tagFilter.kind === "facet"
+      ? tagFilter.option
+      : tagFilter.title
+    : "";
+  useEffect(() => {
+    setPage(1);
+  }, [tagFilter]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const inTagFilter = (t: CatalogTrack): boolean => {
+      if (!tagFilter) return true;
+      if (tagFilter.kind === "facet") {
+        return splitFilterValues(facetValue(t, tagFilter.key)).some(
+          (v) => v.toLowerCase() === tagFilter.option.toLowerCase(),
+        );
+      }
+      const pool =
+        tagFilter.kind === "playlist" ? playlists : tagFilter.kind === "collection" ? collections : categories;
+      const item = pool.find((i) => i.id === tagFilter.id);
+      // The item vanished (deleted in another tab) — don't silently hide everything.
+      return item ? item.trackIds.includes(t.id) : true;
+    };
     let list = tracks.filter(
       (t) =>
         bucketOf(t) === statusTab &&
         (composer === "all" || t.artist === composer) &&
-        (!q || t.title.toLowerCase().includes(q)),
+        (!q || t.title.toLowerCase().includes(q)) &&
+        inTagFilter(t),
     );
     if (sort === "trending") {
       const set = new Set(trending);
@@ -1134,7 +1193,53 @@ const AdminTracksEdit = ({
       });
     }
     return list;
-  }, [tracks, search, composer, sort, trending, statusTab]);
+  }, [tracks, search, composer, sort, trending, statusTab, tagFilter, playlists, collections, categories]);
+
+  // The X on a row while the Show filter is on: pull the track out of the
+  // filtered tag / playlist — the row then drops out of the list by itself.
+  const removeFromTagFilter = async (t: CatalogTrack) => {
+    if (!tagFilter || disabled || busy) return;
+    if (tagFilter.kind === "facet") {
+      const ok = await run(
+        {
+          action: "bulk_update_tracks",
+          trackIds: [t.id],
+          facets: { [tagFilter.key]: { remove: [tagFilter.option] } },
+        },
+        `"${tagFilter.option}" removed from "${t.title}"`,
+      );
+      if (!ok) return;
+      const vals = splitFilterValues(facetValue(t, tagFilter.key)).filter(
+        (v) => v.toLowerCase() !== tagFilter.option.toLowerCase(),
+      );
+      const joined = vals.join(" / ");
+      onApplyOverrides({
+        [t.id]:
+          tagFilter.key === "useCase"
+            ? { useCase: joined }
+            : tagFilter.key === "genre"
+              ? { genre: joined }
+              : { mood: joined },
+      });
+    } else {
+      const change = { remove: [tagFilter.id] };
+      const ok = await run(
+        {
+          action: "bulk_update_tracks",
+          trackIds: [t.id],
+          ...(tagFilter.kind === "playlist"
+            ? { playlistChanges: change }
+            : tagFilter.kind === "collection"
+              ? { collectionChanges: change }
+              : { categoryChanges: change }),
+        },
+        `"${t.title}" removed from "${tagFilter.title}"`,
+      );
+      if (!ok) return;
+      // Membership lives in the CONTENT data — refresh it so the row drops out.
+      onContentReload?.();
+    }
+  };
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / perPage));
   const safePage = Math.min(page, pageCount);
@@ -1709,15 +1814,22 @@ const AdminTracksEdit = ({
               </p>
             )}
             <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,max-content))] gap-x-5 gap-y-1">
-              {g.items.map((item) => (
-                <TriCheckbox
-                  key={item.id}
-                  label={item.title}
-                  state={memberDisplay(delta, item)}
-                  onToggle={() => void toggleMembership(kind, item, delta, setDelta)}
-                  count={item.trackIds.length}
-                />
-              ))}
+              {g.items.map((item) => {
+                const showActive = tagFilter?.kind === kind && tagFilter.id === item.id;
+                return (
+                  <TriCheckbox
+                    key={item.id}
+                    label={item.title}
+                    state={memberDisplay(delta, item)}
+                    onToggle={() => void toggleMembership(kind, item, delta, setDelta)}
+                    count={item.trackIds.length}
+                    onShow={() =>
+                      setTagFilter(showActive ? null : { kind, id: item.id, title: item.title })
+                    }
+                    showActive={showActive}
+                  />
+                );
+              })}
             </div>
           </div>
         ))}
@@ -1935,9 +2047,27 @@ const AdminTracksEdit = ({
     <div className="mt-4 items-start gap-5 xl:grid xl:grid-cols-[minmax(0,1fr)_21rem_16rem_16rem]">
       {/* ===== Left: table + pagination ===== */}
       <div className="min-w-0">
+        {/* The Show filter banner — which tag the table is narrowed to + Clear. */}
+        {tagFilter && (
+          <div className="mb-2 flex items-center gap-2 rounded-lg border border-[#F4C430]/40 bg-[#F4C430]/[0.06] px-3 py-1.5">
+            <span className="min-w-0 truncate font-body text-xs text-foreground">
+              Showing {filtered.length} track{filtered.length === 1 ? "" : "s"} in{" "}
+              <span className="font-semibold text-[#F4C430]">{tagFilterLabel}</span> — the ✕ on a
+              row removes the track from it
+            </span>
+            <button
+              type="button"
+              onClick={() => setTagFilter(null)}
+              className="ml-auto inline-flex shrink-0 items-center gap-1 font-body text-xs text-muted-foreground transition-colors hover:text-[#F4C430]"
+            >
+              <X className="h-3.5 w-3.5" />
+              Clear
+            </button>
+          </div>
+        )}
         <div className="overflow-x-auto rounded-lg border border-border/60">
           <div className="min-w-[44rem]">
-            <div className="grid grid-cols-[2.5rem_2.5rem_3.25rem_minmax(0,1fr)_4.5rem_7rem_4.5rem_5rem] items-center gap-2 border-b border-border/60 bg-secondary/40 px-3 py-2.5">
+            <div className={`grid ${tagFilter ? "grid-cols-[2.5rem_2.5rem_3.25rem_minmax(0,1fr)_4.5rem_7rem_4.5rem_5rem_2.5rem]" : "grid-cols-[2.5rem_2.5rem_3.25rem_minmax(0,1fr)_4.5rem_7rem_4.5rem_5rem]"} items-center gap-2 border-b border-border/60 bg-secondary/40 px-3 py-2.5`}>
               <span className="flex justify-center">
                 <RowCheckbox state={pageState} onToggle={togglePage} label="Select all visible" />
               </span>
@@ -1968,6 +2098,7 @@ const AdminTracksEdit = ({
                 Trending
               </button>
               <span className="font-body text-xs uppercase tracking-wide text-muted-foreground">Duration</span>
+              {tagFilter && <span aria-hidden />}
             </div>
 
             {paged.map((t) => {
@@ -1981,7 +2112,7 @@ const AdminTracksEdit = ({
               return (
                 <div key={t.id} className="border-b border-border/40 last:border-b-0">
                 <div
-                  className={`grid grid-cols-[2.5rem_2.5rem_3.25rem_minmax(0,1fr)_4.5rem_7rem_4.5rem_5rem] items-center gap-2 px-3 py-2 transition-colors ${
+                  className={`grid ${tagFilter ? "grid-cols-[2.5rem_2.5rem_3.25rem_minmax(0,1fr)_4.5rem_7rem_4.5rem_5rem_2.5rem]" : "grid-cols-[2.5rem_2.5rem_3.25rem_minmax(0,1fr)_4.5rem_7rem_4.5rem_5rem]"} items-center gap-2 px-3 py-2 transition-colors ${
                     isSelected ? "bg-[#F4C430]/[0.06]" : "hover:bg-foreground/[0.03]"
                   }`}
                 >
@@ -2101,6 +2232,20 @@ const AdminTracksEdit = ({
                     />
                   </span>
                   <span className="font-body text-xs tabular-nums text-muted-foreground">{t.duration}</span>
+                  {/* Show filter is on: ✕ pulls the track out of the filtered
+                      tag / playlist and the row drops from the list. */}
+                  {tagFilter && (
+                    <button
+                      type="button"
+                      disabled={busy || disabled}
+                      onClick={() => void removeFromTagFilter(t)}
+                      title={`Remove from selected — take "${t.title}" out of ${tagFilterLabel}`}
+                      aria-label={`Remove ${t.title} from ${tagFilterLabel}`}
+                      className="flex h-6 w-6 items-center justify-center justify-self-center rounded-full border border-border/60 text-muted-foreground transition-colors hover:border-red-400 hover:text-red-400 disabled:pointer-events-none disabled:opacity-40"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
 
                 {/* Versions expander: ★ set Main · play · delete. Add/rename +
@@ -2692,15 +2837,21 @@ const AdminTracksEdit = ({
               {label}
             </p>
             <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,max-content))] gap-x-5 gap-y-1">
-              {vocabularies[key].map((opt) => (
-                <TriCheckbox
-                  key={opt}
-                  label={opt}
-                  state={facetDisplay(key, opt)}
-                  onToggle={() => void toggleFacet(key, opt)}
-                  count={facetCounts[key].get(opt.trim().toLowerCase()) ?? 0}
-                />
-              ))}
+              {vocabularies[key].map((opt) => {
+                const showActive =
+                  tagFilter?.kind === "facet" && tagFilter.key === key && tagFilter.option === opt;
+                return (
+                  <TriCheckbox
+                    key={opt}
+                    label={opt}
+                    state={facetDisplay(key, opt)}
+                    onToggle={() => void toggleFacet(key, opt)}
+                    count={facetCounts[key].get(opt.trim().toLowerCase()) ?? 0}
+                    onShow={() => setTagFilter(showActive ? null : { kind: "facet", key, option: opt })}
+                    showActive={showActive}
+                  />
+                );
+              })}
             </div>
           </div>
         ))}
