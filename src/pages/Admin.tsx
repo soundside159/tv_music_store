@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { MoreHorizontal } from "lucide-react";
+import { Check, MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { accountNavGroups, adminNavGroups, composerNavItems } from "@/lib/adminNav";
 import MenuGroupHeader from "@/components/MenuGroupHeader";
@@ -17,6 +17,7 @@ import {
 } from "@/mocks";
 import AdminContent from "@/components/AdminContent";
 import AdminBulkUpload from "@/components/AdminBulkUpload";
+import AdminSfx from "@/components/AdminSfx";
 import AdminImport from "@/components/AdminImport";
 import AdminWhitelist from "@/components/AdminWhitelist";
 import AdminCampaign from "@/components/AdminCampaign";
@@ -31,6 +32,7 @@ const GOLD = "#F4C430";
 type SectionId =
   | "dashboard"
   | "finance"
+  | "soundeffects"
   | "tracks"
   | "collections"
   | "playlists"
@@ -59,6 +61,7 @@ const SECTION_IDS: SectionId[] = [
   "trending",
   "tracksedit",
   "bulkupload",
+  "soundeffects",
   "import",
   "articles",
   "customers",
@@ -96,7 +99,8 @@ interface LiveUser {
   pseudonym: string | null;
   /** "About the composer" — shown on the public /artist/<slug> page. */
   bio: string | null;
-  /** Sync / cue-sheet info printed on license PDFs (composer profiles only). */
+  /** Sync / cue-sheet info printed on license PDFs (composer profiles only) +
+   *  the two upload permissions ("1"/"0" — they ride in the same payload). */
   cue: {
     cueName: string | null;
     pro: string | null;
@@ -104,6 +108,8 @@ interface LiveUser {
     publisherName: string | null;
     publisherPro: string | null;
     publisherIpi: string | null;
+    canUploadTracks?: string | null;
+    canUploadSfx?: string | null;
   } | null;
 }
 
@@ -409,6 +415,52 @@ const Admin = () => {
       setUsersError(e instanceof Error ? e.message : "Save failed");
     } finally {
       setBioBusy(false);
+    }
+  };
+
+  // Upload rights: music and sounds are two separate permissions on the composer
+  // profile. The tab in his panel appears/disappears with them — and the SERVER
+  // refuses the upload either way, so this is a real gate, not a UI courtesy.
+  const [permBusy, setPermBusy] = useState(false);
+  const setUploadPerm = async (userId: string, key: "tracks" | "sfx", on: boolean) => {
+    setPermBusy(true);
+    setUsersError(null);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ userId, uploads: { [key]: on } }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Save failed");
+      setLiveUsers((us) =>
+        (us ?? []).map((u) =>
+          u.id === userId
+            ? {
+                ...u,
+                cue: {
+                  cueName: u.cue?.cueName ?? null,
+                  pro: u.cue?.pro ?? null,
+                  ipi: u.cue?.ipi ?? null,
+                  publisherName: u.cue?.publisherName ?? null,
+                  publisherPro: u.cue?.publisherPro ?? null,
+                  publisherIpi: u.cue?.publisherIpi ?? null,
+                  canUploadTracks:
+                    key === "tracks" ? (on ? "1" : "0") : (u.cue?.canUploadTracks ?? "1"),
+                  canUploadSfx: key === "sfx" ? (on ? "1" : "0") : (u.cue?.canUploadSfx ?? "0"),
+                },
+              }
+            : u,
+        ),
+      );
+      toast.success(
+        `${key === "tracks" ? "Music" : "Sound effects"} uploads ${on ? "enabled" : "disabled"}`,
+      );
+    } catch (e) {
+      setUsersError(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setPermBusy(false);
     }
   };
 
@@ -753,6 +805,8 @@ const Admin = () => {
 
             {section === "bulkupload" && <AdminBulkUpload />}
 
+            {section === "soundeffects" && <AdminSfx />}
+
             {section === "import" && <AdminImport />}
 
             {/* Publication calendar for the /guides articles. */}
@@ -1015,6 +1069,43 @@ const Admin = () => {
                         <p className="mt-1.5 font-body text-[10px] text-muted-foreground">
                           Shown under the pseudonym on the artist page — the page every
                           "by {u.pseudonym ?? "…"}" link under a track title opens.
+                        </p>
+                      </div>
+                    )}
+                    {/* What this composer is allowed to upload. */}
+                    {composerOn && (
+                      <div className="mt-4 border-t border-border/60 pt-3">
+                        <p className="mb-2 font-body text-[10px] font-bold uppercase tracking-[0.18em] text-[#F4C430]">
+                          Can upload
+                        </p>
+                        <div className="flex flex-col gap-1.5">
+                          {(
+                            [
+                              ["tracks", "Music (tracks)", u.cue?.canUploadTracks !== "0"],
+                              ["sfx", "Sound effects", u.cue?.canUploadSfx === "1"],
+                            ] as const
+                          ).map(([key, label, on]) => (
+                            <button
+                              key={key}
+                              type="button"
+                              disabled={permBusy}
+                              onClick={() => void setUploadPerm(u.id, key, !on)}
+                              className="flex items-center gap-2 rounded-md px-1 py-1 text-left transition-colors hover:bg-foreground/[0.04] disabled:opacity-50"
+                            >
+                              <span
+                                className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
+                                  on ? "border-[#F4C430] bg-[#F4C430]" : "border-border"
+                                }`}
+                              >
+                                {on && <Check className="h-3 w-3 text-background" />}
+                              </span>
+                              <span className="font-body text-xs text-foreground">{label}</span>
+                            </button>
+                          ))}
+                        </div>
+                        <p className="mt-1.5 font-body text-[10px] text-muted-foreground">
+                          Turns the Upload tab in his panel on and off — and the server refuses the
+                          upload either way.
                         </p>
                       </div>
                     )}

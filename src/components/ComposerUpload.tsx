@@ -34,7 +34,13 @@ export interface ComposerTrackRow {
 }
 
 export interface ComposerTracksData {
-  composer: { id: string; displayName: string } | null;
+  composer: {
+    id: string;
+    displayName: string;
+    /** Upload rights set by the admin (music and sounds are separate). */
+    canUploadTracks?: boolean;
+    canUploadSfx?: boolean;
+  } | null;
   tracks: ComposerTrackRow[];
   /** Use Case / Genre / Mood options for the upload form. */
   vocabularies: Vocabularies;
@@ -46,7 +52,12 @@ export interface ComposerTracksData {
 
 /** The signed-in composer's own tracks + profile from /api/composer/tracks. */
 export const useComposerTracks = (enabled: boolean): ComposerTracksData => {
-  const [composer, setComposer] = useState<{ id: string; displayName: string } | null>(null);
+  const [composer, setComposer] = useState<{
+    id: string;
+    displayName: string;
+    canUploadTracks?: boolean;
+    canUploadSfx?: boolean;
+  } | null>(null);
   const [tracks, setTracks] = useState<ComposerTrackRow[]>([]);
   const [vocabularies, setVocabularies] = useState<Vocabularies>(defaultVocabularies);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +69,12 @@ export const useComposerTracks = (enabled: boolean): ComposerTracksData => {
     fetch("/api/composer/tracks", { credentials: "include" })
       .then(async (res) => {
         const d = (await res.json()) as {
-          composer?: { id: string; displayName: string };
+          composer?: {
+            id: string;
+            displayName: string;
+            canUploadTracks?: boolean;
+            canUploadSfx?: boolean;
+          };
           tracks?: ComposerTrackRow[];
           vocabularies?: Vocabularies;
           error?: string;

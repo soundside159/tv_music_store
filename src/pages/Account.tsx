@@ -368,7 +368,17 @@ const Account = () => {
                         </p>
                       )}
                       <div className="flex space-x-1 md:flex-col md:space-x-0 md:space-y-1">
-                        {composerNavItems.map((item) => {
+                        {composerNavItems
+                          // Upload is only there when the admin allowed it. The
+                          // server refuses the upload anyway — this just stops
+                          // the UI from offering a door that is locked.
+                          .filter(
+                            (item) =>
+                              item.id !== "upload" ||
+                              user.role === "admin" ||
+                              composerProbe.composer?.canUploadTracks !== false,
+                          )
+                          .map((item) => {
                           const id = `composer-${item.id}` as SectionId;
                           return (
                             <button

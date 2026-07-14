@@ -90,8 +90,29 @@ export const onRequestGet = async (ctx: Ctx) => {
       downloads: number;
     }>();
 
+  // The composer's own upload rights — the panel hides the tabs he doesn't have.
+  // (The server refuses the upload anyway; this is only so the UI doesn't lie.)
+  const perms = await (async () => {
+    try {
+      return await db
+        .prepare(
+          `SELECT COALESCE(can_upload_tracks, 1) AS tracks, COALESCE(can_upload_sfx, 0) AS sfx
+             FROM composers WHERE id = ?1`,
+        )
+        .bind(gate.composer.id)
+        .first<{ tracks: number; sfx: number }>();
+    } catch {
+      return null; // columns not added yet — music on, sounds off
+    }
+  })();
+
   return json({
-    composer: { id: gate.composer.id, displayName: gate.composer.display_name },
+    composer: {
+      id: gate.composer.id,
+      displayName: gate.composer.display_name,
+      canUploadTracks: perms ? !!perms.tracks : true,
+      canUploadSfx: perms ? !!perms.sfx : false,
+    },
     tracks: rows.results,
     // Tag options for the upload form (Use Case / Genre / Mood chips).
     vocabularies: await getVocabularies(db),

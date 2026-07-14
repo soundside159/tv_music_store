@@ -3401,3 +3401,96 @@ Groundwork for the owner's plan to set release dates by "newness" from his sourc
   shows the number ("—" when the track has none). Its header is **clickable and sorts by it**, the
   same way the Trending header does (`SortMode` gained `"id"`); numeric where it can be, tracks
   without a number sink to the bottom instead of pretending to be 0.
+
+### 2026-07-13 — Sound Effects: the build plan is written (docs/SFX_PLAN.md)
+Owner sent a mockup of the SFX landing page and asked for a plan before anything is built. See
+**`docs/SFX_PLAN.md`**. The spine of it:
+- **SFX are NOT tracks** → their own `sfx` table + their own admin section. Reusing `tracks` with a
+  `kind` flag would poison every catalogue query, tag vocabulary, payout rule and download-limit
+  check, and 20k sounds would drown the music catalogue in the admin.
+- **No per-sound cover** (owner's call): the ART BELONGS TO THE CATEGORY (`sfx_categories.image`),
+  which is exactly what his mockup shows. Categories + subcategories are admin-editable rows; the
+  "1,248 SOUNDS" counts are computed.
+- **Composer permissions**: `can_upload_tracks` / `can_upload_sfx` per composer profile (defaults:
+  tracks ON, sfx OFF), toggled in Admin → Users. The composer panel shows/hides each Upload tab
+  accordingly, and **every upload endpoint enforces the flag server-side** — hiding a tab is never a
+  security boundary.
+- **Server-side search + pagination from day one** (`/api/sfx?q=&cat=&page=`). The music catalogue
+  loads everything into the browser and filters client-side; that is fine for 200 tracks and
+  impossible for 20 000 sounds.
+- **Honesty**: SFX are not in Content ID and are never claimed — no whitelisting/claim copy anywhere
+  near them; they get their own licence PDF with SFX scope wording.
+- **Open decisions listed for the owner**: free-tier allowance (shared vs separate), how an SFX
+  download weighs against a track download in composer payouts (the only one with money attached),
+  WAV for Pro or Max only, and whether the mockup's 16 categories are the starting set.
+- **SFX plan updated with the owner's decisions (2026-07-13):** WAV is the ONLY download and it
+  starts at **Pro** (Max keeps stems + commercial licence as its music edge); the MP3 rendered at
+  upload is for STREAMING only, never a download; **no free SFX downloads at all**, so they never
+  touch the 3-a-month free allowance; sounds get their own R2 prefix (`sfx/…`); the owner builds the
+  categories himself. Still open: how one sound weighs against one track in composer payouts —
+  documented three options in `docs/SFX_PLAN.md` (weighted points 1.0 vs 0.2 with a 50% cap when a
+  customer took both kinds ← recommended; flat rate per sound; a fixed revenue share with the single
+  SFX composer).
+- **Fact checked while writing it:** `/api/tracks` has **no LIMIT** — it ships the whole catalogue in
+  one response and `Catalog.tsx` only *renders* a page at a time (`slice(0, visibleCount)`). Fine for
+  hundreds of tracks; not for 20k sounds → `/api/sfx` must page in the DB (`?q=&cat=&sub=&page=`).
+- **SFX plan, round 2 (2026-07-13).** URLs copy TuneTank (owner's ask): `/sound-effects/`,
+  `/sound-effects/:category/`, `?page=2` — numbered pages, each its own indexable URL, not infinite
+  scroll. **Payout DECIDED: weighted points — track = 1.0, sound = 0.2**, inside the existing
+  per-payer/per-cycle allocation, with sounds capped at 50% of a cycle's points when the customer
+  took both kinds (a sounds-only customer still sends 100% to the SFX composer). Both numbers live in
+  config. **Measured the real payload** (live `/api/tracks`): a fully tagged track ≈ 1.9 KB of JSON
+  (metadata only — audio is fetched on play), so 900 tracks ≈ 1.6 MB raw / ~0.4 MB gzipped = FINE
+  (revisit around 2–3k tracks); 20k SFX rows ≈ 6.7 MB / ~1.7 MB gzipped + a 20k-element array
+  filtered on every keystroke = NOT fine → `/api/sfx` pages in the DB (50 rows/page).
+
+### 2026-07-13 — SFX **P0 shipped**: tables, composer permissions, Admin → Sound Effects
+- **`functions/api/admin/sfx.ts`** (new): `ensureSfxTables()` creates **`sfx`**, **`sfx_categories`**,
+  **`sfx_subcategories`** (+ indexes) on first use. `GET /api/admin/sfx?page=&q=&cat=&sub=&status=`
+  is **paged in the DB** (50/page) and returns the sounds, the category tree with computed counts and
+  the composer list. `POST` actions: `create_sfx` (one row per uploaded file), `update_sfx`
+  (name/category/subcategory/composer/tags/status, many ids at once), `delete_sfx` (rows **and their
+  WAV + MP3 in R2**), `upsert_category` / `delete_category` / `upsert_subcategory` /
+  `delete_subcategory` (deleting a shelf never deletes its sounds — they just lose the shelf).
+- **Storage**: SFX masters go to their OWN R2 prefix **`sfx/`** (new `kind=sfx` in
+  `upload-audio.ts`, WAV only, private — served solely by the download gate). The storage sweep
+  counts `sfx/` and treats `sfx.wav_key` + `sfx.preview_src` as referenced, and the Usage breakdown
+  gained an `sfx` group.
+- **Composer permissions**: `composers.can_upload_tracks` (default 1) and `can_upload_sfx` (default 0),
+  lazily added by `ensureUploadPermColumns()`. Toggled in **Admin → Users** (two checkboxes in the
+  composer block, "Can upload"). `/api/composer/tracks` reports them, and the composer's **Upload tab
+  disappears** when music uploads are off — but the REAL gate is `upload-audio.ts`, which 403s a
+  composer who lacks the right, whatever the UI shows.
+- **`src/components/AdminSfx.tsx`** (new, Admin → Sound Effects): three tabs.
+  **Library** — DB-paged table (play preview, select, move to category, publish/unpublish, delete),
+  search + category/status filters. **Upload** — drop a folder of WAVs: the folder name picks the
+  category (or choose one), each file gets an MP3 320 rendered in the browser for streaming, the WAV
+  master goes to `sfx/`, the row lands as a **draft**. **Categories** — create categories and
+  subcategory chips, with live counts.
+- Not yet: the public `/sound-effects` pages + `/api/sfx` (P1), the SFX licence PDF and the payout
+  weighting (track 1.0 / sound 0.2) in the revenue engine (P2).
+
+### 2026-07-13 — SFX **P1 shipped**: the public library is live
+- **`functions/api/sfx.ts`** (public GET): `?q=&cat=&sub=&page=` — **paged in the DB, 50 rows/page**,
+  PUBLISHED sounds only. Returns the sounds (name, tags, duration, MP3 preview path, artist), the
+  category tree with computed counts, and `librarySize` (the "Search 18,542 sound effects…" number).
+  `wav_key` NEVER leaves the server.
+- **`functions/api/sfx-download.ts`**: POST `{ id }` → streams the WAV master. **WAV is the only
+  format and it starts at PRO** (Free gets a plain, friendly 403 — they can listen on the site);
+  admins download at Max level. Logged in its OWN table **`sfx_downloads`** (user, sound, composer,
+  plan) — NOT in `download_log`, because a sound is not a track and the payout engine will weigh them
+  differently (P2).
+- **`src/pages/SoundEffects.tsx`** + routes **`/sound-effects`** and **`/sound-effects/:category`**:
+  hero + search (the search box posts to `?q=`), popular chips, the category shelves with their
+  counts and subcategory chips on the landing, and — inside a shelf or a search — the paged result
+  list (play/pause preview, duration, WAV download button) with **numbered pages**: each page is its
+  own URL (`?page=2`), exactly like TuneTank, so every page is indexable and shareable.
+- **The nav's "Sound Effects · Soon" chip is now a real link** (desktop + mobile).
+- Honesty: nothing on these pages mentions Content ID, whitelisting or claims — sounds are never
+  registered and never claimed. The only promise made is the plan rule ("WAV with Pro and Max — on
+  Free you can listen here").
+- **Admin → Vocabulary now also edits the music CATEGORIES** (owner looks for them there). Add,
+  rename, delete and reorder — wired to the SAME server actions (`upsert_category` /
+  `delete_category` / `reorder_content`) as the existing **Catalog → Categories** tab, so the two
+  views can never drift apart. That tab keeps the extra bit Vocabulary doesn't show: each category's
+  track list.

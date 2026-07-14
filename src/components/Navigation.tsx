@@ -115,16 +115,17 @@ const Navigation = () => {
               >
                 Music Library
               </Link>
-              {/* Sound Effects — placeholder until the SFX library ships. */}
-              <span
-                title="Sound effects library — coming soon"
-                className="flex cursor-default items-center gap-1.5 whitespace-nowrap font-body text-sm text-muted-foreground/50"
+              {/* The SFX library is live — this was a dead "Soon" chip. */}
+              <Link
+                to="/sound-effects"
+                className={`whitespace-nowrap font-body text-sm transition-colors duration-300 hover:text-foreground ${
+                  location.pathname.startsWith("/sound-effects")
+                    ? "text-[#F4C430]"
+                    : "text-muted-foreground"
+                }`}
               >
                 Sound Effects
-                <span className="rounded-full border border-[#F4C430]/40 px-1.5 py-px font-body text-[9px] font-bold uppercase tracking-[0.12em] text-[#F4C430]/80">
-                  Soon
-                </span>
-              </span>
+              </Link>
               {navItems.map((item) => (
                 <Link
                   key={item.label}
@@ -306,12 +307,17 @@ const Navigation = () => {
               >
                 Music Library
               </Link>
-              <span className="flex items-center gap-2 py-2 font-body text-base text-muted-foreground/50">
+              <Link
+                to="/sound-effects"
+                onClick={() => setIsOpen(false)}
+                className={`py-2 font-body text-base transition-colors duration-300 hover:text-foreground ${
+                  location.pathname.startsWith("/sound-effects")
+                    ? "text-[#F4C430]"
+                    : "text-muted-foreground"
+                }`}
+              >
                 Sound Effects
-                <span className="rounded-full border border-[#F4C430]/40 px-1.5 py-px font-body text-[9px] font-bold uppercase tracking-[0.12em] text-[#F4C430]/80">
-                  Soon
-                </span>
-              </span>
+              </Link>
               {navItems.map((item) => (
                 <Link
                   key={item.label}

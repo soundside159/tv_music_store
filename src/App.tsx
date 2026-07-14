@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
+import SoundEffects from "./pages/SoundEffects";
 import Catalog from "./pages/Catalog";
 import Discover from "./pages/Discover";
 import Guides from "./pages/Guides";
@@ -57,6 +58,9 @@ const App = () => (
           <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/catalog" element={<Catalog />} />
+          {/* Sound effects: landing, one category, and search — all paged in the DB. */}
+          <Route path="/sound-effects" element={<SoundEffects />} />
+          <Route path="/sound-effects/:category" element={<SoundEffects />} />
           {/* SEO tag landing pages: /discover, /discover/moods/happy, … */}
           <Route path="/discover" element={<Discover />} />
           <Route path="/discover/:group/:tag" element={<Discover />} />

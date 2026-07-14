@@ -22,8 +22,26 @@ const EXT_BY_TYPE: Record<string, string> = {
   "application/x-zip-compressed": "zip",
 };
 
-type Kind = "preview" | "preview128" | "master" | "wavzip" | "stems";
+// "sfx" = a sound-effect WAV master. It lives under its OWN R2 prefix (sfx/),
+// never under masters/, so storage reports and the cleanup sweep can talk about
+// the two libraries separately. Like every master it is PRIVATE: the customer
+// gets it through /api/download with the plan check (Pro+), never from /api/file.
+type Kind = "preview" | "preview128" | "master" | "wavzip" | "stems" | "sfx";
 const PUBLIC_KINDS: Kind[] = ["preview", "preview128"];
+
+/** Per-composer upload rights (lazy ALTERs): music ON by default, sounds OFF. */
+export const ensureUploadPermColumns = async (db: { prepare: (q: string) => { run: () => Promise<unknown> } }) => {
+  for (const sql of [
+    `ALTER TABLE composers ADD COLUMN can_upload_tracks INTEGER NOT NULL DEFAULT 1`,
+    `ALTER TABLE composers ADD COLUMN can_upload_sfx INTEGER NOT NULL DEFAULT 0`,
+  ]) {
+    try {
+      await db.prepare(sql).run();
+    } catch {
+      // column exists — fine
+    }
+  }
+};
 
 export const onRequestPost = async (ctx: Ctx) => {
   if (!ctx.env.DB) return json({ error: "DB not bound" }, 503);
@@ -54,11 +72,32 @@ export const onRequestPost = async (ctx: Ctx) => {
   const url = new URL(ctx.request.url);
   const kindParam = url.searchParams.get("kind");
   const kind: Kind =
-    kindParam === "master" || kindParam === "wavzip" || kindParam === "preview128" || kindParam === "stems"
+    kindParam === "master" ||
+    kindParam === "wavzip" ||
+    kindParam === "preview128" ||
+    kindParam === "stems" ||
+    kindParam === "sfx"
       ? kindParam
       : "preview";
   if (!isAdmin && kind === "master") {
     return json({ error: "Admin only" }, 403);
+  }
+  // Per-composer upload permissions (admins bypass): music and sounds are two
+  // separate rights. Hiding the tab in the UI is convenience — THIS is the gate.
+  if (!isAdmin) {
+    await ensureUploadPermColumns(ctx.env.DB);
+    const perms = await ctx.env.DB.prepare(
+      `SELECT COALESCE(can_upload_tracks, 1) AS tracks, COALESCE(can_upload_sfx, 0) AS sfx
+         FROM composers WHERE user_id = ?1 LIMIT 1`,
+    )
+      .bind(user.id)
+      .first<{ tracks: number; sfx: number }>();
+    if (kind === "sfx" && !perms?.sfx) {
+      return json({ error: "This account is not allowed to upload sound effects" }, 403);
+    }
+    if (kind !== "sfx" && perms && !perms.tracks) {
+      return json({ error: "This account is not allowed to upload music" }, 403);
+    }
   }
   const isPublic = PUBLIC_KINDS.includes(kind);
 
@@ -70,6 +109,9 @@ export const onRequestPost = async (ctx: Ctx) => {
   }
   if ((kind === "wavzip" || kind === "stems") && ext !== "zip") {
     return json({ error: kind === "stems" ? "Stems must be a .zip" : "The WAV bundle must be a .zip" }, 415);
+  }
+  if (kind === "sfx" && ext !== "wav") {
+    return json({ error: "A sound effect master must be a .wav" }, 415);
   }
 
   const bytes = await ctx.request.arrayBuffer();
@@ -88,7 +130,7 @@ export const onRequestPost = async (ctx: Ctx) => {
       .replace(/^-+|-+$/g, "")
       .slice(0, 40) || kind;
 
-  const prefix = isPublic ? "previews" : "masters";
+  const prefix = isPublic ? "previews" : kind === "sfx" ? "sfx" : "masters";
   const stemsTag = kind === "stems" ? "stems-" : "";
   const key = `${prefix}/${stemsTag}${base}-${crypto.randomUUID().slice(0, 8)}.${ext}`;
   await ctx.env.R2.put(key, bytes, { httpMetadata: { contentType } });

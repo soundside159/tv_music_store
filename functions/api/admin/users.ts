@@ -1,3 +1,4 @@
+import { ensureUploadPermColumns } from "./upload-audio";
 import {
   deleteUserAccount,
   getSessionUser,
@@ -65,8 +66,11 @@ export const onRequestGet = async (ctx: Ctx) => {
   let cueByUser = new Map<string, Record<string, string | null>>();
   try {
     await ensureCueColumns(ctx.env.DB);
+    await ensureUploadPermColumns(ctx.env.DB);
     const cues = await ctx.env.DB.prepare(
-      `SELECT user_id, cue_name, pro, ipi, publisher_name, publisher_pro, publisher_ipi
+      `SELECT user_id, cue_name, pro, ipi, publisher_name, publisher_pro, publisher_ipi,
+              COALESCE(can_upload_tracks, 1) AS can_upload_tracks,
+              COALESCE(can_upload_sfx, 0) AS can_upload_sfx
          FROM composers WHERE user_id IS NOT NULL`,
     ).all<{
       user_id: string;
@@ -76,6 +80,8 @@ export const onRequestGet = async (ctx: Ctx) => {
       publisher_name: string | null;
       publisher_pro: string | null;
       publisher_ipi: string | null;
+      can_upload_tracks: number;
+      can_upload_sfx: number;
     }>();
     cueByUser = new Map(
       cues.results.map((c) => [
@@ -87,6 +93,8 @@ export const onRequestGet = async (ctx: Ctx) => {
           publisherName: c.publisher_name,
           publisherPro: c.publisher_pro,
           publisherIpi: c.publisher_ipi,
+          canUploadTracks: c.can_upload_tracks ? "1" : "0",
+          canUploadSfx: c.can_upload_sfx ? "1" : "0",
         },
       ]),
     );
@@ -230,6 +238,8 @@ export const onRequestPatch = async (ctx: Ctx) => {
     removeComposer?: boolean;
     /** Change the user's login email (unique; the owner account is protected). */
     email?: string;
+    /** Upload rights of the composer profile: music and sounds are separate. */
+    uploads?: { tracks?: boolean; sfx?: boolean };
     /** Sync / cue-sheet info for the composer profile (license PDFs). */
     cue?: {
       cueName?: string;
@@ -244,6 +254,7 @@ export const onRequestPatch = async (ctx: Ctx) => {
   const role = body?.role;
   const removeComposer = body?.removeComposer === true;
   const cue = body?.cue;
+  const uploads = body?.uploads;
   const pseudonym = typeof body?.pseudonym === "string" ? body.pseudonym.trim() : undefined;
   const bio = typeof body?.bio === "string" ? body.bio.trim().slice(0, 2000) : undefined;
   const newEmail = typeof body?.email === "string" ? body.email.trim().toLowerCase() : undefined;
@@ -254,6 +265,7 @@ export const onRequestPatch = async (ctx: Ctx) => {
       bio === undefined &&
       !removeComposer &&
       !cue &&
+      !uploads &&
       newEmail === undefined)
   ) {
     return json({ error: "userId and role, pseudonym, bio, cue, email or removeComposer required" }, 400);
@@ -304,6 +316,24 @@ export const onRequestPatch = async (ctx: Ctx) => {
       .bind(userId, bio)
       .run();
   }
+  if (uploads) {
+    await ensureUploadPermColumns(ctx.env.DB);
+    const has = await ctx.env.DB.prepare(`SELECT id FROM composers WHERE user_id = ?1 LIMIT 1`)
+      .bind(userId)
+      .first();
+    if (!has) return json({ error: "Set a composer pseudonym first" }, 400);
+    if (typeof uploads.tracks === "boolean") {
+      await ctx.env.DB.prepare(`UPDATE composers SET can_upload_tracks = ?2 WHERE user_id = ?1`)
+        .bind(userId, uploads.tracks ? 1 : 0)
+        .run();
+    }
+    if (typeof uploads.sfx === "boolean") {
+      await ctx.env.DB.prepare(`UPDATE composers SET can_upload_sfx = ?2 WHERE user_id = ?1`)
+        .bind(userId, uploads.sfx ? 1 : 0)
+        .run();
+    }
+  }
+
   if (cue) {
     await ensureCueColumns(ctx.env.DB);
     const has = await ctx.env.DB.prepare(`SELECT id FROM composers WHERE user_id = ?1 LIMIT 1`)

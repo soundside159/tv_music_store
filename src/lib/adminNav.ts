@@ -1,4 +1,5 @@
 import {
+  AudioLines,
   Bell,
   CreditCard,
   DollarSign,
@@ -83,6 +84,10 @@ export const adminNavGroups: { label: string; items: NavItem[] }[] = [
       { id: "categories", label: "Categories", icon: Tags },
       { id: "vocabulary", label: "Vocabulary", icon: ListFilter },
     ],
+  },
+  {
+    label: "Sound Effects",
+    items: [{ id: "soundeffects", label: "Sound Effects", icon: AudioLines }],
   },
   {
     label: "Content",

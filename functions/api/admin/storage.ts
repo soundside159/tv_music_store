@@ -20,7 +20,7 @@ import { parseManifest } from "../_zipStream";
 // references its key. Anything the DB still knows about is never touched, so the
 // worst case of a bug here is that we skip a file, never that we delete a live one.
 
-const SWEPT_PREFIXES = ["previews/", "masters/", "covers/"];
+const SWEPT_PREFIXES = ["previews/", "masters/", "covers/", "sfx/"];
 
 /** "/api/file/previews/x.mp3" (or a bare key) -> "previews/x.mp3". */
 const toKey = (v: string | null | undefined): string | null => {
@@ -29,6 +29,8 @@ const toKey = (v: string | null | undefined): string | null => {
   const key = m ? m[1] : v;
   return SWEPT_PREFIXES.some((p) => key.startsWith(p)) ? key : null;
 };
+
+// (SFX masters live under sfx/ — their own prefix, never mixed with masters/.)
 
 /** Every R2 key the database still points at. */
 const referencedKeys = async (db: D1Database): Promise<Set<string>> => {
@@ -79,11 +81,26 @@ const referencedKeys = async (db: D1Database): Promise<Set<string>> => {
     // ditto
   }
 
+  // Sound effects: the WAV master (sfx/…) and its streaming MP3 (previews/…).
+  try {
+    const rows = await db.prepare(`SELECT wav_key, preview_src FROM sfx`).all<{
+      wav_key: string | null;
+      preview_src: string | null;
+    }>();
+    for (const r of rows.results) {
+      add(r.wav_key);
+      add(r.preview_src);
+    }
+  } catch {
+    // the sfx table doesn't exist yet — nothing to keep from it
+  }
+
   // Cover images of collections / playlists / categories / composer avatars.
   for (const sql of [
     `SELECT image AS v FROM collections`,
     `SELECT image AS v FROM playlists`,
     `SELECT image AS v FROM categories`,
+    `SELECT image AS v FROM sfx_categories`,
     `SELECT avatar AS v FROM composers`,
   ]) {
     try {
@@ -139,9 +156,10 @@ export const onRequestGet = async (ctx: Ctx) => {
     return { files: list.length, bytes: list.reduce((n, o) => n + o.size, 0) };
   };
   const breakdown = {
-    previews: group("previews/"), // MP3 320 + 128 per version, MP3 320 per stem
+    previews: group("previews/"), // MP3 320 + 128 per version, MP3 320 per stem/sound
     masters: group("masters/"), // WAV versions + WAV stems (what customers download)
     covers: group("covers/"), // track / collection / playlist artwork
+    sfx: group("sfx/"), // sound-effect WAV masters
   };
 
   const trackCount = await ctx.env.DB.prepare(`SELECT COUNT(*) AS n FROM tracks`)

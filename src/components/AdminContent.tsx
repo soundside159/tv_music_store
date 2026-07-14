@@ -1407,6 +1407,102 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
             a value to rename it (every track using it is retagged automatically); deleting a
             value also removes it from any track that uses it.
           </p>
+
+          {/* CATEGORIES, right here too (owner asked — he looks for them in
+              Vocabulary). Same server actions as the Categories tab, so the two
+              can never drift apart; that tab additionally shows each category's
+              track list. */}
+          <div className="rounded-lg border border-border/60 p-4">
+            <p className="mb-1 font-body text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Categories <span className="text-muted-foreground/60">({(data.categories ?? []).length})</span>
+            </p>
+            <p className="mb-3 font-body text-xs text-muted-foreground">
+              The curated lists behind /catalog?category=… — the Categories tab has the same editor
+              plus each one's track list.
+            </p>
+            <ul className="mb-3 divide-y divide-border/60">
+              {(data.categories ?? []).map((c, ci) => (
+                <li key={c.id} className="flex items-center gap-2 py-2">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-body text-sm text-foreground">{c.title}</span>
+                    <span className="block truncate font-body text-xs text-muted-foreground">
+                      {c.trackIds.length} tracks
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    disabled={busy || ci === 0}
+                    onClick={() => moveCategory(ci, -1)}
+                    aria-label={`Move ${c.title} up`}
+                    className="shrink-0 text-muted-foreground transition-colors hover:text-[#F4C430] disabled:opacity-30"
+                  >
+                    <ChevronUp className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || ci === (data.categories?.length ?? 0) - 1}
+                    onClick={() => moveCategory(ci, 1)}
+                    aria-label={`Move ${c.title} down`}
+                    className="shrink-0 text-muted-foreground transition-colors hover:text-[#F4C430] disabled:opacity-30"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className={btnCls}
+                    onClick={() => {
+                      const title = window.prompt(`Rename "${c.title}" to:`, c.title)?.trim();
+                      if (title && title !== c.title) {
+                        void run({ action: "upsert_category", id: c.id, title }, "Category renamed");
+                      }
+                    }}
+                  >
+                    Rename
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="rounded-lg border border-border px-3 py-1.5 font-body text-xs text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Delete category "${c.title}"? Tracks stay, only the chip and its list are removed.`,
+                        )
+                      ) {
+                        void run({ action: "delete_category", id: c.id }, "Category deleted");
+                      }
+                    }}
+                  >
+                    Delete
+                  </button>
+                </li>
+              ))}
+              {(data.categories ?? []).length === 0 && (
+                <li className="py-2 font-body text-sm text-muted-foreground">No categories yet.</li>
+              )}
+            </ul>
+            <form
+              className="flex flex-wrap gap-2"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const title = newCategoryTitle.trim();
+                if (!title) return;
+                const ok = await run({ action: "upsert_category", title }, "Category added");
+                if (ok) setNewCategoryTitle("");
+              }}
+            >
+              <input
+                placeholder='New category title (e.g. "Best for Trailers")'
+                value={newCategoryTitle}
+                onChange={(e) => setNewCategoryTitle(e.target.value)}
+                className={`${inputCls} w-72 max-w-full`}
+              />
+              <button type="submit" disabled={busy || !newCategoryTitle.trim()} className={goldBtnCls}>
+                Add category
+              </button>
+            </form>
+          </div>
           {(
             [
               ["useCase", "Use Case"],
