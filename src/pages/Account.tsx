@@ -43,7 +43,6 @@ type SectionId =
   | "billing"
   | "support"
   // Composer studio sections (sidebar "Composer" group; content = ComposerPanel).
-  | "composer-dashboard"
   | "composer-tracks"
   | "composer-upload"
   | "composer-earnings"
@@ -60,7 +59,6 @@ const SECTION_IDS: SectionId[] = [
   "claims",
   "billing",
   "support",
-  "composer-dashboard",
   "composer-tracks",
   "composer-upload",
   "composer-earnings",

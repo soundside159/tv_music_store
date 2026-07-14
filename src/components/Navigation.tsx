@@ -229,7 +229,7 @@ const Navigation = () => {
                     <>
                       <div className="my-1.5 h-px bg-border/60" />
                       <Link
-                        to="/account?section=composer-dashboard"
+                        to="/account?section=composer-earnings"
                         role="menuitem"
                         onClick={() => setAcctOpen(false)}
                         className="block px-4 py-2 font-body text-sm text-foreground/90 transition-colors hover:bg-white/5 hover:text-[#F4C430]"
@@ -344,7 +344,7 @@ const Navigation = () => {
                   ))}
                   {(user.role === "composer" || user.role === "admin") && (
                     <Link
-                      to="/account?section=composer-dashboard"
+                      to="/account?section=composer-earnings"
                       onClick={() => setIsOpen(false)}
                       className="py-2 font-body text-base text-muted-foreground transition-colors duration-300 hover:text-[#F4C430]"
                     >

@@ -138,12 +138,17 @@ const TriCheckbox = ({
   count?: number;
   onShow?: () => void;
   showActive?: boolean;
+  /** No tracks selected: the tick can't apply to anything, so only IT goes
+   *  inert — the row (and its SHOW button) stays alive. */
+  toggleDisabled?: boolean;
 }) => (
   <div className="group/tri flex min-w-0 items-center">
     <button
       type="button"
       onClick={onToggle}
-      className="flex min-w-0 items-center gap-2 rounded-md px-1 py-1 text-left transition-colors hover:bg-foreground/[0.04]"
+      disabled={toggleDisabled}
+      title={toggleDisabled ? "Select tracks in the table first" : undefined}
+      className="flex min-w-0 items-center gap-2 rounded-md px-1 py-1 text-left transition-colors hover:bg-foreground/[0.04] disabled:cursor-default disabled:opacity-45 disabled:hover:bg-transparent"
     >
       <span
         className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
@@ -1827,6 +1832,7 @@ const AdminTracksEdit = ({
                       setTagFilter(showActive ? null : { kind, id: item.id, title: item.title })
                     }
                     showActive={showActive}
+                    toggleDisabled={!hasSelection}
                   />
                 );
               })}
@@ -2826,8 +2832,11 @@ const AdminTracksEdit = ({
             </div>
       </aside>
 
-      {/* ===== Tags: Use Case / Genre / Mood (any selection) ===== */}
-      <aside className={`${panelColCls} ${dimIf(hasSelection)}`}>
+      {/* ===== Tags: Use Case / Genre / Mood (any selection) =====
+          The panel itself stays ALIVE with no selection (the SHOW buttons
+          filter the table and need no tracks picked) — only the ticks go
+          inert, via TriCheckbox's toggleDisabled. */}
+      <aside className={panelColCls}>
         <p className="font-body text-[10px] font-bold uppercase tracking-[0.24em] text-[#F4C430]">
           Tags{selTracks.length > 1 ? ` · ${selTracks.length} tracks` : ""}
         </p>
@@ -2849,6 +2858,7 @@ const AdminTracksEdit = ({
                     count={facetCounts[key].get(opt.trim().toLowerCase()) ?? 0}
                     onShow={() => setTagFilter(showActive ? null : { kind: "facet", key, option: opt })}
                     showActive={showActive}
+                    toggleDisabled={!hasSelection}
                   />
                 );
               })}
@@ -2857,8 +2867,9 @@ const AdminTracksEdit = ({
         ))}
       </aside>
 
-      {/* ===== Add to: collections / playlists / categories (any selection) ===== */}
-      <aside className={`${panelColCls} ${dimIf(hasSelection)}`}>
+      {/* ===== Add to: collections / playlists / categories (any selection) =====
+          Alive without a selection too — same deal as the Tags panel. */}
+      <aside className={panelColCls}>
         <p className="font-body text-[10px] font-bold uppercase tracking-[0.24em] text-[#F4C430]">
           Add to
         </p>

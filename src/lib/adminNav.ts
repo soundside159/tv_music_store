@@ -120,10 +120,11 @@ export const adminNavItems: NavItem[] = adminNavGroups.flatMap((g) => g.items);
 // group; account section ids are prefixed: composer-<id>). Shown for
 // role=composer AND admins (the owner is a composer too).
 export const composerNavItems: NavItem[] = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  // Earnings IS the composer dashboard now (owner request): the old Dashboard
+  // tab's stats moved into it, so it sits first and there's no separate tab.
+  { id: "earnings", label: "Earnings", icon: DollarSign },
   { id: "tracks", label: "My tracks", icon: Music2 },
   { id: "upload", label: "Upload", icon: UploadCloud },
-  { id: "earnings", label: "Earnings", icon: DollarSign },
   { id: "requests", label: "Requests", icon: Inbox },
   // No "Profile" here — the composer's account profile lives in the Account
   // menu; a second one would just be the same fields twice.

@@ -13,8 +13,9 @@ import { mockBriefs, mockClaimRequests, mockComposerTracks, mockDownloadLog } fr
 
 const GOLD = "#F4C430";
 
+// No separate "dashboard" — Earnings IS the dashboard now (owner request):
+// its stat cards and charts render at the top of the Earnings section.
 export type ComposerSectionId =
-  | "dashboard"
   | "tracks"
   | "upload"
   | "earnings"
@@ -22,10 +23,9 @@ export type ComposerSectionId =
   | "profile";
 
 export const COMPOSER_SECTION_IDS: ComposerSectionId[] = [
-  "dashboard",
+  "earnings",
   "tracks",
   "upload",
-  "earnings",
   "requests",
   "profile",
 ];
@@ -116,70 +116,6 @@ const ComposerPanel = ({ section }: { section: ComposerSectionId }) => {
 
   return (
     <>
-      {section === "dashboard" && (
-        <>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Card>
-              <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">Downloads (all time)</p>
-              <p className="mt-1 font-body text-3xl font-semibold text-foreground">
-                {live.composer ? liveDownloadsTotal : myDownloads.length}
-              </p>
-            </Card>
-            {/* No fake "estimate" here — the real money lives in Earnings. */}
-            <Card>
-              <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">Earnings</p>
-              <Link
-                to="/account?section=composer-earnings"
-                className="mt-1 inline-block font-body text-lg font-semibold hover:underline"
-                style={{ color: GOLD }}
-              >
-                Open earnings →
-              </Link>
-              <p className="mt-1 font-body text-xs text-muted-foreground">
-                Real payouts, month by month.
-              </p>
-            </Card>
-            <Card>
-              <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">Published tracks</p>
-              <p className="mt-1 font-body text-3xl font-semibold text-foreground">{publishedCount}</p>
-            </Card>
-          </div>
-          {dailyBars.length > 0 && (
-            <Card title="Downloads — last 30 days">
-              <div className="flex h-32 items-end gap-1">
-                {dailyBars.map((b) => (
-                  <div
-                    key={b.day}
-                    title={`${fmtDate(b.day)}: ${b.count}`}
-                    className="flex-1 rounded-t-sm"
-                    style={{ height: `${Math.max(4, b.pct)}%`, backgroundColor: GOLD, opacity: 0.85 }}
-                  />
-                ))}
-              </div>
-              <div className="mt-2 flex justify-between font-body text-[10px] text-muted-foreground">
-                <span>{dailyBars[0] ? fmtDate(dailyBars[0].day) : ""}</span>
-                <span>{dailyBars.at(-1) ? fmtDate(dailyBars.at(-1)!.day) : ""}</span>
-              </div>
-            </Card>
-          )}
-          {topTracks.length > 0 && (
-            <Card title="Top tracks">
-              <ul className="divide-y divide-border/60">
-                {topTracks.map((t, i) => (
-                  <li key={t.title} className="flex items-center justify-between py-2.5">
-                    <span className="font-body text-sm text-foreground">
-                      <span className="mr-3 text-muted-foreground">{i + 1}</span>
-                      {t.title}
-                    </span>
-                    <span className="font-body text-xs text-muted-foreground">{t.count} downloads</span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
-        </>
-      )}
-
       {section === "tracks" &&
         (live.composer ? (
           /* Live rows from /api/composer/tracks — only this composer's tracks. */
@@ -303,8 +239,59 @@ const ComposerPanel = ({ section }: { section: ComposerSectionId }) => {
         </Card>
       )}
 
-      {/* Live money from the revenue ledger — no mocks (see ComposerEarnings). */}
-      {section === "earnings" && <ComposerEarnings />}
+      {/* Earnings = the composer's dashboard: the stat cards and charts that
+          used to live on the separate Dashboard tab, then the live money from
+          the revenue ledger (ComposerEarnings — no mocks). */}
+      {section === "earnings" && (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Card>
+              <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">Downloads (all time)</p>
+              <p className="mt-1 font-body text-3xl font-semibold text-foreground">
+                {live.composer ? liveDownloadsTotal : myDownloads.length}
+              </p>
+            </Card>
+            <Card>
+              <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">Published tracks</p>
+              <p className="mt-1 font-body text-3xl font-semibold text-foreground">{publishedCount}</p>
+            </Card>
+          </div>
+          <ComposerEarnings />
+          {dailyBars.length > 0 && (
+            <Card title="Downloads — last 30 days">
+              <div className="flex h-32 items-end gap-1">
+                {dailyBars.map((b) => (
+                  <div
+                    key={b.day}
+                    title={`${fmtDate(b.day)}: ${b.count}`}
+                    className="flex-1 rounded-t-sm"
+                    style={{ height: `${Math.max(4, b.pct)}%`, backgroundColor: GOLD, opacity: 0.85 }}
+                  />
+                ))}
+              </div>
+              <div className="mt-2 flex justify-between font-body text-[10px] text-muted-foreground">
+                <span>{dailyBars[0] ? fmtDate(dailyBars[0].day) : ""}</span>
+                <span>{dailyBars.at(-1) ? fmtDate(dailyBars.at(-1)!.day) : ""}</span>
+              </div>
+            </Card>
+          )}
+          {topTracks.length > 0 && (
+            <Card title="Top tracks">
+              <ul className="divide-y divide-border/60">
+                {topTracks.map((t, i) => (
+                  <li key={t.title} className="flex items-center justify-between py-2.5">
+                    <span className="font-body text-sm text-foreground">
+                      <span className="mr-3 text-muted-foreground">{i + 1}</span>
+                      {t.title}
+                    </span>
+                    <span className="font-body text-xs text-muted-foreground">{t.count} downloads</span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+        </>
+      )}
 
       {section === "requests" && (
         <>
