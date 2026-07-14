@@ -27,6 +27,7 @@ import AdminGuides from "@/components/AdminGuides";
 import AdminFinance from "@/components/AdminFinance";
 import AdminUsage from "@/components/AdminUsage";
 import AdminAnalytics from "@/components/AdminAnalytics";
+import MenuTreeLines from "@/components/MenuTreeLines";
 
 const GOLD = "#F4C430";
 
@@ -582,12 +583,13 @@ const Admin = () => {
                     <p className="px-3 pb-1.5 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
                       {group.label}
                     </p>
-                    <div className="flex flex-col md:space-y-1">
+                    <div className="relative flex flex-col">
+                      <MenuTreeLines count={group.items.length} />
                       {group.items.map((item) => (
                         <Link
                           key={item.id}
                           to={`/account?section=${item.id}`}
-                          className="flex items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
+                          className="flex h-9 items-center gap-2 rounded-lg pl-8 pr-3 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
                         >
                           <item.icon className="h-4 w-4" />
                           {item.label}
@@ -607,12 +609,13 @@ const Admin = () => {
               />
               <div className={`flex-col ${menu === "composer" ? "flex" : "hidden"}`}>
                 <div className="md:mb-5">
-                  <div className="flex flex-col md:space-y-1">
+                  <div className="relative flex flex-col">
+                    <MenuTreeLines count={composerNavItems.length} />
                     {composerNavItems.map((item) => (
                       <Link
                         key={item.id}
                         to={`/account?section=composer-${item.id}`}
-                        className="flex items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
+                        className="flex h-9 items-center gap-2 rounded-lg pl-8 pr-3 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
                       >
                         <item.icon className="h-4 w-4" />
                         {item.label}
@@ -629,33 +632,22 @@ const Admin = () => {
                     <p className="px-3 pb-1.5 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
                       {group.label}
                     </p>
-                    {/* The items sit a step to the RIGHT of the group header,
-                        joined to it like a file tree (owner request): one soft
-                        trunk drops from the header, a little branch reaches
-                        every item, the active item's branch glows gold. No
-                        space-y here — gaps would slice the trunk. */}
-                    <div className="flex flex-col">
-                      {group.items.map((sec, i) => (
+                    {/* Items sit a step to the RIGHT of the header, joined to
+                        it by the soft gold beams from the homepage trust block
+                        (owner request) — smooth curves, no corners, nothing
+                        lights up on selection. Uniform h-9 rows, no gaps: the
+                        beam geometry depends on it. */}
+                    <div className="relative flex flex-col">
+                      <MenuTreeLines count={group.items.length} />
+                      {group.items.map((sec) => (
                         <button
                           key={sec.id}
                           type="button"
                           onClick={() => setSection(sec.id as SectionId)}
-                          className={`relative flex w-full items-center gap-2 rounded-lg py-2 pl-8 pr-3 font-body text-sm transition-colors ${
+                          className={`flex h-9 w-full items-center gap-2 rounded-lg pl-8 pr-3 font-body text-sm transition-colors ${
                             section === sec.id ? "bg-secondary text-[#F4C430]" : "text-muted-foreground hover:text-foreground"
                           }`}
                         >
-                          <span
-                            aria-hidden
-                            className={`absolute left-3 top-0 w-px bg-border/70 ${
-                              i === group.items.length - 1 ? "h-1/2" : "h-full"
-                            }`}
-                          />
-                          <span
-                            aria-hidden
-                            className={`absolute left-3 top-1/2 h-px w-3 -translate-y-1/2 ${
-                              section === sec.id ? "bg-[#F4C430]/70" : "bg-border/70"
-                            }`}
-                          />
                           <sec.icon className="h-4 w-4" />
                           {sec.label}
                         </button>

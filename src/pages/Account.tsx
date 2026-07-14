@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowUpRight } from "lucide-react";
 import { accountNavGroups, adminNavGroups, composerNavItems } from "@/lib/adminNav";
 import MenuGroupHeader from "@/components/MenuGroupHeader";
+import MenuTreeLines from "@/components/MenuTreeLines";
 import ComposerPanel, { type ComposerSectionId } from "@/components/ComposerPanel";
 import { useComposerTracks } from "@/components/ComposerUpload";
 import Navigation from "@/components/Navigation";
@@ -320,13 +321,14 @@ const Account = () => {
                     <p className="px-3 pb-1.5 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
                       {group.label}
                     </p>
-                    <div className="flex space-x-1 md:flex-col md:space-x-0 md:space-y-1">
+                    <div className="relative flex space-x-1 md:flex-col md:space-x-0">
+                      <MenuTreeLines count={group.items.length} className="hidden md:block" />
                       {group.items.map((s) => (
                         <button
                           key={s.id}
                           type="button"
                           onClick={() => setSection(s.id as SectionId)}
-                          className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors ${
+                          className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors md:h-9 md:py-0 md:pl-8 md:pr-3 ${
                             section === s.id
                               ? "bg-secondary text-[#F4C430]"
                               : "text-muted-foreground hover:text-foreground"
@@ -365,36 +367,40 @@ const Account = () => {
                           Composer
                         </p>
                       )}
-                      <div className="flex space-x-1 md:flex-col md:space-x-0 md:space-y-1">
-                        {composerNavItems
-                          // Upload is only there when the admin allowed it. The
-                          // server refuses the upload anyway — this just stops
-                          // the UI from offering a door that is locked.
-                          .filter(
-                            (item) =>
-                              item.id !== "upload" ||
-                              user.role === "admin" ||
-                              composerProbe.composer?.canUploadTracks !== false,
-                          )
-                          .map((item) => {
-                          const id = `composer-${item.id}` as SectionId;
-                          return (
-                            <button
-                              key={item.id}
-                              type="button"
-                              onClick={() => setSection(id)}
-                              className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors ${
-                                section === id
-                                  ? "bg-secondary text-[#F4C430]"
-                                  : "text-muted-foreground hover:text-foreground"
-                              }`}
-                            >
-                              <item.icon className="h-4 w-4" />
-                              {item.label}
-                            </button>
-                          );
-                        })}
-                      </div>
+                      {(() => {
+                        // Upload is only there when the admin allowed it. The
+                        // server refuses the upload anyway — this just stops
+                        // the UI from offering a door that is locked.
+                        const items = composerNavItems.filter(
+                          (item) =>
+                            item.id !== "upload" ||
+                            user.role === "admin" ||
+                            composerProbe.composer?.canUploadTracks !== false,
+                        );
+                        return (
+                          <div className="relative flex space-x-1 md:flex-col md:space-x-0">
+                            <MenuTreeLines count={items.length} className="hidden md:block" />
+                            {items.map((item) => {
+                              const id = `composer-${item.id}` as SectionId;
+                              return (
+                                <button
+                                  key={item.id}
+                                  type="button"
+                                  onClick={() => setSection(id)}
+                                  className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors md:h-9 md:py-0 md:pl-8 md:pr-3 ${
+                                    section === id
+                                      ? "bg-secondary text-[#F4C430]"
+                                      : "text-muted-foreground hover:text-foreground"
+                                  }`}
+                                >
+                                  <item.icon className="h-4 w-4" />
+                                  {item.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -413,25 +419,16 @@ const Account = () => {
                         <p className="px-3 pb-1.5 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
                           {group.label}
                         </p>
-                        {/* Same file-tree connectors as the /admin sidebar —
-                            desktop only: on mobile this row is horizontal. */}
-                        <div className="flex space-x-1 md:flex-col md:space-x-0">
-                          {group.items.map((item, i) => (
+                        {/* Same soft beams as the /admin sidebar — desktop
+                            only: on mobile this row is horizontal. */}
+                        <div className="relative flex space-x-1 md:flex-col md:space-x-0">
+                          <MenuTreeLines count={group.items.length} className="hidden md:block" />
+                          {group.items.map((item) => (
                             <Link
                               key={item.id}
                               to={`/admin?section=${item.id}`}
-                              className="relative flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground md:pl-8"
+                              className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground md:h-9 md:py-0 md:pl-8 md:pr-3"
                             >
-                              <span
-                                aria-hidden
-                                className={`absolute left-3 top-0 hidden w-px bg-border/70 md:block ${
-                                  i === group.items.length - 1 ? "h-1/2" : "h-full"
-                                }`}
-                              />
-                              <span
-                                aria-hidden
-                                className="absolute left-3 top-1/2 hidden h-px w-3 -translate-y-1/2 bg-border/70 md:block"
-                              />
                               <item.icon className="h-4 w-4" />
                               {item.label}
                             </Link>
