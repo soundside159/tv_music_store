@@ -69,7 +69,7 @@ const Catalog = () => {
     };
   });
   const [expandedTrackId, setExpandedTrackId] = useState<string | null>(null);
-  const [sort, setSort] = useState("Recommended");
+  const [sort, setSort] = useState("Featured");
   const { activePlayer, isPlaying, progress, playedProgress, playVersion } = usePlayer();
   const { tracks, isLoading } = useTracks();
   const trendingIds = useTrendingIds();
@@ -108,10 +108,10 @@ const Catalog = () => {
       return matchesCollection && matchesCategory && matchesUseCase && matchesGenre && matchesMood && matchesQuery;
     });
 
-    // While searching, "Recommended" means "most relevant" — a track whose TAG is
-    // the query outranks one that merely mentions the word in its description.
-    // Picking New / Popular explicitly still wins.
-    if (trimmedQuery && sort === "Recommended") {
+    // While searching, "Featured" (the default) means "most relevant" — a track
+    // whose TAG is the query outranks one that merely mentions the word in its
+    // description. Picking New / Popular explicitly still wins.
+    if (trimmedQuery && sort === "Featured") {
       return [...result].sort(
         (a, b) =>
           searchScore(b, trimmedQuery) - searchScore(a, trimmedQuery) ||
@@ -203,9 +203,12 @@ const Catalog = () => {
             tunnel — so the header never jumps between pages and track rows get the
             full tunnel width. Below 1800px there is no room for that, so the classic
             sidebar+content grid stays. */}
-        <section className="relative mt-4 grid gap-5 lg:grid-cols-[14.5rem_minmax(0,1fr)] xl:grid-cols-[15.5rem_minmax(0,1fr)] min-[1800px]:grid-cols-1">
+        {/* The sidebar column is sized so the three filter tab pills (Use Case /
+            Genre / Mood) sit on ONE row — 14.5/15.5rem wrapped Mood onto a
+            second line. */}
+        <section className="relative mt-4 grid gap-5 lg:grid-cols-[17rem_minmax(0,1fr)] xl:grid-cols-[17.5rem_minmax(0,1fr)] min-[1800px]:grid-cols-1">
           <div
-            className="animate-slide-in-left min-[1800px]:absolute min-[1800px]:bottom-0 min-[1800px]:right-full min-[1800px]:top-0 min-[1800px]:mr-6 min-[1800px]:w-[15.5rem]"
+            className="animate-slide-in-left min-[1800px]:absolute min-[1800px]:bottom-0 min-[1800px]:right-full min-[1800px]:top-0 min-[1800px]:mr-6 min-[1800px]:w-[17.5rem]"
             style={{ animationDelay: "0.4s" }}
           >
             <FilterSidebar filters={filters} setFilter={setFilter} onClear={clearFilters} />
@@ -342,7 +345,7 @@ const Catalog = () => {
   );
 };
 
-const sortOptions = ["Recommended", "New", "Popular"];
+const sortOptions = ["Featured", "New", "Popular"];
 
 const SortDropdown = ({ value, onChange }: { value: string; onChange: (value: string) => void }) => {
   const [open, setOpen] = useState(false);
@@ -605,7 +608,7 @@ const FilterSidebar = ({
               type="button"
               onClick={() => setTab(t.id)}
               aria-pressed={active}
-              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-body text-[11px] font-semibold transition-all duration-200 ${
+              className={`relative inline-flex items-center gap-1 rounded-full px-2 py-1 font-body text-[11px] font-semibold transition-all duration-200 ${
                 active
                   ? "bg-[#F4C430] text-background shadow-[0_0_20px_-2px_rgba(244,196,48,0.55)]"
                   : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
@@ -613,12 +616,12 @@ const FilterSidebar = ({
             >
               <t.icon className="h-3 w-3" />
               {t.label}
-              {picked && (
-                <span
-                  className={`flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[9px] font-bold tabular-nums ${
-                    active ? "bg-background/25 text-background" : "bg-[#F4C430] text-background"
-                  }`}
-                >
+              {/* Count floats over the corner so it never widens the pill (an
+                  inline badge pushed Mood onto a second row). Shown on the
+                  INACTIVE tabs only — the open tab's pick is already lit up
+                  in the chip list right below. */}
+              {picked && !active && (
+                <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-[#F4C430] px-0.5 text-[9px] font-bold tabular-nums text-background">
                   1
                 </span>
               )}
@@ -639,15 +642,17 @@ const FilterSidebar = ({
               type="button"
               onClick={() => setFilter(tab, option)}
               aria-pressed={active}
-              className={`group inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-body text-xs transition-all duration-200 ${
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-body text-xs transition-colors duration-200 ${
                 active
                   ? "border-[#F4C430]/70 bg-[#F4C430]/[0.07] text-[#F4C430]"
-                  : "border-border bg-card/50 text-muted-foreground hover:-translate-y-0.5 hover:border-[#F4C430]/70 hover:bg-[#F4C430]/[0.07] hover:text-[#F4C430]"
+                  : "border-border bg-card/50 text-muted-foreground hover:border-[#F4C430]/70 hover:bg-[#F4C430]/[0.07] hover:text-[#F4C430]"
               }`}
             >
+              {/* The dot lights up ONLY on the picked chip — hover just tints
+                  the chip itself (owner request: no jumping, no hover dot). */}
               <span
                 className={`h-1.5 w-1.5 rounded-full transition-colors duration-200 ${
-                  active ? "bg-[#F4C430]" : "bg-muted-foreground/40 group-hover:bg-[#F4C430]"
+                  active ? "bg-[#F4C430]" : "bg-muted-foreground/40"
                 }`}
                 aria-hidden
               />
