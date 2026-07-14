@@ -321,14 +321,14 @@ const Account = () => {
                     <p className="px-3 pb-1.5 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
                       {group.label}
                     </p>
-                    <div className="relative flex space-x-1 md:flex-col md:space-x-0">
+                    <div className="relative flex space-x-1 md:flex-col md:space-x-0 md:pl-8">
                       <MenuTreeLines className="hidden md:block" />
                       {group.items.map((s) => (
                         <button
                           key={s.id}
                           type="button"
                           onClick={() => setSection(s.id as SectionId)}
-                          className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors md:ml-8 md:h-9 md:py-0 md:pl-2 md:pr-3 ${
+                          className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors md:h-9 md:py-0 md:pl-2 md:pr-3 ${
                             section === s.id
                               ? "bg-secondary text-[#F4C430]"
                               : "text-muted-foreground hover:text-foreground"
@@ -378,7 +378,7 @@ const Account = () => {
                             composerProbe.composer?.canUploadTracks !== false,
                         );
                         return (
-                          <div className="relative flex space-x-1 md:flex-col md:space-x-0">
+                          <div className="relative flex space-x-1 md:flex-col md:space-x-0 md:pl-8">
                             <MenuTreeLines className="hidden md:block" />
                             {items.map((item) => {
                               const id = `composer-${item.id}` as SectionId;
@@ -387,7 +387,7 @@ const Account = () => {
                                   key={item.id}
                                   type="button"
                                   onClick={() => setSection(id)}
-                                  className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors md:ml-8 md:h-9 md:py-0 md:pl-2 md:pr-3 ${
+                                  className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors md:h-9 md:py-0 md:pl-2 md:pr-3 ${
                                     section === id
                                       ? "bg-secondary text-[#F4C430]"
                                       : "text-muted-foreground hover:text-foreground"
@@ -421,13 +421,13 @@ const Account = () => {
                         </p>
                         {/* Same soft beams as the /admin sidebar — desktop
                             only: on mobile this row is horizontal. */}
-                        <div className="relative flex space-x-1 md:flex-col md:space-x-0">
+                        <div className="relative flex space-x-1 md:flex-col md:space-x-0 md:pl-8">
                           <MenuTreeLines className="hidden md:block" />
                           {group.items.map((item) => (
                             <Link
                               key={item.id}
                               to={`/admin?section=${item.id}`}
-                              className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground md:ml-8 md:h-9 md:py-0 md:pl-2 md:pr-3"
+                              className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground md:h-9 md:py-0 md:pl-2 md:pr-3"
                             >
                               <item.icon className="h-4 w-4" />
                               {item.label}
