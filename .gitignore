@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Vite dev-server temp files — never commit
+vite.config.ts.timestamp-*

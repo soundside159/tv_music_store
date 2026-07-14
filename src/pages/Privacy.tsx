@@ -2,7 +2,7 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 
 // Public Privacy Policy page. Content mirrors docs/PRIVACY_POLICY_DRAFT.md.
-const EFFECTIVE = "8 July 2026";
+const EFFECTIVE = "14 July 2026";
 const ADDRESS = "TV Music Store, 5 Brayford Square, London, E1 0SG, United Kingdom";
 
 const H2 = ({ children }: { children: React.ReactNode }) => (
@@ -30,7 +30,7 @@ const Privacy = () => (
         <p className="font-body text-xs uppercase tracking-widest text-[#F4C430]">Legal</p>
         <h1 className="mt-2 text-3xl text-foreground md:text-4xl">Privacy Policy</h1>
         <p className="mt-2 font-body text-sm text-muted-foreground">
-          Version 1.0 · Effective {EFFECTIVE}
+          Version 1.1 · Effective {EFFECTIVE}
         </p>
       </header>
 
@@ -51,11 +51,14 @@ const Privacy = () => (
           "Download history — to enforce plan limits and provide re-downloads and license history (contract).",
           "Technical logs — IP, timestamp, request, browser — to keep the site working and secure and to prevent abuse (legitimate interest).",
           "Essential cookies — to keep you signed in and remember your cart and preferences (strictly necessary).",
+          "Anonymous usage statistics — pages viewed, referring site, country, device and browser type — to understand what visitors find useful (legitimate interest). Collected without cookies; IP addresses are never stored and visitors cannot be identified — see Analytics below.",
         ]}
       />
       <P>
-        We do not sell your data and we do not use it for third-party advertising. We do not currently
-        set analytics or advertising cookies; if we add any, we will ask for consent first.
+        We do not sell your data and we do not use it for third-party advertising. Our visitor
+        statistics are collected by our own cookie-less system (see Analytics below) — we set no
+        analytics or advertising cookies and share nothing with ad networks; if that ever changes, we
+        will ask for consent first.
       </P>
 
       <H2>Payments</H2>
@@ -105,11 +108,26 @@ const Privacy = () => (
         Office (ICO) at ico.org.uk.
       </P>
 
+      <H2>Analytics</H2>
+      <P>
+        We measure site usage with our own privacy-first analytics, served from our own
+        infrastructure. It uses no cookies and stores nothing on your device. For each page view we
+        record the page address, the referring website, your country (derived from your IP address at
+        our edge provider), and your device and browser type. Your IP address is never stored:
+        it is used once, together with your browser signature, to compute an anonymised identifier
+        that automatically changes every day, so visits cannot be linked across days and no one can
+        be identified. This data is processed on the basis of our legitimate interest in understanding
+        how the service is used, is never shared with third parties or ad networks, and is deleted
+        after 180 days. Because no persistent identifiers are used, this does not require a consent
+        banner; you can still object at any time — see Your rights above.
+      </P>
+
       <H2>Cookies</H2>
       <P>
         We use essential cookies to keep you signed in and remember your cart and preferences. These
-        are required for the site to work. We do not currently set analytics or advertising cookies;
-        if we add any, we will show a consent banner first.
+        are required for the site to work. We set no analytics or advertising cookies — our visitor
+        statistics work without cookies entirely (see Analytics above). If we ever add cookies that
+        need consent, we will show a consent banner first.
       </P>
 
       <H2>Children</H2>

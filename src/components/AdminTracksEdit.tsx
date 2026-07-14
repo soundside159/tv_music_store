@@ -581,8 +581,9 @@ const AdminTracksEdit = ({
   // matched by title (same normalizer as the other readers); cell values are
   // comma-separated and matched case-insensitively against the LIVE
   // vocabularies and the playlist / category titles — anything unknown is
-  // skipped and reported, never written. ADD-only: a re-import can't untick
-  // what was set by hand. BPM / description are NOT touched.
+  // skipped and reported, never written. Checkboxes are ADD-only (a re-import
+  // can't untick what was set by hand); BPM / Description — and Tags, when the
+  // sheet has such a column — are written too, overwriting the old values.
   const [vicateBusy, setVicateBusy] = useState(false);
 
   const vicateImport = async (file: File) => {
@@ -607,6 +608,11 @@ const AdminTracksEdit = ({
       const cUsage = col(/^usage|^use.?case/, 5);
       const cCats = col(/^categor/, 6);
       const cPls = col(/^playlist/, 7);
+      const cBpm = col(/^bpm/, 2);
+      const cDesc = col(/^desc/, 8);
+      // The mapped sheet has no tags column — read one ONLY when the owner
+      // added it (no positional fallback, that would swallow another column).
+      const iTags = header.findIndex((h) => /^tags?/.test(h));
 
       const byName = new Map<string, string[]>();
       for (const row of grid.slice(1)) {
@@ -663,6 +669,9 @@ const AdminTracksEdit = ({
             usage: pick(cells(row, cUsage), canonUsage),
             catIds: pick(cells(row, cCats), categoryIdOf),
             plIds: pick(cells(row, cPls), playlistIdOf),
+            bpm: Math.round(Number((row[cBpm] ?? "").toString().replace(/[^0-9.]/g, ""))),
+            desc: (row[cDesc] ?? "").toString().trim(),
+            tags: iTags >= 0 ? cells(row, iTags).slice(0, 12) : [],
           },
         ];
       });
@@ -675,7 +684,8 @@ const AdminTracksEdit = ({
             (unknown.size > 0
               ? `\nUnknown values (skipped): ${[...unknown].slice(0, 8).join(", ")}${unknown.size > 8 ? "…" : ""}`
               : "") +
-            `\nADD-only — existing ticks are never removed. BPM / description are not touched.`,
+            `\nAlso writes BPM and Description${header.some((h) => /^tags?/.test(h)) ? " and Tags" : ""} from the sheet (overwrites the current ones).` +
+            `\nCheckboxes are ADD-only — existing ticks are never removed.`,
         )
       )
         return;
@@ -691,7 +701,13 @@ const AdminTracksEdit = ({
         if (Object.keys(facets).length > 0) body.facets = facets;
         if (p.plIds.length > 0) body.playlistChanges = { add: p.plIds };
         if (p.catIds.length > 0) body.categoryChanges = { add: p.catIds };
-        if (!body.facets && !body.playlistChanges && !body.categoryChanges) continue;
+        // BPM / Description / Tags ride along in the same call (fields overwrite).
+        const fields: Record<string, unknown> = {};
+        if (p.bpm >= 20 && p.bpm <= 400) fields.bpm = p.bpm;
+        if (p.desc) fields.description = p.desc;
+        if (p.tags.length > 0) fields.tags = p.tags;
+        if (Object.keys(fields).length > 0) body.fields = fields;
+        if (!body.facets && !body.playlistChanges && !body.categoryChanges && !body.fields) continue;
         const res = await fetch("/api/admin/content", {
           method: "POST",
           credentials: "include",
@@ -715,6 +731,9 @@ const AdminTracksEdit = ({
           ...(p.usage.length > 0 ? { useCase: merge(p.t.useCase, p.usage) } : {}),
           ...(p.genres.length > 0 ? { genre: merge(p.t.genre, p.genres) } : {}),
           ...(p.moods.length > 0 ? { mood: merge(p.t.mood, p.moods) } : {}),
+          ...(fields.bpm !== undefined ? { bpm: p.bpm } : {}),
+          ...(fields.description !== undefined ? { description: p.desc } : {}),
+          ...(fields.tags !== undefined ? { tags: p.tags } : {}),
         };
         done += 1;
       }
@@ -722,7 +741,7 @@ const AdminTracksEdit = ({
       if (done > 0) onContentReload?.();
       setSelected(keep);
       toast.success(
-        `Checkboxes set for ${done} track(s)` +
+        `Checkboxes + BPM/description set for ${done} track(s)` +
           (missed > 0 ? ` · ${missed} unmatched` : "") +
           (unknown.size > 0 ? ` · ${unknown.size} unknown value(s) skipped` : ""),
       );
@@ -2007,7 +2026,7 @@ const AdminTracksEdit = ({
               {VICATE_SHEET_COMPOSERS.includes(composer) && (
                 <label
                   className={`${btnCls} cursor-pointer ${vicateBusy || busy ? "pointer-events-none opacity-50" : ""}`}
-                  title="Match the selected tracks by title and tick Genres / Moods / Usage / Categories / Playlists from the sheet (add-only)"
+                  title="Match the selected tracks by title, tick Genres / Moods / Usage / Categories / Playlists (add-only) and write BPM / Description / Tags from the sheet"
                 >
                   {vicateBusy ? "Importing…" : "Vicate Import xlsx"}
                   <input

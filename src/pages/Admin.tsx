@@ -26,11 +26,13 @@ import AdminCustomerProfile from "@/components/AdminCustomerProfile";
 import AdminGuides from "@/components/AdminGuides";
 import AdminFinance from "@/components/AdminFinance";
 import AdminUsage from "@/components/AdminUsage";
+import AdminAnalytics from "@/components/AdminAnalytics";
 
 const GOLD = "#F4C430";
 
 type SectionId =
   | "dashboard"
+  | "analytics"
   | "finance"
   | "soundeffects"
   | "tracks"
@@ -52,6 +54,7 @@ type SectionId =
 
 const SECTION_IDS: SectionId[] = [
   "dashboard",
+  "analytics",
   "finance",
   "tracks",
   "collections",
@@ -813,6 +816,8 @@ const Admin = () => {
             {section === "articles" && <AdminGuides />}
 
             {/* Real money: revenue ledger, the 50/50 split, composer payouts. */}
+            {section === "analytics" && <AdminAnalytics />}
+
             {section === "finance" && <AdminFinance />}
 
 

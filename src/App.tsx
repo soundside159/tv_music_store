@@ -22,6 +22,7 @@ import Account from "./pages/Account";
 import Cart from "./pages/Cart";
 import Composer from "./pages/Composer";
 import Admin from "./pages/Admin";
+import RouteBeacon from "./lib/analytics";
 import Login from "./pages/Login";
 import LicenseTerms from "./pages/LicenseTerms";
 import Privacy from "./pages/Privacy";
@@ -52,6 +53,8 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        {/* Pageview beacon for Admin -> Analytics (see src/lib/analytics.tsx). */}
+        <RouteBeacon />
         <ContentBoot />
         <DevPersonaSwitcher />
         <PlayerProvider>

@@ -9,6 +9,16 @@
 > **Open decisions (marked `[[ ]]`):** correspondence address; whether analytics/
 > ad cookies are used (currently assumed **none** beyond what's essential).
 
+> **Update (v1.1, 14 July 2026):** the live page (src/pages/Privacy.tsx) now also
+> covers the self-hosted, cookie-less analytics: an "Analytics" section (what is
+> collected, daily-rotating anonymised identifier, no stored IPs, 180-day
+> retention, legitimate-interest basis, no consent banner needed), a bullet in
+> "What we collect and why", and reworded cookies paragraphs ("we set no
+> analytics or advertising cookies — our visitor statistics work without
+> cookies"). This draft is kept as the v1.0 baseline; the page is the source of
+> truth.
+
+
 ---
 
 ## Who we are

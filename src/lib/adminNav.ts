@@ -1,4 +1,4 @@
-import {
+import { BarChart3,
   AudioLines,
   Bell,
   CreditCard,
@@ -71,7 +71,10 @@ export const accountNavGroups: { label: string; items: NavItem[] }[] = [
 export const adminNavGroups: { label: string; items: NavItem[] }[] = [
   {
     label: "Overview",
-    items: [{ id: "dashboard", label: "Dashboard", icon: LayoutDashboard }],
+    items: [
+      { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { id: "analytics", label: "Analytics", icon: BarChart3 },
+    ],
   },
   {
     label: "Catalog",
