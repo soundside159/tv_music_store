@@ -408,14 +408,16 @@ const AdminTracksEdit = ({
         const i = header.findIndex((h) => /^title|^track|^name/.test(h));
         return i >= 0 ? i : 1;
       })();
-      const cAlt = (() => {
-        const i = header.findIndex((h) => /alternative/.test(h));
-        return i >= 0 ? i : 4;
-      })();
+      // Alternative Title exists on Dred's sheet only — use it when the header
+      // says so; a blind positional fallback would eat a data column on other
+      // layouts (on Vicate's mapped sheet column 5 is moods).
+      const cAlt = header.findIndex((h) => /alternative/.test(h));
 
       const byName = new Map<string, string[]>();
       for (const row of grid.slice(1)) {
-        for (const key of [normTitle(row[cTitle] ?? ""), normTitle(row[cAlt] ?? "")]) {
+        const keys = [normTitle(row[cTitle] ?? "")];
+        if (cAlt >= 0) keys.push(normTitle(row[cAlt] ?? ""));
+        for (const key of keys) {
           if (key && !byName.has(key)) byName.set(key, row);
         }
       }
@@ -2000,7 +2002,13 @@ const AdminTracksEdit = ({
                   }}
                 />
               </label>
-              {/* Numbers only — the "#" column (A) into the ID column. */}
+                </>
+              )}
+              {/* Numbers only — the "#" column (A) into the ID column. Works
+                  for Dred's sheet AND Vicate's mapped one (both carry a "#"
+                  and a title column), so both composers get the button. */}
+              {(XLSX_SHEET_COMPOSERS.includes(composer) ||
+                VICATE_SHEET_COMPOSERS.includes(composer)) && (
               <label
                 className={`${btnCls} cursor-pointer ${numBusy || busy ? "pointer-events-none opacity-50" : ""}`}
                 title="Match the selected tracks by title and write ONLY the sheet's # into their ID"
@@ -2017,7 +2025,6 @@ const AdminTracksEdit = ({
                   }}
                 />
               </label>
-                </>
               )}
               {/* Vicate's mapped sheet (# / title / bpm / genres / moods / usage /
                   categories / playlists / description) — ticks the checkboxes of
