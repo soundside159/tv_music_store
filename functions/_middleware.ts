@@ -50,6 +50,17 @@ interface MiddlewareCtx {
 const SITE = "https://tvmusicstore.com";
 const OG_IMAGE = `${SITE}/images/icons/web-app-manifest-512x512.png`;
 
+// The #root prerender is ONLY for agents that don't run JavaScript. Browsers
+// used to get it too, and every F5 flashed the SEO track list for a moment
+// before React mounted (the owner saw it and reported it as a bug). So the
+// body swap is now gated by User-Agent: crawlers, link-preview fetchers and
+// AI bots get the real markup; humans get the untouched empty shell — no
+// flash, no layout jump. Meta / canonical / JSON-LD rewrites stay for
+// EVERYONE (they're invisible), and this is Google's sanctioned "dynamic
+// rendering", not cloaking: bots read the same content React renders.
+const BOT_UA =
+  /bot|crawl|spider|slurp|preview|fetch|scrape|curl|wget|python|httpx|headless|lighthouse|bingpreview|yandex|baidu|duckduck|facebookexternalhit|meta-external|twitterbot|linkedin|whatsapp|telegram|discord|slack|skype|pinterest|embedly|vkshare|qwant|applebot|amazonbot|petalbot|gptbot|chatgpt|oai-search|claude|anthropic|perplexity|ccbot|bytespider|cohere|youbot|phindbot|semrush|ahrefs|mj12|dotbot|screaming|seznam/i;
+
 interface Seo {
   title: string;
   description: string;
@@ -584,6 +595,9 @@ export const onRequest = async (ctx: MiddlewareCtx): Promise<Response> => {
 
   const canonical = SITE + seo.path;
   const image = seo.image ?? OG_IMAGE;
+  // No/empty UA = a script of some kind — it doesn't run JS, give it the body.
+  const ua = ctx.request.headers.get("user-agent") ?? "";
+  const wantsPrerenderBody = ua.trim() === "" || BOT_UA.test(ua);
   // The canonical <link> already exists in index.html — it is REWRITTEN below,
   // never appended twice (two canonicals = Google ignores both).
   const head = seo.jsonLd
@@ -634,7 +648,8 @@ export const onRequest = async (ctx: MiddlewareCtx): Promise<Response> => {
     })
     .on("#root", {
       element(el) {
-        el.setInnerContent(seo!.body, { html: true });
+        // Browsers keep the empty shell — see the BOT_UA comment for why.
+        if (wantsPrerenderBody) el.setInnerContent(seo!.body, { html: true });
       },
     })
     .transform(response);
