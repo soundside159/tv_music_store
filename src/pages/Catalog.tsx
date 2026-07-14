@@ -597,8 +597,9 @@ const FilterSidebar = ({
       </div>
 
       {/* Segmented control — the homepage "Browse by" pills, sized for the
-          narrow sidebar column. */}
-      <div className="flex flex-wrap gap-1 rounded-full border border-border/70 bg-card/60 p-1">
+          narrow sidebar column. Each pill stretches (flex-1) so the three fill
+          the groove edge to edge — no dead space right of Mood. */}
+      <div className="flex gap-1 rounded-full border border-border/70 bg-card/60 p-1">
         {FILTER_TABS.map((t) => {
           const active = t.id === tab;
           const picked = filters[t.id] !== "All";
@@ -608,7 +609,7 @@ const FilterSidebar = ({
               type="button"
               onClick={() => setTab(t.id)}
               aria-pressed={active}
-              className={`relative inline-flex items-center gap-1 rounded-full px-2 py-1 font-body text-[11px] font-semibold transition-all duration-200 ${
+              className={`relative inline-flex flex-1 items-center justify-center gap-1 rounded-full px-2 py-1 font-body text-[11px] font-semibold transition-all duration-200 ${
                 active
                   ? "bg-[#F4C430] text-background shadow-[0_0_20px_-2px_rgba(244,196,48,0.55)]"
                   : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
@@ -617,11 +618,17 @@ const FilterSidebar = ({
               <t.icon className="h-3 w-3" />
               {t.label}
               {/* Count floats over the corner so it never widens the pill (an
-                  inline badge pushed Mood onto a second row). Shown on the
-                  INACTIVE tabs only — the open tab's pick is already lit up
-                  in the chip list right below. */}
-              {picked && !active && (
-                <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-[#F4C430] px-0.5 text-[9px] font-bold tabular-nums text-background">
+                  inline badge pushed Mood onto a second row). The colours flip
+                  with the tab: gold badge on a dark inactive pill, dark badge
+                  with gold digit on the lit gold pill — readable on both. */}
+              {picked && (
+                <span
+                  className={`absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[9px] font-bold tabular-nums ${
+                    active
+                      ? "border border-[#F4C430]/60 bg-background text-[#F4C430]"
+                      : "bg-[#F4C430] text-background"
+                  }`}
+                >
                   1
                 </span>
               )}
