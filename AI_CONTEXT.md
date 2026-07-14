@@ -3511,3 +3511,16 @@ were numbered. The numbers show in the ID column of Tracks Edit, which is sortab
   active his rows move away entirely), which reads as "my checkboxes got cleared". The numbers are
   already patched into the rows locally via `onApplyOverrides`, so the refetch was pointless — it is
   gone, and the selection is additionally snapshotted (`keep`) and restored after the run.
+
+### 2026-07-13 — Tracks Edit: checkboxes save themselves (Apply is only for the text fields now)
+Owner: "no Apply for the checkboxes — leave it for Description and Tags."
+- **`toggleFacet`** (Use Case / Genre / Mood) and the new **`toggleMembership`** (Collections /
+  Playlists / Categories) now WRITE ON CLICK: the box flips optimistically, a
+  `bulk_update_tracks` with just that one `add`/`remove` follows for the whole selection, and a
+  failure puts the box back. Facets are mirrored onto the rows locally (no refetch); membership
+  triggers `onContentReload()` so `item.trackIds` — and therefore the tri-state — stay truthful.
+  The per-row **Trending** checkbox already worked this way; its unused panel-level draft state
+  (`trendingChange`) is gone.
+- **`applyChanges` now sends ONLY the single track's typed fields** (title, BPM, description, tags,
+  cover, stems flag); `dirty` = `fieldsDirty`. The Apply/Reset buttons are hidden until something is
+  actually typed, and Apply reads **"Save description & tags"** — what it now does.

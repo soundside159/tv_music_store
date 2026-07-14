@@ -294,7 +294,6 @@ const AdminTracksEdit = ({
   const [playlistDelta, setPlaylistDelta] = useState<Record<string, "all" | "none">>({});
   const [collectionDelta, setCollectionDelta] = useState<Record<string, "all" | "none">>({});
   const [categoryDelta, setCategoryDelta] = useState<Record<string, "all" | "none">>({});
-  const [trendingChange, setTrendingChange] = useState<"add" | "remove" | "none">("none");
   const [fields, setFields] = useState<SingleFields | null>(null);
   const [playlistSearch, setPlaylistSearch] = useState("");
   const aiSet = useMemo(() => new Set(aiTrackIds), [aiTrackIds]);
@@ -951,7 +950,6 @@ const AdminTracksEdit = ({
     setPlaylistDelta({});
     setCollectionDelta({});
     setCategoryDelta({});
-    setTrendingChange("none");
     if (selected.length === 1) {
       const t = tracks.find((x) => x.id === selected[0]);
       setFields(t ? fieldsOf(t) : null);
@@ -976,11 +974,91 @@ const AdminTracksEdit = ({
 
   const facetDisplay = (key: FacetKey, option: string): TriState =>
     facetChanges[key][option] ?? facetBase(key, option);
-  const toggleFacet = (key: FacetKey, option: string) =>
-    setFacetChanges((prev) => ({
-      ...prev,
-      [key]: { ...prev[key], [option]: nextState(facetDisplay(key, option)) },
-    }));
+
+  // TICKING A BOX SAVES IT (owner: no Apply for checkboxes). The click is applied
+  // optimistically, the request follows, and a failure puts the box back where it
+  // was. Apply is now ONLY for the text fields (description, tags, title, BPM…),
+  // where you want to finish typing before anything is written.
+  const toggleFacet = async (key: FacetKey, option: string) => {
+    if (disabled || busy || selected.length === 0) return;
+    const to = nextState(facetDisplay(key, option));
+    setFacetChanges((prev) => ({ ...prev, [key]: { ...prev[key], [option]: to } }));
+
+    const ok = await run(
+      {
+        action: "bulk_update_tracks",
+        trackIds: selected,
+        facets: { [key]: to === "all" ? { add: [option] } : { remove: [option] } },
+      },
+      to === "all" ? `"${option}" added` : `"${option}" removed`,
+    );
+    if (!ok) {
+      // Put the box back — the server said no.
+      setFacetChanges((prev) => {
+        const m = { ...prev[key] };
+        delete m[option];
+        return { ...prev, [key]: m };
+      });
+      return;
+    }
+    // Mirror it onto the rows so the table is right without refetching, then drop
+    // the pending mark (the tracks themselves now carry the value).
+    const overrides: Record<string, Partial<CatalogTrack>> = {};
+    for (const t of selTracks) {
+      let vals = splitFilterValues(facetValue(t, key));
+      if (to === "all") {
+        if (!vals.includes(option)) vals = [...vals, option];
+      } else {
+        vals = vals.filter((v) => v !== option);
+      }
+      const joined = vals.join(" / ");
+      overrides[t.id] =
+        key === "useCase" ? { useCase: joined } : key === "genre" ? { genre: joined } : { mood: joined };
+    }
+    onApplyOverrides(overrides);
+    setFacetChanges((prev) => {
+      const m = { ...prev[key] };
+      delete m[option];
+      return { ...prev, [key]: m };
+    });
+  };
+
+  /** Same instant save for collection / playlist / category membership. */
+  const toggleMembership = async (
+    kind: "collection" | "playlist" | "category",
+    item: ContentItemLite,
+    delta: Record<string, "all" | "none">,
+    setDelta: (fn: (prev: Record<string, "all" | "none">) => Record<string, "all" | "none">) => void,
+  ) => {
+    if (disabled || busy || selected.length === 0) return;
+    const to = nextState(delta[item.id] ?? memberBase(item));
+    setDelta((prev) => ({ ...prev, [item.id]: to }));
+
+    const change = to === "all" ? { add: [item.id] } : { remove: [item.id] };
+    const ok = await run(
+      {
+        action: "bulk_update_tracks",
+        trackIds: selected,
+        ...(kind === "collection"
+          ? { collectionChanges: change }
+          : kind === "playlist"
+            ? { playlistChanges: change }
+            : { categoryChanges: change }),
+      },
+      to === "all" ? `Added to "${item.title}"` : `Removed from "${item.title}"`,
+    );
+    if (!ok) {
+      setDelta((prev) => {
+        const m = { ...prev };
+        delete m[item.id];
+        return m;
+      });
+      return;
+    }
+    // Membership lives in the CONTENT data (item.trackIds) — refresh it so the
+    // box keeps reading right when the selection changes.
+    onContentReload?.();
+  };
 
   const memberDisplay = (delta: Record<string, "all" | "none">, item: ContentItemLite): TriState =>
     delta[item.id] ?? memberBase(item);
@@ -995,103 +1073,45 @@ const AdminTracksEdit = ({
       fields.tags !== selTracks[0].tags.join(", ") ||
       fields.hasStems !== (selTracks[0].hasStems ?? false));
 
-  const dirty =
-    trendingChange !== "none" ||
-    Object.values(facetChanges).some((m) => Object.keys(m).length > 0) ||
-    Object.keys(playlistDelta).length > 0 ||
-    Object.keys(collectionDelta).length > 0 ||
-    Object.keys(categoryDelta).length > 0 ||
-    fieldsDirty;
+  // Checkboxes save themselves now, so Apply/Reset only ever deal with the
+  // typed fields (title, BPM, description, tags, cover, stems flag).
+  const dirty = fieldsDirty;
 
   const resetChanges = () => {
-    setFacetChanges({ useCase: {}, genre: {}, mood: {} });
-    setPlaylistDelta({});
-    setCollectionDelta({});
-    setCategoryDelta({});
-    setTrendingChange("none");
     if (selTracks.length === 1) setFields(fieldsOf(selTracks[0]));
   };
 
+  // Apply now saves ONLY the typed fields of the single selected track — every
+  // checkbox (tags, collections, playlists, categories, trending) writes itself
+  // the moment it is clicked.
   const applyChanges = async () => {
-    const toAddRemove = (m: Record<string, "all" | "none">) => ({
-      add: Object.keys(m).filter((k) => m[k] === "all"),
-      remove: Object.keys(m).filter((k) => m[k] === "none"),
-    });
-    const facets: Record<string, { add: string[]; remove: string[] }> = {};
-    for (const { key } of FACETS) {
-      const ar = toAddRemove(facetChanges[key]);
-      if (ar.add.length || ar.remove.length) facets[key] = ar;
-    }
-    const playlistChanges = toAddRemove(playlistDelta);
-    const collectionChanges = toAddRemove(collectionDelta);
-    const categoryChanges = toAddRemove(categoryDelta);
-    const hasChanges = (c: { add: string[]; remove: string[] }) => c.add.length || c.remove.length;
-
-    const singleFields =
-      fields && selTracks.length === 1 && fieldsDirty
-        ? {
-            title: fields.title,
-            bpm: fields.bpm ? Number(fields.bpm) : undefined,
-            description: fields.description,
-            cover: fields.cover,
-            tags: fields.tags.split(",").map((s) => s.trim()).filter(Boolean),
-            hasStems: fields.hasStems,
-          }
-        : undefined;
+    if (!fields || selTracks.length !== 1 || !fieldsDirty) return;
+    const singleFields = {
+      title: fields.title,
+      bpm: fields.bpm ? Number(fields.bpm) : undefined,
+      description: fields.description,
+      cover: fields.cover,
+      tags: fields.tags.split(",").map((s) => s.trim()).filter(Boolean),
+      hasStems: fields.hasStems,
+    };
 
     const ok = await run(
-      {
-        action: "bulk_update_tracks",
-        trackIds: selected,
-        facets: Object.keys(facets).length ? facets : undefined,
-        playlistChanges: hasChanges(playlistChanges) ? playlistChanges : undefined,
-        collectionChanges: hasChanges(collectionChanges) ? collectionChanges : undefined,
-        categoryChanges: hasChanges(categoryChanges) ? categoryChanges : undefined,
-        trendingChange: trendingChange === "none" ? undefined : trendingChange,
-        fields: singleFields,
-      },
-      selected.length === 1 ? "Track updated" : `${selected.length} tracks updated`,
+      { action: "bulk_update_tracks", trackIds: selected, fields: singleFields },
+      "Track updated",
     );
     if (!ok) return;
 
-    // Mirror the server result locally (facets + single fields + categories)
-    // so the table updates without refetching /api/tracks. Collections /
-    // playlists / trending refresh via the parent reload().
-    const overrides: Record<string, Partial<CatalogTrack>> = {};
-    for (const t of selTracks) {
-      const o: Partial<CatalogTrack> = {};
-      for (const { key } of FACETS) {
-        const m = facetChanges[key];
-        if (Object.keys(m).length === 0) continue;
-        let vals = splitFilterValues(facetValue(t, key)).filter((v) => m[v] !== "none");
-        for (const opt of Object.keys(m)) if (m[opt] === "all" && !vals.includes(opt)) vals = [...vals, opt];
-        const joined = vals.join(" / ");
-        if (key === "useCase") o.useCase = joined;
-        else if (key === "genre") o.genre = joined;
-        else o.mood = joined;
-      }
-      if (hasChanges(categoryChanges)) {
-        const current = t.categoryIds && t.categoryIds.length > 0 ? t.categoryIds : [t.category];
-        let next = current.filter((c) => !categoryChanges.remove.includes(c));
-        for (const c of categoryChanges.add) if (!next.includes(c)) next = [...next, c];
-        o.categoryIds = next;
-      }
-      if (singleFields) {
-        if (singleFields.title.trim()) o.title = singleFields.title.trim();
-        if (singleFields.bpm !== undefined) o.bpm = singleFields.bpm;
-        o.description = singleFields.description;
-        o.cover = singleFields.cover || undefined;
-        o.tags = singleFields.tags;
-        o.hasStems = singleFields.hasStems;
-      }
-      if (Object.keys(o).length > 0) overrides[t.id] = o;
-    }
-    if (Object.keys(overrides).length > 0) onApplyOverrides(overrides);
-    setFacetChanges({ useCase: {}, genre: {}, mood: {} });
-    setPlaylistDelta({});
-    setCollectionDelta({});
-    setCategoryDelta({});
-    setTrendingChange("none");
+    // Mirror it onto the row so the table updates without refetching /api/tracks.
+    const t = selTracks[0];
+    const o: Partial<CatalogTrack> = {
+      description: singleFields.description,
+      tags: singleFields.tags,
+      cover: singleFields.cover || undefined,
+      hasStems: singleFields.hasStems,
+    };
+    if (singleFields.title.trim()) o.title = singleFields.title.trim();
+    if (singleFields.bpm !== undefined) o.bpm = singleFields.bpm;
+    onApplyOverrides({ [t.id]: o });
   };
 
   // --- selection ---
@@ -1448,6 +1468,7 @@ const AdminTracksEdit = ({
 
   const membershipSection = (
     title: string,
+    kind: "collection" | "playlist" | "category",
     items: ContentItemLite[],
     delta: Record<string, "all" | "none">,
     setDelta: (updater: (prev: Record<string, "all" | "none">) => Record<string, "all" | "none">) => void,
@@ -1493,9 +1514,7 @@ const AdminTracksEdit = ({
                   key={item.id}
                   label={item.title}
                   state={memberDisplay(delta, item)}
-                  onToggle={() =>
-                    setDelta((prev) => ({ ...prev, [item.id]: nextState(memberDisplay(delta, item)) }))
-                  }
+                  onToggle={() => void toggleMembership(kind, item, delta, setDelta)}
                   count={item.trackIds.length}
                 />
               ))}
@@ -1658,17 +1677,24 @@ const AdminTracksEdit = ({
                   }}
                 />
               </label>
-              <button type="button" disabled={!dirty || busy} onClick={resetChanges} className={btnCls}>
-                Reset
-              </button>
-              <button
-                type="button"
-                disabled={!dirty || busy || disabled}
-                onClick={() => void applyChanges()}
-                className={goldBtnCls}
-              >
-                {busy ? "Applying..." : "Apply Changes"}
-              </button>
+              {/* Checkboxes save themselves — Apply/Reset are only for the typed
+                  fields of a single selected track (title, BPM, description,
+                  tags, cover). They stay hidden until something is actually typed. */}
+              {dirty && (
+                <>
+                  <button type="button" disabled={busy} onClick={resetChanges} className={btnCls}>
+                    Reset
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || disabled}
+                    onClick={() => void applyChanges()}
+                    className={goldBtnCls}
+                  >
+                    {busy ? "Saving…" : "Save description & tags"}
+                  </button>
+                </>
+              )}
             </div>
           )}
       </div>
@@ -2445,7 +2471,7 @@ const AdminTracksEdit = ({
                   key={opt}
                   label={opt}
                   state={facetDisplay(key, opt)}
-                  onToggle={() => toggleFacet(key, opt)}
+                  onToggle={() => void toggleFacet(key, opt)}
                   count={facetCounts[key].get(opt.trim().toLowerCase()) ?? 0}
                 />
               ))}
@@ -2459,9 +2485,9 @@ const AdminTracksEdit = ({
         <p className="font-body text-[10px] font-bold uppercase tracking-[0.24em] text-[#F4C430]">
           Add to
         </p>
-        {membershipSection("Collections", collections, collectionDelta, setCollectionDelta)}
-        {membershipSection("Playlists", playlists, playlistDelta, setPlaylistDelta, playlistSearch, setPlaylistSearch)}
-        {membershipSection("Categories", categories, categoryDelta, setCategoryDelta)}
+        {membershipSection("Collections", "collection", collections, collectionDelta, setCollectionDelta)}
+        {membershipSection("Playlists", "playlist", playlists, playlistDelta, setPlaylistDelta, playlistSearch, setPlaylistSearch)}
+        {membershipSection("Categories", "category", categories, categoryDelta, setCategoryDelta)}
       </aside>
     </div>
 
