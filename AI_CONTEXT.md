@@ -3524,3 +3524,6 @@ Owner: "no Apply for the checkboxes — leave it for Description and Tags."
 - **`applyChanges` now sends ONLY the single track's typed fields** (title, BPM, description, tags,
   cover, stems flag); `dirty` = `fieldsDirty`. The Apply/Reset buttons are hidden until something is
   actually typed, and Apply reads **"Save description & tags"** — what it now does.
+- Tracks Edit → the **composer filter now shows each composer's track count** ("Lumine Wave (37)"),
+  and "All Composers (N)" the total with a composer. Counted over the WHOLE catalogue, not the
+  current tab/search, so the number means "how big this composer's catalogue is".

@@ -892,9 +892,22 @@ const AdminTracksEdit = ({
     if (ok) setTagsBaseOpen(false);
   };
 
-  const composers = useMemo(
-    () => [...new Set(tracks.map((t) => t.artist).filter(Boolean))].sort(),
-    [tracks],
+  // Composer filter: the names + how many tracks each one has in the WHOLE
+  // catalogue (not just the current tab/filter) — the owner wants to see the
+  // size of a composer's catalogue right in the dropdown.
+  const composers = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const t of tracks) {
+      if (!t.artist) continue;
+      counts.set(t.artist, (counts.get(t.artist) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [tracks]);
+  const totalWithComposer = useMemo(
+    () => composers.reduce((n, c) => n + c.count, 0),
+    [composers],
   );
 
   // Three buckets: Review = composer uploads awaiting moderation, Drafts =
@@ -1611,10 +1624,10 @@ const AdminTracksEdit = ({
             className={inputCls}
             aria-label="Filter by composer"
           >
-            <option value="all">All Composers</option>
+            <option value="all">All Composers ({totalWithComposer})</option>
             {composers.map((c) => (
-              <option key={c} value={c}>
-                {c}
+              <option key={c.name} value={c.name}>
+                {c.name} ({c.count})
               </option>
             ))}
           </select>
