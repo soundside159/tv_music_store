@@ -413,13 +413,25 @@ const Account = () => {
                         <p className="px-3 pb-1.5 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
                           {group.label}
                         </p>
-                        <div className="flex space-x-1 md:flex-col md:space-x-0 md:space-y-1">
-                          {group.items.map((item) => (
+                        {/* Same file-tree connectors as the /admin sidebar —
+                            desktop only: on mobile this row is horizontal. */}
+                        <div className="flex space-x-1 md:flex-col md:space-x-0">
+                          {group.items.map((item, i) => (
                             <Link
                               key={item.id}
                               to={`/admin?section=${item.id}`}
-                              className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
+                              className="relative flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground md:pl-8"
                             >
+                              <span
+                                aria-hidden
+                                className={`absolute left-3 top-0 hidden w-px bg-border/70 md:block ${
+                                  i === group.items.length - 1 ? "h-1/2" : "h-full"
+                                }`}
+                              />
+                              <span
+                                aria-hidden
+                                className="absolute left-3 top-1/2 hidden h-px w-3 -translate-y-1/2 bg-border/70 md:block"
+                              />
                               <item.icon className="h-4 w-4" />
                               {item.label}
                             </Link>
