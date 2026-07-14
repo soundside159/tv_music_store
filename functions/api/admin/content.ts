@@ -1650,7 +1650,13 @@ export const onRequestPost = async (ctx: Ctx) => {
         // the join/split round-trip (see cleanVocabValue).
         const clean = cleanVocabValue(value);
         if (!clean) return json({ error: "value required" }, 400);
-        if (!list.some((v) => v.toLowerCase() === clean.toLowerCase())) list = [...list, clean];
+        // It used to return ok and the UI cheerfully said "Value added" while
+        // nothing happened — which reads as "the admin is broken". Say it plainly.
+        const dupe = list.find((v) => v.toLowerCase() === clean.toLowerCase());
+        if (dupe) {
+          return json({ error: `"${dupe}" is already in the list`, code: "exists" }, 409);
+        }
+        list = [...list, clean];
       } else {
         list = list.filter((v) => v !== value);
       }

@@ -100,6 +100,14 @@ const FACETS: Array<{ key: FacetKey; label: string }> = [
   { key: "genre", label: "Genre" },
 ];
 
+// The .xlsx readers below understand ONE sheet layout: the one Dred Studio sends
+// (# / Title / BPM / Lengths / Alternative Title / Style / Description / Tags).
+// Other composers deliver other shapes, and reading them with these rules writes
+// the wrong data into the wrong columns — so the buttons only appear when his
+// catalogue is the one being filtered. Add a composer here when his format is
+// supported too.
+const XLSX_SHEET_COMPOSERS = ["Dred Studio"];
+
 const facetValue = (track: CatalogTrack, key: FacetKey) =>
   key === "useCase" ? track.useCase : key === "genre" ? track.genre : track.mood;
 
@@ -1655,8 +1663,10 @@ const AdminTracksEdit = ({
                 <X className="h-3.5 w-3.5" />
                 {selected.length} selected
               </button>
-              {/* Fill the selected tracks from the owner's spreadsheet
-                  (# / Title / BPM / Lengths / Alt Title / Style / Description / Tags). */}
+              {/* The sheet readers only understand Dred Studio's layout — see
+                  XLSX_SHEET_COMPOSERS. Filter by him and they appear. */}
+              {XLSX_SHEET_COMPOSERS.includes(composer) && (
+                <>
               <label
                 className={`${btnCls} cursor-pointer ${xlsxBusy || busy ? "pointer-events-none opacity-50" : ""}`}
                 title="Match the selected tracks by Title / Alternative Title and write BPM, Description and Tags from the sheet"
@@ -1690,6 +1700,8 @@ const AdminTracksEdit = ({
                   }}
                 />
               </label>
+                </>
+              )}
               {/* Checkboxes save themselves — Apply/Reset are only for the typed
                   fields of a single selected track (title, BPM, description,
                   tags, cover). They stay hidden until something is actually typed. */}

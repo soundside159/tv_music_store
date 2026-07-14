@@ -3527,3 +3527,18 @@ Owner: "no Apply for the checkboxes — leave it for Description and Tags."
 - Tracks Edit → the **composer filter now shows each composer's track count** ("Lumine Wave (37)"),
   and "All Composers (N)" the total with a composer. Counted over the WHOLE catalogue, not the
   current tab/search, so the number means "how big this composer's catalogue is".
+
+### 2026-07-13 — Vocabulary: adding an existing value now SAYS so (it used to lie)
+Owner thought "Dubstep" wasn't saving. Checked the live `/api/content`: **Dubstep, Electronic and
+Hip hop were already in the genre list** — his earlier adds had landed. The real bug was the
+feedback: `add_vocab` silently returned `ok` for a value that already existed (case-insensitive
+dedupe), so the UI cheerfully toasted **"Value added"** while nothing changed — which reads as a
+broken admin. It now returns **409 `{ error: '"Dubstep" is already in the list' }`**, and the toast
+says exactly that. (The list itself always refreshed correctly — `run()` reloads the content data.)
+- **The .xlsx buttons in Tracks Edit ("Read .xlsx" + "Read # Only") now only appear when the
+  composer filter is set to a composer whose sheet layout they understand** — currently just
+  **Dred Studio** (`XLSX_SHEET_COMPOSERS` at the top of `AdminTracksEdit.tsx`). His sheet is
+  `# / Title / BPM / Lengths / Alternative Title / Style / Description / Tags`; another composer's
+  file has other columns, and reading it with these rules writes the wrong data into the wrong
+  fields. When a second format is supported, add the name to that array (and teach the reader the
+  layout).
