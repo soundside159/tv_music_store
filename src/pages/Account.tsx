@@ -322,7 +322,7 @@ const Account = () => {
                       {group.label}
                     </p>
                     <div className="relative flex space-x-1 md:flex-col md:space-x-0">
-                      <MenuTreeLines count={group.items.length} className="hidden md:block" />
+                      <MenuTreeLines className="hidden md:block" />
                       {group.items.map((s) => (
                         <button
                           key={s.id}
@@ -379,7 +379,7 @@ const Account = () => {
                         );
                         return (
                           <div className="relative flex space-x-1 md:flex-col md:space-x-0">
-                            <MenuTreeLines count={items.length} className="hidden md:block" />
+                            <MenuTreeLines className="hidden md:block" />
                             {items.map((item) => {
                               const id = `composer-${item.id}` as SectionId;
                               return (
@@ -422,7 +422,7 @@ const Account = () => {
                         {/* Same soft beams as the /admin sidebar — desktop
                             only: on mobile this row is horizontal. */}
                         <div className="relative flex space-x-1 md:flex-col md:space-x-0">
-                          <MenuTreeLines count={group.items.length} className="hidden md:block" />
+                          <MenuTreeLines className="hidden md:block" />
                           {group.items.map((item) => (
                             <Link
                               key={item.id}

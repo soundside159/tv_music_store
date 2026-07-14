@@ -584,7 +584,7 @@ const Admin = () => {
                       {group.label}
                     </p>
                     <div className="relative flex flex-col">
-                      <MenuTreeLines count={group.items.length} />
+                      <MenuTreeLines />
                       {group.items.map((item) => (
                         <Link
                           key={item.id}
@@ -610,7 +610,7 @@ const Admin = () => {
               <div className={`flex-col ${menu === "composer" ? "flex" : "hidden"}`}>
                 <div className="md:mb-5">
                   <div className="relative flex flex-col">
-                    <MenuTreeLines count={composerNavItems.length} />
+                    <MenuTreeLines />
                     {composerNavItems.map((item) => (
                       <Link
                         key={item.id}
@@ -638,7 +638,7 @@ const Admin = () => {
                         lights up on selection. Uniform h-9 rows, no gaps: the
                         beam geometry depends on it. */}
                     <div className="relative flex flex-col">
-                      <MenuTreeLines count={group.items.length} />
+                      <MenuTreeLines />
                       {group.items.map((sec) => (
                         <button
                           key={sec.id}
