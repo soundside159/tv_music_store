@@ -6,9 +6,12 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Clapperboard,
   Home,
+  Music2,
   Search,
   SlidersHorizontal,
+  Sparkles,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import cinemaHero from "@/assets/cinema-hero-wide.png";
@@ -547,6 +550,16 @@ const CollectionLamp = ({ active }: { active: boolean }) => (
   </div>
 );
 
+// The filter facets as TABS — same pattern as "Browse by" on the homepage
+// (owner request: the three stacked accordion groups were a pain to scroll).
+// One tab open at a time, its options as clickable chips below; a tab with an
+// active pick carries a little count badge, so nothing selected is ever hidden.
+const FILTER_TABS: { id: keyof FilterValue; label: string; icon: typeof Music2 }[] = [
+  { id: "useCase", label: "Use Case", icon: Clapperboard },
+  { id: "genre", label: "Genre", icon: Music2 },
+  { id: "mood", label: "Mood", icon: Sparkles },
+];
+
 const FilterSidebar = ({
   filters,
   setFilter,
@@ -557,6 +570,7 @@ const FilterSidebar = ({
   onClear: () => void;
 }) => {
   const vocab = useVocabularies();
+  const [tab, setTab] = useState<keyof FilterValue>("useCase");
   const hasActive = filters.useCase !== "All" || filters.genre !== "All" || filters.mood !== "All";
 
   return (
@@ -578,78 +592,74 @@ const FilterSidebar = ({
           </button>
         )}
       </div>
-      <FilterGroup
-        label="Use Case"
-        options={vocab.useCase}
-        value={filters.useCase}
-        onChange={(value) => setFilter("useCase", value)}
-        defaultOpen
-      />
-      <FilterGroup
-        label="Genre"
-        options={vocab.genre}
-        value={filters.genre}
-        onChange={(value) => setFilter("genre", value)}
-      />
-      <FilterGroup
-        label="Mood"
-        options={vocab.mood}
-        value={filters.mood}
-        onChange={(value) => setFilter("mood", value)}
-      />
-    </aside>
-  );
-};
 
-const FilterGroup = ({
-  label,
-  onChange,
-  options,
-  value,
-  defaultOpen = false,
-}: {
-  label: string;
-  onChange: (value: string) => void;
-  options: string[];
-  value: string;
-  defaultOpen?: boolean;
-}) => {
-  const [open, setOpen] = useState(defaultOpen);
-
-  return (
-    <div className="border-t border-border/30 py-4 first:border-t-0 first:pt-0">
-      <button
-        type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full items-center justify-between font-body text-xs font-semibold uppercase tracking-[0.12em] text-foreground"
-      >
-        {label}
-        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${open ? "" : "-rotate-90"}`} />
-      </button>
-      {open && (
-        <div className="mt-3 space-y-2">
-          {options.map((option) => {
-            const active = value === option;
-
-            return (
-              <button
-                key={option}
-                type="button"
-                onClick={() => onChange(option)}
-                className="flex w-full items-center gap-2.5 text-left font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
-              >
+      {/* Segmented control — the homepage "Browse by" pills, sized for the
+          narrow sidebar column. */}
+      <div className="flex flex-wrap gap-1 rounded-full border border-border/70 bg-card/60 p-1">
+        {FILTER_TABS.map((t) => {
+          const active = t.id === tab;
+          const picked = filters[t.id] !== "All";
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              aria-pressed={active}
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-body text-[11px] font-semibold transition-all duration-200 ${
+                active
+                  ? "bg-[#F4C430] text-background shadow-[0_0_20px_-2px_rgba(244,196,48,0.55)]"
+                  : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
+              }`}
+            >
+              <t.icon className="h-3 w-3" />
+              {t.label}
+              {picked && (
                 <span
-                  className={`h-3.5 w-3.5 rounded-[3px] border ${
-                    active ? "border-[#F4C430] bg-[#F4C430]" : "border-border bg-transparent"
+                  className={`flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[9px] font-bold tabular-nums ${
+                    active ? "bg-background/25 text-background" : "bg-[#F4C430] text-background"
                   }`}
-                />
-                <span>{option}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
+                >
+                  1
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* The chips re-mount on every tab switch (key), so they fade in each
+          time — same trick as the homepage shelf. Clicking an active chip
+          clears it (setFilter toggles back to "All"). */}
+      <div key={tab} className="mt-4 flex animate-fade-in flex-wrap gap-1.5">
+        {vocab[tab].map((option) => {
+          const active = filters[tab] === option;
+          return (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setFilter(tab, option)}
+              aria-pressed={active}
+              className={`group inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-body text-xs transition-all duration-200 ${
+                active
+                  ? "border-[#F4C430]/70 bg-[#F4C430]/[0.07] text-[#F4C430]"
+                  : "border-border bg-card/50 text-muted-foreground hover:-translate-y-0.5 hover:border-[#F4C430]/70 hover:bg-[#F4C430]/[0.07] hover:text-[#F4C430]"
+              }`}
+            >
+              <span
+                className={`h-1.5 w-1.5 rounded-full transition-colors duration-200 ${
+                  active ? "bg-[#F4C430]" : "bg-muted-foreground/40 group-hover:bg-[#F4C430]"
+                }`}
+                aria-hidden
+              />
+              {option}
+            </button>
+          );
+        })}
+        {vocab[tab].length === 0 && (
+          <p className="font-body text-xs text-muted-foreground">Nothing here yet.</p>
+        )}
+      </div>
+    </aside>
   );
 };
 
