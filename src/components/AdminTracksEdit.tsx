@@ -108,6 +108,13 @@ const FACETS: Array<{ key: FacetKey; label: string }> = [
 // supported too.
 const XLSX_SHEET_COMPOSERS = ["Dred Studio"];
 
+// "Vicate Import xlsx" understands a DIFFERENT sheet layout: the mapped one
+// (# / title / bpm / genres / moods / usage / categories / playlists /
+// description) where every cell holds comma-separated SITE values. It ticks
+// the checkbox facets / categories / playlists of the selected tracks —
+// nothing else — so it gets its own composer gate, like the Dred buttons.
+const VICATE_SHEET_COMPOSERS = ["Vicate"];
+
 const facetValue = (track: CatalogTrack, key: FacetKey) =>
   key === "useCase" ? track.useCase : key === "genre" ? track.genre : track.mood;
 
@@ -529,6 +536,163 @@ const AdminTracksEdit = ({
       toast.error(e instanceof Error ? e.message : "Could not read the .xlsx");
     } finally {
       setXlsxBusy(false);
+    }
+  };
+
+  // ---- "Vicate Import xlsx" — tick Genres / Moods / Usage / Categories /
+  // Playlists of the SELECTED tracks from Vicate's mapped sheet. Rows are
+  // matched by title (same normalizer as the other readers); cell values are
+  // comma-separated and matched case-insensitively against the LIVE
+  // vocabularies and the playlist / category titles — anything unknown is
+  // skipped and reported, never written. ADD-only: a re-import can't untick
+  // what was set by hand. BPM / description are NOT touched.
+  const [vicateBusy, setVicateBusy] = useState(false);
+
+  const vicateImport = async (file: File) => {
+    const keep = [...selected]; // the selection must survive the whole run
+    const selectedTracks = tracks.filter((t) => keep.includes(t.id));
+    if (selectedTracks.length === 0) {
+      toast.error("Select the tracks to import first");
+      return;
+    }
+    setVicateBusy(true);
+    try {
+      const grid = await parseXlsx(file);
+      if (grid.length < 2) throw new Error("The sheet needs a header row and data rows");
+      const header = grid[0].map((h) => h.trim().toLowerCase());
+      const col = (re: RegExp, fallback: number) => {
+        const i = header.findIndex((h) => re.test(h));
+        return i >= 0 ? i : fallback;
+      };
+      const cTitle = col(/^title/, 1);
+      const cGenres = col(/^genre/, 3);
+      const cMoods = col(/^mood/, 4);
+      const cUsage = col(/^usage|^use.?case/, 5);
+      const cCats = col(/^categor/, 6);
+      const cPls = col(/^playlist/, 7);
+
+      const byName = new Map<string, string[]>();
+      for (const row of grid.slice(1)) {
+        const key = normTitle(row[cTitle] ?? "");
+        if (key && !byName.has(key)) byName.set(key, row);
+      }
+      const sheetKeys = [...byName.keys()];
+      const findRow = (title: string): string[] | undefined => {
+        const n = normTitle(title);
+        if (!n) return undefined;
+        const exact = byName.get(n);
+        if (exact) return exact;
+        const fuzzy = sheetKeys.find((k) => k.includes(n) || n.includes(k));
+        return fuzzy ? byName.get(fuzzy) : undefined;
+      };
+
+      // Case-insensitive canonicalizers: the sheet says "hip hop", the site
+      // writes "Hip hop" — always the LIVE spelling wins.
+      const canon = (options: string[]) => {
+        const m = new Map(options.map((o) => [o.trim().toLowerCase(), o]));
+        return (v: string) => m.get(v.toLowerCase());
+      };
+      const canonGenre = canon(vocabularies.genre);
+      const canonMood = canon(vocabularies.mood);
+      const canonUsage = canon(vocabularies.useCase);
+      const itemByTitle = (items: ContentItemLite[]) => {
+        const m = new Map(items.map((i) => [i.title.trim().toLowerCase(), i.id]));
+        return (v: string) => m.get(v.toLowerCase());
+      };
+      const playlistIdOf = itemByTitle(playlists);
+      const categoryIdOf = itemByTitle(categories);
+
+      const cells = (row: string[], c: number) =>
+        (row[c] ?? "").split(/[,;]+/).map((s: string) => s.trim()).filter(Boolean);
+      const unknown = new Set<string>();
+      const pick = (vals: string[], f: (v: string) => string | undefined): string[] => {
+        const out: string[] = [];
+        for (const v of vals) {
+          const c = f(v);
+          if (c === undefined) unknown.add(v);
+          else if (!out.includes(c)) out.push(c);
+        }
+        return out;
+      };
+
+      const plan = selectedTracks.flatMap((t) => {
+        const row = findRow(t.title);
+        if (!row) return [];
+        return [
+          {
+            t,
+            genres: pick(cells(row, cGenres), canonGenre),
+            moods: pick(cells(row, cMoods), canonMood),
+            usage: pick(cells(row, cUsage), canonUsage),
+            catIds: pick(cells(row, cCats), categoryIdOf),
+            plIds: pick(cells(row, cPls), playlistIdOf),
+          },
+        ];
+      });
+      const missed = selectedTracks.length - plan.length;
+      if (plan.length === 0) throw new Error("No selected track matched a title in the sheet");
+      if (
+        !window.confirm(
+          `Tick Genres / Moods / Usage / Categories / Playlists for ${plan.length} selected track(s) from "${file.name}"?` +
+            (missed > 0 ? `\n${missed} selected track(s) had no matching row and stay untouched.` : "") +
+            (unknown.size > 0
+              ? `\nUnknown values (skipped): ${[...unknown].slice(0, 8).join(", ")}${unknown.size > 8 ? "…" : ""}`
+              : "") +
+            `\nADD-only — existing ticks are never removed. BPM / description are not touched.`,
+        )
+      )
+        return;
+
+      let done = 0;
+      const overrides: Record<string, Partial<CatalogTrack>> = {};
+      for (const p of plan) {
+        const facets: Partial<Record<FacetKey, { add: string[] }>> = {};
+        if (p.usage.length > 0) facets.useCase = { add: p.usage };
+        if (p.genres.length > 0) facets.genre = { add: p.genres };
+        if (p.moods.length > 0) facets.mood = { add: p.moods };
+        const body: Record<string, unknown> = { action: "bulk_update_tracks", trackIds: [p.t.id] };
+        if (Object.keys(facets).length > 0) body.facets = facets;
+        if (p.plIds.length > 0) body.playlistChanges = { add: p.plIds };
+        if (p.catIds.length > 0) body.categoryChanges = { add: p.catIds };
+        if (!body.facets && !body.playlistChanges && !body.categoryChanges) continue;
+        const res = await fetch("/api/admin/content", {
+          method: "POST",
+          credentials: "include",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+        if (!res.ok || !d.ok) {
+          toast.error(`${p.t.title}: ${d.error ?? "failed"}`);
+          continue;
+        }
+        // Mirror the facets onto the row so the table (and the tri-state boxes)
+        // are right without a tracks refetch; memberships live in the CONTENT
+        // data and are reloaded once below.
+        const merge = (cur: string, add: string[]) => {
+          const vals = splitFilterValues(cur);
+          for (const a of add) if (!vals.some((v) => v.toLowerCase() === a.toLowerCase())) vals.push(a);
+          return vals.join(" / ");
+        };
+        overrides[p.t.id] = {
+          ...(p.usage.length > 0 ? { useCase: merge(p.t.useCase, p.usage) } : {}),
+          ...(p.genres.length > 0 ? { genre: merge(p.t.genre, p.genres) } : {}),
+          ...(p.moods.length > 0 ? { mood: merge(p.t.mood, p.moods) } : {}),
+        };
+        done += 1;
+      }
+      if (Object.keys(overrides).length > 0) onApplyOverrides(overrides);
+      if (done > 0) onContentReload?.();
+      setSelected(keep);
+      toast.success(
+        `Checkboxes set for ${done} track(s)` +
+          (missed > 0 ? ` · ${missed} unmatched` : "") +
+          (unknown.size > 0 ? ` · ${unknown.size} unknown value(s) skipped` : ""),
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not read the .xlsx");
+    } finally {
+      setVicateBusy(false);
     }
   };
 
@@ -1701,6 +1865,28 @@ const AdminTracksEdit = ({
                 />
               </label>
                 </>
+              )}
+              {/* Vicate's mapped sheet (# / title / bpm / genres / moods / usage /
+                  categories / playlists / description) — ticks the checkboxes of
+                  the selected tracks. Appears only when his catalogue is filtered
+                  (see VICATE_SHEET_COMPOSERS). */}
+              {VICATE_SHEET_COMPOSERS.includes(composer) && (
+                <label
+                  className={`${btnCls} cursor-pointer ${vicateBusy || busy ? "pointer-events-none opacity-50" : ""}`}
+                  title="Match the selected tracks by title and tick Genres / Moods / Usage / Categories / Playlists from the sheet (add-only)"
+                >
+                  {vicateBusy ? "Importing…" : "Vicate Import xlsx"}
+                  <input
+                    type="file"
+                    accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) void vicateImport(f);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
               )}
               {/* Checkboxes save themselves — Apply/Reset are only for the typed
                   fields of a single selected track (title, BPM, description,
