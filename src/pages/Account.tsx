@@ -328,7 +328,7 @@ const Account = () => {
                           key={s.id}
                           type="button"
                           onClick={() => setSection(s.id as SectionId)}
-                          className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors md:h-9 md:py-0 md:pl-8 md:pr-3 ${
+                          className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors md:ml-8 md:h-9 md:py-0 md:pl-2 md:pr-3 ${
                             section === s.id
                               ? "bg-secondary text-[#F4C430]"
                               : "text-muted-foreground hover:text-foreground"
@@ -387,7 +387,7 @@ const Account = () => {
                                   key={item.id}
                                   type="button"
                                   onClick={() => setSection(id)}
-                                  className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors md:h-9 md:py-0 md:pl-8 md:pr-3 ${
+                                  className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors md:ml-8 md:h-9 md:py-0 md:pl-2 md:pr-3 ${
                                     section === id
                                       ? "bg-secondary text-[#F4C430]"
                                       : "text-muted-foreground hover:text-foreground"
@@ -427,7 +427,7 @@ const Account = () => {
                             <Link
                               key={item.id}
                               to={`/admin?section=${item.id}`}
-                              className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground md:h-9 md:py-0 md:pl-8 md:pr-3"
+                              className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm text-muted-foreground transition-colors hover:text-foreground md:ml-8 md:h-9 md:py-0 md:pl-2 md:pr-3"
                             >
                               <item.icon className="h-4 w-4" />
                               {item.label}

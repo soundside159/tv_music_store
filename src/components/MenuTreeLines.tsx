@@ -7,7 +7,7 @@
 const MenuTreeLines = ({ className = "" }: { className?: string }) => (
   <span
     aria-hidden
-    className={`pointer-events-none absolute bottom-1.5 left-3 top-1.5 w-px rounded-full bg-border ${className}`}
+    className={`pointer-events-none absolute bottom-1.5 left-4 top-1.5 w-px rounded-full bg-border ${className}`}
   />
 );
 

@@ -589,7 +589,7 @@ const Admin = () => {
                         <Link
                           key={item.id}
                           to={`/account?section=${item.id}`}
-                          className="flex h-9 items-center gap-2 rounded-lg pl-8 pr-3 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
+                          className="flex ml-8 h-9 items-center gap-2 rounded-lg pl-2 pr-3 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
                         >
                           <item.icon className="h-4 w-4" />
                           {item.label}
@@ -615,7 +615,7 @@ const Admin = () => {
                       <Link
                         key={item.id}
                         to={`/account?section=composer-${item.id}`}
-                        className="flex h-9 items-center gap-2 rounded-lg pl-8 pr-3 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
+                        className="flex ml-8 h-9 items-center gap-2 rounded-lg pl-2 pr-3 font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
                       >
                         <item.icon className="h-4 w-4" />
                         {item.label}
@@ -644,7 +644,7 @@ const Admin = () => {
                           key={sec.id}
                           type="button"
                           onClick={() => setSection(sec.id as SectionId)}
-                          className={`flex h-9 w-full items-center gap-2 rounded-lg pl-8 pr-3 font-body text-sm transition-colors ${
+                          className={`ml-8 flex h-9 items-center gap-2 rounded-lg pl-2 pr-3 font-body text-sm transition-colors ${
                             section === sec.id ? "bg-secondary text-[#F4C430]" : "text-muted-foreground hover:text-foreground"
                           }`}
                         >
