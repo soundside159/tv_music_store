@@ -3494,3 +3494,15 @@ Owner sent a mockup of the SFX landing page and asked for a plan before anything
   `delete_category` / `reorder_content`) as the existing **Catalog → Categories** tab, so the two
   views can never drift apart. That tab keeps the extra bit Vocabulary doesn't show: each category's
   track list.
+
+### 2026-07-13 — FIX + new button: "Read # Only" (the ID column stayed empty)
+The owner's IDs never appeared because **I wired the "#" into the wrong importer**: the `# (ID)`
+column picker went into **Admin → Import (CSV)** (`AdminImport.tsx`, which only parses CSV), while
+the button he actually uses is **"Read .xlsx" inside Tracks Edit** (`AdminTracksEdit.tsx` →
+`readXlsx`, which fills BPM / Description / Tags for the SELECTED tracks).
+New **"Read # Only"** button next to it (`readNumbersOnly`): pick the .xlsx, it finds the **"#"
+column by header (`#`, `№`, `no`, `num`, `id`) and falls back to column A**, matches the selected
+tracks to sheet rows by Title / Alternative Title (same normalisation + fuzzy pass as `readXlsx`),
+and writes **ONLY `fields.importNo`** — BPM, description and tags are never touched. It confirms
+first ("write the # to N selected tracks… M had no match and stay untouched") and reports how many
+were numbered. The numbers show in the ID column of Tracks Edit, which is sortable.

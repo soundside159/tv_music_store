@@ -330,6 +330,100 @@ const AdminTracksEdit = ({
       .replace(/^[\d\s]+/, "") // "1685 as light as a feather" -> "as light as a feather"
       .trim();
 
+  // ---- "Read # Only" — write ONLY the sheet's "#" into the ID column of the
+  // selected tracks. Deliberately separate from "Read .xlsx": that one rewrites
+  // BPM / Description / Tags, and the owner often wants just the numbers (they
+  // will drive the release-date ordering later). Nothing else is touched.
+  const [numBusy, setNumBusy] = useState(false);
+
+  const readNumbersOnly = async (file: File) => {
+    const selectedTracks = tracks.filter((t) => selected.includes(t.id));
+    if (selectedTracks.length === 0) {
+      toast.error("Select the tracks to number first");
+      return;
+    }
+    setNumBusy(true);
+    try {
+      const grid = await parseXlsx(file);
+      if (grid.length < 2) throw new Error("The sheet needs a header row and data rows");
+      const header = grid[0].map((h) => h.trim().toLowerCase());
+      // The "#" column is usually the first one (A); a header match wins over it.
+      const cNum = (() => {
+        const i = header.findIndex((h) => /^(#|№|no\.?|num(ber)?|id)$/.test(h));
+        return i >= 0 ? i : 0;
+      })();
+      const cTitle = (() => {
+        const i = header.findIndex((h) => /^title|^track|^name/.test(h));
+        return i >= 0 ? i : 1;
+      })();
+      const cAlt = (() => {
+        const i = header.findIndex((h) => /alternative/.test(h));
+        return i >= 0 ? i : 4;
+      })();
+
+      const byName = new Map<string, string[]>();
+      for (const row of grid.slice(1)) {
+        for (const key of [normTitle(row[cTitle] ?? ""), normTitle(row[cAlt] ?? "")]) {
+          if (key && !byName.has(key)) byName.set(key, row);
+        }
+      }
+      const sheetKeys = [...byName.keys()];
+      const findRow = (title: string): string[] | undefined => {
+        const n = normTitle(title);
+        if (!n) return undefined;
+        const exact = byName.get(n);
+        if (exact) return exact;
+        const fuzzy = sheetKeys.find((k) => k.includes(n) || n.includes(k));
+        return fuzzy ? byName.get(fuzzy) : undefined;
+      };
+
+      const matches = selectedTracks
+        .map((t) => ({ t, no: (findRow(t.title)?.[cNum] ?? "").toString().trim() }))
+        .filter((m) => m.no);
+      const missed = selectedTracks.length - matches.length;
+      if (matches.length === 0) {
+        throw new Error(`No selected track matched a row with a number (column ${cNum + 1})`);
+      }
+      if (
+        !window.confirm(
+          `Write the # to ${matches.length} selected track(s) from "${file.name}"?` +
+            (missed > 0 ? `\n${missed} selected track(s) had no number and stay untouched.` : "") +
+            `\nOnly the ID is written — BPM, description and tags are NOT touched.`,
+        )
+      )
+        return;
+
+      let done = 0;
+      const overrides: Record<string, Partial<CatalogTrack>> = {};
+      for (const { t, no } of matches) {
+        const res = await fetch("/api/admin/content", {
+          method: "POST",
+          credentials: "include",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            action: "bulk_update_tracks",
+            trackIds: [t.id],
+            fields: { importNo: no },
+          }),
+        });
+        const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+        if (!res.ok || !d.ok) {
+          toast.error(`${t.title}: ${d.error ?? "failed"}`);
+          continue;
+        }
+        overrides[t.id] = { importNo: no };
+        done += 1;
+      }
+      if (Object.keys(overrides).length > 0) onApplyOverrides(overrides);
+      toast.success(`${done} track(s) numbered${missed > 0 ? ` · ${missed} without a match` : ""}`);
+      onTracksReload?.();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not read the sheet");
+    } finally {
+      setNumBusy(false);
+    }
+  };
+
   const readXlsx = async (file: File) => {
     const selectedTracks = tracks.filter((t) => selected.includes(t.id));
     if (selectedTracks.length === 0) return;
@@ -1538,6 +1632,23 @@ const AdminTracksEdit = ({
                   onChange={(e) => {
                     const f = e.target.files?.[0];
                     if (f) void readXlsx(f);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+              {/* Numbers only — the "#" column (A) into the ID column. */}
+              <label
+                className={`${btnCls} cursor-pointer ${numBusy || busy ? "pointer-events-none opacity-50" : ""}`}
+                title="Match the selected tracks by title and write ONLY the sheet's # into their ID"
+              >
+                {numBusy ? "Reading…" : "Read # Only"}
+                <input
+                  type="file"
+                  accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void readNumbersOnly(f);
                     e.target.value = "";
                   }}
                 />
