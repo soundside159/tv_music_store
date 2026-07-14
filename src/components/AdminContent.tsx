@@ -1708,6 +1708,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
           onGenerateCover={(id) => void generateCoverForTrack(id)}
           aiModel={aiModel}
           onAiModelChange={setAiModel}
+          allComposers={(data.composers ?? []).map((c) => c.displayName)}
         />
       )}
 

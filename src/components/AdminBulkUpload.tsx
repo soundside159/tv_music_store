@@ -111,8 +111,16 @@ const baseName = (filename: string) => filename.replace(/\.[a-z0-9]+$/i, "").tri
 const cleanTitle = (s: string) =>
   s.replace(/^\s*\d+[\s._-]+(?!(?:sec(?:s|onds?)?|min(?:s|utes?)?)\b)/i, "").trim() || s.trim();
 
-/** "Epic Battle_Stems_Drums.wav" → a stem, not a version of the track. */
-const isStemFile = (filename: string) => /(^|[_\s(-])stems?([_\s).-]|$)/i.test(baseName(filename));
+/** "Epic Battle_Stems_Drums.wav" → a stem, not a version of the track.
+ *  Two rules: "stem"/"stems" as a separated word (the strict, original one) OR
+ *  "stems" glued anywhere into the name ("EpicBattleStems_Drums.wav") — the
+ *  owner's composers don't always put delimiters around it. The glued rule
+ *  demands the plural and not "sy" before it, so "Systems of War.wav" (and any
+ *  other …systems… title) never turns into a stem by accident. */
+const isStemFile = (filename: string) => {
+  const base = baseName(filename);
+  return /(^|[_\s(-])stems?([_\s).-]|$)/i.test(base) || /(?<!sy)stems/i.test(base);
+};
 
 /** "Epic Battle_main.wav" → this file is the Main version (unless starred). */
 const isMainFile = (filename: string) => /(^|[_\s(-])main([_\s).-]|$)/i.test(baseName(filename));
@@ -126,10 +134,12 @@ const isMp3 = (filename: string) => /\.mp3$/i.test(filename);
 const MAX_UPLOAD_BYTES = 95 * 1024 * 1024;
 const mb = (n: number) => `${Math.round(n / 1024 / 1024)} MB`;
 
-/** Track title for a loose stem file: everything before the stem marker. */
+/** Track title for a loose stem file: everything before the stem marker —
+ *  the separated form first, then the glued "…Stems…" form (same pair of
+ *  rules as isStemFile). */
 const stemTitle = (filename: string): string => {
   const base = baseName(filename);
-  const m = base.match(/^(.*?)[_\s(-]+stems?([_\s).-]|$)/i);
+  const m = base.match(/^(.*?)[_\s(-]+stems?([_\s).-]|$)/i) ?? base.match(/^(.*?)(?<!sy)stems/i);
   return (m ? m[1] : base).replace(/[_\s-]+$/, "").trim();
 };
 
@@ -630,7 +640,9 @@ const AdminBulkUpload = () => {
       <p className="mt-1 font-body text-xs text-muted-foreground">
         <span className="text-foreground">One folder = one track</span>: the folder name becomes the
         title, every WAV/MP3 inside becomes a version (MP3s are used as-is, no re-encode). Files
-        named <span className="text-foreground">…_stem(s)_…</span> go into a separate STEMS zip.
+        named <span className="text-foreground">…_stem(s)_…</span> (or with{" "}
+        <span className="text-foreground">stems</span> anywhere in the name) go into a separate
+        STEMS zip.
         Main = the starred file → a file named <span className="text-foreground">…_main…</span> →
         else the longest. Loose files are grouped by name ("Epic Battle (short).wav" joins "Epic
         Battle.wav"). Tracks are created as <span className="text-amber-400">drafts</span> — tag

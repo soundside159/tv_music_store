@@ -247,6 +247,7 @@ const AdminTracksEdit = ({
   onGenerateCover,
   aiModel = "standard",
   onAiModelChange,
+  allComposers = [],
 }: {
   tracks: CatalogTrack[];
   vocabularies: Vocabularies;
@@ -278,6 +279,9 @@ const AdminTracksEdit = ({
   /** Image model for AI covers: standard (cheap) | premium (better). */
   aiModel?: "standard" | "premium";
   onAiModelChange?: (m: "standard" | "premium") => void;
+  /** EVERY composer profile name (Admin -> Users), tracks or not — the filter
+   *  dropdown lists them all, so a fresh composer shows up with (0). */
+  allComposers?: string[];
 }) => {
   const player = usePlayer();
 
@@ -1066,17 +1070,28 @@ const AdminTracksEdit = ({
 
   // Composer filter: the names + how many tracks each one has in the WHOLE
   // catalogue (not just the current tab/filter) — the owner wants to see the
-  // size of a composer's catalogue right in the dropdown.
+  // size of a composer's catalogue right in the dropdown. Profiles WITHOUT
+  // tracks are listed too (with 0) — the owner filters by a fresh composer
+  // before his first upload lands (case-insensitive merge, the track spelling
+  // wins when both exist).
   const composers = useMemo(() => {
     const counts = new Map<string, number>();
     for (const t of tracks) {
       if (!t.artist) continue;
       counts.set(t.artist, (counts.get(t.artist) ?? 0) + 1);
     }
+    const have = new Set([...counts.keys()].map((n) => n.toLowerCase()));
+    for (const name of allComposers) {
+      const n = name.trim();
+      if (n && !have.has(n.toLowerCase())) {
+        have.add(n.toLowerCase());
+        counts.set(n, 0);
+      }
+    }
     return [...counts.entries()]
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [tracks]);
+  }, [tracks, allComposers]);
   const totalWithComposer = useMemo(
     () => composers.reduce((n, c) => n + c.count, 0),
     [composers],
