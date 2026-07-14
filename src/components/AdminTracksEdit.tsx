@@ -337,7 +337,8 @@ const AdminTracksEdit = ({
   const [numBusy, setNumBusy] = useState(false);
 
   const readNumbersOnly = async (file: File) => {
-    const selectedTracks = tracks.filter((t) => selected.includes(t.id));
+    const keep = [...selected]; // the selection must survive the whole run
+    const selectedTracks = tracks.filter((t) => keep.includes(t.id));
     if (selectedTracks.length === 0) {
       toast.error("Select the tracks to number first");
       return;
@@ -414,9 +415,13 @@ const AdminTracksEdit = ({
         overrides[t.id] = { importNo: no };
         done += 1;
       }
+      // The rows are patched locally with the new numbers — NO tracks refetch.
+      // A refetch re-sorts the table under the owner (and, with the ID sort on,
+      // moves his rows away), which reads as "my checkboxes got cleared".
+      // The selection is also restored explicitly, so nothing can drop it.
       if (Object.keys(overrides).length > 0) onApplyOverrides(overrides);
+      setSelected(keep);
       toast.success(`${done} track(s) numbered${missed > 0 ? ` · ${missed} without a match` : ""}`);
-      onTracksReload?.();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not read the sheet");
     } finally {

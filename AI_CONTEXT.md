@@ -3506,3 +3506,8 @@ tracks to sheet rows by Title / Alternative Title (same normalisation + fuzzy pa
 and writes **ONLY `fields.importNo`** — BPM, description and tags are never touched. It confirms
 first ("write the # to N selected tracks… M had no match and stay untouched") and reports how many
 were numbered. The numbers show in the ID column of Tracks Edit, which is sortable.
+- Follow-up: "Read # Only" was **clearing the selection**. Cause: it finished with
+  `onTracksReload()`, and a full tracks refetch re-sorts the table under the owner (with the ID sort
+  active his rows move away entirely), which reads as "my checkboxes got cleared". The numbers are
+  already patched into the rows locally via `onApplyOverrides`, so the refetch was pointless — it is
+  gone, and the selection is additionally snapshotted (`keep`) and restored after the run.
