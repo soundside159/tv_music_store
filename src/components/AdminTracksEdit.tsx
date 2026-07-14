@@ -131,6 +131,7 @@ const TriCheckbox = ({
   count,
   onShow,
   showActive = false,
+  toggleDisabled = false,
 }: {
   label: string;
   state: TriState;
