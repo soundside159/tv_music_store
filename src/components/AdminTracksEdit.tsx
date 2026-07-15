@@ -482,56 +482,6 @@ const AdminTracksEdit = ({
     }
   };
 
-  // ---- TEMPORARY "Fix titles" (owner request, to be removed later): Vicate's
-  // uploads arrived with dashed titles ("stylish-dynamic-beat") — this turns
-  // every dash in the SELECTED tracks' titles into a space. Nothing else is
-  // touched; slugs/URLs stay as they are.
-  const [titlesBusy, setTitlesBusy] = useState(false);
-
-  const fixDashTitles = async () => {
-    const keep = [...selected];
-    const jobs = tracks
-      .filter((t) => keep.includes(t.id))
-      .map((t) => ({ t, next: t.title.replace(/-+/g, " ").replace(/\s+/g, " ").trim() }))
-      .filter((j) => j.next && j.next !== j.t.title);
-    if (jobs.length === 0) {
-      toast.error("No selected track has a dash in its title");
-      return;
-    }
-    if (
-      !window.confirm(
-        `Replace dashes with spaces in ${jobs.length} title(s)?` +
-          `\ne.g. "${jobs[0].t.title}" -> "${jobs[0].next}"`,
-      )
-    )
-      return;
-    setTitlesBusy(true);
-    try {
-      let done = 0;
-      const overrides: Record<string, Partial<CatalogTrack>> = {};
-      for (const { t, next } of jobs) {
-        const res = await fetch("/api/admin/content", {
-          method: "POST",
-          credentials: "include",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ action: "bulk_update_tracks", trackIds: [t.id], fields: { title: next } }),
-        });
-        const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-        if (!res.ok || !d.ok) {
-          toast.error(`${t.title}: ${d.error ?? "failed"}`);
-          continue;
-        }
-        overrides[t.id] = { title: next };
-        done += 1;
-      }
-      if (Object.keys(overrides).length > 0) onApplyOverrides(overrides);
-      setSelected(keep);
-      toast.success(`${done} title(s) fixed`);
-    } finally {
-      setTitlesBusy(false);
-    }
-  };
-
   const readXlsx = async (file: File) => {
     const selectedTracks = tracks.filter((t) => selected.includes(t.id));
     if (selectedTracks.length === 0) return;
@@ -1501,6 +1451,37 @@ const AdminTracksEdit = ({
     onContentReload?.();
   };
 
+  // Per-SECTION "Deselect all": pull the selected tracks out of every item of
+  // ONE kind only (just Categories, just Playlists…) — the panel-header button
+  // above clears all three kinds at once.
+  const deselectMembershipKind = async (
+    kind: "collection" | "playlist" | "category",
+    items: ContentItemLite[],
+    title: string,
+  ) => {
+    if (disabled || busy || selected.length === 0 || items.length === 0) return;
+    if (
+      !window.confirm(
+        `Remove ${selTracks.length} selected track(s) from ALL ${title.toLowerCase()}?`,
+      )
+    )
+      return;
+    const change = { remove: items.map((i) => i.id) };
+    const ok = await run(
+      {
+        action: "bulk_update_tracks",
+        trackIds: selected,
+        ...(kind === "collection"
+          ? { collectionChanges: change }
+          : kind === "playlist"
+            ? { playlistChanges: change }
+            : { categoryChanges: change }),
+      },
+      `Removed from all ${title.toLowerCase()}`,
+    );
+    if (ok) onContentReload?.();
+  };
+
   const memberDisplay = (delta: Record<string, "all" | "none">, item: ContentItemLite): TriState =>
     delta[item.id] ?? memberBase(item);
 
@@ -1931,9 +1912,22 @@ const AdminTracksEdit = ({
     groups.sort((a, b) => (a.theme === "" ? -1 : b.theme === "" ? 1 : 0));
     return (
       <div className="border-t border-border/60 pt-4 first:border-t-0 first:pt-0">
-        <p className="mb-2 font-body text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {title}
-        </p>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <p className="font-body text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {title}
+          </p>
+          {hasSelection && items.length > 0 && (
+            <button
+              type="button"
+              disabled={busy || disabled}
+              onClick={() => void deselectMembershipKind(kind, items, title)}
+              className="shrink-0 font-body text-[10px] text-muted-foreground transition-colors hover:text-red-400 disabled:opacity-50"
+              title={`Remove the selected tracks from every one of these ${title.toLowerCase()}`}
+            >
+              Deselect all
+            </button>
+          )}
+        </div>
         {setSearchValue && items.length > 6 && (
           <input
             placeholder={`Search ${title.toLowerCase()}...`}
@@ -2134,19 +2128,6 @@ const AdminTracksEdit = ({
                   }}
                 />
               </label>
-              )}
-              {/* TEMPORARY (owner request): dashes -> spaces in the selected
-                  titles. Vicate-only; delete this block when asked. */}
-              {VICATE_SHEET_COMPOSERS.includes(composer) && (
-                <button
-                  type="button"
-                  disabled={titlesBusy || busy}
-                  onClick={() => void fixDashTitles()}
-                  className={btnCls}
-                  title="Replace dashes with spaces in the SELECTED tracks' titles"
-                >
-                  {titlesBusy ? "Fixing…" : "Fix titles (– to space)"}
-                </button>
               )}
               {/* Vicate's mapped sheet (# / title / bpm / genres / moods / usage /
                   categories / playlists / description) — ticks the checkboxes of
