@@ -30,6 +30,8 @@ export interface LiveComposer {
 
 interface ApiContent {
   trending?: string[];
+  /** Owner-picked playlist ids for the Editor Picks rail (ordered). */
+  editorPicks?: string[];
   categories?: { id: string; title: string }[];
   composers?: LiveComposer[];
   /** Guide publication dates set in Admin -> Articles (slug -> YYYY-MM-DD). */
@@ -299,6 +301,26 @@ export const useTrendingIds = (): string[] => {
     const apply = () => {
       void fetchContent().then((data) => {
         if (!cancelled && data?.trending?.length) setIds(data.trending);
+      });
+    };
+    apply();
+    contentListeners.add(apply);
+    return () => {
+      cancelled = true;
+      contentListeners.delete(apply);
+    };
+  }, []);
+  return ids;
+};
+
+/** Editor Picks — the owner's hand-picked playlist ids (ordered, may be []). */
+export const useEditorPickIds = (): string[] => {
+  const [ids, setIds] = useState<string[]>(() => cache?.editorPicks ?? []);
+  useEffect(() => {
+    let cancelled = false;
+    const apply = () => {
+      void fetchContent().then((data) => {
+        if (!cancelled) setIds(data?.editorPicks ?? []);
       });
     };
     apply();

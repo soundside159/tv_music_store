@@ -41,6 +41,18 @@ export const onRequestGet = async (ctx: Ctx) => {
     // site_config not created yet — no trending override
   }
 
+  // Editor Picks — the owner's hand-picked playlists (homepage rail + the
+  // pinned section on /playlists). An ordered id list in site_config.
+  let editorPicks: string[] = [];
+  try {
+    const row = await db
+      .prepare(`SELECT value FROM site_config WHERE key = 'editor_picks_playlist_ids'`)
+      .first<{ value: string }>();
+    if (row) editorPicks = JSON.parse(row.value) as string[];
+  } catch {
+    // none picked yet
+  }
+
   // Categories (homepage chips / catalog?category=...). Tables are created by
   // the admin editor; before that we return [] and the frontend keeps its
   // built-in defaults.
@@ -94,6 +106,7 @@ export const onRequestGet = async (ctx: Ctx) => {
 
   return json({
     trending,
+    editorPicks,
     categories,
     composers,
     guideSchedule,

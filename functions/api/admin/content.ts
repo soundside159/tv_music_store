@@ -421,6 +421,9 @@ export const onRequestGet = async (ctx: Ctx) => {
   const trendingRow = await db
     .prepare(`SELECT value FROM site_config WHERE key = 'trending_track_ids'`)
     .first<{ value: string }>();
+  const editorRow = await db
+    .prepare(`SELECT value FROM site_config WHERE key = 'editor_picks_playlist_ids'`)
+    .first<{ value: string }>();
   const trackCount = await db.prepare(`SELECT COUNT(*) AS n FROM tracks`).first<{ n: number }>();
   const vocabularies = await getVocabularies(db);
   // Self-heal legacy vocab values containing "/" (they broke the " / "-joined
@@ -513,6 +516,7 @@ export const onRequestGet = async (ctx: Ctx) => {
     playlistThemes,
     composers,
     trending: trendingRow ? (JSON.parse(trendingRow.value) as string[]) : [],
+    editorPicks: editorRow ? (JSON.parse(editorRow.value) as string[]) : [],
     categories: categories.results.map((c) => ({
       id: c.id,
       title: c.title,
@@ -601,6 +605,7 @@ export const onRequestPost = async (ctx: Ctx) => {
     }[];
     // bulk_update_tracks fields (trackIds shared with set_tracks above)
     facets?: Partial<Record<"useCase" | "genre" | "mood", { add?: string[]; remove?: string[] }>>;
+    playlistIds?: string[];
     playlistChanges?: { add?: string[]; remove?: string[] };
     collectionChanges?: { add?: string[]; remove?: string[] };
     categoryChanges?: { add?: string[]; remove?: string[] };
@@ -803,6 +808,24 @@ export const onRequestPost = async (ctx: Ctx) => {
            ON CONFLICT(key) DO UPDATE SET value = ?1`,
         )
         .bind(JSON.stringify(body.trackIds.slice(0, 24)))
+        .run();
+      return json({ ok: true });
+    }
+
+    case "set_editor_picks": {
+      // Editor Picks: the owner's ordered list of EXISTING playlists. Unknown
+      // ids are dropped, 12 max — plenty for one rail.
+      if (!Array.isArray(body.playlistIds)) return json({ error: "playlistIds required" }, 400);
+      const known = new Set(
+        (await db.prepare(`SELECT id FROM playlists`).all<{ id: string }>()).results.map((r) => r.id),
+      );
+      const ids = [...new Set(body.playlistIds.filter((x) => typeof x === "string" && known.has(x)))].slice(0, 12);
+      await db
+        .prepare(
+          `INSERT INTO site_config (key, value) VALUES ('editor_picks_playlist_ids', ?1)
+           ON CONFLICT(key) DO UPDATE SET value = ?1`,
+        )
+        .bind(JSON.stringify(ids))
         .run();
       return json({ ok: true });
     }

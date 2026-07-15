@@ -18,7 +18,7 @@ import Footer from "@/components/Footer";
 import { TrackRowList, TrackRowSkeletonList } from "@/components/TrackRowPlayer";
 import { discoverPath } from "@/lib/discovery";
 import CardCarousel from "@/components/CardCarousel";
-import { useCategories, usePlaylists, useTrendingTracks, useVocabularies } from "@/hooks/useContent";
+import { useCategories, useEditorPickIds, usePlaylists, useTrendingTracks, useVocabularies } from "@/hooks/useContent";
 import type { LivePlaylist } from "@/hooks/useContent";
 import { usePlans } from "@/hooks/useMockData";
 
@@ -90,9 +90,17 @@ const Index = () => {
   const categories = useCategories();
   const vocab = useVocabularies();
 
-  // Editor Picks: the first six playlists, in the order the owner arranged them
-  // in the admin. Six keeps the rail to (almost) one screen — no endless scroll.
-  const editorPicks = usePlaylists().slice(0, 6);
+  // Editor Picks: the owner's hand-picked list (admin -> Playlists -> ⋯ on a
+  // row). While nothing is picked yet, the first six playlists keep the rail
+  // alive — the old behaviour as a fallback.
+  const allPlaylists = usePlaylists();
+  const editorPickIds = useEditorPickIds();
+  const editorPicks =
+    editorPickIds.length > 0
+      ? editorPickIds
+          .map((id) => allPlaylists.find((p) => p.id === id))
+          .filter((p): p is LivePlaylist => !!p)
+      : allPlaylists.slice(0, 6);
 
   const [browseTab, setBrowseTab] = useState<BrowseTab>("categories");
   const browseItems =

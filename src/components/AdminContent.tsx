@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, ChevronDown, ChevronRight, ChevronUp, GripVertical, Pause, Play, Plus, Sparkles, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, ChevronUp, GripVertical, MoreHorizontal, Pause, Play, Plus, Sparkles, Star, X } from "lucide-react";
 import WaveformPreview from "@/components/WaveformPreview";
 import { toast } from "sonner";
 import { makeThumbnail } from "@/lib/audioEncoding";
@@ -46,6 +46,8 @@ interface ContentData {
   playlistThemes?: string[];
   /** Composer profiles (pseudonyms) for the upload composer picker. */
   composers?: { id: string; userId: string | null; displayName: string }[];
+  /** Owner-picked playlist ids for the homepage Editor Picks rail (ordered). */
+  editorPicks?: string[];
 }
 
 type Tab = "collections" | "playlists" | "categories" | "vocabulary" | "trending" | "tracks";
@@ -567,6 +569,31 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
   }
 
   // ---- Playlists grouped by THEME (mirrors /playlists) + drag&drop ----------
+  // ---- Editor Picks: the owner's ordered list of playlists (site_config).
+  // Toggled from the ⋯ menu on any playlist row; the pinned strip above the
+  // sections shows the current picks and removes them.
+  const editorPicks = data.editorPicks ?? [];
+  const [pickMenuId, setPickMenuId] = useState<string | null>(null);
+  const toggleEditorPick = (id: string) => {
+    const picked = editorPicks.includes(id);
+    const next = picked ? editorPicks.filter((x) => x !== id) : [...editorPicks, id];
+    void run(
+      { action: "set_editor_picks", playlistIds: next },
+      picked ? "Removed from Editor Picks" : "Added to Editor Picks",
+    ).then((ok) => {
+      if (ok) void refreshContent();
+    });
+  };
+  const moveEditorPick = (index: number, dir: -1 | 1) => {
+    const j = index + dir;
+    if (j < 0 || j >= editorPicks.length) return;
+    const next = [...editorPicks];
+    [next[index], next[j]] = [next[j], next[index]];
+    void run({ action: "set_editor_picks", playlistIds: next }, "Editor Picks reordered").then((ok) => {
+      if (ok) void refreshContent();
+    });
+  };
+
   const playlistSections: { theme: string; items: ContentItem[] }[] = [];
   if (tab === "playlists") {
     for (const p of data.playlists) {
@@ -964,6 +991,70 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
             /* Grouped by theme, mirroring /playlists. Drag a playlist row to
                reorder or drop it into another theme; ↑↓ move whole themes. */
             <div className="mt-5 flex flex-col gap-4">
+              {/* The Editor Picks strip — what the homepage rail (and the top
+                  of /playlists) shows, in this exact order. */}
+              <div className="rounded-lg border border-[#F4C430]/40 bg-[#F4C430]/[0.04]">
+                <div className="flex items-center gap-2 border-b border-[#F4C430]/20 px-3 py-2">
+                  <Star className="h-4 w-4 fill-[#F4C430] text-[#F4C430]" />
+                  <span className="font-body text-xs font-semibold uppercase tracking-wide text-foreground">
+                    Editor Picks
+                  </span>
+                  <span className="font-body text-[11px] text-muted-foreground">
+                    {editorPicks.length === 0
+                      ? "nothing picked — the homepage shows the first 6 playlists as a fallback"
+                      : `${editorPicks.length} picked · shown on the homepage and on top of /playlists`}
+                  </span>
+                </div>
+                {editorPicks.length > 0 && (
+                  <ul className="divide-y divide-border/40">
+                    {editorPicks.map((id, i) => {
+                      const item = data.playlists.find((x) => x.id === id);
+                      if (!item) return null;
+                      return (
+                        <li key={id} className="flex items-center gap-3 px-3 py-2">
+                          {item.image && (
+                            <img src={item.image} alt="" className="h-8 w-8 shrink-0 rounded object-cover" />
+                          )}
+                          <span className="min-w-0 flex-1 truncate font-body text-sm text-foreground">
+                            {item.title}
+                            <span className="ml-2 font-body text-xs text-muted-foreground">
+                              {item.trackIds.length} tracks
+                            </span>
+                          </span>
+                          <button
+                            type="button"
+                            disabled={busy || i === 0}
+                            onClick={() => moveEditorPick(i, -1)}
+                            aria-label={`Move ${item.title} up in Editor Picks`}
+                            className="text-muted-foreground transition-colors hover:text-[#F4C430] disabled:opacity-30"
+                          >
+                            <ChevronUp className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy || i === editorPicks.length - 1}
+                            onClick={() => moveEditorPick(i, 1)}
+                            aria-label={`Move ${item.title} down in Editor Picks`}
+                            className="text-muted-foreground transition-colors hover:text-[#F4C430] disabled:opacity-30"
+                          >
+                            <ChevronDown className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => toggleEditorPick(id)}
+                            title="Remove from Editor Picks"
+                            aria-label={`Remove ${item.title} from Editor Picks`}
+                            className="text-muted-foreground transition-colors hover:text-red-400 disabled:opacity-30"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
               {playlistSections.map((sec, si) => (
                 <div
                   key={sec.theme || "__none"}
@@ -1111,13 +1202,55 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                               title="Open the playlist page"
                               className="block truncate font-body text-sm font-semibold text-foreground transition-colors hover:text-[#F4C430]"
                             >
+                              {editorPicks.includes(item.id) && (
+                                <Star className="mr-1.5 inline h-3 w-3 fill-[#F4C430] text-[#F4C430]" />
+                              )}
                               {item.title}
                             </Link>
                             <span className="block truncate font-body text-xs text-muted-foreground">
                               {item.trackIds.length} tracks · /playlist/{item.id}
                             </span>
                           </span>
-                          <span className="flex shrink-0 gap-2">
+                          <span className="flex shrink-0 items-center gap-2">
+                            {/* ⋯ menu (owner request): Editor Picks toggle. */}
+                            <span className="relative">
+                              <button
+                                type="button"
+                                onClick={() => setPickMenuId((cur) => (cur === item.id ? null : item.id))}
+                                title="More actions"
+                                aria-label={`More actions for ${item.title}`}
+                                className={btnCls}
+                              >
+                                <MoreHorizontal className="h-3.5 w-3.5" />
+                              </button>
+                              {pickMenuId === item.id && (
+                                <>
+                                  <span className="fixed inset-0 z-10" onClick={() => setPickMenuId(null)} />
+                                  <span className="absolute right-0 top-full z-20 mt-1 w-56 rounded-lg border border-border bg-card p-1 shadow-xl">
+                                    <button
+                                      type="button"
+                                      disabled={busy}
+                                      onClick={() => {
+                                        setPickMenuId(null);
+                                        toggleEditorPick(item.id);
+                                      }}
+                                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left font-body text-xs text-foreground transition-colors hover:bg-foreground/[0.05] disabled:opacity-50"
+                                    >
+                                      <Star
+                                        className={`h-3.5 w-3.5 ${
+                                          editorPicks.includes(item.id)
+                                            ? "fill-[#F4C430] text-[#F4C430]"
+                                            : "text-muted-foreground"
+                                        }`}
+                                      />
+                                      {editorPicks.includes(item.id)
+                                        ? "Remove from Editor Picks"
+                                        : "Add to Editor Picks"}
+                                    </button>
+                                  </span>
+                                </>
+                              )}
+                            </span>
                             <button
                               type="button"
                               className={btnCls}

@@ -8,7 +8,7 @@ import CardCarousel from "@/components/CardCarousel";
 import { usePlayer } from "@/components/playerContext";
 import { useTracks } from "@/hooks/useTracks";
 import type { CatalogTrack } from "@/data/catalogTracks";
-import { refreshContent, useContentReady, usePlaylists, type LivePlaylist } from "@/hooks/useContent";
+import { refreshContent, useContentReady, useEditorPickIds, usePlaylists, type LivePlaylist } from "@/hooks/useContent";
 import {
   AdminItemBar,
   useAdminDragReorder,
@@ -280,6 +280,11 @@ const NewThemeButton = ({
 const Playlists = () => {
   const playlists = usePlaylists();
   const ready = useContentReady();
+  // Owner-curated Editor Picks — pinned ABOVE the theme sections.
+  const editorPickIds = useEditorPickIds();
+  const editorPicks = editorPickIds
+    .map((id) => playlists.find((p) => p.id === id))
+    .filter((p): p is LivePlaylist => !!p);
   const { tracks } = useTracks();
   const admin = useContentAdmin();
   const { dragProps, dragClass } = useAdminDragReorder("playlist", admin);
@@ -329,6 +334,20 @@ const Playlists = () => {
           </div>
         ) : (
           <>
+            {editorPicks.length > 0 && (
+              <section className="mt-12">
+                <h2 className="mb-6 font-display text-2xl font-semibold text-white">
+                  Editor Picks
+                </h2>
+                <CardCarousel>
+                  {editorPicks.map((p) => (
+                    <div key={p.id}>
+                      <PlaylistCard playlist={p} tracks={tracks} />
+                    </div>
+                  ))}
+                </CardCarousel>
+              </section>
+            )}
             {sections
               .filter((section) => section.theme || section.items.length > 0)
               .map((section) => (
