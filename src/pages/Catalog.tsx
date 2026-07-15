@@ -121,6 +121,32 @@ const Catalog = () => {
   // slow answer never fight each other).
   const aiSeqRef = useRef(0);
 
+  // Elastic box: while the user types, the search column stretches further
+  // right just before the text reaches Find — capped at +50% of the AI width
+  // (36rem -> up to 54rem), eased with an expo-out curve. Text width is
+  // measured on a throwaway canvas with the input's own font.
+  const aiInputRef = useRef<HTMLInputElement | null>(null);
+  const measureCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [aiExtraPx, setAiExtraPx] = useState(0);
+  useEffect(() => {
+    if (searchMode !== "ai") {
+      setAiExtraPx(0);
+      return;
+    }
+    const el = aiInputRef.current;
+    if (!el) return;
+    const style = window.getComputedStyle(el);
+    if (!measureCanvasRef.current) measureCanvasRef.current = document.createElement("canvas");
+    const ctx = measureCanvasRef.current.getContext("2d");
+    if (!ctx) return;
+    ctx.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+    const textPx = ctx.measureText(aiQuery).width;
+    setAiExtraPx((prev) => {
+      const baseAvail = el.clientWidth - prev; // the column widens ~1:1 with the input
+      return Math.max(0, Math.min(288, Math.round(textPx + 32 - baseAvail)));
+    });
+  }, [aiQuery, searchMode]);
+
   const runAiSearch = async () => {
     const q = aiQuery.trim();
     if (q.length < 3 || aiBusy) return;
@@ -161,8 +187,15 @@ const Catalog = () => {
   };
   const switchSearchMode = (m: "text" | "ai") => {
     setSearchMode(m);
-    if (m === "text") clearAi();
-    else setQuery("");
+    if (m === "text") {
+      // Back to plain Search: drop the AI result AND its text — the next trip
+      // to AI Search starts with an empty line (owner request).
+      aiSeqRef.current++;
+      clearAi();
+      setAiQuery("");
+    } else {
+      setQuery("");
+    }
   };
   const { activePlayer, isPlaying, progress, playedProgress, playVersion } = usePlayer();
   const { tracks, isLoading } = useTracks();
@@ -350,11 +383,11 @@ const Catalog = () => {
               style={{ animationDelay: "0.5s" }}
             >
               <div
-                className={`grid gap-3 border-b border-border/30 bg-background/20 px-4 py-3 transition-[grid-template-columns] duration-500 md:items-center ${
-                  searchMode === "ai"
-                    ? "md:grid-cols-[minmax(16rem,36rem)_1fr_auto]"
-                    : "md:grid-cols-[minmax(16rem,28rem)_1fr_auto]"
-                }`}
+                className="grid gap-3 border-b border-border/30 bg-background/20 px-4 py-3 transition-[grid-template-columns] duration-500 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] md:grid-cols-[minmax(16rem,var(--srchw,28rem))_1fr_auto] md:items-center"
+                style={{
+                  ["--srchw" as string]:
+                    searchMode === "ai" ? `${36 + aiExtraPx / 16}rem` : "28rem",
+                }}
               >
                 <div className="min-w-0">
                   {/* ONE search box for both modes, a single row. The mode
@@ -392,6 +425,7 @@ const Catalog = () => {
                       ))}
                     </div>
                     <input
+                      ref={aiInputRef}
                       value={searchMode === "ai" ? aiQuery : query}
                       onChange={(e) =>
                         searchMode === "ai" ? onAiQueryChange(e.target.value) : setQuery(e.target.value)
