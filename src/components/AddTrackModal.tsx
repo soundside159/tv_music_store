@@ -322,9 +322,9 @@ const AddTrackModal = ({
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               className={`${inputCls} min-w-0 flex-1`}
-              aria-label="Category"
+              aria-label="Album"
             >
-              <option value="">No category</option>
+              <option value="">No album</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.title}

@@ -681,7 +681,7 @@ const AdminTracksEdit = ({
       if (plan.length === 0) throw new Error("No selected track matched a title in the sheet");
       if (
         !window.confirm(
-          `Tick Genres / Moods / Usage / Categories / Playlists for ${plan.length} selected track(s) from "${file.name}"?` +
+          `Tick Genres / Moods / Usage / Albums / Playlists for ${plan.length} selected track(s) from "${file.name}"?` +
             (missed > 0 ? `\n${missed} selected track(s) had no matching row and stay untouched.` : "") +
             (unknown.size > 0
               ? `\nUnknown values (skipped): ${[...unknown].slice(0, 8).join(", ")}${unknown.size > 8 ? "…" : ""}`
@@ -1433,7 +1433,7 @@ const AdminTracksEdit = ({
     if (disabled || busy || selected.length === 0) return;
     if (
       !window.confirm(
-        `Remove ${selTracks.length} selected track(s) from ALL collections, playlists and categories?`,
+        `Remove ${selTracks.length} selected track(s) from ALL collections, playlists and albums?`,
       )
     )
       return;
@@ -1445,7 +1445,7 @@ const AdminTracksEdit = ({
         playlistChanges: { remove: playlists.map((i) => i.id) },
         categoryChanges: { remove: categories.map((i) => i.id) },
       },
-      "Removed from all collections / playlists / categories",
+      "Removed from all collections / playlists / albums",
     );
     if (!ok) return;
     onContentReload?.();
@@ -2136,7 +2136,7 @@ const AdminTracksEdit = ({
               {VICATE_SHEET_COMPOSERS.includes(composer) && (
                 <label
                   className={`${btnCls} cursor-pointer ${vicateBusy || busy ? "pointer-events-none opacity-50" : ""}`}
-                  title="Match the selected tracks by title, tick Genres / Moods / Usage / Categories / Playlists (add-only) and write BPM / Description / Tags from the sheet"
+                  title="Match the selected tracks by title, tick Genres / Moods / Usage / Albums / Playlists (add-only) and write BPM / Description / Tags from the sheet"
                 >
                   {vicateBusy ? "Importing…" : "Vicate Import xlsx"}
                   <input
@@ -2789,7 +2789,7 @@ const AdminTracksEdit = ({
                       onToggle={() => setAiInclude((p) => ({ ...p, playlists: !p.playlists }))}
                     />
                     <TriCheckbox
-                      label="Categories"
+                      label="Albums"
                       state={aiInclude.categories ? "all" : "none"}
                       onToggle={() => setAiInclude((p) => ({ ...p, categories: !p.categories }))}
                     />
@@ -3023,7 +3023,7 @@ const AdminTracksEdit = ({
               disabled={busy || disabled}
               onClick={() => void deselectAllMemberships()}
               className="shrink-0 font-body text-[10px] text-muted-foreground transition-colors hover:text-red-400 disabled:opacity-50"
-              title="Remove the selected tracks from every collection, playlist and category"
+              title="Remove the selected tracks from every collection, playlist and album"
             >
               Deselect all
             </button>
@@ -3031,7 +3031,7 @@ const AdminTracksEdit = ({
         </div>
         {membershipSection("Collections", "collection", collections, collectionDelta, setCollectionDelta)}
         {membershipSection("Playlists", "playlist", playlists, playlistDelta, setPlaylistDelta, playlistSearch, setPlaylistSearch)}
-        {membershipSection("Categories", "category", categories, categoryDelta, setCategoryDelta)}
+        {membershipSection("Albums", "category", categories, categoryDelta, setCategoryDelta)}
       </aside>
     </div>
 

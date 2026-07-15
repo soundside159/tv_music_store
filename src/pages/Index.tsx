@@ -40,7 +40,7 @@ const TRENDING_COUNT = 8;
  *  owner's own curation, the other three are the raw tag families. */
 type BrowseTab = "categories" | "useCase" | "genre" | "mood";
 const BROWSE_TABS: { id: BrowseTab; label: string; icon: typeof LayoutGrid }[] = [
-  { id: "categories", label: "Categories", icon: LayoutGrid },
+  { id: "categories", label: "Albums", icon: LayoutGrid },
   { id: "useCase", label: "Use Case", icon: Clapperboard },
   { id: "genre", label: "Genre", icon: Music2 },
   { id: "mood", label: "Mood", icon: Sparkles },
