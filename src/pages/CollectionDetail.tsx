@@ -1,7 +1,7 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import { TrackRowList } from "@/components/TrackRowPlayer";
+import { TrackRowList, TrackRowSkeletonList } from "@/components/TrackRowPlayer";
 import { useCollections, useContentReady } from "@/hooks/useContent";
 import { useTracks } from "@/hooks/useTracks";
 import {
@@ -16,7 +16,7 @@ const CollectionDetail = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
   const musicCollections = useCollections();
-  const { tracks: allTracks, reload: reloadTracks } = useTracks();
+  const { tracks: allTracks, isLoading: tracksLoading, reload: reloadTracks } = useTracks();
   // Inline admin editing: click title/description, hover cover, X on rows.
   const admin = useContentAdmin();
   const ready = useContentReady();
@@ -127,6 +127,10 @@ const CollectionDetail = () => {
         <div className="mt-8">
           {tracks.length > 0 ? (
             <TrackRowList tracks={tracks} adminRemove={adminRemove} />
+          ) : tracksLoading ? (
+            /* The catalog is still on its way — placeholder rows the exact
+               height of real ones, so nothing jumps when they land. */
+            <TrackRowSkeletonList count={8} />
           ) : (
             <p className="font-body text-sm text-muted-foreground">
               Tracks for this collection are on the way.

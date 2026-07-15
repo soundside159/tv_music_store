@@ -1,7 +1,7 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import { TrackRowList } from "@/components/TrackRowPlayer";
+import { TrackRowList, TrackRowSkeletonList } from "@/components/TrackRowPlayer";
 import type { CatalogTrack } from "@/data/catalogTracks";
 import { useContentReady, usePlaylists } from "@/hooks/useContent";
 import { useTracks } from "@/hooks/useTracks";
@@ -40,7 +40,7 @@ const PlaylistDetail = () => {
   const navigate = useNavigate();
   const playlists = usePlaylists();
   const ready = useContentReady();
-  const { tracks: allTracks } = useTracks();
+  const { tracks: allTracks, isLoading: tracksLoading } = useTracks();
   // Inline admin editing: click title/description, hover cover, X on rows.
   const admin = useContentAdmin();
   const playlist = playlists.find((p) => p.slug === slug || p.id === slug);
@@ -151,6 +151,10 @@ const PlaylistDetail = () => {
         <div className="mt-8">
           {tracks.length > 0 ? (
             <TrackRowList tracks={tracks} adminRemove={adminRemove} />
+          ) : tracksLoading ? (
+            /* The catalog is still on its way — placeholder rows the exact
+               height of real ones, so nothing jumps when they land. */
+            <TrackRowSkeletonList count={8} />
           ) : (
             <p className="font-body text-sm text-muted-foreground">
               Tracks for this playlist are on the way.

@@ -73,34 +73,65 @@ const mapTrack = (t: ApiTrack): CatalogTrack => ({
  * `drafts: true` (admin pages) also loads draft tracks — the server only honors
  * it for admin sessions.
  */
+// Module-level cache (stale-while-revalidate, like useContent): SPA navigation
+// renders the catalog INSTANTLY from the last answer while a background
+// refetch (when stale) swaps fresh data in. Without it every page re-fetched
+// the whole track list and every list replayed its loading dance.
+const trackCache: Record<string, { list: CatalogTrack[]; at: number }> = {};
+const trackInflight: Record<string, Promise<CatalogTrack[] | null> | undefined> = {};
+const TRACKS_STALE_MS = 30_000;
+
 export const useTracks = (opts?: { drafts?: boolean }) => {
   const wantDrafts = !!opts?.drafts;
-  const [tracks, setTracks] = useState<CatalogTrack[]>([]);
-  const [source, setSource] = useState<"mock" | "api">("mock");
-  // True until the API answers (or fails) — lets pages show skeletons instead
-  // of flashing empty/placeholder rows that then get replaced by live rows.
-  const [isLoading, setIsLoading] = useState(true);
+  const key = wantDrafts ? "drafts" : "public";
+  const cached = trackCache[key];
+  const [tracks, setTracks] = useState<CatalogTrack[]>(cached ? cached.list : []);
+  const [source, setSource] = useState<"mock" | "api">(cached ? "api" : "mock");
+  // True until the FIRST answer for this cache key lands — pages show
+  // skeletons meanwhile. A cached render is never "loading".
+  const [isLoading, setIsLoading] = useState(!cached);
 
-  const load = useCallback(() => {
-    setIsLoading(true);
-    return fetch(wantDrafts ? "/api/tracks?drafts=1" : "/api/tracks", { credentials: "include" })
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
-      .then((data: { tracks?: ApiTrack[] }) => {
-        const list = (data.tracks ?? []).map(mapTrack).filter((t) => t.audioVersions.length > 0);
-        // Even an EMPTY answer counts as live data — admin tools stay enabled
-        // and the storefront simply shows nothing instead of demo content.
-        setTracks(list);
+  const load = useCallback(
+    (force = false) => {
+      const hit = trackCache[key];
+      if (!force && hit && Date.now() - hit.at < TRACKS_STALE_MS) {
+        setTracks(hit.list);
         setSource("api");
-      })
-      .catch(() => {
-        // API unavailable — catalog stays empty (no mock data on the site)
-      })
-      .finally(() => setIsLoading(false));
-  }, [wantDrafts]);
+        setIsLoading(false);
+        return Promise.resolve();
+      }
+      if (!hit) setIsLoading(true); // stale data keeps rendering during a refresh
+      const p = (trackInflight[key] ??= fetch(
+        wantDrafts ? "/api/tracks?drafts=1" : "/api/tracks",
+        { credentials: "include" },
+      )
+        .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
+        .then((data: { tracks?: ApiTrack[] }) => {
+          const list = (data.tracks ?? []).map(mapTrack).filter((t) => t.audioVersions.length > 0);
+          // Even an EMPTY answer counts as live data — admin tools stay enabled
+          // and the storefront simply shows nothing instead of demo content.
+          trackCache[key] = { list, at: Date.now() };
+          return list;
+        })
+        .catch(() => null) // API unavailable — catalog stays empty (no mocks)
+        .finally(() => {
+          trackInflight[key] = undefined;
+        }));
+      return p.then((list) => {
+        if (list) {
+          setTracks(list);
+          setSource("api");
+        }
+        setIsLoading(false);
+      });
+    },
+    [wantDrafts, key],
+  );
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  return { tracks, source, isLoading, reload: load };
+  // reload() (admin edits) always bypasses the cache.
+  return { tracks, source, isLoading, reload: () => load(true) };
 };

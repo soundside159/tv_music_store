@@ -731,19 +731,24 @@ export const TrackRowList = ({
           />
         );
 
-        if (!adminRemove) return row;
+        // ALWAYS the same wrapper: the admin session confirms asynchronously,
+        // and if the row's DOM shape changed when the X column appeared, React
+        // remounted every row — the list blinked away and replayed its
+        // entrance stagger (the owner saw it as a loading glitch).
         return (
           <div key={track.id} className="flex items-stretch">
             <div className="min-w-0 flex-1">{row}</div>
-            <button
-              type="button"
-              onClick={() => adminRemove(track.id)}
-              aria-label={`Remove ${track.title} from this list`}
-              title="Admin: remove from this list"
-              className="flex w-9 shrink-0 items-center justify-center border-l border-border/30 text-muted-foreground/60 transition-colors hover:bg-red-400/10 hover:text-red-400"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+            {adminRemove && (
+              <button
+                type="button"
+                onClick={() => adminRemove(track.id)}
+                aria-label={`Remove ${track.title} from this list`}
+                title="Admin: remove from this list"
+                className="flex w-9 shrink-0 items-center justify-center border-l border-border/30 text-muted-foreground/60 transition-colors hover:bg-red-400/10 hover:text-red-400"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
         );
       })}
