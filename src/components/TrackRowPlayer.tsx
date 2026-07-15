@@ -609,22 +609,14 @@ export const useTrackAudioEngine = () => {
         if (audio.seeking || pendingSeekRef.current !== null) return;
         const nextProgress = audio.duration ? audio.currentTime / audio.duration : 0;
         setProgress(nextProgress);
-        if (activePlayer) {
-          setPlayedProgress((prev) => ({
-            ...prev,
-            [`${activePlayer.trackId}:${activePlayer.versionId}`]: nextProgress,
-          }));
-        }
+        // TEMPORARILY OFF (owner request): remembering per-track progress kept
+        // the gold fill on every previously played waveform. To bring the
+        // feature back, restore the setPlayedProgress writes here and in
+        // onEnded — the whole read side is still wired up.
       }}
       onEnded={() => {
         setIsPlaying(false);
         setProgress(0);
-        if (activePlayer) {
-          setPlayedProgress((prev) => ({
-            ...prev,
-            [`${activePlayer.trackId}:${activePlayer.versionId}`]: 1,
-          }));
-        }
       }}
     />
   );

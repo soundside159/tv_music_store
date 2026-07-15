@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
@@ -111,6 +111,23 @@ const Index = () => {
     browseTab === "categories"
       ? categories.map((c) => ({ key: c.id, label: c.title, to: `/catalog?category=${c.id}` }))
       : vocab[browseTab].map((v) => ({ key: v, label: v, to: discoverPath(browseTab, v) }));
+
+  // The arcs ignite in RANDOM order (owner request — left-to-right read as a
+  // boring sweep): shuffle the stagger slots once per tab switch, so every
+  // switch lights the chips up in a new sequence.
+  const arcDelays = useMemo(() => {
+    const order = browseItems.map((_, i) => i);
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+    const delays = new Array<number>(order.length);
+    order.forEach((chipIdx, pos) => {
+      delays[chipIdx] = 150 + pos * 35;
+    });
+    return delays;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [browseTab, browseItems.length]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -233,7 +250,7 @@ const Index = () => {
                     strokeWidth="2"
                     strokeLinecap="round"
                     className="arc-draw"
-                    style={{ animationDelay: `${150 + i * 35}ms` }}
+                    style={{ animationDelay: `${arcDelays[i] ?? 150}ms` }}
                   />
                 </svg>
                 {item.label}
