@@ -5,6 +5,8 @@
 
 export interface VisualizerSettings {
   enabled: boolean;
+  /** Bar opacity, 0–100 (100 = fully solid). */
+  opacity: number;
   /** How many particles spawn (spawn rate). */
   density: number;
   /** How strongly band energy turns into jump height/velocity. */
@@ -38,6 +40,7 @@ export interface VisualizerSettings {
 // Owner-approved defaults (bar-EQ round 2, tuned live on 2026-07-09).
 export const DEFAULT_VISUALIZER: VisualizerSettings = {
   enabled: true,
+  opacity: 100,
   density: 100, // Bars
   reactivity: 7,
   maxRise: 56,

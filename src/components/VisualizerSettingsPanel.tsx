@@ -17,6 +17,7 @@ import {
 // the particle era are unused (glow kept in storage for a possible comeback).
 const SLIDERS: Array<[keyof VisualizerSettings, string, number, number]> = [
   ["density", "Bars", 0, 100],
+  ["opacity", "Opacity", 0, 100],
   ["reactivity", "Reactivity", 0, 100],
   ["maxRise", "Max rise (px)", 20, 96],
   ["size", "Bar width", 0, 100],
