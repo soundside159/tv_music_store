@@ -14,13 +14,14 @@ import {
   Users,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
+import VisualizerSettingsPanel from "@/components/VisualizerSettingsPanel";
 import Footer from "@/components/Footer";
 import { TrackRowList, TrackRowSkeletonList } from "@/components/TrackRowPlayer";
 import { discoverPath } from "@/lib/discovery";
 import CardCarousel from "@/components/CardCarousel";
 import { useCategories, useEditorPickIds, usePlaylists, useTrendingTracks, useVocabularies } from "@/hooks/useContent";
 import type { LivePlaylist } from "@/hooks/useContent";
-import { usePlans } from "@/hooks/useMockData";
+import { useCurrentUser, usePlans } from "@/hooks/useMockData";
 
 const GOLD = "#F4C430";
 
@@ -90,6 +91,9 @@ const EditorPickCard = ({ playlist }: { playlist: LivePlaylist }) => (
 
 const Index = () => {
   const plans = usePlans();
+  // Admin-only: the visualizer tuning panel above the footer (temporary —
+  // the owner dials numbers in, we bake them into DEFAULT_VISUALIZER).
+  const user = useCurrentUser();
   const { tracks: trendingTracks, isLoading: tracksLoading } = useTrendingTracks(TRENDING_COUNT);
   const categories = useCategories();
   const vocab = useVocabularies();
@@ -398,6 +402,7 @@ const Index = () => {
           </div>
         </section>
       </main>
+      {user?.role === "admin" && <VisualizerSettingsPanel />}
       <Footer />
     </div>
   );

@@ -184,8 +184,9 @@ const AudioVisualizer = () => {
             ctx.fillStyle = `rgba(${GOLD},${(borderLight * (0.25 + v * 0.75)).toFixed(3)})`;
             ctx.fillRect(i * slot, height - 2, slot, 2);
           }
-          // color: gold↔white mix, brighter when taller
-          const a = 0.28 + v * 0.6;
+          // color: gold↔white mix — fully OPAQUE (owner request: the
+          // translucent bars read as washed out over the blurred player bar).
+          const a = 1;
           ctx.fillStyle =
             goldShare >= 0.999
               ? `rgba(${GOLD},${a.toFixed(3)})`
@@ -201,7 +202,7 @@ const AudioVisualizer = () => {
           const restFade = peakRest[i] > 0 ? Math.max(0, 1 - peakRest[i] / REST_FADE) : 1;
           if (restFade > 0.01) {
             const py = height - 2 - Math.max(1.5, pk * rise);
-            ctx.fillStyle = `rgba(${GOLD},${((0.35 + (s.sparkle / 100) * 0.55) * restFade).toFixed(3)})`;
+            ctx.fillStyle = `rgba(${GOLD},${restFade.toFixed(3)})`; // opaque cap, fades only while resting
             ctx.fillRect(x, py, barW, 1.5);
           }
         }
