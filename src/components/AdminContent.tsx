@@ -241,7 +241,7 @@ const emptyDraft = {
 const tabLabels: Record<Tab, string> = {
   collections: "Collections",
   playlists: "Playlists",
-  categories: "Albums",
+  categories: "Categories",
   vocabulary: "Vocabulary",
   trending: "Trending",
   tracks: "Tracks Edit",
@@ -649,7 +649,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
     if (j < 0 || j >= cats.length || busy) return;
     const ids = cats.map((c) => c.id);
     [ids[index], ids[j]] = [ids[j], ids[index]];
-    void run({ action: "reorder_content", kind: "category", values: ids }, "Albums reordered").then(
+    void run({ action: "reorder_content", kind: "category", values: ids }, "Categories reordered").then(
       (ok) => {
         if (ok) void refreshContent();
       },
@@ -658,7 +658,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
   const removeCategoryTrack = (catId: string, trackId: string) => {
     void run(
       { action: "bulk_update_tracks", trackIds: [trackId], categoryChanges: { remove: [catId] } },
-      "Removed from album",
+      "Removed from category",
     ).then((ok) => {
       if (ok) void refreshContent();
     });
@@ -1301,7 +1301,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
           <p className="font-body text-sm text-muted-foreground">
             Category chips on the homepage — each links to /catalog?category=…
             ("Best for Trailers", "Epic Openers", "Music for Drone Footage", …).
-            Assign tracks to albums in the <span className="text-foreground">Tracks Edit</span> tab.
+            Assign tracks to categories in the <span className="text-foreground">Tracks Edit</span> tab.
           </p>
           <ul className="divide-y divide-border/60">
             {(data.categories ?? []).map((c, ci) => (
@@ -1310,7 +1310,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                   <button
                     type="button"
                     onClick={() => setExpandedCategoryId((cur) => (cur === c.id ? null : c.id))}
-                    title="Show the album's tracks"
+                    title="Show the category's tracks"
                     aria-label={`Expand ${c.title}`}
                     className="shrink-0 text-muted-foreground transition-colors hover:text-[#F4C430]"
                   >
@@ -1323,7 +1323,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                   <span className="min-w-0 flex-1">
                     <Link
                       to={`/catalog?category=${encodeURIComponent(c.id)}`}
-                      title="Open this album in the catalog"
+                      title="Open this category in the catalog"
                       className="block truncate font-body text-sm font-semibold text-foreground transition-colors hover:text-[#F4C430]"
                     >
                       {c.title}
@@ -1360,7 +1360,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                       onClick={() => {
                         const title = window.prompt(`Rename "${c.title}" to:`, c.title)?.trim();
                         if (title && title !== c.title) {
-                          void run({ action: "upsert_category", id: c.id, title }, "Album renamed");
+                          void run({ action: "upsert_category", id: c.id, title }, "Category renamed");
                         }
                       }}
                     >
@@ -1372,7 +1372,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                       className="rounded-lg border border-border px-3 py-1.5 font-body text-xs text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
                       onClick={() => {
                         if (window.confirm(`Delete category "${c.title}"? Tracks stay, only the chip and its list are removed.`)) {
-                          void run({ action: "delete_category", id: c.id }, "Album deleted");
+                          void run({ action: "delete_category", id: c.id }, "Category deleted");
                         }
                       }}
                     >
@@ -1400,18 +1400,18 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
               e.preventDefault();
               const title = newCategoryTitle.trim();
               if (!title) return;
-              const ok = await run({ action: "upsert_category", title }, "Album added");
+              const ok = await run({ action: "upsert_category", title }, "Category added");
               if (ok) setNewCategoryTitle("");
             }}
           >
             <input
-              placeholder='New album title (e.g. "Best for Trailers")'
+              placeholder='New category title (e.g. "Best for Trailers")'
               value={newCategoryTitle}
               onChange={(e) => setNewCategoryTitle(e.target.value)}
               className={`${inputCls} w-72 max-w-full`}
             />
             <button type="submit" disabled={busy || !newCategoryTitle.trim()} className={goldBtnCls}>
-              Add album
+              Add category
             </button>
           </form>
         </div>
@@ -1432,10 +1432,10 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
               track list. */}
           <div className="rounded-lg border border-border/60 p-4">
             <p className="mb-1 font-body text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Albums <span className="text-muted-foreground/60">({(data.categories ?? []).length})</span>
+              Categories <span className="text-muted-foreground/60">({(data.categories ?? []).length})</span>
             </p>
             <p className="mb-3 font-body text-xs text-muted-foreground">
-              The curated lists behind /catalog?category=… — the Albums tab has the same editor
+              The curated lists behind /catalog?category=… — the Categories tab has the same editor
               plus each one's track list.
             </p>
             <ul className="mb-3 divide-y divide-border/60">
@@ -1472,7 +1472,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                     onClick={() => {
                       const title = window.prompt(`Rename "${c.title}" to:`, c.title)?.trim();
                       if (title && title !== c.title) {
-                        void run({ action: "upsert_category", id: c.id, title }, "Album renamed");
+                        void run({ action: "upsert_category", id: c.id, title }, "Category renamed");
                       }
                     }}
                   >
@@ -1488,7 +1488,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                           `Delete category "${c.title}"? Tracks stay, only the chip and its list are removed.`,
                         )
                       ) {
-                        void run({ action: "delete_category", id: c.id }, "Album deleted");
+                        void run({ action: "delete_category", id: c.id }, "Category deleted");
                       }
                     }}
                   >
@@ -1506,18 +1506,18 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                 e.preventDefault();
                 const title = newCategoryTitle.trim();
                 if (!title) return;
-                const ok = await run({ action: "upsert_category", title }, "Album added");
+                const ok = await run({ action: "upsert_category", title }, "Category added");
                 if (ok) setNewCategoryTitle("");
               }}
             >
               <input
-                placeholder='New album title (e.g. "Best for Trailers")'
+                placeholder='New category title (e.g. "Best for Trailers")'
                 value={newCategoryTitle}
                 onChange={(e) => setNewCategoryTitle(e.target.value)}
                 className={`${inputCls} w-72 max-w-full`}
               />
               <button type="submit" disabled={busy || !newCategoryTitle.trim()} className={goldBtnCls}>
-                Add album
+                Add category
               </button>
             </form>
           </div>

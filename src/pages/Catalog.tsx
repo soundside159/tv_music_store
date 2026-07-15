@@ -18,7 +18,8 @@ import cinemaHero from "@/assets/cinema-hero-wide.png";
 import { Input } from "@/components/ui/input";
 import { useTracks } from "@/hooks/useTracks";
 import type { MusicCollection } from "@/data/musicCollections";
-import { useCollections, useTrendingIds, useVocabularies } from "@/hooks/useContent";
+import type { CatalogTrack } from "@/data/catalogTracks";
+import { useCollections, usePlaylists, useTrendingIds, useVocabularies } from "@/hooks/useContent";
 import { buildRecommendedRank, sortTracks } from "@/lib/catalogSort";
 import { relatedTracks, searchScore } from "@/lib/discovery";
 import { TrackRow } from "@/components/TrackRowPlayer";
@@ -30,6 +31,39 @@ type FilterValue = {
   mood: string;
   useCase: string;
 };
+
+/** What /api/ai-search sends back: catalog tags + playlist/collection ids that
+ *  fit the described project, plus free keywords for title/tag matching. */
+interface AiRoute {
+  useCase: string[];
+  genre: string[];
+  mood: string[];
+  playlistIds: string[];
+  collectionIds: string[];
+  keywords: string[];
+}
+
+/** Compact result card for the Playlists / Collections tabs of an AI search. */
+const AiResultCard = ({ to, image, title, sub }: { to: string; image: string; title: string; sub: string }) => (
+  <Link
+    to={to}
+    className="group flex items-center gap-3 rounded-lg border border-border/50 bg-background/40 p-3 transition-colors hover:border-[#F4C430]/60"
+  >
+    <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/50 bg-secondary">
+      {image ? (
+        <img src={image} alt="" loading="lazy" className="h-full w-full object-cover" />
+      ) : (
+        <Music2 className="h-4 w-4 text-muted-foreground/70" />
+      )}
+    </span>
+    <span className="min-w-0">
+      <span className="block truncate font-body text-sm font-medium text-foreground transition-colors group-hover:text-[#F4C430]">
+        {title}
+      </span>
+      <span className="block truncate font-body text-xs text-muted-foreground">{sub}</span>
+    </span>
+  </Link>
+);
 
 const splitFilterValues = (value: string) => value.split("/").map((item) => item.trim()).filter(Boolean);
 
@@ -70,6 +104,49 @@ const Catalog = () => {
   });
   const [expandedTrackId, setExpandedTrackId] = useState<string | null>(null);
   const [sort, setSort] = useState("Featured");
+
+  // ---- AI Search ("describe your project") — see functions/api/ai-search.ts.
+  // Its model is fixed server-side; the admin's image-model switcher in Tracks
+  // Edit has no effect here.
+  const [searchMode, setSearchMode] = useState<"text" | "ai">("text");
+  const [aiQuery, setAiQuery] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiRes, setAiRes] = useState<AiRoute | null>(null);
+  const [aiTab, setAiTab] = useState<"tracks" | "playlists" | "collections">("tracks");
+  const allPlaylists = usePlaylists();
+
+  const runAiSearch = async () => {
+    const q = aiQuery.trim();
+    if (q.length < 3 || aiBusy) return;
+    setAiBusy(true);
+    setAiError(null);
+    try {
+      const res = await fetch("/api/ai-search", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ q }),
+      });
+      const d = (await res.json()) as AiRoute & { error?: string };
+      if (!res.ok) throw new Error(d.error ?? "Search failed");
+      setAiRes(d);
+      setAiTab("tracks");
+    } catch (e) {
+      setAiError(e instanceof Error ? e.message : "Search failed");
+    } finally {
+      setAiBusy(false);
+    }
+  };
+  const clearAi = () => {
+    setAiRes(null);
+    setAiError(null);
+    setAiTab("tracks");
+  };
+  const switchSearchMode = (m: "text" | "ai") => {
+    setSearchMode(m);
+    if (m === "text") clearAi();
+    else setQuery("");
+  };
   const { activePlayer, isPlaying, progress, playedProgress, playVersion } = usePlayer();
   const { tracks, isLoading } = useTracks();
   const trendingIds = useTrendingIds();
@@ -91,6 +168,23 @@ const Catalog = () => {
   const exactTracks = useMemo(() => {
     const trimmedQuery = query.trim();
 
+    // AI relevance: +2 per matched tag (the router already picked the best
+    // catalog values), +1 per keyword hit in the title/tags. 0 = filtered out.
+    const aiScore = (track: CatalogTrack): number => {
+      if (!aiRes) return 1;
+      let score = 0;
+      const facetHits = (raw: string, vals: string[]) =>
+        splitFilterValues(raw).filter((v) => vals.some((x) => x.toLowerCase() === v.toLowerCase())).length;
+      score += facetHits(track.useCase, aiRes.useCase) * 2;
+      score += facetHits(track.genre, aiRes.genre) * 2;
+      score += facetHits(track.mood, aiRes.mood) * 2;
+      if (aiRes.keywords.length > 0) {
+        const hay = `${track.title} ${track.tags.join(" ")}`.toLowerCase();
+        for (const k of aiRes.keywords) if (hay.includes(k.toLowerCase())) score += 1;
+      }
+      return score;
+    };
+
     const result = tracks.filter((track) => {
       const matchesCollection = !activeCollection || track.collectionIds.includes(activeCollection.id);
       // Admin-curated membership when present; legacy single category otherwise.
@@ -104,9 +198,17 @@ const Catalog = () => {
       const matchesGenre = filters.genre === "All" || matchesOption(track.genre, filters.genre);
       const matchesMood = filters.mood === "All" || matchesOption(track.mood, filters.mood);
       const matchesQuery = !trimmedQuery || searchScore(track, trimmedQuery) > 0;
+      const matchesAi = !aiRes || aiScore(track) > 0;
 
-      return matchesCollection && matchesCategory && matchesUseCase && matchesGenre && matchesMood && matchesQuery;
+      return matchesCollection && matchesCategory && matchesUseCase && matchesGenre && matchesMood && matchesQuery && matchesAi;
     });
+
+    // AI search on + default sort: most relevant first (score, then the mix).
+    if (aiRes && sort === "Featured") {
+      return [...result].sort(
+        (a, b) => aiScore(b) - aiScore(a) || (recommendedRank.get(a.id) ?? 0) - (recommendedRank.get(b.id) ?? 0),
+      );
+    }
 
     // While searching, "Featured" (the default) means "most relevant" — a track
     // whose TAG is the query outranks one that merely mentions the word in its
@@ -119,7 +221,7 @@ const Catalog = () => {
       );
     }
     return sortTracks(result, sort, recommendedRank);
-  }, [tracks, activeCollection, categoryParam, filters, query, sort, recommendedRank]);
+  }, [tracks, activeCollection, categoryParam, filters, query, sort, recommendedRank, aiRes]);
 
   // RELATED tail: when the request was narrow and returned few tracks, keep the
   // funnel going with tracks that share what those few have in common (see
@@ -145,10 +247,15 @@ const Catalog = () => {
   const pagedTracks = filteredTracks.slice(0, visibleCount);
   const hasMore = visibleCount < filteredTracks.length;
 
+  const aiPlaylists = aiRes ? allPlaylists.filter((pl) => aiRes.playlistIds.includes(pl.id)) : [];
+  const aiCollections = aiRes ? musicCollections.filter((c) => aiRes.collectionIds.includes(c.id)) : [];
+  /** Playlists / Collections tabs replace the track list below the toolbar. */
+  const showTrackList = !aiRes || aiTab === "tracks";
+
   // Any change of filters/search/sort/collection starts the list from the top.
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [filters, query, sort, activeCollectionId, categoryParam]);
+  }, [filters, query, sort, activeCollectionId, categoryParam, aiRes]);
 
   // Load the next batch when the sentinel under the list comes into view
   // (200px early, so rows are ready before the user reaches them).
@@ -221,18 +328,70 @@ const Catalog = () => {
               style={{ animationDelay: "0.5s" }}
             >
               <div className="grid gap-3 border-b border-border/30 bg-background/20 px-4 py-3 md:grid-cols-[minmax(16rem,28rem)_1fr_auto] md:items-center">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    placeholder={
-                      activeCollection
-                        ? `Search tracks in ${activeCollection.shortTitle}...`
-                        : "Search tracks, genres, moods"
-                    }
-                    className="h-10 rounded-full border-white/20 bg-background/50 pl-11 transition-colors focus-visible:border-[#F4C430]/70 focus-visible:ring-0 focus-visible:ring-offset-0"
-                  />
+                <div className="flex min-w-0 flex-col gap-2">
+                  {/* Search / AI Search — the same pill switch as the filter tabs. */}
+                  <div className="flex w-fit gap-1 rounded-full border border-border/70 bg-card/60 p-1">
+                    {(
+                      [
+                        ["text", "Search"],
+                        ["ai", "AI Search"],
+                      ] as const
+                    ).map(([m, label]) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => switchSearchMode(m)}
+                        aria-pressed={searchMode === m}
+                        className={`inline-flex items-center gap-1 rounded-full px-3 py-1 font-body text-[11px] font-semibold transition-all duration-200 ${
+                          searchMode === m
+                            ? "bg-[#F4C430] text-background shadow-[0_0_20px_-2px_rgba(244,196,48,0.55)]"
+                            : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
+                        }`}
+                      >
+                        {m === "ai" && <Sparkles className="h-3 w-3" />}
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {searchMode === "text" ? (
+                    <div className="relative">
+                      <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                        placeholder={
+                          activeCollection
+                            ? `Search tracks in ${activeCollection.shortTitle}...`
+                            : "Search tracks, genres, moods"
+                        }
+                        className="h-10 rounded-full border-white/20 bg-background/50 pl-11 transition-colors focus-visible:border-[#F4C430]/70 focus-visible:ring-0 focus-visible:ring-offset-0"
+                      />
+                    </div>
+                  ) : (
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        void runAiSearch();
+                      }}
+                      className="relative"
+                    >
+                      <Sparkles className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#F4C430]/80" />
+                      <Input
+                        value={aiQuery}
+                        onChange={(e) => setAiQuery(e.target.value)}
+                        placeholder="Describe your project — the mood, the story, where the music will play…"
+                        className="h-10 rounded-full border-[#F4C430]/30 bg-background/50 pl-11 pr-24 transition-colors focus-visible:border-[#F4C430]/70 focus-visible:ring-0 focus-visible:ring-offset-0"
+                      />
+                      <button
+                        type="submit"
+                        disabled={aiBusy || aiQuery.trim().length < 3}
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-full bg-[#F4C430] px-3 py-1.5 font-body text-xs font-semibold text-background transition-opacity disabled:opacity-50"
+                      >
+                        {aiBusy ? "Thinking…" : "Find"}
+                      </button>
+                    </form>
+                  )}
+                  {aiError && <p className="font-body text-xs text-red-400">{aiError}</p>}
                 </div>
                 <div />
                 <div className="flex items-center gap-2 justify-self-start font-body text-sm text-muted-foreground md:justify-self-end">
@@ -241,7 +400,73 @@ const Catalog = () => {
                 </div>
               </div>
 
-              {isLoading && (
+              {/* AI result: tabs (tracks / playlists / collections), the tags
+                  the router matched, and a Clear switch back to plain browsing. */}
+              {aiRes && (
+                <div className="flex flex-wrap items-center gap-2 border-b border-border/30 bg-background/10 px-4 py-2.5">
+                  <div className="flex gap-1 rounded-full border border-border/70 bg-card/60 p-1">
+                    {(
+                      [
+                        ["tracks", `All Tracks · ${filteredTracks.length}`],
+                        ["playlists", `Playlists · ${aiPlaylists.length}`],
+                        ["collections", `Collections · ${aiCollections.length}`],
+                      ] as const
+                    ).map(([id, label]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setAiTab(id)}
+                        className={`rounded-full px-3 py-1 font-body text-xs font-semibold transition-colors ${
+                          aiTab === id ? "bg-[#F4C430] text-background" : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="min-w-0 flex-1 truncate font-body text-[11px] text-muted-foreground">
+                    {[...aiRes.mood, ...aiRes.genre, ...aiRes.useCase].slice(0, 6).join(" · ")}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={clearAi}
+                    className="shrink-0 font-body text-xs text-muted-foreground transition-colors hover:text-[#F4C430]"
+                  >
+                    ✕ Clear
+                  </button>
+                </div>
+              )}
+
+              {aiRes && !showTrackList && (
+                <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {aiTab === "playlists"
+                    ? aiPlaylists.map((pl) => (
+                        <AiResultCard
+                          key={pl.id}
+                          to={`/playlist/${pl.slug}`}
+                          image={pl.image}
+                          title={pl.title}
+                          sub={`${pl.trackIds.length} track${pl.trackIds.length === 1 ? "" : "s"}${pl.theme ? ` · ${pl.theme}` : ""}`}
+                        />
+                      ))
+                    : aiCollections.map((c) => (
+                        <AiResultCard
+                          key={c.id}
+                          to={`/collection/${c.id}`}
+                          image={c.image}
+                          title={c.title}
+                          sub={`${c.trackCount} tracks`}
+                        />
+                      ))}
+                  {(aiTab === "playlists" ? aiPlaylists : aiCollections).length === 0 && (
+                    <p className="col-span-full px-1 py-8 text-center font-body text-sm text-muted-foreground">
+                      Nothing matched here — check the All Tracks tab.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {showTrackList && isLoading && (
                 <div aria-hidden="true">
                   {Array.from({ length: 8 }).map((_, i) => (
                     <div
@@ -258,7 +483,7 @@ const Catalog = () => {
                 </div>
               )}
 
-              {!isLoading && (
+              {showTrackList && !isLoading && (
               <AnimatePresence mode="wait">
                 <motion.div
                   key={activeCollection?.id ?? "all-tracks"}
@@ -313,7 +538,7 @@ const Catalog = () => {
               </AnimatePresence>
               )}
 
-              {!isLoading && filteredTracks.length === 0 && (
+              {showTrackList && !isLoading && filteredTracks.length === 0 && (
                 <div className="px-4 py-12 text-center font-body text-sm text-muted-foreground">
                   No tracks found. Try another filter or search phrase.
                 </div>
@@ -321,7 +546,7 @@ const Catalog = () => {
 
               {/* Infinite scroll: crossing this loads the next 20 rows. The two
                   pulsing placeholders are the only hint that more is coming. */}
-              {!isLoading && hasMore && (
+              {showTrackList && !isLoading && hasMore && (
                 <div ref={sentinelRef} aria-hidden="true">
                   {Array.from({ length: 2 }).map((_, i) => (
                     <div

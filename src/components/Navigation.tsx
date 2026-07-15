@@ -142,12 +142,24 @@ const Navigation = () => {
 
           {/* Right: search + account + cart */}
           <div className="hidden items-center gap-5 md:flex">
-            <form onSubmit={submitSearch} className="relative">
+            {/* On /catalog the header search glides away — the catalog page
+                has its own (plus AI Search) right below, and two boxes on one
+                screen read as a bug. */}
+            <form
+              onSubmit={submitSearch}
+              className={`relative overflow-hidden transition-all duration-500 ease-out ${
+                location.pathname === "/catalog"
+                  ? "pointer-events-none max-w-0 -translate-y-1 opacity-0"
+                  : "max-w-64 translate-y-0 opacity-100"
+              }`}
+              aria-hidden={location.pathname === "/catalog"}
+            >
               <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search"
+                tabIndex={location.pathname === "/catalog" ? -1 : 0}
                 className="h-9 w-44 rounded-full border border-border bg-card/60 pl-10 pr-4 font-body text-sm text-foreground placeholder:text-muted-foreground/70 transition-all duration-300 focus:w-64 focus:border-[#F4C430]/70 focus:outline-none lg:w-56"
               />
             </form>
@@ -289,15 +301,17 @@ const Navigation = () => {
         {isOpen && (
           <div className="md:hidden pb-6 animate-fade-in">
             <div className="flex flex-col gap-4">
-              <form onSubmit={submitSearch} className="relative">
-                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search tracks"
-                  className="h-10 w-full rounded-full border border-border bg-card/60 pl-10 pr-4 font-body text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-[#F4C430]/70 focus:outline-none"
-                />
-              </form>
+              {location.pathname !== "/catalog" && (
+                <form onSubmit={submitSearch} className="relative">
+                  <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search tracks"
+                    className="h-10 w-full rounded-full border border-border bg-card/60 pl-10 pr-4 font-body text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-[#F4C430]/70 focus:outline-none"
+                  />
+                </form>
+              )}
               <Link
                 to="/catalog"
                 onClick={() => setIsOpen(false)}
