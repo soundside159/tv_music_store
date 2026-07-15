@@ -26,6 +26,63 @@ const requireAdmin = async (ctx: Ctx) => {
 const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+const SITE_URL = "https://tvmusicstore.com";
+const SIGNATURE_NAME = "TV Music Store Team";
+const POSTAL = "TV Music Store · 5 Brayford Square, London, E1 0SG, United Kingdom";
+
+/** Branded wrapper for every outgoing email: logo, gold accent, the message,
+ *  a Best-regards signature and a small footer. Table layout + inline styles
+ *  only — that's what survives Gmail/Outlook; fancy web fonts don't. */
+const emailHtml = (bodyText: string) => {
+  const paragraphs = bodyText
+    .split(/\n{2,}/)
+    .map(
+      (p) =>
+        `<p style="margin:0 0 14px;font-size:14px;line-height:1.65;color:#26251f">${escapeHtml(p).replace(/\n/g, "<br>")}</p>`,
+    )
+    .join("");
+  return `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#f4f3ef">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f3ef;padding:28px 12px">
+      <tr><td align="center">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden;font-family:Arial,Helvetica,sans-serif">
+          <tr>
+            <td style="background:#0d0d0f;padding:20px 32px">
+              <a href="${SITE_URL}" style="text-decoration:none">
+                <img src="${SITE_URL}/images/icons/logo-header.png" alt="TV Music Store" height="34" style="display:inline-block;vertical-align:middle;border:0">
+                <span style="display:inline-block;vertical-align:middle;margin-left:10px;color:#ffffff;font-size:14px;font-weight:bold;letter-spacing:2px">TV MUSIC STORE</span>
+              </a>
+            </td>
+          </tr>
+          <tr><td style="height:3px;background:#F4C430;font-size:0;line-height:0">&nbsp;</td></tr>
+          <tr>
+            <td style="padding:28px 32px 8px">
+              ${paragraphs}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 32px 26px">
+              <p style="margin:0;font-size:14px;line-height:1.65;color:#26251f">Best regards,<br>
+              <strong>${SIGNATURE_NAME}</strong><br>
+              <a href="${SITE_URL}" style="color:#a8841c;text-decoration:none">tvmusicstore.com</a></p>
+            </td>
+          </tr>
+          <tr>
+            <td style="border-top:1px solid #eceae2;padding:16px 32px 20px">
+              <p style="margin:0;font-size:11px;line-height:1.6;color:#9a968a">
+                You're receiving this email because you contacted TV Music Store or have an account with us.
+                Just reply to this email to reach us.<br>${escapeHtml(POSTAL)}
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>`;
+};
+
 const sendReply = async (
   env: Env,
   to: string,
@@ -33,10 +90,6 @@ const sendReply = async (
   body: string,
 ): Promise<{ ok: boolean; id?: string; error?: string }> => {
   if (!env.RESEND_API_KEY) return { ok: false, error: "Email is not configured (RESEND_API_KEY)" };
-  const html = body
-    .split(/\n{2,}/)
-    .map((p) => `<p style="margin:0 0 12px">${escapeHtml(p).replace(/\n/g, "<br>")}</p>`)
-    .join("");
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" },
@@ -45,8 +98,8 @@ const sendReply = async (
       to,
       reply_to: CONTACT_ADDR,
       subject,
-      html: `<div style="font-family:Arial,sans-serif;font-size:14px;color:#222">${html}</div>`,
-      text: body,
+      html: emailHtml(body),
+      text: `${body}\n\nBest regards,\n${SIGNATURE_NAME}\ntvmusicstore.com`,
     }),
   });
   const data = (await res.json().catch(() => ({}))) as { id?: string; message?: string };
