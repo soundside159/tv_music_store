@@ -274,6 +274,8 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
   const [newThemeName, setNewThemeName] = useState("");
   // Playlists tab: expanded playlist (tracks with waveforms) + theme rename.
   const [expandedPlaylistId, setExpandedPlaylistId] = useState<string | null>(null);
+  // Which playlist row's ⋯ menu is open (Editor Picks toggle).
+  const [pickMenuId, setPickMenuId] = useState<string | null>(null);
   const [themeRename, setThemeRename] = useState<{ from: string; draft: string } | null>(null);
   // Categories tab: expanded category (tracks with waveforms).
   const [expandedCategoryId, setExpandedCategoryId] = useState<string | null>(null);
@@ -573,7 +575,6 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
   // Toggled from the ⋯ menu on any playlist row; the pinned strip above the
   // sections shows the current picks and removes them.
   const editorPicks = data.editorPicks ?? [];
-  const [pickMenuId, setPickMenuId] = useState<string | null>(null);
   const toggleEditorPick = (id: string) => {
     const picked = editorPicks.includes(id);
     const next = picked ? editorPicks.filter((x) => x !== id) : [...editorPicks, id];
