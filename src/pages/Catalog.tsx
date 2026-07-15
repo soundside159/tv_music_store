@@ -335,44 +335,20 @@ const Catalog = () => {
                 }`}
               >
                 <div className="min-w-0">
-                  {/* ONE search box for both modes — the Search / AI Search
-                      switch lives INSIDE it (owner request). Flipping to AI
-                      unfolds the pill: wider, plus a second row with the hint
-                      and the Find button — a single smooth transition, like
-                      the header search growing on focus. */}
+                  {/* ONE search box for both modes. The Search / AI Search
+                      switch sits INSIDE it on the LEFT (the right edge moves
+                      when the box widens — buttons must not ride along), no
+                      magnifier icon. The corner radius is CONSTANT: animating
+                      it painted odd corner artifacts mid-transition. AI mode
+                      grows the typing area itself to two lines — the second
+                      row is real input space; long text wraps and stays
+                      visible. Enter searches, Shift+Enter makes a new line. */}
                   <div
-                    className={`overflow-hidden border bg-background/50 transition-all duration-500 ease-out ${
-                      searchMode === "ai"
-                        ? "rounded-2xl border-[#F4C430]/40"
-                        : "rounded-full border-white/20"
+                    className={`relative overflow-hidden rounded-[20px] border bg-background/50 transition-colors duration-500 ${
+                      searchMode === "ai" ? "border-[#F4C430]/40" : "border-white/20"
                     }`}
                   >
-                    <div className="flex h-10 items-center gap-2 pl-4 pr-1.5">
-                      {searchMode === "ai" ? (
-                        <Sparkles className="h-4 w-4 shrink-0 text-[#F4C430]/80" />
-                      ) : (
-                        <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      )}
-                      <input
-                        value={searchMode === "ai" ? aiQuery : query}
-                        onChange={(e) =>
-                          searchMode === "ai" ? setAiQuery(e.target.value) : setQuery(e.target.value)
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && searchMode === "ai") {
-                            e.preventDefault();
-                            void runAiSearch();
-                          }
-                        }}
-                        placeholder={
-                          searchMode === "ai"
-                            ? "Describe your project — mood, story, where it plays…"
-                            : activeCollection
-                              ? `Search tracks in ${activeCollection.shortTitle}...`
-                              : "Search tracks, genres, moods"
-                        }
-                        className="h-10 min-w-0 flex-1 bg-transparent font-body text-sm text-foreground outline-none placeholder:text-muted-foreground/60"
-                      />
+                    <div className="flex items-start gap-2 py-1.5 pl-2 pr-3">
                       <div className="flex shrink-0 gap-0.5 rounded-full border border-border/60 bg-card/70 p-0.5">
                         {(
                           [
@@ -396,29 +372,46 @@ const Catalog = () => {
                           </button>
                         ))}
                       </div>
+                      <textarea
+                        value={searchMode === "ai" ? aiQuery : query}
+                        onChange={(e) =>
+                          searchMode === "ai" ? setAiQuery(e.target.value) : setQuery(e.target.value)
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            if (searchMode === "ai") void runAiSearch();
+                          }
+                        }}
+                        rows={1}
+                        placeholder={
+                          searchMode === "ai"
+                            ? "Describe your project — mood, story, where it plays…"
+                            : activeCollection
+                              ? `Search tracks in ${activeCollection.shortTitle}...`
+                              : "Search tracks, genres, moods"
+                        }
+                        className={`mt-[3px] min-w-0 flex-1 resize-none overflow-hidden bg-transparent font-body text-sm leading-6 text-foreground outline-none transition-all duration-500 ease-out placeholder:text-muted-foreground/60 ${
+                          searchMode === "ai" ? "h-12 pr-16" : "h-6"
+                        }`}
+                      />
                     </div>
-                    {/* Second row — unfolds in AI mode only. */}
-                    <div
-                      className={`transition-all duration-500 ease-out ${
-                        searchMode === "ai" ? "max-h-12 opacity-100" : "max-h-0 opacity-0"
+                    {/* Find wakes up only once something is typed. */}
+                    <button
+                      type="button"
+                      onClick={() => void runAiSearch()}
+                      disabled={searchMode !== "ai" || aiBusy || aiQuery.trim().length < 3}
+                      tabIndex={searchMode === "ai" ? 0 : -1}
+                      className={`absolute bottom-2 right-2 rounded-full bg-[#F4C430] px-4 py-1 font-body text-xs font-semibold text-background transition-all duration-300 ${
+                        searchMode === "ai"
+                          ? aiQuery.trim().length >= 3
+                            ? "opacity-100"
+                            : "opacity-40"
+                          : "pointer-events-none opacity-0"
                       }`}
-                      aria-hidden={searchMode !== "ai"}
                     >
-                      <div className="flex items-center gap-3 border-t border-border/40 py-2 pl-4 pr-1.5">
-                        <p className="min-w-0 flex-1 truncate font-body text-[11px] text-muted-foreground">
-                          Tip: mention the mood, the story and where the video will play.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => void runAiSearch()}
-                          disabled={aiBusy || aiQuery.trim().length < 3}
-                          tabIndex={searchMode === "ai" ? 0 : -1}
-                          className="shrink-0 rounded-full bg-[#F4C430] px-4 py-1 font-body text-xs font-semibold text-background transition-opacity disabled:opacity-50"
-                        >
-                          {aiBusy ? "Thinking…" : "Find"}
-                        </button>
-                      </div>
-                    </div>
+                      {aiBusy ? "Thinking…" : "Find"}
+                    </button>
                   </div>
                   {aiError && <p className="mt-1.5 font-body text-xs text-red-400">{aiError}</p>}
                 </div>

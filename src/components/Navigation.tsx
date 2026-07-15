@@ -160,7 +160,7 @@ const Navigation = () => {
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search"
                 tabIndex={location.pathname === "/catalog" ? -1 : 0}
-                className="h-9 w-44 rounded-full border border-border bg-card/60 pl-10 pr-4 font-body text-sm text-foreground placeholder:text-muted-foreground/70 transition-all duration-300 focus:w-64 focus:border-[#F4C430]/70 focus:outline-none lg:w-56"
+                className="h-9 w-44 rounded-full border border-border bg-card/60 pl-10 pr-4 font-body text-sm text-foreground placeholder:text-muted-foreground/70 transition-colors duration-300 focus:border-[#F4C430]/70 focus:outline-none lg:w-56"
               />
             </form>
             <div className="relative flex items-center" ref={acctRef}>
