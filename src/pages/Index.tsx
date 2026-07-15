@@ -36,6 +36,10 @@ const trustPoints = [
 /** Rows shown in "Trending tracks" — also the number of placeholders reserved. */
 const TRENDING_COUNT = 8;
 
+/** "Browse by" chips: each left-rim arc gets its own colour, cycling through
+ *  the brand-adjacent palette (gold first, then the gradient's friends). */
+const ARC_COLORS = ["#F4C430", "#7c3aed", "#22d3ee", "#34d399", "#fb7185", "#fb923c", "#60a5fa", "#e879f9"];
+
 /** "Browse by" — one shelf, four ways in. Categories is the default: it is the
  *  owner's own curation, the other three are the raw tag families. */
 type BrowseTab = "categories" | "useCase" | "genre" | "mood";
@@ -205,16 +209,33 @@ const Index = () => {
 
           {/* The list re-mounts on every tab (key), so it fades in each time. */}
           <div key={browseTab} className="mt-5 flex animate-fade-in flex-wrap gap-2">
-            {browseItems.map((item) => (
+            {browseItems.map((item, i) => (
               <Link
                 key={item.key}
                 to={item.to}
-                className="group inline-flex items-center gap-2 rounded-full border border-border bg-card/50 px-4 py-1.5 font-body text-xs text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:border-[#F4C430]/70 hover:bg-[#F4C430]/[0.07] hover:text-[#F4C430]"
+                className="relative inline-flex items-center overflow-hidden rounded-full border border-border bg-card/50 px-4 py-1.5 font-body text-xs text-muted-foreground transition-colors duration-200 hover:border-[#F4C430]/70 hover:bg-[#F4C430]/[0.07] hover:text-[#F4C430]"
               >
-                <span
-                  className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 transition-colors duration-200 group-hover:bg-[#F4C430]"
+                {/* The left rim lights up AFTER the chips land: born as a dot
+                    at the leftmost point of the rounding, then the arc draws
+                    itself both ways (expo-out), each chip in its own colour.
+                    The key={browseTab} remount above replays it per tab. */}
+                <svg
                   aria-hidden
-                />
+                  viewBox="0 0 16 30"
+                  preserveAspectRatio="xMinYMid meet"
+                  className="pointer-events-none absolute inset-y-0 left-0 h-full w-4"
+                >
+                  <path
+                    d="M15 1 A14 14 0 0 0 15 29"
+                    pathLength={100}
+                    fill="none"
+                    stroke={ARC_COLORS[i % ARC_COLORS.length]}
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    className="arc-draw"
+                    style={{ animationDelay: `${150 + i * 35}ms` }}
+                  />
+                </svg>
                 {item.label}
               </Link>
             ))}

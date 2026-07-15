@@ -276,6 +276,28 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
   const [expandedPlaylistId, setExpandedPlaylistId] = useState<string | null>(null);
   // Which playlist row's ⋯ menu is open (Editor Picks toggle).
   const [pickMenuId, setPickMenuId] = useState<string | null>(null);
+  // Editor Picks strip: the id being dragged (reorder by drag, owner request).
+  const [dragPickId, setDragPickId] = useState<string | null>(null);
+  // Visually collapsed theme sections — remembered across reloads.
+  const [collapsedThemes, setCollapsedThemes] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("tvms_admin_collapsed_themes") ?? "[]") as string[];
+    } catch {
+      return [];
+    }
+  });
+  const toggleThemeCollapsed = (theme: string) => {
+    const key = theme || "__none";
+    setCollapsedThemes((prev) => {
+      const next = prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key];
+      try {
+        localStorage.setItem("tvms_admin_collapsed_themes", JSON.stringify(next));
+      } catch {
+        // private mode etc. — collapse still works for this visit
+      }
+      return next;
+    });
+  };
   const [themeRename, setThemeRename] = useState<{ from: string; draft: string } | null>(null);
   // Categories tab: expanded category (tracks with waveforms).
   const [expandedCategoryId, setExpandedCategoryId] = useState<string | null>(null);
@@ -585,11 +607,15 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
       if (ok) void refreshContent();
     });
   };
-  const moveEditorPick = (index: number, dir: -1 | 1) => {
-    const j = index + dir;
-    if (j < 0 || j >= editorPicks.length) return;
-    const next = [...editorPicks];
-    [next[index], next[j]] = [next[j], next[index]];
+  /** Drop the dragged pick before `beforeId` (null = to the end). */
+  const dropEditorPick = (beforeId: string | null) => {
+    const drag = dragPickId;
+    setDragPickId(null);
+    if (!drag || busy || drag === beforeId) return;
+    const next = editorPicks.filter((x) => x !== drag);
+    let idx = beforeId ? next.indexOf(beforeId) : next.length;
+    if (idx < 0) idx = next.length;
+    next.splice(idx, 0, drag);
     void run({ action: "set_editor_picks", playlistIds: next }, "Editor Picks reordered").then((ok) => {
       if (ok) void refreshContent();
     });
@@ -1007,12 +1033,37 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                   </span>
                 </div>
                 {editorPicks.length > 0 && (
-                  <ul className="divide-y divide-border/40">
-                    {editorPicks.map((id, i) => {
+                  <ul
+                    className="divide-y divide-border/40"
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      dropEditorPick(null);
+                    }}
+                  >
+                    {editorPicks.map((id) => {
                       const item = data.playlists.find((x) => x.id === id);
                       if (!item) return null;
                       return (
-                        <li key={id} className="flex items-center gap-3 px-3 py-2">
+                        <li
+                          key={id}
+                          draggable={!busy}
+                          onDragStart={(e) => {
+                            setDragPickId(id);
+                            e.dataTransfer.effectAllowed = "move";
+                          }}
+                          onDragEnd={() => setDragPickId(null)}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            dropEditorPick(id);
+                          }}
+                          className={`flex cursor-grab items-center gap-3 px-3 py-2 active:cursor-grabbing ${
+                            dragPickId === id ? "opacity-40" : ""
+                          }`}
+                        >
+                          <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground/50" />
                           {item.image && (
                             <img src={item.image} alt="" className="h-8 w-8 shrink-0 rounded object-cover" />
                           )}
@@ -1022,24 +1073,6 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                               {item.trackIds.length} tracks
                             </span>
                           </span>
-                          <button
-                            type="button"
-                            disabled={busy || i === 0}
-                            onClick={() => moveEditorPick(i, -1)}
-                            aria-label={`Move ${item.title} up in Editor Picks`}
-                            className="text-muted-foreground transition-colors hover:text-[#F4C430] disabled:opacity-30"
-                          >
-                            <ChevronUp className="h-4 w-4" />
-                          </button>
-                          <button
-                            type="button"
-                            disabled={busy || i === editorPicks.length - 1}
-                            onClick={() => moveEditorPick(i, 1)}
-                            aria-label={`Move ${item.title} down in Editor Picks`}
-                            className="text-muted-foreground transition-colors hover:text-[#F4C430] disabled:opacity-30"
-                          >
-                            <ChevronDown className="h-4 w-4" />
-                          </button>
                           <button
                             type="button"
                             disabled={busy}
@@ -1067,6 +1100,24 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                   className={`rounded-lg border border-border/60 ${busy ? "opacity-60" : ""}`}
                 >
                   <div className="flex items-center gap-2 border-b border-border/50 bg-secondary/30 px-3 py-2">
+                    {/* Collapse/expand this theme (purely visual, remembered). */}
+                    <button
+                      type="button"
+                      onClick={() => toggleThemeCollapsed(sec.theme)}
+                      title={
+                        collapsedThemes.includes(sec.theme || "__none")
+                          ? "Expand this theme"
+                          : "Collapse this theme"
+                      }
+                      aria-label={`Toggle ${sec.theme || "no-theme"} section`}
+                      className="shrink-0 text-muted-foreground transition-colors hover:text-[#F4C430]"
+                    >
+                      {collapsedThemes.includes(sec.theme || "__none") ? (
+                        <ChevronRight className="h-4 w-4" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" />
+                      )}
+                    </button>
                     {themeRename && themeRename.from === sec.theme ? (
                       <input
                         autoFocus
@@ -1156,6 +1207,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                       )}
                     </span>
                   </div>
+                  {!collapsedThemes.includes(sec.theme || "__none") && (
                   <ul className="divide-y divide-border/50">
                     {sec.items.map((item) => (
                       <li
@@ -1305,6 +1357,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                       </li>
                     )}
                   </ul>
+                  )}
                   {/* Inline create/edit form — right inside its own theme. */}
                   {draftInSection(sec) && <div className="px-3 pb-3">{draftForm}</div>}
                 </div>

@@ -339,3 +339,23 @@
     --rail-cards: 5.5;
   }
 }
+
+/* "Browse by" chips (homepage): the left-rim arc draws itself in — born as a
+   dot at the leftmost point, growing along the rounding both ways, expo-out.
+   Each chip staggers a little and carries its own stroke colour (see
+   ARC_COLORS in Index.tsx). Replays on every tab switch via remount. */
+@keyframes arc-draw {
+  from {
+    stroke-dasharray: 0.01 99.99;
+    stroke-dashoffset: -50;
+    opacity: 0;
+  }
+  to {
+    stroke-dasharray: 55 45;
+    stroke-dashoffset: -22.5;
+    opacity: 1;
+  }
+}
+.arc-draw {
+  animation: arc-draw 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
