@@ -210,10 +210,15 @@ const Catalog = () => {
         (track.categoryIds && track.categoryIds.length > 0
           ? track.categoryIds.includes(categoryParam)
           : track.category === categoryParam);
+      // AI mode: the sidebar filters are PAUSED, not cleared — hand-picked
+      // genre/mood would fight the AI's own tag routing. Flipping back to
+      // Search restores them exactly as they were.
+      const filtersPaused = searchMode === "ai";
       const matchesUseCase =
+        filtersPaused ||
         filters.useCase === "All" || splitFilterValues(track.useCase).some((item) => matchesOption(item, filters.useCase));
-      const matchesGenre = filters.genre === "All" || matchesOption(track.genre, filters.genre);
-      const matchesMood = filters.mood === "All" || matchesOption(track.mood, filters.mood);
+      const matchesGenre = filtersPaused || filters.genre === "All" || matchesOption(track.genre, filters.genre);
+      const matchesMood = filtersPaused || filters.mood === "All" || matchesOption(track.mood, filters.mood);
       const matchesQuery = !trimmedQuery || searchScore(track, trimmedQuery) > 0;
       const matchesAi = !aiRes || aiScore(track) > 0;
 
@@ -238,7 +243,7 @@ const Catalog = () => {
       );
     }
     return sortTracks(result, sort, recommendedRank);
-  }, [tracks, activeCollection, categoryParam, filters, query, sort, recommendedRank, aiRes]);
+  }, [tracks, activeCollection, categoryParam, filters, query, sort, recommendedRank, aiRes, searchMode]);
 
   // RELATED tail: when the request was narrow and returned few tracks, keep the
   // funnel going with tracks that share what those few have in common (see
@@ -335,7 +340,7 @@ const Catalog = () => {
             className="animate-slide-in-left min-[1800px]:absolute min-[1800px]:bottom-0 min-[1800px]:right-full min-[1800px]:top-0 min-[1800px]:mr-6 min-[1800px]:w-[17.5rem]"
             style={{ animationDelay: "0.4s" }}
           >
-            <FilterSidebar filters={filters} setFilter={setFilter} onClear={clearFilters} />
+            <FilterSidebar filters={filters} setFilter={setFilter} onClear={clearFilters} paused={searchMode === "ai"} />
           </div>
 
           <section className="min-w-0">
@@ -822,17 +827,27 @@ const FilterSidebar = ({
   filters,
   setFilter,
   onClear,
+  paused = false,
 }: {
   filters: FilterValue;
   setFilter: (key: keyof FilterValue, value: string) => void;
   onClear: () => void;
+  /** AI search on: the whole panel dims and ignores clicks — selections are
+   *  kept and wake up the moment the user returns to plain Search. */
+  paused?: boolean;
 }) => {
   const vocab = useVocabularies();
   const [tab, setTab] = useState<keyof FilterValue>("useCase");
   const hasActive = filters.useCase !== "All" || filters.genre !== "All" || filters.mood !== "All";
 
   return (
-    <aside className="h-fit rounded-lg border border-border/30 bg-card/30 p-4 lg:sticky lg:top-24">
+    <aside
+      className={`h-fit rounded-lg border border-border/30 bg-card/30 p-4 transition-opacity duration-300 lg:sticky lg:top-24 ${
+        paused ? "pointer-events-none opacity-35" : ""
+      }`}
+      aria-disabled={paused}
+      title={paused ? "Filters are off while AI Search is active" : undefined}
+    >
       <div className="mb-4 flex items-center justify-between gap-3 border-b border-border/30 pb-4">
         <div className="flex items-center gap-3">
           <span className="flex h-8 w-8 items-center justify-center rounded-md border border-border/50">
