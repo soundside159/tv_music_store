@@ -29,6 +29,12 @@ export const ensureMailTables = async (db: D1Database): Promise<void> => {
   } catch {
     // column already exists — fine
   }
+  // favorite marks the owner's starred correspondents (the Favorites tab).
+  try {
+    await db.prepare(`ALTER TABLE mail_threads ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0`).run();
+  } catch {
+    // column already exists — fine
+  }
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_mail_threads_last ON mail_threads(last_message_at)`).run();
   await db
     .prepare(

@@ -4,9 +4,12 @@ import { ensureMailTables, recordMessage } from "../_mail";
 // Admin mailbox API. Inbound mail arrives via the separate Email Worker (see
 // mail-worker/) into the same D1; this reads threads/messages and sends replies
 // through Resend from contact@tvmusicstore.com.
-//   GET  /api/admin/mail            -> { threads }
+//   GET  /api/admin/mail?tab=inbox|sent|favorites -> { threads, counts }
 //   GET  /api/admin/mail?id=<tid>   -> { thread, messages, customer } (marks read)
-//   POST /api/admin/mail { action: reply | mark_read | archive | delete, ... }
+//   POST /api/admin/mail { action: reply | compose | favorite | mark_read |
+//                          archive | delete, ... }
+// Tabs are a TRIAGE view over per-person threads: Inbox = the client spoke
+// last (needs an answer), Sent = we spoke last, Favorites = starred people.
 
 const CONTACT_FROM = "TV Music Store <contact@tvmusicstore.com>";
 const CONTACT_ADDR = "contact@tvmusicstore.com";
@@ -115,7 +118,7 @@ export const onRequestGet = async (ctx: Ctx) => {
     const like = `%${q}%`;
     const found = await ctx.env.DB.prepare(
       `SELECT DISTINCT t.id, t.email, t.name, t.last_message_at, t.last_snippet,
-              t.last_direction, t.unread, t.archived, t.priority
+              t.last_direction, t.unread, t.archived, t.priority, t.favorite
          FROM mail_threads t
          LEFT JOIN mail_messages m ON m.thread_id = t.id
         WHERE t.email LIKE ?1 OR t.name LIKE ?1 OR m.subject LIKE ?1 OR m.body LIKE ?1
@@ -127,17 +130,36 @@ export const onRequestGet = async (ctx: Ctx) => {
     return json({ threads: found.results, unreadThreads: 0 });
   }
 
+  const tab = new URL(ctx.request.url).searchParams.get("tab") ?? "inbox";
+  const where =
+    tab === "sent"
+      ? "archived = 0 AND last_direction = 'out'"
+      : tab === "favorites"
+        ? "archived = 0 AND favorite = 1"
+        : "archived = 0 AND (last_direction = 'in' OR last_direction IS NULL)";
   const threads = await ctx.env.DB.prepare(
-    `SELECT id, email, name, last_message_at, last_snippet, last_direction, unread, archived, priority
+    `SELECT id, email, name, last_message_at, last_snippet, last_direction, unread, archived, priority, favorite
        FROM mail_threads
-      WHERE archived = 0
+      WHERE ${where}
       ORDER BY priority DESC, last_message_at DESC
       LIMIT 300`,
   ).all();
+  const countOf = async (w: string) => {
+    const r = await ctx.env.DB.prepare(`SELECT COUNT(*) AS n FROM mail_threads WHERE ${w}`).first<{ n: number }>();
+    return r?.n ?? 0;
+  };
   const unreadRow = await ctx.env.DB.prepare(
     `SELECT COUNT(*) AS n FROM mail_threads WHERE unread > 0 AND archived = 0`,
   ).first<{ n: number }>();
-  return json({ threads: threads.results, unreadThreads: unreadRow?.n ?? 0 });
+  return json({
+    threads: threads.results,
+    unreadThreads: unreadRow?.n ?? 0,
+    counts: {
+      inbox: await countOf("archived = 0 AND (last_direction = 'in' OR last_direction IS NULL)"),
+      sent: await countOf("archived = 0 AND last_direction = 'out'"),
+      favorites: await countOf("archived = 0 AND favorite = 1"),
+    },
+  });
 };
 
 export const onRequestPost = async (ctx: Ctx) => {
@@ -154,6 +176,9 @@ export const onRequestPost = async (ctx: Ctx) => {
         subject?: string;
         body?: string;
         archived?: boolean;
+        to?: string;
+        name?: string;
+        favorite?: boolean;
       };
     } catch {
       return null;
@@ -185,6 +210,38 @@ export const onRequestPost = async (ctx: Ctx) => {
         body: text,
         providerId: sent.id ?? null,
       });
+      return json({ ok: true });
+    }
+
+    case "compose": {
+      // A brand-new outgoing email (not a reply): creates/reuses the person's
+      // thread, so the conversation continues in one place when they answer.
+      const to = (body.to ?? "").trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return json({ error: "A valid recipient email is required" }, 400);
+      const text = body.body?.trim();
+      if (!text) return json({ error: "Message text is required" }, 400);
+      const subject = body.subject?.trim() || "Message from TV Music Store";
+      const sent = await sendReply(ctx.env, to, subject, text);
+      if (!sent.ok) return json({ error: `Could not send: ${sent.error}` }, 502);
+      const threadId = await recordMessage(db, {
+        email: to,
+        name: body.name?.trim() || null,
+        direction: "out",
+        from: CONTACT_ADDR,
+        to,
+        subject,
+        body: text,
+        providerId: sent.id ?? null,
+      });
+      return json({ ok: true, threadId });
+    }
+
+    case "favorite": {
+      if (!body.threadId) return json({ error: "threadId required" }, 400);
+      await db
+        .prepare(`UPDATE mail_threads SET favorite = ?2 WHERE id = ?1`)
+        .bind(body.threadId, body.favorite === false ? 0 : 1)
+        .run();
       return json({ ok: true });
     }
 
