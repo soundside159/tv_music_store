@@ -949,12 +949,24 @@ export const onRequestPost = async (ctx: Ctx) => {
         changes?: { add?: string[]; remove?: string[] },
       ) => {
         if (!changes) return;
-        const marks = ids.map((_, i) => `?${i + 2}`).join(", ");
-        for (const target of changes.remove ?? []) {
-          await db
-            .prepare(`DELETE FROM ${table} WHERE ${col} = ?1 AND track_id IN (${marks})`)
-            .bind(target, ...ids)
-            .run();
+        // D1 (SQLite) caps bound variables at 100 PER STATEMENT. "Deselect all"
+        // sends every playlist id × a couple hundred selected tracks in one
+        // request, so both lists are chunked and each DELETE stays under the
+        // cap (10 targets + 88 track ids = 98 variables, worst case).
+        const chunk = <T,>(arr: T[], n: number): T[][] => {
+          const out: T[][] = [];
+          for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+          return out;
+        };
+        for (const targets of chunk(changes.remove ?? [], 10)) {
+          for (const trackIds of chunk(ids, 88)) {
+            const tMarks = targets.map((_, i) => `?${i + 1}`).join(", ");
+            const idMarks = trackIds.map((_, i) => `?${targets.length + i + 1}`).join(", ");
+            await db
+              .prepare(`DELETE FROM ${table} WHERE ${col} IN (${tMarks}) AND track_id IN (${idMarks})`)
+              .bind(...targets, ...trackIds)
+              .run();
+          }
         }
         for (const target of changes.add ?? []) {
           const sortRow = await db
@@ -1534,7 +1546,10 @@ export const onRequestPost = async (ctx: Ctx) => {
           ? [body.id]
           : [];
       if (ids.length === 0) return json({ error: "trackIds required" }, 400);
-      const marks = ids.map((_, i) => `?${i + 1}`).join(", ");
+      // D1 caps bound variables at 100 per statement — run every id-list
+      // statement per chunk of 90 ids instead of one giant IN (...).
+      const idChunks: string[][] = [];
+      for (let i = 0; i < ids.length; i += 90) idChunks.push(ids.slice(i, i + 90));
       await ensureTrackCoverColumn(db);
 
       // Collect every FILE these tracks own BEFORE the rows go — otherwise the
@@ -1550,12 +1565,14 @@ export const onRequestPost = async (ctx: Ctx) => {
         return /^(previews|masters|covers)\//.test(key) ? key : null;
       };
       try {
+        for (const chunk of idChunks) {
+        const marks = chunk.map((_, i) => `?${i + 1}`).join(", ");
         const rows = await db
           .prepare(
             `SELECT wav_manifest, stems_manifest, r2_key_wav_zip, r2_key_stems, cover, cover_thumb
                FROM tracks WHERE id IN (${marks})`,
           )
-          .bind(...ids)
+          .bind(...chunk)
           .all<{
             wav_manifest: string | null;
             stems_manifest: string | null;
@@ -1580,7 +1597,7 @@ export const onRequestPost = async (ctx: Ctx) => {
           .prepare(
             `SELECT preview_src, preview_128, r2_key_wav FROM track_versions WHERE track_id IN (${marks})`,
           )
-          .bind(...ids)
+          .bind(...chunk)
           .all<{ preview_src: string | null; preview_128: string | null; r2_key_wav: string | null }>();
         for (const v of vrows.results) {
           for (const p of [v.preview_src, v.preview_128, v.r2_key_wav]) {
@@ -1588,17 +1605,21 @@ export const onRequestPost = async (ctx: Ctx) => {
             if (k) doomedKeys.add(k);
           }
         }
+        }
       } catch {
         // legacy DB without some column — delete what we could read
       }
 
-      await db.prepare(`DELETE FROM track_versions WHERE track_id IN (${marks})`).bind(...ids).run();
-      await db.prepare(`DELETE FROM collection_tracks WHERE track_id IN (${marks})`).bind(...ids).run();
-      await db.prepare(`DELETE FROM playlist_tracks WHERE track_id IN (${marks})`).bind(...ids).run();
-      try {
-        await db.prepare(`DELETE FROM category_tracks WHERE track_id IN (${marks})`).bind(...ids).run();
-      } catch {
-        // category_tracks not created yet — fine
+      for (const chunk of idChunks) {
+        const marks = chunk.map((_, i) => `?${i + 1}`).join(", ");
+        await db.prepare(`DELETE FROM track_versions WHERE track_id IN (${marks})`).bind(...chunk).run();
+        await db.prepare(`DELETE FROM collection_tracks WHERE track_id IN (${marks})`).bind(...chunk).run();
+        await db.prepare(`DELETE FROM playlist_tracks WHERE track_id IN (${marks})`).bind(...chunk).run();
+        try {
+          await db.prepare(`DELETE FROM category_tracks WHERE track_id IN (${marks})`).bind(...chunk).run();
+        } catch {
+          // category_tracks not created yet — fine
+        }
       }
       // Strip the deleted ids out of the trending list.
       try {
@@ -1620,7 +1641,10 @@ export const onRequestPost = async (ctx: Ctx) => {
         // no trending config — fine
       }
 
-      await db.prepare(`DELETE FROM tracks WHERE id IN (${marks})`).bind(...ids).run();
+      for (const chunk of idChunks) {
+        const marks = chunk.map((_, i) => `?${i + 1}`).join(", ");
+        await db.prepare(`DELETE FROM tracks WHERE id IN (${marks})`).bind(...chunk).run();
+      }
 
       // Storage cleanup last: the DB is the source of truth, so a hiccup here
       // never blocks the delete — it only leaves an orphaned object behind.
