@@ -23,6 +23,21 @@ import Cart from "./pages/Cart";
 import Composer from "./pages/Composer";
 import Admin from "./pages/Admin";
 import RouteBeacon from "./lib/analytics";
+import { useEffect } from "react";
+import { useLocation } from "react-router-dom";
+
+// SPA navigation keeps the scroll position — landing mid-page on a playlist
+// after scrolling the homepage reads as a bug. Every PATHNAME change starts
+// the new page at the top; query-param changes (catalog filters etc.) don't
+// jump. Instant, not smooth: smooth scrolling across a route change looks
+// like the page is running away.
+const ScrollToTop = () => {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+};
 import Login from "./pages/Login";
 import LicenseTerms from "./pages/LicenseTerms";
 import Privacy from "./pages/Privacy";
@@ -54,6 +69,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         {/* Pageview beacon for Admin -> Analytics (see src/lib/analytics.tsx). */}
+        <ScrollToTop />
         <RouteBeacon />
         <ContentBoot />
         <DevPersonaSwitcher />
