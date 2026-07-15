@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Check, MoreHorizontal } from "lucide-react";
+import { ExternalLink, Check, MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { accountNavGroups, adminNavGroups, composerNavItems } from "@/lib/adminNav";
 import MenuGroupHeader from "@/components/MenuGroupHeader";
@@ -752,6 +752,17 @@ const Admin = () => {
                     dashboard is becoming the owner's single landing screen. */}
                 <div className="my-2 h-px bg-border/60" />
                 <AdminUsage />
+                {/* Straight to the money page (owner request): OpenAI's billing
+                    overview, where the balance is topped up. */}
+                <a
+                  href="https://platform.openai.com/settings/organization/billing/overview"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex w-fit items-center gap-2 rounded-lg border border-border px-4 py-2 font-body text-sm text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
+                >
+                  OpenAI Billing — top up balance
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
               </>
             )}
 

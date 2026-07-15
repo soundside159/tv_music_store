@@ -482,6 +482,56 @@ const AdminTracksEdit = ({
     }
   };
 
+  // ---- TEMPORARY "Fix titles" (owner request, to be removed later): Vicate's
+  // uploads arrived with dashed titles ("stylish-dynamic-beat") — this turns
+  // every dash in the SELECTED tracks' titles into a space. Nothing else is
+  // touched; slugs/URLs stay as they are.
+  const [titlesBusy, setTitlesBusy] = useState(false);
+
+  const fixDashTitles = async () => {
+    const keep = [...selected];
+    const jobs = tracks
+      .filter((t) => keep.includes(t.id))
+      .map((t) => ({ t, next: t.title.replace(/-+/g, " ").replace(/\s+/g, " ").trim() }))
+      .filter((j) => j.next && j.next !== j.t.title);
+    if (jobs.length === 0) {
+      toast.error("No selected track has a dash in its title");
+      return;
+    }
+    if (
+      !window.confirm(
+        `Replace dashes with spaces in ${jobs.length} title(s)?` +
+          `\ne.g. "${jobs[0].t.title}" -> "${jobs[0].next}"`,
+      )
+    )
+      return;
+    setTitlesBusy(true);
+    try {
+      let done = 0;
+      const overrides: Record<string, Partial<CatalogTrack>> = {};
+      for (const { t, next } of jobs) {
+        const res = await fetch("/api/admin/content", {
+          method: "POST",
+          credentials: "include",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "bulk_update_tracks", trackIds: [t.id], fields: { title: next } }),
+        });
+        const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+        if (!res.ok || !d.ok) {
+          toast.error(`${t.title}: ${d.error ?? "failed"}`);
+          continue;
+        }
+        overrides[t.id] = { title: next };
+        done += 1;
+      }
+      if (Object.keys(overrides).length > 0) onApplyOverrides(overrides);
+      setSelected(keep);
+      toast.success(`${done} title(s) fixed`);
+    } finally {
+      setTitlesBusy(false);
+    }
+  };
+
   const readXlsx = async (file: File) => {
     const selectedTracks = tracks.filter((t) => selected.includes(t.id));
     if (selectedTracks.length === 0) return;
@@ -1392,6 +1442,65 @@ const AdminTracksEdit = ({
     onContentReload?.();
   };
 
+  // "Deselect all" for the TAGS panel: unticks every Usage / Genre / Mood value
+  // the selected tracks currently carry (union across the selection — stray
+  // values that aren't even in the vocabulary get cleared too).
+  const deselectAllFacets = async () => {
+    if (disabled || busy || selected.length === 0) return;
+    const union = (key: FacetKey) => {
+      const set = new Set<string>();
+      for (const t of selTracks) for (const v of splitFilterValues(facetValue(t, key))) set.add(v);
+      return [...set];
+    };
+    const rm = { useCase: union("useCase"), genre: union("genre"), mood: union("mood") };
+    if (rm.useCase.length + rm.genre.length + rm.mood.length === 0) {
+      toast.error("The selected tracks have no tags to clear");
+      return;
+    }
+    if (
+      !window.confirm(
+        `Untick ALL Usage / Genre / Mood values on ${selTracks.length} selected track(s)?`,
+      )
+    )
+      return;
+    const facets: Record<string, { remove: string[] }> = {};
+    if (rm.useCase.length > 0) facets.useCase = { remove: rm.useCase };
+    if (rm.genre.length > 0) facets.genre = { remove: rm.genre };
+    if (rm.mood.length > 0) facets.mood = { remove: rm.mood };
+    const ok = await run(
+      { action: "bulk_update_tracks", trackIds: selected, facets },
+      "All tags cleared",
+    );
+    if (!ok) return;
+    const overrides: Record<string, Partial<CatalogTrack>> = {};
+    for (const t of selTracks) overrides[t.id] = { useCase: "", genre: "", mood: "" };
+    onApplyOverrides(overrides);
+  };
+
+  // "Deselect all" for the ADD TO panel: pulls the selected tracks out of every
+  // collection, playlist and category (remove is a no-op where not a member).
+  const deselectAllMemberships = async () => {
+    if (disabled || busy || selected.length === 0) return;
+    if (
+      !window.confirm(
+        `Remove ${selTracks.length} selected track(s) from ALL collections, playlists and categories?`,
+      )
+    )
+      return;
+    const ok = await run(
+      {
+        action: "bulk_update_tracks",
+        trackIds: selected,
+        collectionChanges: { remove: collections.map((i) => i.id) },
+        playlistChanges: { remove: playlists.map((i) => i.id) },
+        categoryChanges: { remove: categories.map((i) => i.id) },
+      },
+      "Removed from all collections / playlists / categories",
+    );
+    if (!ok) return;
+    onContentReload?.();
+  };
+
   const memberDisplay = (delta: Record<string, "all" | "none">, item: ContentItemLite): TriState =>
     delta[item.id] ?? memberBase(item);
 
@@ -2025,6 +2134,19 @@ const AdminTracksEdit = ({
                   }}
                 />
               </label>
+              )}
+              {/* TEMPORARY (owner request): dashes -> spaces in the selected
+                  titles. Vicate-only; delete this block when asked. */}
+              {VICATE_SHEET_COMPOSERS.includes(composer) && (
+                <button
+                  type="button"
+                  disabled={titlesBusy || busy}
+                  onClick={() => void fixDashTitles()}
+                  className={btnCls}
+                  title="Replace dashes with spaces in the SELECTED tracks' titles"
+                >
+                  {titlesBusy ? "Fixing…" : "Fix titles (– to space)"}
+                </button>
               )}
               {/* Vicate's mapped sheet (# / title / bpm / genres / moods / usage /
                   categories / playlists / description) — ticks the checkboxes of
@@ -2864,9 +2986,22 @@ const AdminTracksEdit = ({
           filter the table and need no tracks picked) — only the ticks go
           inert, via TriCheckbox's toggleDisabled. */}
       <aside className={panelColCls}>
-        <p className="font-body text-[10px] font-bold uppercase tracking-[0.24em] text-[#F4C430]">
-          Tags{selTracks.length > 1 ? ` · ${selTracks.length} tracks` : ""}
-        </p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="font-body text-[10px] font-bold uppercase tracking-[0.24em] text-[#F4C430]">
+            Tags{selTracks.length > 1 ? ` · ${selTracks.length} tracks` : ""}
+          </p>
+          {hasSelection && (
+            <button
+              type="button"
+              disabled={busy || disabled}
+              onClick={() => void deselectAllFacets()}
+              className="shrink-0 font-body text-[10px] text-muted-foreground transition-colors hover:text-red-400 disabled:opacity-50"
+              title="Untick every Usage / Genre / Mood value on the selected tracks"
+            >
+              Deselect all
+            </button>
+          )}
+        </div>
         {FACETS.map(({ key, label }) => (
           <div key={key} className="border-t border-border/60 pt-4 first:border-t-0 first:pt-0">
             <p className="mb-2 font-body text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -2897,9 +3032,22 @@ const AdminTracksEdit = ({
       {/* ===== Add to: collections / playlists / categories (any selection) =====
           Alive without a selection too — same deal as the Tags panel. */}
       <aside className={panelColCls}>
-        <p className="font-body text-[10px] font-bold uppercase tracking-[0.24em] text-[#F4C430]">
-          Add to
-        </p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="font-body text-[10px] font-bold uppercase tracking-[0.24em] text-[#F4C430]">
+            Add to
+          </p>
+          {hasSelection && (
+            <button
+              type="button"
+              disabled={busy || disabled}
+              onClick={() => void deselectAllMemberships()}
+              className="shrink-0 font-body text-[10px] text-muted-foreground transition-colors hover:text-red-400 disabled:opacity-50"
+              title="Remove the selected tracks from every collection, playlist and category"
+            >
+              Deselect all
+            </button>
+          )}
+        </div>
         {membershipSection("Collections", "collection", collections, collectionDelta, setCollectionDelta)}
         {membershipSection("Playlists", "playlist", playlists, playlistDelta, setPlaylistDelta, playlistSearch, setPlaylistSearch)}
         {membershipSection("Categories", "category", categories, categoryDelta, setCategoryDelta)}
