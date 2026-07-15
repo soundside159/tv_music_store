@@ -57,7 +57,7 @@ const VisualizerSettingsPanel = () => {
             onClick={() => resetVisualizerSettings()}
             className="rounded-lg border border-border px-3 py-1.5 font-body text-xs text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
           >
-            Reset
+            Reset to my setup
           </button>
         </div>
         <p className="mt-1 font-body text-[11px] text-muted-foreground">

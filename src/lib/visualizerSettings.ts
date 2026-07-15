@@ -56,10 +56,16 @@ export const DEFAULT_VISUALIZER: VisualizerSettings = {
 };
 
 const KEY = "tvms_visualizer_v1";
+// One-time snapshot of whatever this browser had BEFORE the tuning panel ever
+// touched anything. Reset restores THIS — the owner's own setup — never the
+// factory numbers (he lost a tuned setup to a factory reset once; not again).
+const BACKUP_KEY = "tvms_visualizer_backup_v1";
 
 let settings: VisualizerSettings = (() => {
   try {
     const raw = localStorage.getItem(KEY);
+    // Take the pre-panel snapshot exactly once, before anything can change.
+    if (raw && !localStorage.getItem(BACKUP_KEY)) localStorage.setItem(BACKUP_KEY, raw);
     if (raw) return { ...DEFAULT_VISUALIZER, ...(JSON.parse(raw) as Partial<VisualizerSettings>) };
   } catch {
     // ignore — defaults
@@ -81,8 +87,17 @@ export const updateVisualizerSettings = (patch: Partial<VisualizerSettings>): vo
   listeners.forEach((l) => l());
 };
 
+/** Reset = back to the owner's OWN saved setup (the pre-panel snapshot).
+ *  Only when no snapshot exists does it fall back to the factory numbers. */
 export const resetVisualizerSettings = (): void => {
-  updateVisualizerSettings({ ...DEFAULT_VISUALIZER });
+  let saved: Partial<VisualizerSettings> | null = null;
+  try {
+    const raw = localStorage.getItem(BACKUP_KEY);
+    if (raw) saved = JSON.parse(raw) as Partial<VisualizerSettings>;
+  } catch {
+    // corrupt backup — factory it is
+  }
+  updateVisualizerSettings({ ...DEFAULT_VISUALIZER, ...(saved ?? {}) });
 };
 
 export const subscribeVisualizer = (cb: () => void): (() => void) => {
