@@ -37,24 +37,26 @@ export interface VisualizerSettings {
   fade: number;
 }
 
-// Owner-approved defaults (bar-EQ round 2, tuned live on 2026-07-09).
+// Owner-approved defaults (bar-EQ final, owner's screenshot 2026-07-15 baked verbatim;
+// the tuning panel is unmounted now — remount VisualizerSettingsPanel in
+// Index.tsx to tune again).
 export const DEFAULT_VISUALIZER: VisualizerSettings = {
   enabled: true,
   opacity: 100,
   density: 100, // Bars
-  reactivity: 7,
-  maxRise: 56,
+  reactivity: 20,
+  maxRise: 37,
   size: 100, // Bar width
   trail: 17, // Fall smooth
-  glow: 49, // Border light
+  glow: 54, // Border light
   chaos: 22, // unused (particle era)
   sparkle: 90, // Peak caps
   gold: 100,
-  smoothing: 43,
-  bass: 100,
-  mid: 79,
-  high: 86,
-  threshold: 53, // Sensitivity
+  smoothing: 53,
+  bass: 55,
+  mid: 62,
+  high: 100,
+  threshold: 42, // Sensitivity
   fade: 0, // Cap fall (0 = caps linger — owner's pick)
 };
 

@@ -471,6 +471,22 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
     }
   };
 
+  /** Published -> draft for the whole selection (mirror of Publish). */
+  const unpublishSelectedTracks = async () => {
+    if (selectedTrackIds.length === 0) return;
+    const n = selectedTrackIds.length;
+    if (!window.confirm(`Unpublish ${n} track${n > 1 ? "s" : ""}? They go back to Drafts and disappear from the site.`)) return;
+    const ok = await run(
+      { action: "bulk_update_tracks", trackIds: selectedTrackIds, fields: { status: "draft" } },
+      `${n} track${n > 1 ? "s" : ""} unpublished`,
+    );
+    if (ok) {
+      setSelectedTrackIds([]);
+      setSelResetKey((k) => k + 1);
+      void reloadTracks();
+    }
+  };
+
   // (The legacy per-track "Upload stems ZIP" flow was removed — stems arrive
   // as plain audio files through Bulk Upload; Tags Base took its button spot.)
 
@@ -980,14 +996,29 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                   <Sparkles className={`h-4 w-4 ${aiBusy ? "animate-pulse" : ""}`} />
                   {aiBusy ? `AI ${aiNote}…` : `AI Art & Text (${selectedTrackIds.length})`}
                 </button>
-                <button
-                  type="button"
-                  disabled={busy || aiBusy}
-                  onClick={() => void publishSelectedTracks()}
-                  className={goldBtnCls}
-                >
-                  Publish ({selectedTrackIds.length})
-                </button>
+                {/* Publish shows when the selection contains drafts; Unpublish
+                    when it contains published tracks (both, for a mixed pick). */}
+                {mergedTracks.some((t) => selectedTrackIds.includes(t.id) && t.status !== "published") && (
+                  <button
+                    type="button"
+                    disabled={busy || aiBusy}
+                    onClick={() => void publishSelectedTracks()}
+                    className={goldBtnCls}
+                  >
+                    Publish ({selectedTrackIds.length})
+                  </button>
+                )}
+                {mergedTracks.some((t) => selectedTrackIds.includes(t.id) && t.status === "published") && (
+                  <button
+                    type="button"
+                    disabled={busy || aiBusy}
+                    onClick={() => void unpublishSelectedTracks()}
+                    title="Back to Drafts — the tracks disappear from the site until published again"
+                    className="rounded-lg border border-amber-400/60 px-4 py-2 font-body text-sm font-semibold text-amber-400 transition-colors hover:bg-amber-400/10 disabled:opacity-50"
+                  >
+                    Unpublish ({selectedTrackIds.length})
+                  </button>
+                )}
                 <button
                   type="button"
                   disabled={busy}

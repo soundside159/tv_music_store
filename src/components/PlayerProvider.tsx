@@ -82,7 +82,18 @@ export const PlayerProvider = ({ children }: { children: ReactNode }) => {
                 >
                   {currentTrack.title}
                 </Link>
-                <p className="truncate font-body text-xs text-muted-foreground">{currentVersion.label}</p>
+                {/* "by <artist>" like the track rows — the version label here
+                    either duplicated the title or just said "Main". */}
+                {currentTrack.artistSlug ? (
+                  <Link
+                    to={`/artist/${currentTrack.artistSlug}`}
+                    className="block w-fit max-w-full truncate font-body text-xs text-muted-foreground transition-colors hover:text-[#F4C430]"
+                  >
+                    by {currentTrack.artist}
+                  </Link>
+                ) : (
+                  <p className="truncate font-body text-xs text-muted-foreground">by {currentTrack.artist}</p>
+                )}
               </div>
             </div>
 
