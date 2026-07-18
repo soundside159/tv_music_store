@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Music, Tag, Trash2 } from "lucide-react";
+import { CreditCard, Music, Tag, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
@@ -32,10 +32,57 @@ const post = async (path: string, body: unknown) => {
   const data = (await res.json().catch(() => ({}))) as {
     ok?: boolean;
     id?: string;
+    url?: string;
     error?: string;
     code?: string;
   };
   return { ...data, status: res.status };
+};
+
+/** Reads the cart at click time (it may have changed since render). */
+const cartItemsNow = (): { slug: string; tier: string }[] => {
+  const raw = localStorage.getItem("tvms_cart_v1");
+  return (raw ? (JSON.parse(raw) as { slug: string; tier: string }[]) : []).map((i) => ({
+    slug: i.slug,
+    tier: i.tier,
+  }));
+};
+
+/** "Pay with card" — redirects to a Stripe Checkout page for the cart. */
+const CardCheckout = ({ disabled }: { disabled: boolean }) => {
+  const [busy, setBusy] = useState(false);
+
+  const payWithCard = async () => {
+    setBusy(true);
+    try {
+      const res = await post("/api/stripe/checkout-licenses", { items: cartItemsNow() });
+      if (res.status === 401) {
+        window.dispatchEvent(new CustomEvent("tvms:open-auth"));
+        return;
+      }
+      if (!res.url) {
+        toast.error(res.error ?? "Card checkout is not available right now — try PayPal below.");
+        return;
+      }
+      window.location.href = res.url;
+    } catch {
+      toast.error("Could not start card checkout. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={payWithCard}
+      disabled={disabled || busy}
+      className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#F4C430] px-6 py-3 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85 disabled:pointer-events-none disabled:opacity-50"
+    >
+      <CreditCard className="h-4 w-4" />
+      {busy ? "Opening secure checkout..." : "Pay with card"}
+    </button>
+  );
 };
 
 /** PayPal buttons; renders a notice while payments are not configured. */
@@ -80,12 +127,7 @@ const PayPalCheckout = ({ disabled }: { disabled: boolean }) => {
       .Buttons({
         style: { layout: "vertical", color: "gold", shape: "rect", label: "paypal" },
         createOrder: async () => {
-          // Read the cart at click time (it may have changed since render).
-          const raw = localStorage.getItem("tvms_cart_v1");
-          const items = (raw ? (JSON.parse(raw) as { slug: string; tier: string }[]) : []).map(
-            (i) => ({ slug: i.slug, tier: i.tier }),
-          );
-          const res = await post("/api/paypal/order", { items });
+          const res = await post("/api/paypal/order", { items: cartItemsNow() });
           if (res.status === 401) {
             window.dispatchEvent(new CustomEvent("tvms:open-auth"));
             throw new Error("Sign in to buy licenses");
@@ -142,6 +184,21 @@ const Cart = () => {
   const { items, count, total } = useCart();
   // Live tier prices (admin-editable) — re-renders when they hydrate/change.
   const liveTiers = useLicenseTiers();
+  const navigate = useNavigate();
+
+  // Back from Stripe Checkout: ?checkout=success (paid — webhook is recording
+  // the licenses) or ?checkout=canceled (nothing charged, cart untouched).
+  useEffect(() => {
+    const outcome = new URLSearchParams(window.location.search).get("checkout");
+    if (outcome === "success") {
+      clearCart();
+      toast.success("Payment complete! Your licenses are in your account.");
+      navigate("/account?purchase=success", { replace: true });
+    } else if (outcome === "canceled") {
+      toast("Checkout canceled — your cart is unchanged.");
+      navigate("/cart", { replace: true });
+    }
+  }, [navigate]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -262,7 +319,15 @@ const Cart = () => {
                 <Tag className="h-3.5 w-3.5" />
                 Licenses are delivered to your account instantly after payment.
               </p>
-              <div className="mt-5">
+              <div className="mt-5 flex flex-col gap-3">
+                <CardCheckout disabled={count === 0} />
+                <div className="flex items-center gap-3">
+                  <span className="h-px flex-1 bg-border/70" />
+                  <span className="font-body text-[11px] uppercase tracking-wide text-muted-foreground">
+                    or
+                  </span>
+                  <span className="h-px flex-1 bg-border/70" />
+                </div>
                 <PayPalCheckout disabled={count === 0} />
               </div>
             </aside>

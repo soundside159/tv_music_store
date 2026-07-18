@@ -1,5 +1,5 @@
-import { json, type Ctx } from "../_utils";
-import { recordRevenueEvent, reverseEvent } from "../_revenue";
+import { json, newId, type Ctx } from "../_utils";
+import { allocateEvent, recordRevenueEvent, reverseEvent } from "../_revenue";
 import {
   mapStripeStatus,
   stripeCall,
@@ -103,6 +103,111 @@ const recordStripeInvoice = async (ctx: Ctx, key: string, inv: StripeInvoice): P
 };
 
 
+// ---------------------------------------------------------------------------
+// One-time license carts paid by CARD (created by checkout-licenses.ts).
+// The twin of paypal/capture.ts: writes the same sync_orders rows and books
+// the same per-track ledger events, so Account/Licenses, the PDF certificate
+// and Finance treat card and PayPal purchases identically.
+// ---------------------------------------------------------------------------
+
+interface LicenseCartSession {
+  id?: string;
+  client_reference_id?: string | null;
+  payment_intent?: string | null;
+  metadata?: Record<string, string>;
+  currency?: string;
+  total_details?: { amount_tax?: number };
+}
+
+const fulfillLicenseCart = async (ctx: Ctx, key: string, s: LicenseCartSession): Promise<void> => {
+  const sessionId = s.id;
+  const userId = s.metadata?.user_id ?? s.client_reference_id ?? null;
+  if (!sessionId || !userId) return;
+
+  // A webhook can fire twice — record each cart once (same guard as PayPal).
+  const existing = await ctx.env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM sync_orders WHERE stripe_session_id = ?1`,
+  )
+    .bind(sessionId)
+    .first<{ n: number }>();
+  if ((existing?.n ?? 0) > 0) return;
+
+  // What was bought: slug/tier travel in each line's product metadata.
+  const lines = await stripeCall<{
+    data?: {
+      amount_total?: number;
+      price?: { product?: { metadata?: Record<string, string> } | string | null } | null;
+    }[];
+  }>(key, "GET", `/checkout/sessions/${sessionId}/line_items?limit=100&expand[]=data.price.product`);
+
+  const items = (lines.data ?? [])
+    .map((l) => {
+      const product = l.price && typeof l.price === "object" ? l.price.product : null;
+      const meta = product && typeof product === "object" ? (product.metadata ?? {}) : {};
+      return { slug: meta.slug ?? "", tier: meta.tier ?? "", priceCents: l.amount_total ?? 0 };
+    })
+    .filter((i) => i.slug && i.tier);
+  if (items.length === 0) return;
+
+  const itemsTotal = items.reduce((sum, i) => sum + i.priceCents, 0) || 1;
+
+  // Stripe's real fee from the charge's balance transaction; standard
+  // 2.9% + 30c if the lookup fails — never wrong in the composer's favour.
+  let feeTotal = -1;
+  if (s.payment_intent) {
+    try {
+      const pi = await stripeCall<{
+        latest_charge?: { balance_transaction?: { fee?: number } | string | null } | string | null;
+      }>(key, "GET", `/payment_intents/${s.payment_intent}?expand[]=latest_charge.balance_transaction`);
+      const charge = pi.latest_charge;
+      if (charge && typeof charge === "object") {
+        const bt = charge.balance_transaction;
+        if (bt && typeof bt === "object" && typeof bt.fee === "number") feeTotal = bt.fee;
+      }
+    } catch {
+      // keep the estimate
+    }
+  }
+  if (feeTotal < 0) feeTotal = Math.round(itemsTotal * 0.029) + 30;
+  const taxTotal = s.total_details?.amount_tax ?? 0;
+  const currency = (s.currency ?? "usd").toLowerCase();
+
+  for (const item of items) {
+    const track = await ctx.env.DB.prepare(`SELECT id FROM tracks WHERE slug = ?1`)
+      .bind(item.slug)
+      .first<{ id: string }>();
+    const trackId = track?.id ?? item.slug;
+
+    // The licence row. Its id goes into the ledger event, so a refund can
+    // void exactly this licence (see reverseEvent).
+    const licenseId = newId("ord");
+    await ctx.env.DB.prepare(
+      `INSERT INTO sync_orders (id, user_id, track_id, tier, price, stripe_session_id)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
+    )
+      .bind(licenseId, userId, trackId, item.tier, item.priceCents / 100, sessionId)
+      .run();
+
+    // One ledger event per licensed TRACK; tax and fee are shared out in
+    // proportion to price, exactly like the PayPal capture path.
+    const share = item.priceCents / itemsTotal;
+    const eventId = await recordRevenueEvent(ctx.env.DB, {
+      source: "license",
+      userId,
+      provider: "stripe",
+      providerRef: `${s.payment_intent ?? sessionId}:${item.slug}:${item.tier}`,
+      grossCents: item.priceCents,
+      taxCents: Math.round(taxTotal * share),
+      feeCents: Math.round(feeTotal * share),
+      currency,
+      trackId,
+      orderId: licenseId,
+    });
+    // A one-off license has no cycle to wait for — split it right away.
+    if (eventId) await allocateEvent(ctx.env.DB, eventId);
+  }
+};
+
 export const onRequestPost = async (ctx: Ctx) => {
   if (!ctx.env.DB) return json({ error: "DB not bound" }, 503);
   const key = ctx.env.STRIPE_SECRET_KEY;
@@ -125,9 +230,10 @@ export const onRequestPost = async (ctx: Ctx) => {
   switch (event.type) {
     case "checkout.session.completed": {
       const s = event.data.object as {
+        mode?: string;
         subscription?: string | null;
         client_reference_id?: string | null;
-      };
+      } & LicenseCartSession;
       if (s.subscription) {
         const sub = await stripeCall<StripeSubscription>(
           key,
@@ -135,6 +241,9 @@ export const onRequestPost = async (ctx: Ctx) => {
           `/subscriptions/${s.subscription}`,
         );
         await applySubscription(ctx, sub, s.client_reference_id);
+      } else if (s.mode === "payment" && s.metadata?.kind === "license_cart") {
+        // One-time card purchase of track licenses.
+        await fulfillLicenseCart(ctx, key, s);
       }
       break;
     }
@@ -172,22 +281,46 @@ export const onRequestPost = async (ctx: Ctx) => {
     case "charge.refunded":
     case "charge.dispute.created":
     case "charge.dispute.funds_withdrawn": {
-      const obj = event.data.object as { invoice?: string | null; charge?: string | null };
+      const obj = event.data.object as {
+        invoice?: string | null;
+        charge?: string | null;
+        payment_intent?: string | null;
+      };
       // A dispute object points at the charge; a charge points at the invoice.
       let invoiceId = obj.invoice ?? null;
+      let paymentIntent = obj.payment_intent ?? null;
       if (!invoiceId && obj.charge) {
         try {
-          const ch = await stripeCall<{ invoice?: string | null }>(
+          const ch = await stripeCall<{ invoice?: string | null; payment_intent?: string | null }>(
             key,
             "GET",
             `/charges/${obj.charge}`,
           );
           invoiceId = ch.invoice ?? null;
+          paymentIntent = paymentIntent ?? ch.payment_intent ?? null;
         } catch {
           // charge gone — nothing to reverse
         }
       }
-      if (invoiceId) await reverseEvent(ctx.env.DB, { providerRef: invoiceId });
+      if (invoiceId) {
+        // Subscription invoice refunded.
+        await reverseEvent(ctx.env.DB, { providerRef: invoiceId });
+      } else if (paymentIntent) {
+        // One-time license cart refunded: void every licence bought in that
+        // payment (its ledger refs are "<payment_intent>:<slug>:<tier>").
+        try {
+          const rows = await ctx.env.DB.prepare(
+            `SELECT id FROM revenue_events WHERE provider_ref LIKE ?1`,
+          )
+            .bind(`${paymentIntent}:%`)
+            .all<{ id: string }>();
+          for (const row of rows.results ?? []) {
+            await reverseEvent(ctx.env.DB, { eventId: row.id });
+          }
+        } catch {
+          // revenue tables not created yet — nothing to reverse
+        }
+      }
       break;
     }
     case "invoice.payment_failed": {

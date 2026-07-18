@@ -3564,3 +3564,42 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   not ship to the built site and don't affect the favicon; removing them is optional cleanup.
   Owner still to do: run deploy.bat, then @WebpageBot; for Google, optionally request re-indexing
   of the homepage in Search Console to nudge the favicon recrawl.
+
+- **2026-07-18 (CARD payments for one-time licenses — Stripe in the cart):** owner asked for
+  Stripe alongside PayPal on solo licenses. NEW `functions/api/stripe/checkout-licenses.ts`:
+  POST {items:[{slug,tier}]} -> Stripe Checkout URL, mode=payment; prices server-side via
+  getLicensePrices + the shared validateItems from paypal/_paypal.ts; per-line product_data
+  metadata carries slug/tier; metadata.kind="license_cart" (+user_id) on both session and
+  payment_intent; success/cancel URLs -> /cart?checkout=success|canceled. FULFILMENT in
+  `stripe/webhook.ts` `fulfillLicenseCart()` (twin of paypal/capture.ts): on
+  checkout.session.completed with mode=payment+kind=license_cart -> idempotency guard = COUNT
+  sync_orders WHERE stripe_session_id = session id; line items re-read from Stripe
+  (expand data.price.product) so slugs/tiers are trusted; real Stripe fee from
+  payment_intent->latest_charge->balance_transaction (fallback 2.9%+30c), tax from session
+  total_details.amount_tax; writes the SAME sync_orders rows (stripe_session_id = cs_... id)
+  + one revenue_event per track (provider "stripe", provider_ref
+  "<payment_intent>:<slug>:<tier>") + allocateEvent immediately — so Account->Licenses, PDF
+  certs, WAV/stems unlock and Finance work identically for card and PayPal buys. REFUNDS:
+  charge.refunded / dispute handlers now also resolve payment_intent (direct or via the
+  charge) and reverse ALL events provider_ref LIKE "<pi>:%" when there is no invoice —
+  one-time card purchases get voided exactly like PayPal ones. CART UI (`src/pages/Cart.tsx`):
+  gold full-width "Pay with card" button (CreditCard icon) above an "or" divider, PayPal
+  buttons below; button POSTs checkout-licenses and redirects to session.url (401 -> opens
+  auth modal; 503/error -> toast suggesting PayPal); shared `cartItemsNow()` helper replaces
+  the inline localStorage read in the PayPal path too. Returning from Stripe: Cart's
+  useEffect on ?checkout=success -> clearCart + success toast + navigate
+  /account?purchase=success; ?checkout=canceled -> neutral toast, cart untouched.
+  VERIFIED in a fresh clone of main: npm run lint 0 errors (25 pre-existing warnings),
+  tsc --noEmit on both functions files clean, vite build OK. NOTE: tsc -p tsconfig.app.json
+  has a PRE-EXISTING unrelated error in src/pages/Composer.tsx(10) ("dashboard" not
+  assignable to ComposerSectionId) — present on clean HEAD too, NOT from this change;
+  left untouched (owner's call whether to fix separately).
+  STRIPE DASHBOARD: nothing new to create for this feature (products/prices are inline).
+  BUT the standing reminder from 07-09 still applies if not done yet: switch
+  STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET in Cloudflare to LIVE values and create the
+  live webhook endpoint (https://tvmusicstore.com/api/stripe/webhook). The webhook
+  subscription must include: checkout.session.completed, customer.subscription.updated,
+  customer.subscription.deleted, invoice.paid (or invoice.payment_succeeded),
+  invoice.payment_failed, charge.refunded, charge.dispute.created,
+  charge.dispute.funds_withdrawn. Test path: with TEST keys buy a license with 4242 card,
+  check Account->Licenses + Admin->Finance, then switch keys to live.
