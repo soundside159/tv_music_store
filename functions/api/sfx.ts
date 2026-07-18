@@ -77,8 +77,15 @@ export const onRequestGet = async (ctx: Ctx) => {
 
   // The shelves + their computed counts (the "1,248 SOUNDS" of the mockup).
   const cats = await db
-    .prepare(`SELECT id, title, description, image, sort FROM sfx_categories ORDER BY sort, title`)
-    .all<{ id: string; title: string; description: string | null; image: string | null; sort: number }>();
+    .prepare(`SELECT id, title, description, image, popular, sort FROM sfx_categories ORDER BY sort, title`)
+    .all<{
+      id: string;
+      title: string;
+      description: string | null;
+      image: string | null;
+      popular: number;
+      sort: number;
+    }>();
   const subs = await db
     .prepare(`SELECT id, category_id, title FROM sfx_subcategories ORDER BY sort, title`)
     .all<{ id: string; category_id: string; title: string }>();
@@ -114,6 +121,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       title: c.title,
       description: c.description,
       image: c.image,
+      popular: c.popular === 1,
       count: countBy.get(c.id) ?? 0,
       subs: subs.results.filter((x) => x.category_id === c.id).map((x) => ({ id: x.id, title: x.title })),
     })),

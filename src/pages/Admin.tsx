@@ -38,6 +38,8 @@ type SectionId =
   | "trending"
   | "tracksedit"
   | "bulkupload"
+  | "sfxedit"
+  | "sfxbulk"
   | "import"
   | "articles"
   | "customers"
@@ -60,6 +62,8 @@ const SECTION_IDS: SectionId[] = [
   "trending",
   "tracksedit",
   "bulkupload",
+  "sfxedit",
+  "sfxbulk",
   "soundeffects",
   "import",
   "articles",
@@ -824,7 +828,11 @@ const Admin = () => {
 
             {section === "bulkupload" && <AdminBulkUpload />}
 
-            {section === "soundeffects" && <AdminSfx />}
+            {/* "SFX" = manage (library + categories), "Bulk SFX Upload" = the
+                drop zone. The old "soundeffects" id keeps working for old links. */}
+            {(section === "sfxedit" || section === "soundeffects") && <AdminSfx view="manage" />}
+
+            {section === "sfxbulk" && <AdminSfx view="upload" />}
 
             {section === "import" && <AdminImport />}
 

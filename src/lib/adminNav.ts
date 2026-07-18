@@ -84,16 +84,14 @@ export const adminNavGroups: { label: string; items: NavItem[] }[] = [
     items: [
       { id: "tracksedit", label: "Tracks", icon: SlidersHorizontal },
       { id: "bulkupload", label: "Bulk Upload", icon: UploadCloud },
+      { id: "sfxedit", label: "SFX", icon: AudioLines },
+      { id: "sfxbulk", label: "Bulk SFX Upload", icon: UploadCloud },
       { id: "import", label: "Import (CSV)", icon: FileSpreadsheet },
       { id: "collections", label: "Collections", icon: Library },
       { id: "playlists", label: "Playlists", icon: ListMusic },
       { id: "categories", label: "Categories", icon: Tags },
       { id: "vocabulary", label: "Vocabulary", icon: ListFilter },
     ],
-  },
-  {
-    label: "Sound Effects",
-    items: [{ id: "soundeffects", label: "Sound Effects", icon: AudioLines }],
   },
   {
     label: "Content",

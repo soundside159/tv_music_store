@@ -45,6 +45,8 @@ interface SfxCategory {
   title: string;
   description: string | null;
   image: string | null;
+  /** 1 = shown as a "Popular Categories" artwork card on the landing. */
+  popular: number;
   count: number;
   subs: SfxSub[];
 }
@@ -103,13 +105,27 @@ const uploadFile = async (
   return { key: d.key, path: d.path ?? null };
 };
 
+const uploadImage = async (file: File): Promise<string> => {
+  const res = await fetch(`/api/admin/upload?filename=${encodeURIComponent(file.name)}`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": file.type || "image/jpeg" },
+    body: file,
+  });
+  const d = (await res.json().catch(() => ({}))) as { ok?: boolean; path?: string; error?: string };
+  if (!res.ok || !d.ok || !d.path) throw new Error(d.error ?? "Image upload failed");
+  return d.path;
+};
+
 const isWav = (name: string) => /\.wav$/i.test(name);
 const mb = (n: number) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
 type Tab = "library" | "upload" | "categories";
 
-const AdminSfx = () => {
-  const [tab, setTab] = useState<Tab>("library");
+// view="manage": Library + Categories tabs (admin nav "SFX").
+// view="upload": the bulk drop zone alone (admin nav "Bulk SFX Upload").
+const AdminSfx = ({ view = "manage" }: { view?: "manage" | "upload" }) => {
+  const [tab, setTab] = useState<Tab>(view === "upload" ? "upload" : "library");
   const [data, setData] = useState<SfxData | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -227,7 +243,7 @@ const AdminSfx = () => {
         done += 1;
       }
       toast.success(`${done} sound(s) uploaded as drafts`);
-      setTab("library");
+      if (view === "manage") setTab("library");
       setPage(1);
       await load();
     } catch (e) {
@@ -251,28 +267,29 @@ const AdminSfx = () => {
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="flex items-center gap-2 font-body text-lg font-semibold text-foreground">
           <AudioLines className="h-5 w-5 text-[#F4C430]" />
-          Sound Effects
+          {view === "upload" ? "Bulk SFX Upload" : "SFX"}
         </h2>
-        <div className="flex gap-1 rounded-lg border border-border/60 bg-background/40 p-1">
-          {(
-            [
-              ["library", `Library${data ? ` (${data.total})` : ""}`],
-              ["upload", "Upload"],
-              ["categories", "Categories"],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setTab(id)}
-              className={`rounded-md px-3 py-1.5 font-body text-xs font-semibold transition-colors ${
-                tab === id ? "bg-[#F4C430] text-background" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {view === "manage" && (
+          <div className="flex gap-1 rounded-lg border border-border/60 bg-background/40 p-1">
+            {(
+              [
+                ["library", `Library${data ? ` (${data.total})` : ""}`],
+                ["categories", "Categories"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTab(id)}
+                className={`rounded-md px-3 py-1.5 font-body text-xs font-semibold transition-colors ${
+                  tab === id ? "bg-[#F4C430] text-background" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ===================== LIBRARY ===================== */}
@@ -583,6 +600,75 @@ const AdminSfx = () => {
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
+                </div>
+
+                {/* Landing artwork + the "Popular Categories" flag. The image
+                    is the card on /sound-effects; the checkbox puts the card
+                    in the Popular grid at the top of the page. */}
+                <div className="mt-3 flex items-center gap-3">
+                  <label
+                    title="Category artwork — click to upload"
+                    className="group relative block h-14 w-24 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-border bg-secondary/50"
+                  >
+                    {c.image ? (
+                      <img src={c.image} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="flex h-full w-full items-center justify-center font-body text-[10px] text-muted-foreground">
+                        no image
+                      </span>
+                    )}
+                    <span className="absolute inset-0 hidden items-center justify-center bg-black/50 font-body text-[10px] font-semibold text-white group-hover:flex">
+                      Change
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        e.target.value = "";
+                        if (!file) return;
+                        void (async () => {
+                          setBusy(true);
+                          try {
+                            const path = await uploadImage(file);
+                            await api({ action: "update_category", id: c.id, image: path });
+                            toast.success("Image set");
+                            await load();
+                          } catch (err) {
+                            toast.error(err instanceof Error ? err.message : "Image upload failed");
+                          } finally {
+                            setBusy(false);
+                          }
+                        })();
+                      }}
+                    />
+                  </label>
+                  <label className="inline-flex cursor-pointer items-center gap-1.5 font-body text-xs text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={c.popular === 1}
+                      disabled={busy}
+                      onChange={(e) =>
+                        void run(
+                          { action: "update_category", id: c.id, popular: e.target.checked },
+                          e.target.checked ? "Added to Popular" : "Removed from Popular",
+                        )
+                      }
+                      className="accent-[#F4C430]"
+                    />
+                    Popular
+                  </label>
+                  {c.image && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void run({ action: "update_category", id: c.id, image: "" }, "Image removed")}
+                      className="font-body text-xs text-muted-foreground transition-colors hover:text-red-400"
+                    >
+                      Remove image
+                    </button>
+                  )}
                 </div>
 
                 <div className="mt-2 flex flex-wrap gap-1.5">

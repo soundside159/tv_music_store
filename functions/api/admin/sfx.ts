@@ -70,6 +70,13 @@ export const ensureSfxTables = async (db: D1Database) => {
        )`,
     )
     .run();
+  // Popular flag (landing "Popular Categories" cards with artwork) — added
+  // after the table shipped, so self-heal it in.
+  try {
+    await db.prepare(`ALTER TABLE sfx_categories ADD COLUMN popular INTEGER NOT NULL DEFAULT 0`).run();
+  } catch {
+    // column already there
+  }
   // Search hits name+tags; the listing filters by category and status.
   for (const sql of [
     `CREATE INDEX IF NOT EXISTS idx_sfx_cat ON sfx (category_id)`,
@@ -159,8 +166,15 @@ export const onRequestGet = async (ctx: Ctx) => {
     }>();
 
   const cats = await db
-    .prepare(`SELECT id, title, description, image, sort FROM sfx_categories ORDER BY sort, title`)
-    .all<{ id: string; title: string; description: string | null; image: string | null; sort: number }>();
+    .prepare(`SELECT id, title, description, image, popular, sort FROM sfx_categories ORDER BY sort, title`)
+    .all<{
+      id: string;
+      title: string;
+      description: string | null;
+      image: string | null;
+      popular: number;
+      sort: number;
+    }>();
   const subs = await db
     .prepare(`SELECT id, category_id, title, sort FROM sfx_subcategories ORDER BY sort, title`)
     .all<{ id: string; category_id: string; title: string; sort: number }>();
@@ -229,6 +243,7 @@ export const onRequestPost = async (ctx: Ctx) => {
     title?: string;
     description?: string;
     image?: string;
+    popular?: boolean;
     sort?: number;
   }>(ctx.request);
   if (!body?.action) return json({ error: "action required" }, 400);
@@ -339,6 +354,41 @@ export const onRequestPost = async (ctx: Ctx) => {
         .bind(id, title, body.description ?? "", body.image ?? "", Math.round(body.sort ?? 0))
         .run();
       return json({ ok: true, id });
+    }
+
+    case "update_category": {
+      // Patch-style: only the fields sent are touched (image / popular /
+      // description / title / sort) — upsert_category would wipe the rest.
+      const id = body.id;
+      if (!id) return json({ error: "id required" }, 400);
+      const sets: string[] = [];
+      const binds: unknown[] = [];
+      if (typeof body.title === "string" && body.title.trim()) {
+        sets.push(`title = ?${binds.length + 2}`);
+        binds.push(body.title.trim().slice(0, 60));
+      }
+      if (typeof body.description === "string") {
+        sets.push(`description = ?${binds.length + 2}`);
+        binds.push(body.description.slice(0, 300));
+      }
+      if (typeof body.image === "string") {
+        sets.push(`image = ?${binds.length + 2}`);
+        binds.push(body.image);
+      }
+      if (typeof body.popular === "boolean") {
+        sets.push(`popular = ?${binds.length + 2}`);
+        binds.push(body.popular ? 1 : 0);
+      }
+      if (typeof body.sort === "number") {
+        sets.push(`sort = ?${binds.length + 2}`);
+        binds.push(Math.round(body.sort));
+      }
+      if (sets.length === 0) return json({ error: "nothing to update" }, 400);
+      await db
+        .prepare(`UPDATE sfx_categories SET ${sets.join(", ")} WHERE id = ?1`)
+        .bind(id, ...binds)
+        .run();
+      return json({ ok: true });
     }
 
     case "delete_category": {

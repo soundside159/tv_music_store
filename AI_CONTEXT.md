@@ -3809,3 +3809,76 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   account involved) on a small VPS (~$5-15/mo) and match locally — minutes per video, no YouTube
   quota, no re-upload, no test channel. Output = track list per video -> auto-ticket with tracks
   attached. Owner to decide; NOT built.
+
+- **2026-07-18 (fingerprinting — owner APPROVED the direction, plan for a future chat):** owner
+  liked the fingerprint idea and extended it: use the fingerprint base NOW to auto-attach tracks
+  to claim tickets (instead of the customer typing names next to the YouTube link). Agreed plan
+  (NOT built yet): (1) PROTOTYPE — fingerprint 10-20 catalogue tracks (MAIN mp3 versions only;
+  short cuts are subsets of the same audio and will match the full-version prints), test matching
+  against real YouTube videos for accuracy; (2) FULL BASE — all main versions, auto-add prints
+  when a new track is uploaded; (3) WIRE-UP — claim form: customer pastes the video link -> a
+  small external server (VPS ~$5-15/mo; Cloudflare Pages cannot run yt-dlp/matcher) downloads
+  AUDIO ONLY and matches -> detected tracks auto-attach to the ticket (customer confirms);
+  manual track rows STAY as the fallback (quiet/short/heavily-mixed music can miss); later the
+  same base powers whitelist monitoring of new channel videos. Constraints to remember: video
+  must be Public/Unlisted (same as claims validation), yt-dlp is ToS-gray and needs maintenance,
+  matching needs the track audible ~10-15s. Chat was getting long — owner advised to start the
+  fingerprinting work in a FRESH chat from this file.
+
+- **2026-07-18 (fingerprinting — refinements after owner questions):** clarified for the owner:
+  (1) the fingerprint DB stores compact spectral hashes, NOT audio — ~tens-hundreds of KB per
+  track, tens of MB for the whole catalogue (the ~1.5-2GB of mp3s are only read once at
+  print-time; they already live in R2); (2) 128 kbps mp3s are fine for fingerprinting (spectral
+  method survives compression easily) — owner may use them to save space; (3) "no server"
+  variant AGREED: instead of a VPS, a LOCAL DESKTOP UTILITY on the owner's Windows PC — he pastes
+  a video link, it downloads the audio via yt-dlp locally, matches against the local fingerprint
+  base, prints the tracks found. $0/mo and a residential IP that YouTube blocks far less than
+  datacenter IPs. A button on the SITE cannot do this (Cloudflare can't run yt-dlp/ffmpeg); the
+  VPS is only needed later IF matching should run automatically on customer claims without the
+  owner. (4) Prototype focus: verify the base builds from his tracks and that matching does not
+  CONFUSE similar tracks by the same composer (main false-positive risk). Owner will test
+  recognition quality himself and then decide whether the manual track rows in the claim form
+  stay. Next chat starts from this file.
+
+- **2026-07-18 (fingerprinting — final agreed architecture, recorded per owner):** the plan is
+  now: (1) the fingerprint base is built and EXTENDED AUTOMATICALLY on the site side — every
+  uploaded main-version mp3 gets its print added without manual steps (base lives with the site,
+  e.g. R2/D1); (2) the owner's PC UTILITY talks to that shared base: it downloads the video's
+  audio from YouTube locally, matches it against the base (fetched/synced from the site), and
+  PUSHES the result back — so track info appears ON THE SITE right after the run; (3) the utility
+  can also PULL THE QUEUE itself: fetch the pending claim-release links straight from the admin
+  Copyright Claims list (an API endpoint with an owner token), download each video's audio, match,
+  and FILL IN the missing track names on those tickets automatically. So: base auto-grows
+  site-side, matching runs on the owner's PC (residential IP, $0/mo), results land back in the
+  admin queue. Status: PLAN ONLY — nothing built; start in a fresh chat with the prototype
+  (10-20 tracks, accuracy + confusion testing) before any of the above wiring.
+
+- **2026-07-18 (SFX front redesign per owner's mockups + admin restructure):** owner sent two
+  mockups (a landing with Popular Categories artwork cards + Browse by Category panels, and a
+  TuneTank category page with waveform rows) and asked to build them in THIS chat.
+  BACKEND: `sfx_categories` got a `popular INTEGER DEFAULT 0` column (guarded ALTER in
+  ensureSfxTables); NEW admin action `update_category` (patch-style: title/description/image/
+  popular/sort — upsert would wipe the rest); public /api/sfx now returns `popular` per category.
+  LANDING (`src/pages/SoundEffects.tsx`, rewritten): hero = h1 "Sound Effects" + the owner's exact
+  subtext ("Premium royalty-free sound effects for video, gaming, podcasts, and creative
+  content...") + full-width search bar ("Sound Effects |" prefix inside, like the mockup) + a
+  "Popular:" chip row; section "Popular Categories" — artwork cards (aspect 3/2, image cover,
+  dark gradient, name bottom-left, hover zoom) for categories flagged popular; section "Browse by
+  Category" — panels (icon + title + count) whose subcategory chips are the HOMEPAGE "Browse by"
+  arc-chips (self-drawing coloured left rim, same ARC_COLORS + .arc-draw animation, extracted as
+  local ArcChip component).
+  CATEGORY PAGE: breadcrumb "Sound Effects › {cat}", h1 "{Cat} Sounds", default SEO-ish
+  description, same search bar, subcategory pills, and TuneTank-style rows: square tile
+  play/pause button (AudioLines -> Play on hover, gold when playing) · name+artist ·
+  **WaveformPreview** (real waveform, click-to-seek — the shared <audio> element got
+  ontimeupdate progress + seek support in play()) · duration · WAV download. A plain search
+  (no category) shows all-category chips above results. Pagination and the Free-plan note kept.
+  ADMIN: nav Catalog group now has **SFX** (AudioLines) + **Bulk SFX Upload** right under
+  Tracks/Bulk Upload (the separate "Sound Effects" group is gone; old ?section=soundeffects still
+  renders). `AdminSfx` got `view` prop: "manage" = Library+Categories tabs, "upload" = the drop
+  zone alone. Categories tab: per-category ARTWORK uploader (click the 24×14 thumb -> uploads via
+  /api/admin/upload -> update_category image; "Remove image" link) and a **Popular** checkbox
+  (gold) -> the landing cards. lint 0 errors, tsc clean on both sfx APIs, build OK. Committed:
+  SoundEffects.tsx, AdminSfx.tsx, Admin.tsx, adminNav.ts, api/sfx.ts, api/admin/sfx.ts.
+  STILL OPEN on SFX (unchanged): payout weighting (1.0/0.2 + 50% cap) in the revenue engine, SFX
+  licence PDF, favourites/packs, pricing-page copy, SEO pass.
