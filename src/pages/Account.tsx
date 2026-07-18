@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowUpRight, Download as DownloadIcon, X } from "lucide-react";
+import { ArrowUpRight, Download as DownloadIcon, Heart, X } from "lucide-react";
 import { accountNavGroups, adminNavGroups, composerNavItems } from "@/lib/adminNav";
 import MenuGroupHeader from "@/components/MenuGroupHeader";
 import MenuTreeLines from "@/components/MenuTreeLines";
@@ -27,6 +27,7 @@ import SupportSection from "@/components/SupportSection";
 import FavouritesSection from "@/components/FavouritesSection";
 import LicensesSection from "@/components/LicensesSection";
 import { logout, updateProfile } from "@/hooks/useAuth";
+import { useFavourites } from "@/lib/favourites";
 import { BILLING_ENABLED, openBillingPortal, openPlanModal } from "@/lib/billing";
 import { downloadTrackVersion } from "@/lib/downloadTrack";
 
@@ -210,26 +211,35 @@ const Account = () => {
 
   // Which tracks are in the video — search-first picker (no checkbox walls):
   // type a name, pick from the dropdown (your downloaded tracks come first),
-  // picked tracks become removable chips. Several tracks per video is normal.
+  // or open your downloads / favourites with the buttons next to the field.
+  // Picked tracks become removable chips; several tracks per video is normal.
   const [claimTracks, setClaimTracks] = useState<
     { id: string; slug: string; title: string; artist: string }[]
   >([]);
   const [trackQuery, setTrackQuery] = useState("");
   const [trackOpen, setTrackOpen] = useState(false);
+  const [trackSource, setTrackSource] = useState<"downloads" | "favourites" | null>(null);
+  const trackInputRef = useRef<HTMLInputElement>(null);
 
+  const favIds = useFavourites();
   const downloadedIds = useMemo(() => new Set(downloadedTracks.map((t) => t.id)), [downloadedTracks]);
+  const favTracks = useMemo(() => liveTracks.filter((t) => favIds.has(t.id)), [liveTracks, favIds]);
+
   const trackSuggestions = useMemo(() => {
     const q = trackQuery.trim().toLowerCase();
     const picked = new Set(claimTracks.map((t) => t.id));
-    const pool = q
-      ? liveTracks.filter(
-          (t) => t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q),
-        )
-      : downloadedTracks; // empty query = your library, most recent first
-    const mine = pool.filter((t) => downloadedIds.has(t.id) && !picked.has(t.id));
-    const rest = pool.filter((t) => !downloadedIds.has(t.id) && !picked.has(t.id));
-    return [...mine, ...rest].slice(0, 8);
-  }, [trackQuery, liveTracks, downloadedTracks, downloadedIds, claimTracks]);
+    if (q) {
+      const pool = liveTracks.filter(
+        (t) => t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q),
+      );
+      const mine = pool.filter((t) => downloadedIds.has(t.id) && !picked.has(t.id));
+      const rest = pool.filter((t) => !downloadedIds.has(t.id) && !picked.has(t.id));
+      return [...mine, ...rest].slice(0, 8);
+    }
+    // No query: the list the customer explicitly opened (downloads by default).
+    const pool = trackSource === "favourites" ? favTracks : downloadedTracks;
+    return pool.filter((t) => !picked.has(t.id)).slice(0, 8);
+  }, [trackQuery, liveTracks, downloadedTracks, favTracks, downloadedIds, claimTracks, trackSource]);
 
   const pickTrack = (t: CatalogTrack) => {
     setClaimTracks((list) =>
@@ -238,6 +248,16 @@ const Account = () => {
         : [...list, { id: t.id, slug: t.slug, title: t.title, artist: t.artist }],
     );
     setTrackQuery("");
+  };
+
+  /** "From downloads" / "From favourites" buttons: open that list under the
+   *  search field. onMouseDown + preventDefault keeps the input focused, so
+   *  the blur-close never fires. */
+  const openTrackSource = (source: "downloads" | "favourites") => {
+    setTrackSource(source);
+    setTrackQuery("");
+    setTrackOpen(true);
+    trackInputRef.current?.focus();
   };
 
   const loadClaims = useCallback(async () => {
@@ -682,95 +702,160 @@ const Account = () => {
                 handled per-video below. Admin tooling and data stay intact. */}
 
             {section === "claims" && (
-              <SectionCard title="Content ID claims">
+              <SectionCard title="Copyright Claims">
                 {/* No essays: the server validates the link (a private video is
                     rejected with an explanation) and the list below shows status. */}
                 <p className="font-body text-sm text-muted-foreground">
-                  Submit YouTube copyright claim removals — they appear below with their status.
+                  Got a Content ID claim on your video? Send it here — we submit it for release
+                  within one business day.
                 </p>
                 <form
-                  className="mt-4 flex flex-col gap-3"
+                  className="mt-5 flex max-w-xl flex-col gap-5"
                   onSubmit={(e) => {
                     e.preventDefault();
                     void submitClaim();
                   }}
                 >
-                  <input
-                    value={claimUrl}
-                    onChange={(e) => setClaimUrl(e.target.value)}
-                    placeholder="https://youtube.com/watch?v=..."
-                    className="rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
-                  />
-
-                  {/* Which of our tracks are in the video — helps us route the
-                      release to the right composer. Search-first: type a name,
-                      your downloaded tracks are suggested first. */}
-                  <div className="relative">
+                  <div>
+                    <label
+                      htmlFor="claim-video-url"
+                      className="mb-1.5 block font-body text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                    >
+                      Link to the claimed video
+                    </label>
                     <input
-                      value={trackQuery}
-                      onChange={(e) => {
-                        setTrackQuery(e.target.value);
-                        setTrackOpen(true);
-                      }}
-                      onFocus={() => setTrackOpen(true)}
-                      onBlur={() => window.setTimeout(() => setTrackOpen(false), 150)}
-                      placeholder="Which track is in the video? Start typing its name…"
+                      id="claim-video-url"
+                      value={claimUrl}
+                      onChange={(e) => setClaimUrl(e.target.value)}
+                      placeholder="https://youtube.com/watch?v=..."
                       className="w-full rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
                     />
-                    {trackOpen && trackSuggestions.length > 0 && (
-                      <ul className="absolute left-0 right-0 top-full z-20 mt-1 max-h-72 overflow-y-auto rounded-lg border border-border bg-card py-1 shadow-xl">
-                        {trackSuggestions.map((t) => (
-                          <li key={t.id}>
-                            <button
-                              type="button"
-                              // mousedown fires before the input's blur closes the list
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                pickTrack(t);
-                              }}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-secondary"
-                            >
-                              <span className="min-w-0 flex-1 truncate font-body text-sm text-foreground">
-                                {t.title}
-                                <span className="ml-2 font-body text-xs text-muted-foreground">
-                                  {t.artist}
-                                </span>
-                              </span>
-                              {downloadedIds.has(t.id) && (
-                                <span className="inline-flex shrink-0 items-center gap-1 font-body text-[10px] uppercase tracking-wide text-[#F4C430]">
-                                  <DownloadIcon className="h-3 w-3" />
-                                  downloaded
-                                </span>
-                              )}
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
                   </div>
 
-                  {claimTracks.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {claimTracks.map((t) => (
-                        <span
-                          key={t.id}
-                          className="inline-flex items-center gap-1.5 rounded-full border border-[#F4C430]/40 bg-[#F4C430]/10 py-1 pl-3 pr-1.5 font-body text-xs text-foreground"
-                        >
-                          {t.title}
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setClaimTracks((list) => list.filter((x) => x.id !== t.id))
-                            }
-                            aria-label={`Remove ${t.title}`}
-                            className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </span>
-                      ))}
+                  {/* Which of our tracks are in the video — helps us route the
+                      release to the right composer. Search-first, plus explicit
+                      "from downloads / favourites" shortcuts. */}
+                  <div>
+                    <label
+                      htmlFor="claim-track-search"
+                      className="mb-1.5 block font-body text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                    >
+                      Which track is in the video?
+                    </label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="relative w-full max-w-xs">
+                        <input
+                          id="claim-track-search"
+                          ref={trackInputRef}
+                          value={trackQuery}
+                          onChange={(e) => {
+                            setTrackQuery(e.target.value);
+                            setTrackOpen(true);
+                          }}
+                          onFocus={() => setTrackOpen(true)}
+                          onBlur={() => window.setTimeout(() => setTrackOpen(false), 150)}
+                          placeholder="Type the track name…"
+                          className="w-full rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
+                        />
+                        {trackOpen && (
+                          <ul className="absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-lg border border-border bg-card py-1 shadow-xl">
+                            {trackSuggestions.length === 0 && (
+                              <li className="px-3 py-2 font-body text-xs text-muted-foreground">
+                                {trackQuery.trim()
+                                  ? "Nothing found — try another spelling."
+                                  : trackSource === "favourites"
+                                    ? "No favourites yet."
+                                    : "No downloads yet — type the track name instead."}
+                              </li>
+                            )}
+                            {trackSuggestions.map((t) => (
+                              <li key={t.id}>
+                                <button
+                                  type="button"
+                                  // mousedown fires before the input's blur closes the list
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    pickTrack(t);
+                                  }}
+                                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-secondary"
+                                  title={
+                                    downloadedIds.has(t.id) ? `${t.title} — you downloaded this` : t.title
+                                  }
+                                >
+                                  {downloadedIds.has(t.id) && (
+                                    <DownloadIcon className="h-3 w-3 shrink-0 text-[#F4C430]" />
+                                  )}
+                                  <span className="min-w-0 flex-1 truncate font-body text-sm text-foreground">
+                                    {t.title}
+                                  </span>
+                                  <span className="shrink-0 font-body text-[11px] text-muted-foreground">
+                                    {t.artist}
+                                  </span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                      <span className="font-body text-xs text-muted-foreground">or pick from</span>
+                      <button
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          openTrackSource("downloads");
+                        }}
+                        className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 font-body text-xs transition-colors ${
+                          trackOpen && trackSource === "downloads" && !trackQuery.trim()
+                            ? "border-[#F4C430] text-[#F4C430]"
+                            : "border-border text-muted-foreground hover:border-[#F4C430] hover:text-[#F4C430]"
+                        }`}
+                      >
+                        <DownloadIcon className="h-3.5 w-3.5" />
+                        Downloads
+                      </button>
+                      <button
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          openTrackSource("favourites");
+                        }}
+                        className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 font-body text-xs transition-colors ${
+                          trackOpen && trackSource === "favourites" && !trackQuery.trim()
+                            ? "border-[#F4C430] text-[#F4C430]"
+                            : "border-border text-muted-foreground hover:border-[#F4C430] hover:text-[#F4C430]"
+                        }`}
+                      >
+                        <Heart className="h-3.5 w-3.5" />
+                        Favourites
+                      </button>
                     </div>
-                  )}
+
+                    {claimTracks.length > 0 && (
+                      <div className="mt-2.5 flex flex-wrap gap-1.5">
+                        {claimTracks.map((t) => (
+                          <span
+                            key={t.id}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-[#F4C430]/40 bg-[#F4C430]/10 py-1 pl-3 pr-1.5 font-body text-xs text-foreground"
+                          >
+                            {t.title}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setClaimTracks((list) => list.filter((x) => x.id !== t.id))
+                              }
+                              aria-label={`Remove ${t.title}`}
+                              className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <p className="mt-2 font-body text-xs text-muted-foreground">
+                      Used more than one track? Add each of them.
+                    </p>
+                  </div>
 
                   <button
                     type="submit"

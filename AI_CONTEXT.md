@@ -3693,3 +3693,17 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   ONLY the pre-existing Composer.tsx(10) error (untouched). Existing prod tickets keep working —
   track_ids self-heals on first request. OWNER: run deploy.bat; then check /account -> Copyright
   Claims (form + picker) and /admin -> Copyright Claims.
+
+- **2026-07-18 (claim form UI redesign — owner: "клиенту непонятно"):** the first cut of the
+  Copyright Claims form confused the owner (unlabeled inputs, full-width dropdown). Rebuilt in
+  `src/pages/Account.tsx`: section retitled "Copyright Claims" (was "Content ID claims") with a
+  plain-language intro; two labeled fields (uppercase mini-labels like the rest of the site) —
+  "LINK TO THE CLAIMED VIDEO" and "WHICH TRACK IS IN THE VIDEO?"; the track search input is now
+  narrow (max-w-xs) and the dropdown matches ITS width, compact rows (gold download icon · title ·
+  artist right-aligned, title attr tooltip); to the right of the field: "or pick from" +
+  [Downloads] [Favourites] buttons (Download/Heart icons, gold active state) that open that list
+  under the field (onMouseDown+preventDefault so the input's blur never closes it; favourites via
+  useFavourites() from lib/favourites); dropdown has empty states ("Nothing found…", "No downloads
+  yet…", "No favourites yet."); helper line "Used more than one track? Add each of them."; whole
+  form capped at max-w-xl. No backend changes. lint 0 errors, build OK. Committed to owner's repo
+  (Account.tsx only).
