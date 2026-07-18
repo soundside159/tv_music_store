@@ -16,7 +16,74 @@ export interface AuthSession {
   downloadsUsedThisMonth: number;
 }
 
-let session: AuthSession = {
+// The last confirmed sign-in, remembered across reloads. Without it a cold
+// load renders the GUEST header icon for a beat and then flips to the avatar
+// once /api/me answers — the owner filmed it frame by frame. The hint paints
+// the avatar immediately; /api/me still has the final word (a session revoked
+// elsewhere corrects itself on the first response).
+const HINT_KEY = "tvms:session-hint";
+
+interface SessionHint {
+  id: string;
+  email: string;
+  name: string | null;
+  role: string;
+  plan: string;
+}
+
+const readHintSession = (): AuthSession | null => {
+  try {
+    const raw = window.localStorage.getItem(HINT_KEY);
+    if (!raw) return null;
+    const h = JSON.parse(raw) as SessionHint;
+    if (!h?.email || !h?.id) return null;
+    const role = (h.role as User["role"]) ?? "customer";
+    const plan = (role === "admin" ? "max" : h.plan || "free") as Subscription["plan"];
+    return {
+      status: "authed",
+      user: {
+        id: h.id,
+        email: h.email,
+        name: h.name ?? h.email.split("@")[0],
+        role,
+        createdAt: "",
+      },
+      subscription: {
+        id: `hint_${h.id}`,
+        userId: h.id,
+        plan,
+        interval: null,
+        status: "active",
+        currentPeriodEnd: "",
+        downloadsUsedThisPeriod: 0,
+      },
+      downloadsUsedThisMonth: 0,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const writeHint = (s: AuthSession) => {
+  try {
+    if (s.status === "authed" && s.user) {
+      const h: SessionHint = {
+        id: s.user.id,
+        email: s.user.email,
+        name: s.user.name,
+        role: s.user.role,
+        plan: s.subscription?.plan ?? "free",
+      };
+      window.localStorage.setItem(HINT_KEY, JSON.stringify(h));
+    } else {
+      window.localStorage.removeItem(HINT_KEY);
+    }
+  } catch {
+    // storage unavailable — the hint is only a nicety
+  }
+};
+
+let session: AuthSession = readHintSession() ?? {
   status: "loading",
   user: null,
   subscription: null,
@@ -87,6 +154,7 @@ export const refreshSession = (): Promise<void> => {
     .then(async (res) => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       session = mapSession((await res.json()) as ApiMeResponse);
+      writeHint(session);
     })
     .catch(() => {
       // API unreachable (local dev without functions) — treat as guest.
@@ -184,6 +252,7 @@ export const logout = async (): Promise<void> => {
     // ignore network errors; clear local state regardless
   }
   session = { status: "guest", user: null, subscription: null, downloadsUsedThisMonth: 0 };
+  writeHint(session);
   emit();
 };
 

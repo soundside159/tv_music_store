@@ -17,15 +17,15 @@
     />
     <link rel="canonical" href="https://tvmusicstore.com/" />
 
-    <!-- Fonts start downloading with the HTML (was a CSS @import — too late,
-         hence the font flash on every page). display=swap + the metric-matched
-         fallbacks in index.css make the swap invisible. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap"
-    />
+    <!-- Fonts are SELF-HOSTED (public/fonts) and the visible weights are
+         preloaded, so they arrive before first paint — no font flash, no
+         Google Fonts round-trip. @font-face lives in src/index.css. -->
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/inter-latin-400-normal.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/inter-latin-600-normal.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/outfit-latin-700-normal.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/outfit-latin-800-normal.woff2" crossorigin />
+    <!-- The header logo used to pop in a frame late — fetch it with the page. -->
+    <link rel="preload" as="image" href="/images/icons/logo-header.png" />
 
     <link rel="icon" type="image/x-icon" href="/images/icons/favicon.ico" />
     <link rel="icon" type="image/png" sizes="96x96" href="/images/icons/favicon-96x96.png" />

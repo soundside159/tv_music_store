@@ -3917,3 +3917,24 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   (update_sfx subcategoryId). With nothing selected the panel says to select sounds first.
   lint 0 errors, build OK. Committed: index.html, index.css, tailwind.config.ts,
   SoundEffects.tsx, AdminSfx.tsx.
+
+- **2026-07-18 (cold-load polish — owner filmed the reload frame by frame):** four flickers fixed:
+  (1) FONT SWAP KILLED FOR REAL: Inter + Outfit are now SELF-HOSTED — latin woff2 for all used
+  weights (Inter 400/500/600/700, Outfit 400/500/600/700/800, ~167KB total, sourced from
+  @fontsource packages, OFL licenses included) live in `public/fonts/`; @font-face blocks in
+  src/index.css; index.html PRELOADS the four visible weights (inter 400/600, outfit 700/800) so
+  they arrive before first paint — same-origin, no Google Fonts at all (the earlier <link> to
+  fonts.googleapis.com is gone; metric fallbacks kept as a safety net). NOTE: new font weights =
+  add the woff2 + @font-face + (if visible at load) a preload.
+  (2) LOGO no longer pops in late: `<link rel="preload" as="image">` for
+  /images/icons/logo-header.png in index.html.
+  (3) GUEST->AVATAR FLIP: useAuth.ts now keeps a SESSION HINT in localStorage
+  ("tvms:session-hint": id/email/name/role/plan, written on every /api/me answer, cleared on
+  logout/guest) and BOOTS the session from it — the gold initial avatar renders on the first
+  frame; /api/me still has the final word (revoked sessions correct themselves on first
+  response).
+  (4) SFX SEARCH PLACEHOLDER no longer flips from "Search for sound effects" to "Search 14…":
+  librarySize persists in localStorage ("tvms:sfx-library-size") and seeds the placeholder from
+  the first frame.
+  lint 0 errors, build OK (fonts verified in dist/). Committed: index.html, index.css,
+  useAuth.ts, SoundEffects.tsx, public/fonts/* (9 woff2 + 2 licenses).

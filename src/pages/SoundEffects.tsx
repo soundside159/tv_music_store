@@ -69,6 +69,17 @@ const POPULAR = ["Whoosh", "Explosion", "Click", "Notification", "Rain", "Footst
 // skeletons, no jumping. Skeletons only ever show on a truly first visit.
 const sfxCache = new Map<string, SfxResponse>();
 
+// Library size survives reloads so the search placeholder reads
+// "Search 14 sound effects…" from the FIRST frame instead of flipping to it.
+const LIB_SIZE_KEY = "tvms:sfx-library-size";
+const readLibSize = (): number => {
+  try {
+    return Math.max(0, Number(window.localStorage.getItem(LIB_SIZE_KEY) ?? 0) || 0);
+  } catch {
+    return 0;
+  }
+};
+
 /** The chip with the self-drawing coloured left rim — the homepage "Browse by"
  *  look, reused on the Browse by Category panels (owner request). */
 const ArcChip = ({ to, label, index }: { to: string; label: string; index: number }) => (
@@ -131,6 +142,11 @@ const SoundEffects = () => {
       if (!res.ok || !d.ok) throw new Error("Failed");
       sfxCache.set(key, d);
       setData(d);
+      try {
+        window.localStorage.setItem(LIB_SIZE_KEY, String(d.librarySize ?? 0));
+      } catch {
+        // storage unavailable — the placeholder just stays generic
+      }
     } catch {
       if (!cached) setData(null);
     } finally {
@@ -247,7 +263,7 @@ const SoundEffects = () => {
   const cats = data?.categories ?? [];
   const current = cats.find((c) => c.id === category);
   const isLanding = !category && !q;
-  const libSize = data?.librarySize ?? 0;
+  const libSize = data?.librarySize ?? readLibSize();
   const popularCats = cats.filter((c) => c.popular);
 
   const pageTitle = current
