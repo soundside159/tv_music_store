@@ -18,10 +18,13 @@ interface ClaimTrack {
 interface Claim {
   id: number;
   videoUrl: string;
+  videoTitle: string | null;
   status: string;
   createdAt: string;
   resolvedAt: string | null;
   tracks: ClaimTrack[];
+  /** Free-typed track titles (customer wrote anything) — no composer known. */
+  trackNames: string[];
   userId: string | null;
   userEmail: string;
   userName: string | null;
@@ -56,10 +59,12 @@ const AdminClaims = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => 
         claims?: {
           id: number;
           video_url: string;
+          video_title?: string | null;
           status: string;
           created_at: string;
           resolved_at: string | null;
           tracks?: ClaimTrack[];
+          track_names?: string[];
           user_id?: string;
           user_email?: string;
           user_name?: string | null;
@@ -71,10 +76,12 @@ const AdminClaims = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => 
         d.claims.map((c) => ({
           id: c.id,
           videoUrl: c.video_url,
+          videoTitle: c.video_title ?? null,
           status: c.status,
           createdAt: c.created_at,
           resolvedAt: c.resolved_at,
           tracks: c.tracks ?? [],
+          trackNames: c.track_names ?? [],
           userId: c.user_id ?? null,
           userEmail: c.user_email ?? "",
           userName: c.user_name ?? null,
@@ -137,7 +144,9 @@ const AdminClaims = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => 
     (c.userName ?? "").toLowerCase().includes(q) ||
     c.tracks.some(
       (t) => t.title.toLowerCase().includes(q) || (t.composer ?? "").toLowerCase().includes(q),
-    );
+    ) ||
+    c.trackNames.some((n) => n.toLowerCase().includes(q)) ||
+    (c.videoTitle ?? "").toLowerCase().includes(q);
 
   // ≤200 rows — plain filtering, no memo gymnastics needed.
   const filtered = (claims ?? []).filter(matches);
@@ -252,28 +261,36 @@ const AdminClaims = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => 
                     </>
                   )}
                 </td>
-                <td className="whitespace-nowrap py-3 pr-4">
-                  {/* Nobody reads a YouTube URL — a short link + copy is enough. */}
-                  <a
-                    href={c.videoUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-[#F4C430] hover:underline"
-                  >
-                    Watch
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => void copyText(c.videoUrl, "link")}
-                    title="Copy link"
-                    className="ml-2 align-middle text-muted-foreground transition-colors hover:text-[#F4C430]"
-                  >
-                    <ClipboardCopy className="h-3.5 w-3.5" />
-                  </button>
+                <td className="max-w-[220px] py-3 pr-4">
+                  {/* Nobody reads a YouTube URL — short link + copy + the
+                      video's own title underneath. */}
+                  <span className="flex items-center gap-2">
+                    <a
+                      href={c.videoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[#F4C430] hover:underline"
+                    >
+                      Watch
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => void copyText(c.videoUrl, "link")}
+                      title="Copy link"
+                      className="text-muted-foreground transition-colors hover:text-[#F4C430]"
+                    >
+                      <ClipboardCopy className="h-3.5 w-3.5" />
+                    </button>
+                  </span>
+                  {c.videoTitle && (
+                    <span className="mt-0.5 block truncate text-xs text-muted-foreground" title={c.videoTitle}>
+                      {c.videoTitle}
+                    </span>
+                  )}
                 </td>
                 <td className="py-3 pr-4">
-                  {c.tracks.length === 0 ? (
+                  {c.tracks.length === 0 && c.trackNames.length === 0 ? (
                     <span className="text-xs text-muted-foreground">not specified</span>
                   ) : (
                     <ul className="space-y-0.5">
@@ -283,6 +300,13 @@ const AdminClaims = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => 
                           <span className="ml-1.5 text-xs text-muted-foreground">
                             {t.composer ?? "TV Music Store"}
                           </span>
+                        </li>
+                      ))}
+                      {/* Free-typed titles — not matched to the catalogue. */}
+                      {c.trackNames.map((n) => (
+                        <li key={`txt-${n}`}>
+                          <span className="text-foreground">{n}</span>
+                          <span className="ml-1.5 text-xs italic text-muted-foreground">typed by customer</span>
                         </li>
                       ))}
                     </ul>

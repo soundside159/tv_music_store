@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowUpRight, Download as DownloadIcon, Pause, Play, Plus, X } from "lucide-react";
 import { accountNavGroups, adminNavGroups, composerNavItems } from "@/lib/adminNav";
@@ -267,53 +267,39 @@ const Account = () => {
     {
       id: number;
       videoUrl: string;
+      videoTitle: string | null;
       status: string;
       createdAt: string;
-      tracks: { id: string; title: string }[];
+      trackTitles: string[];
     }[]
   >([]);
   const [claimUrl, setClaimUrl] = useState("");
   const [claimBusy, setClaimBusy] = useState(false);
 
-  // Which tracks are in the video. Two ways in: type a name (or paste a
-  // /track/<slug> link) into the search field, or hit "Downloads" — that opens
-  // a playable list (waveform + Select) of the customer's library below, 10
-  // per page. Picked tracks become removable chips; after the first pick the
-  // picker collapses behind "Used more? + Add used track".
+  // Which tracks are in the video (at least ONE is required — a claim without
+  // a track tells us nothing). Two ways in: type ANY name and hit Add (free
+  // text, no search-as-you-type — the Downloads button is the list), or open
+  // "Downloads" — a playable list (waveform + Select), 10 per page. Picked
+  // tracks become removable chips; the input hides after a pick and comes back
+  // via the persistent "Used more? + Add used track" button below it.
   const [claimTracks, setClaimTracks] = useState<
-    { id: string; slug: string; title: string; artist: string }[]
+    { key: string; slug: string | null; title: string }[]
   >([]);
   const [trackQuery, setTrackQuery] = useState("");
-  const [trackOpen, setTrackOpen] = useState(false);
   const [dlOpen, setDlOpen] = useState(false);
   const [dlPickPage, setDlPickPage] = useState(1);
   const [addingMore, setAddingMore] = useState(false);
   const trackInputRef = useRef<HTMLInputElement>(null);
 
-  const downloadedIds = useMemo(() => new Set(downloadedTracks.map((t) => t.id)), [downloadedTracks]);
-  const pickedIds = useMemo(() => new Set(claimTracks.map((t) => t.id)), [claimTracks]);
-
-  // The picker is visible until the first track is picked, then hides behind
-  // the "+ Add used track" button.
+  const pickedKeys = useMemo(() => new Set(claimTracks.map((t) => t.key)), [claimTracks]);
   const pickerVisible = claimTracks.length === 0 || addingMore;
-
-  const trackSuggestions = useMemo(() => {
-    const q = trackQuery.trim().toLowerCase();
-    if (!q) return [];
-    const pool = liveTracks.filter(
-      (t) => t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q),
-    );
-    const mine = pool.filter((t) => downloadedIds.has(t.id) && !pickedIds.has(t.id));
-    const rest = pool.filter((t) => !downloadedIds.has(t.id) && !pickedIds.has(t.id));
-    return [...mine, ...rest].slice(0, 8);
-  }, [trackQuery, liveTracks, downloadedIds, pickedIds]);
 
   // "Downloads" list under the field: the customer's library minus already
   // picked tracks, 10 per page with numbered pages.
   const DL_PICK_PER_PAGE = 10;
   const dlPickTracks = useMemo(
-    () => downloadedTracks.filter((t) => !pickedIds.has(t.id)),
-    [downloadedTracks, pickedIds],
+    () => downloadedTracks.filter((t) => !pickedKeys.has(t.id)),
+    [downloadedTracks, pickedKeys],
   );
   const dlPickPages = Math.max(1, Math.ceil(dlPickTracks.length / DL_PICK_PER_PAGE));
   const safeDlPickPage = Math.min(dlPickPage, dlPickPages);
@@ -322,20 +308,21 @@ const Account = () => {
     safeDlPickPage * DL_PICK_PER_PAGE,
   );
 
-  const pickTrack = (t: CatalogTrack) => {
-    setClaimTracks((list) =>
-      list.some((x) => x.id === t.id)
-        ? list
-        : [...list, { id: t.id, slug: t.slug, title: t.title, artist: t.artist }],
-    );
+  const addClaimTrack = (entry: { key: string; slug: string | null; title: string }) => {
+    setClaimTracks((list) => (list.some((x) => x.key === entry.key) ? list : [...list, entry]));
     setTrackQuery("");
-    setTrackOpen(false);
     setDlOpen(false);
     setAddingMore(false);
   };
 
-  /** Search field accepts a pasted track-page link too: /track/<slug>. */
-  const handleTrackQuery = (value: string) => {
+  const pickTrack = (t: CatalogTrack) => addClaimTrack({ key: t.id, slug: t.slug, title: t.title });
+
+  /** Free-text add: whatever the customer typed. A pasted /track/<slug> link
+   *  or an exact catalogue title silently resolves to the real track (the
+   *  owner then sees its composer); anything else is kept as plain text. */
+  const addTypedTrack = () => {
+    const value = trackQuery.trim();
+    if (!value) return;
     const slugMatch = /\/track\/([a-z0-9-]+)/i.exec(value);
     if (slugMatch) {
       const t = liveTracks.find((x) => x.slug.toLowerCase() === slugMatch[1].toLowerCase());
@@ -344,8 +331,12 @@ const Account = () => {
         return;
       }
     }
-    setTrackQuery(value);
-    setTrackOpen(true);
+    const exact = liveTracks.find((x) => x.title.toLowerCase() === value.toLowerCase());
+    if (exact) {
+      pickTrack(exact);
+      return;
+    }
+    addClaimTrack({ key: `txt:${value.toLowerCase()}`, slug: null, title: value });
   };
 
   const loadClaims = useCallback(async () => {
@@ -356,9 +347,11 @@ const Account = () => {
         claims?: {
           id: number;
           video_url: string;
+          video_title?: string | null;
           status: string;
           created_at: string;
           tracks?: { id: string; title: string }[];
+          track_names?: string[];
           track_title?: string | null;
         }[];
       };
@@ -366,9 +359,10 @@ const Account = () => {
         (data.claims ?? []).map((c) => ({
           id: c.id,
           videoUrl: c.video_url,
+          videoTitle: c.video_title ?? null,
           status: c.status,
           createdAt: c.created_at,
-          tracks: c.tracks ?? [],
+          trackTitles: [...(c.tracks ?? []).map((t) => t.title), ...(c.track_names ?? [])],
         })),
       );
     } catch {
@@ -389,7 +383,8 @@ const Account = () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           videoUrl: claimUrl.trim(),
-          trackSlugs: claimTracks.map((t) => t.slug),
+          trackSlugs: claimTracks.filter((t) => t.slug).map((t) => t.slug),
+          trackNames: claimTracks.filter((t) => !t.slug).map((t) => t.title),
         }),
       });
       const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
@@ -795,16 +790,10 @@ const Account = () => {
 
             {section === "claims" && (
               <div className="flex flex-col gap-6">
-                {/* Card 1: the submission form. Card 2 (below): sent requests.
-                    Separated on purpose — "add" and "results" in one box read
-                    as one mush (owner feedback). */}
+                {/* Card 1: the submission form. Card 2 (below): sent requests. */}
                 <SectionCard title="Copyright Claims">
-                  <p className="font-body text-sm text-muted-foreground">
-                    Got a Content ID claim on your video? Send it here — we submit it for release
-                    within one business day.
-                  </p>
                   <form
-                    className="mt-5 flex max-w-xl flex-col gap-5"
+                    className="flex max-w-xl flex-col gap-5"
                     onSubmit={(e) => {
                       e.preventDefault();
                       void submitClaim();
@@ -815,14 +804,14 @@ const Account = () => {
                         htmlFor="claim-video-url"
                         className="mb-1.5 block font-body text-xs font-semibold uppercase tracking-wide text-muted-foreground"
                       >
-                        Link to the claimed video
+                        Got a Content ID claim? Send your video link for release.
                       </label>
                       <input
                         id="claim-video-url"
                         value={claimUrl}
                         onChange={(e) => setClaimUrl(e.target.value)}
                         placeholder="https://youtube.com/watch?v=..."
-                        className="w-full rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
+                        className="h-9 w-full rounded-lg border border-border bg-background px-3 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
                       />
                     </div>
 
@@ -831,24 +820,22 @@ const Account = () => {
                         htmlFor="claim-track-search"
                         className="mb-1.5 block font-body text-xs font-semibold uppercase tracking-wide text-muted-foreground"
                       >
-                        Add the track used in the video — search it, paste its link, or pick from
-                        your downloads
+                        Add the track used in the video
                       </label>
 
-                      {/* Picked tracks as chips; the picker collapses after the
-                          first pick, "+ Add used track" reopens it. */}
+                      {/* Picked tracks as chips. */}
                       {claimTracks.length > 0 && (
                         <div className="mb-2.5 flex flex-wrap gap-1.5">
                           {claimTracks.map((t) => (
                             <span
-                              key={t.id}
+                              key={t.key}
                               className="inline-flex items-center gap-1.5 rounded-full border border-[#F4C430]/40 bg-[#F4C430]/10 py-1 pl-3 pr-1.5 font-body text-xs text-foreground"
                             >
                               {t.title}
                               <button
                                 type="button"
                                 onClick={() =>
-                                  setClaimTracks((list) => list.filter((x) => x.id !== t.id))
+                                  setClaimTracks((list) => list.filter((x) => x.key !== t.key))
                                 }
                                 aria-label={`Remove ${t.title}`}
                                 className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
@@ -860,56 +847,34 @@ const Account = () => {
                         </div>
                       )}
 
-                      {pickerVisible ? (
+                      {/* Free-text entry: type ANY name and press Add — no
+                          search-as-you-type (the Downloads button IS the list).
+                          An exact catalogue title or a pasted /track/ link
+                          still resolves to the real track silently. */}
+                      {pickerVisible && (
                         <div className="flex flex-wrap items-center gap-2">
-                          <div className="relative w-full max-w-xs">
-                            <input
-                              id="claim-track-search"
-                              ref={trackInputRef}
-                              value={trackQuery}
-                              onChange={(e) => handleTrackQuery(e.target.value)}
-                              onBlur={() => window.setTimeout(() => setTrackOpen(false), 150)}
-                              placeholder="Track name or link…"
-                              className="w-full rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
-                            />
-                            {trackOpen && trackQuery.trim() && (
-                              <ul className="absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-lg border border-border bg-card py-1 shadow-xl">
-                                {trackSuggestions.length === 0 && (
-                                  <li className="px-3 py-2 font-body text-xs text-muted-foreground">
-                                    Nothing found — try another spelling.
-                                  </li>
-                                )}
-                                {trackSuggestions.map((t) => (
-                                  <li key={t.id}>
-                                    <button
-                                      type="button"
-                                      // mousedown fires before the input's blur closes the list
-                                      onMouseDown={(e) => {
-                                        e.preventDefault();
-                                        pickTrack(t);
-                                      }}
-                                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-secondary"
-                                      title={
-                                        downloadedIds.has(t.id)
-                                          ? `${t.title} — you downloaded this`
-                                          : t.title
-                                      }
-                                    >
-                                      {downloadedIds.has(t.id) && (
-                                        <DownloadIcon className="h-3 w-3 shrink-0 text-[#F4C430]" />
-                                      )}
-                                      <span className="min-w-0 flex-1 truncate font-body text-sm text-foreground">
-                                        {t.title}
-                                      </span>
-                                      <span className="shrink-0 font-body text-[11px] text-muted-foreground">
-                                        {t.artist}
-                                      </span>
-                                    </button>
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </div>
+                          <input
+                            id="claim-track-search"
+                            ref={trackInputRef}
+                            value={trackQuery}
+                            onChange={(e) => setTrackQuery(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                addTypedTrack();
+                              }
+                            }}
+                            placeholder="Track name…"
+                            className="h-9 w-full max-w-[240px] rounded-lg border border-border bg-background px-3 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            disabled={!trackQuery.trim()}
+                            onClick={addTypedTrack}
+                            className="h-9 rounded-lg bg-[#F4C430] px-3.5 font-body text-xs font-semibold text-background transition-colors hover:bg-[#F4C430]/85 disabled:opacity-40"
+                          >
+                            Add
+                          </button>
                           <span className="font-body text-xs text-muted-foreground">or</span>
                           <button
                             type="button"
@@ -917,7 +882,7 @@ const Account = () => {
                               setDlOpen((v) => !v);
                               setDlPickPage(1);
                             }}
-                            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 font-body text-xs font-semibold transition-colors ${
+                            className={`inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 font-body text-xs font-semibold transition-colors ${
                               dlOpen
                                 ? "border-[#F4C430] bg-[#F4C430]/10 text-[#F4C430]"
                                 : "border-border text-muted-foreground hover:border-[#F4C430] hover:text-[#F4C430]"
@@ -925,21 +890,6 @@ const Account = () => {
                           >
                             <DownloadIcon className="h-3.5 w-3.5" />
                             Downloads
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <span className="font-body text-xs text-muted-foreground">Used more?</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setAddingMore(true);
-                              window.setTimeout(() => trackInputRef.current?.focus(), 0);
-                            }}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 font-body text-xs font-semibold text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                            Add used track
                           </button>
                         </div>
                       )}
@@ -951,7 +901,7 @@ const Account = () => {
                           {dlPickTracks.length === 0 ? (
                             <p className="font-body text-xs text-muted-foreground">
                               {downloadedTracks.length === 0
-                                ? "No downloads yet — search the track by name instead."
+                                ? "No downloads yet — type the track name instead."
                                 : "All your downloaded tracks are already added."}
                             </p>
                           ) : (
@@ -983,11 +933,35 @@ const Account = () => {
                           )}
                         </div>
                       )}
+
+                      {/* Persistent "add another" — always BELOW the picker, it
+                          never disappears once at least one track is in. */}
+                      {claimTracks.length > 0 && (
+                        <div className="mt-3 flex items-center gap-2">
+                          <span className="font-body text-xs text-muted-foreground">Used more?</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!addingMore) {
+                                setAddingMore(true);
+                                window.setTimeout(() => trackInputRef.current?.focus(), 0);
+                              } else {
+                                trackInputRef.current?.focus();
+                              }
+                            }}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 font-body text-xs font-semibold text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            Add used track
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     <button
                       type="submit"
-                      disabled={claimBusy || !claimUrl.trim()}
+                      disabled={claimBusy || !claimUrl.trim() || claimTracks.length === 0}
+                      title={claimTracks.length === 0 ? "Add at least one track first" : undefined}
                       className="self-start rounded-lg bg-[#F4C430] px-5 py-2 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85 disabled:opacity-50"
                     >
                       {claimBusy ? "Sending…" : "Submit"}
@@ -995,35 +969,52 @@ const Account = () => {
                   </form>
                 </SectionCard>
 
-                {/* Card 2: what was sent — video link, its tracks, and the date
-                    it went out. No status pills: the customer doesn't need our
-                    workflow, the date is the useful bit. */}
+                {/* Card 2: what was sent — three columns: the video (link +
+                    its YouTube title), the music named for it, and the date. */}
                 {claims.length > 0 && (
                   <SectionCard title="Sent requests">
-                    <ul className="divide-y divide-border/60">
+                    <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto] items-center gap-x-4">
+                      <span className="border-b border-border pb-2 font-body text-xs uppercase tracking-wide text-muted-foreground">
+                        YouTube link
+                      </span>
+                      <span className="border-b border-border pb-2 font-body text-xs uppercase tracking-wide text-muted-foreground">
+                        Used Music
+                      </span>
+                      <span className="border-b border-border pb-2 text-right font-body text-xs uppercase tracking-wide text-muted-foreground">
+                        Date
+                      </span>
                       {claims.map((c) => (
-                        <li key={c.id} className="flex items-center justify-between gap-4 py-3">
-                          <span className="min-w-0 font-body text-sm">
+                        <Fragment key={c.id}>
+                          <span className="min-w-0 border-b border-border/50 py-3 pr-2 font-body text-sm">
                             <a
                               href={c.videoUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="block truncate text-foreground hover:text-[#F4C430]"
+                              className="block truncate text-[#F4C430] hover:underline"
                             >
                               {c.videoUrl.replace("https://www.", "")}
                             </a>
-                            {c.tracks.length > 0 && (
+                            {c.videoTitle && (
                               <span className="mt-0.5 block truncate font-body text-xs text-muted-foreground">
-                                {c.tracks.map((t) => t.title).join(", ")}
+                                {c.videoTitle}
                               </span>
                             )}
                           </span>
-                          <span className="shrink-0 font-body text-xs text-muted-foreground">
+                          <span className="min-w-0 border-b border-border/50 py-3 pr-2 font-body text-sm text-foreground">
+                            {c.trackTitles.length > 0 ? (
+                              <span className="block truncate" title={c.trackTitles.join(", ")}>
+                                {c.trackTitles.join(", ")}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </span>
+                          <span className="whitespace-nowrap border-b border-border/50 py-3 text-right font-body text-xs text-muted-foreground">
                             {fmtDate(c.createdAt)}
                           </span>
-                        </li>
+                        </Fragment>
                       ))}
-                    </ul>
+                    </div>
                   </SectionCard>
                 )}
               </div>

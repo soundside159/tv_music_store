@@ -2,11 +2,15 @@ import { getSessionUser, json, OWNER_EMAIL, readJson, type Ctx } from "./_utils"
 
 // Content ID claim requests.
 //
-// POST  { videoUrl, trackSlugs? } — a customer asks us to get a claim released.
-//                                   trackSlugs = the tracks heard in the video
-//                                   (multiple per video; legacy trackSlug also
-//                                   accepted). Re-submitting the same video
-//                                   merges the tracks into the open ticket.
+// POST  { videoUrl, trackSlugs?, trackNames? }
+//                                 — a customer asks us to get a claim released.
+//                                   trackSlugs = catalogue tracks, trackNames =
+//                                   free-typed titles (the customer may type
+//                                   anything; legacy trackSlug also accepted).
+//                                   At least ONE track is required. The video's
+//                                   YouTube title is captured and stored.
+//                                   Re-submitting the same video merges the
+//                                   tracks into the open ticket.
 // GET                             — his own requests (admins: ?all=1 for every
 //                                   one, incl. customer + per-track composer).
 // PATCH { id, status }            — admin only: new / in_progress / done.
@@ -51,20 +55,24 @@ const ensureClaimsTable = async (ctx: Ctx) => {
        status TEXT NOT NULL DEFAULT 'new',
        created_at TEXT NOT NULL DEFAULT (datetime('now')),
        resolved_at TEXT,
-       track_ids TEXT
+       track_ids TEXT,
+       track_names TEXT,
+       video_title TEXT
      )`,
   ).run();
-  // The prod table pre-dates track_ids; CREATE TABLE IF NOT EXISTS never alters
-  // an existing table, so add the column the same self-healing way wl_channels
-  // got channel_ref.
-  try {
-    await ctx.env.DB.prepare(`ALTER TABLE claim_requests ADD COLUMN track_ids TEXT`).run();
-  } catch {
-    // column already there
+  // The prod table pre-dates these columns; CREATE TABLE IF NOT EXISTS never
+  // alters an existing table, so add them the same self-healing way
+  // wl_channels got channel_ref.
+  for (const col of ["track_ids TEXT", "track_names TEXT", "video_title TEXT"]) {
+    try {
+      await ctx.env.DB.prepare(`ALTER TABLE claim_requests ADD COLUMN ${col}`).run();
+    } catch {
+      // column already there
+    }
   }
 };
 
-/** JSON column -> string[] (never throws — bad data reads as no tracks). */
+/** JSON column -> string[] (never throws — bad data reads as empty). */
 const parseIds = (raw: string | null | undefined): string[] => {
   if (!raw) return [];
   try {
@@ -105,16 +113,44 @@ export const onRequestPost = async (ctx: Ctx) => {
   const user = await getSessionUser(ctx);
   if (!user) return json({ error: "Sign in first", code: "auth" }, 401);
 
-  const body = await readJson<{ videoUrl?: string; trackSlug?: string; trackSlugs?: string[] }>(
-    ctx.request,
-  );
+  const body = await readJson<{
+    videoUrl?: string;
+    trackSlug?: string;
+    trackSlugs?: string[];
+    trackNames?: string[];
+  }>(ctx.request);
   const raw = body?.videoUrl?.trim() ?? "";
   const videoId = videoIdOf(raw);
   if (!videoId) {
     return json({ error: "That does not look like a YouTube video link", code: "badurl" }, 400);
   }
 
-  // Ask YouTube whether the video exists and whether we can see it.
+  // Free-typed track titles — the customer may write anything at all.
+  const freeNames = [
+    ...new Set(
+      (Array.isArray(body?.trackNames) ? body.trackNames : [])
+        .map((s) => (typeof s === "string" ? s.trim().slice(0, 120) : ""))
+        .filter(Boolean),
+    ),
+  ].slice(0, 10);
+
+  const slugsIn = [
+    ...new Set(
+      [...(Array.isArray(body?.trackSlugs) ? body.trackSlugs : []), body?.trackSlug ?? ""]
+        .map((s) => (typeof s === "string" ? s.trim() : ""))
+        .filter(Boolean),
+    ),
+  ].slice(0, 10);
+
+  // A claim without a track is useless to everyone — we would not know what to
+  // release. The form enforces this too; this is the backstop.
+  if (slugsIn.length === 0 && freeNames.length === 0) {
+    return json({ error: "Name at least one track used in the video", code: "notrack" }, 400);
+  }
+
+  // Ask YouTube whether the video exists and whether we can see it (and grab
+  // its title for the owner's queue and the customer's list).
+  let videoTitle: string | null = null;
   const key = ctx.env.YOUTUBE_API_KEY;
   if (key) {
     try {
@@ -143,6 +179,7 @@ export const onRequestPost = async (ctx: Ctx) => {
           400,
         );
       }
+      videoTitle = video.snippet?.title?.slice(0, 200) ?? null;
     } catch {
       // YouTube unreachable — take the request anyway, a human will look at it.
     }
@@ -152,49 +189,60 @@ export const onRequestPost = async (ctx: Ctx) => {
 
   const url = `https://www.youtube.com/watch?v=${videoId}`;
 
-  // Which tracks the customer heard in the video (slugs -> ids + composer).
-  const slugs = [
-    ...new Set(
-      [...(Array.isArray(body?.trackSlugs) ? body.trackSlugs : []), body?.trackSlug ?? ""]
-        .map((s) => (typeof s === "string" ? s.trim() : ""))
-        .filter(Boolean),
-    ),
-  ].slice(0, 10);
+  // Which catalogue tracks the customer named (slugs -> ids + composer).
   let resolved: { id: string; composer_id: string | null }[] = [];
-  if (slugs.length > 0) {
-    const marks = slugs.map((_, i) => `?${i + 1}`).join(",");
+  if (slugsIn.length > 0) {
+    const marks = slugsIn.map((_, i) => `?${i + 1}`).join(",");
     const rows = await ctx.env.DB.prepare(
       `SELECT id, composer_id FROM tracks WHERE slug IN (${marks})`,
     )
-      .bind(...slugs)
+      .bind(...slugsIn)
       .all<{ id: string; composer_id: string | null }>();
     resolved = rows.results;
   }
   const trackIds = resolved.map((t) => t.id);
+  // A slug the DB no longer knows still matters to the owner — keep it as text.
+  if (trackIds.length === 0 && slugsIn.length > 0 && freeNames.length === 0) {
+    freeNames.push(...slugsIn.map((s) => s.replace(/-/g, " ")).slice(0, 10));
+  }
 
   // Already asked for this one? Don't create a second ticket — but DO merge any
   // newly named tracks into the open one, so "oh, and this track too" works.
   const existing = await ctx.env.DB.prepare(
-    `SELECT id, track_ids, track_id FROM claim_requests
+    `SELECT id, track_ids, track_names, track_id FROM claim_requests
       WHERE user_id = ?1 AND video_url = ?2 AND status <> 'done' LIMIT 1`,
   )
     .bind(user.id, url)
-    .first<{ id: number; track_ids: string | null; track_id: string | null }>();
+    .first<{
+      id: number;
+      track_ids: string | null;
+      track_names: string | null;
+      track_id: string | null;
+    }>();
   if (existing) {
-    if (trackIds.length > 0) {
-      const merged = [
-        ...new Set([
-          ...parseIds(existing.track_ids),
-          ...(existing.track_id ? [existing.track_id] : []),
-          ...trackIds,
-        ]),
-      ];
-      await ctx.env.DB.prepare(
-        `UPDATE claim_requests SET track_ids = ?1, track_id = COALESCE(track_id, ?2) WHERE id = ?3`,
+    const mergedIds = [
+      ...new Set([
+        ...parseIds(existing.track_ids),
+        ...(existing.track_id ? [existing.track_id] : []),
+        ...trackIds,
+      ]),
+    ];
+    const mergedNames = [...new Set([...parseIds(existing.track_names), ...freeNames])];
+    await ctx.env.DB.prepare(
+      `UPDATE claim_requests
+          SET track_ids = ?1, track_names = ?2,
+              track_id = COALESCE(track_id, ?3),
+              video_title = COALESCE(video_title, ?4)
+        WHERE id = ?5`,
+    )
+      .bind(
+        mergedIds.length > 0 ? JSON.stringify(mergedIds) : null,
+        mergedNames.length > 0 ? JSON.stringify(mergedNames) : null,
+        trackIds[0] ?? null,
+        videoTitle,
+        existing.id,
       )
-        .bind(JSON.stringify(merged), trackIds[0] ?? null, existing.id)
-        .run();
-    }
+      .run();
     return json({ ok: true, duplicate: true });
   }
 
@@ -203,10 +251,19 @@ export const onRequestPost = async (ctx: Ctx) => {
   const composerId = resolved.find((t) => t.composer_id)?.composer_id ?? null;
 
   await ctx.env.DB.prepare(
-    `INSERT INTO claim_requests (user_id, track_id, composer_id, video_url, status, track_ids)
-     VALUES (?1, ?2, ?3, ?4, 'new', ?5)`,
+    `INSERT INTO claim_requests
+       (user_id, track_id, composer_id, video_url, status, track_ids, track_names, video_title)
+     VALUES (?1, ?2, ?3, ?4, 'new', ?5, ?6, ?7)`,
   )
-    .bind(user.id, trackId, composerId, url, trackIds.length > 0 ? JSON.stringify(trackIds) : null)
+    .bind(
+      user.id,
+      trackId,
+      composerId,
+      url,
+      trackIds.length > 0 ? JSON.stringify(trackIds) : null,
+      freeNames.length > 0 ? JSON.stringify(freeNames) : null,
+      videoTitle,
+    )
     .run();
 
   return json({ ok: true });
@@ -215,11 +272,13 @@ export const onRequestPost = async (ctx: Ctx) => {
 interface ClaimRow {
   id: number;
   video_url: string;
+  video_title: string | null;
   status: string;
   created_at: string;
   resolved_at: string | null;
   track_id: string | null;
   track_ids: string | null;
+  track_names: string | null;
   user_email?: string;
   user_name?: string | null;
   user_id?: string;
@@ -236,16 +295,16 @@ export const onRequestGet = async (ctx: Ctx) => {
 
   const rows = all
     ? await ctx.env.DB.prepare(
-        `SELECT c.id, c.video_url, c.status, c.created_at, c.resolved_at,
-                c.track_id, c.track_ids, c.user_id,
+        `SELECT c.id, c.video_url, c.video_title, c.status, c.created_at, c.resolved_at,
+                c.track_id, c.track_ids, c.track_names, c.user_id,
                 u.email AS user_email, u.name AS user_name
            FROM claim_requests c
            LEFT JOIN users u ON u.id = c.user_id
           ORDER BY c.created_at DESC LIMIT 200`,
       ).all<ClaimRow>()
     : await ctx.env.DB.prepare(
-        `SELECT c.id, c.video_url, c.status, c.created_at, c.resolved_at,
-                c.track_id, c.track_ids
+        `SELECT c.id, c.video_url, c.video_title, c.status, c.created_at, c.resolved_at,
+                c.track_id, c.track_ids, c.track_names
            FROM claim_requests c
           WHERE c.user_id = ?1
           ORDER BY c.created_at DESC LIMIT 100`,
@@ -273,11 +332,13 @@ export const onRequestGet = async (ctx: Ctx) => {
     return {
       id: r.id,
       video_url: r.video_url,
+      video_title: r.video_title,
       status: r.status,
       created_at: r.created_at,
       resolved_at: r.resolved_at,
       track_title: tracks[0]?.title ?? null, // legacy field, older UI reads it
       tracks,
+      track_names: parseIds(r.track_names), // free-typed titles
       ...(all
         ? { user_id: r.user_id, user_email: r.user_email, user_name: r.user_name ?? null }
         : {}),

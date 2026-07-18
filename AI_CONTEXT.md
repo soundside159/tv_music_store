@@ -3737,3 +3737,25 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   request shows the video link (clickable, truncated) with its named tracks underneath and the
   SENT DATE on the right (created_at now mapped client-side) instead of a status pill.
   lint 0 errors, build OK. Committed to owner's repo: Account.tsx only.
+
+- **2026-07-18 (claim form v4 + video titles — owner feedback round 3):**
+  BACKEND `functions/api/claims.ts`: (a) a claim WITHOUT a track is now REJECTED (400 code
+  "notrack") — server backstop, the form enforces it too; (b) NEW columns `track_names` (JSON of
+  free-typed titles) + `video_title` (both guarded ALTERs, self-healing) — POST accepts
+  `trackNames: string[]` (any text, ≤10 × ≤120 chars) and captures the video's YOUTUBE TITLE from
+  the snippet during the existing validation call; duplicate-merge now merges names and backfills
+  video_title; GET returns video_title + track_names in both customer and admin shapes.
+  CUSTOMER FORM (`Account.tsx`): search-as-you-type dropdown REMOVED — the field is free text:
+  type ANYTHING + press Add/Enter (a pasted /track/ link or an exact catalogue title still resolves
+  to the real track silently, so the owner sees the composer when possible); Downloads button
+  stays as THE list. Intro paragraph + "Link to the claimed video" label replaced by one line:
+  "Got a Content ID claim? Send your video link for release." Track label is just "Add the track
+  used in the video". Submit DISABLED until ≥1 track. Inputs slimmed to h-9 (owner: "очень
+  жирные"), Downloads button matches. "Used more? + Add used track" is PERSISTENT below the picker
+  (it no longer swaps places with the input — clicking opens the input above it and the button
+  stays). "Sent requests" card is now a 3-column grid with headers: YouTube link (link + the
+  video's own title underneath) / Used Music (catalogue + free-typed titles) / Date.
+  ADMIN (`AdminClaims.tsx`): video title shown truncated under the Watch link; free-typed names
+  listed in Tracks with an italic "typed by customer" note; search also matches them + the video
+  title. lint 0 errors, tsc clean on claims.ts, build OK. Committed to owner's repo: Account.tsx,
+  claims.ts, AdminClaims.tsx.
