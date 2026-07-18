@@ -4011,3 +4011,26 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   animations (separate from the four originals) — next lever is to soften/skip those on first mount.
   NOTE (housekeeping, not done): ~60 stale `vite.config.ts.timestamp-*.mjs` temp files sit in the
   repo root — safe to delete / gitignore when convenient.
+
+- **2026-07-18 (SFX category SEO/AI-discovery FAQ — TuneTank-style):** every
+  `/sound-effects/:category` page now renders a "Frequently Asked Questions" block
+  (4 templated Q&A per category name, à la tunetank.com/sound-effects/<cat>/) as
+  visible native `<details>` accordions AND mirrors the same Q&A into a schema.org
+  **FAQPage JSON-LD** (via the existing `useSeo` hook, `#route-jsonld`), so Google
+  can show rich results and answer engines can quote clean Q&A. Copy lives in NEW
+  `src/content/sfxFaq.ts` (`buildSfxFaq(title)` + `sfxFaqJsonLd(title)`) — honesty-safe:
+  SFX are our own royalty-free content so "royalty-free / commercial use / no
+  attribution / won't trigger a claim" are true here; plan-accurate (WAV on Pro+Max,
+  Free = listen, commercial = Max). `SoundEffects.tsx` also now sets a proper per-page
+  SEO title/description/canonical for both the category and landing views (it had none
+  before). Questions: Where can I download / royalty-free & YouTube-safe / commercial
+  use / how to download. lint 0 errors, build OK. Committed to owner repo:
+  src/content/sfxFaq.ts (new), src/pages/SoundEffects.tsx. NOTE: JSON-LD is injected at
+  runtime (client-rendered SPA) — Google renders JS so it's fine; for JS-less answer
+  bots a prerender/SSR pass (docs/SEO.md) is the eventual upgrade. IN PROGRESS (next):
+  smart bulk SFX upload — owner decided HYBRID category mapping (map to existing cats,
+  propose new for unmatched, review TABLE before upload), description SAVED + fed into
+  SFX search (sfx table has NO description column yet — add lazy ALTER + include in the
+  name/tags search), tool-home (browser Bulk vs PyQt6 desktop) TBD after inspecting the
+  owner's real library (year/ -> arbitrarily-named subfolders -> WAV + sibling .txt/.doc
+  with tags+description). Awaiting the owner to connect the sound-library folder.

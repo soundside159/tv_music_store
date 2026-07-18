@@ -14,6 +14,8 @@ import { toast } from "sonner";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import WaveformPreview from "@/components/WaveformPreview";
+import { useSeo } from "@/hooks/useSeo";
+import { buildSfxFaq, sfxFaqJsonLd } from "@/content/sfxFaq";
 
 // Public Sound Effects pages (see docs/SFX_PLAN.md + the owner's mockups):
 //
@@ -271,6 +273,21 @@ const SoundEffects = () => {
       ? current.title
       : `${current.title} Sounds`
     : "Sound Effects";
+
+  // TuneTank-style FAQ (visible accordion + FAQPage JSON-LD) only on a category
+  // page. buildSfxFaq/sfxFaqJsonLd keep the copy in src/content/sfxFaq.ts.
+  const faqItems = current ? buildSfxFaq(current.title) : [];
+
+  useSeo({
+    title: current
+      ? `${current.title} Sound Effects — Royalty-Free WAV Downloads | TV Music Store`
+      : "Sound Effects — Royalty-Free WAV SFX Library | TV Music Store",
+    description: current
+      ? `Download royalty-free ${current.title.toLowerCase()} sound effects in studio-quality WAV. Cleared for commercial use and safe for YouTube — preview and download on TV Music Store.`
+      : "Premium royalty-free sound effects for video, gaming, podcasts and creative content — studio-quality WAV with commercial licensing on TV Music Store.",
+    path: current ? `/sound-effects/${category}` : "/sound-effects",
+    jsonLd: current ? sfxFaqJsonLd(current.title) : null,
+  });
 
   return (
     <div className="min-h-screen bg-background">
@@ -676,6 +693,30 @@ const SoundEffects = () => {
               Sound effects download as WAV with the Pro and Max plans — on Free you can listen to them
               right here.
             </p>
+          </section>
+        )}
+
+        {/* ---------- SEO / AI-discovery FAQ (category pages only) ----------
+            Visible <details> accordions; the same Q&A is mirrored into a
+            FAQPage JSON-LD via useSeo above. */}
+        {current && faqItems.length > 0 && (
+          <section className="mt-16 border-t border-border/60 pt-10">
+            <h2 className="font-display text-2xl font-bold text-foreground md:text-3xl">
+              Frequently Asked Questions
+            </h2>
+            <div className="mt-6 divide-y divide-border/60">
+              {faqItems.map((f, i) => (
+                <details key={i} className="group py-4">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-body text-base font-medium text-foreground [&::-webkit-details-marker]:hidden">
+                    <span>{f.q}</span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-90 group-hover:text-[#F4C430]" />
+                  </summary>
+                  <p className="mt-3 max-w-3xl font-body text-sm leading-relaxed text-muted-foreground">
+                    {f.a}
+                  </p>
+                </details>
+              ))}
+            </div>
           </section>
         )}
       </main>
