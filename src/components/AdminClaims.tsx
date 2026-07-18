@@ -408,7 +408,7 @@ const AdminClaims = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => 
                       type="button"
                       disabled={busyId === c.id}
                       onClick={() => void setStatus(c.id, "in_progress")}
-                      className="rounded-md border border-border px-2.5 py-1 text-xs text-foreground hover:border-[#F4C430] hover:text-[#F4C430] disabled:opacity-40"
+                      className="inline-flex h-6 items-center rounded-md border border-border px-2.5 align-middle text-xs text-foreground hover:border-[#F4C430] hover:text-[#F4C430] disabled:opacity-40"
                     >
                       In progress
                     </button>
@@ -418,7 +418,7 @@ const AdminClaims = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => 
                       type="button"
                       disabled={busyId === c.id}
                       onClick={() => void setStatus(c.id, "done")}
-                      className="ml-1.5 inline-flex items-center gap-1 rounded-md bg-[#F4C430] px-2.5 py-1 text-xs font-bold text-background hover:bg-[#F4C430]/85 disabled:opacity-40"
+                      className="ml-1.5 inline-flex h-6 items-center gap-1 rounded-md bg-[#F4C430] px-2.5 align-middle text-xs font-bold text-background hover:bg-[#F4C430]/85 disabled:opacity-40"
                     >
                       <Check className="h-3 w-3" />
                       Done
@@ -429,7 +429,7 @@ const AdminClaims = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => 
                       disabled={busyId === c.id}
                       onClick={() => void setStatus(c.id, "new")}
                       title="Re-open"
-                      className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground hover:border-[#F4C430] hover:text-[#F4C430] disabled:opacity-40"
+                      className="inline-flex h-6 items-center gap-1 rounded-md border border-border px-2.5 align-middle text-xs text-muted-foreground hover:border-[#F4C430] hover:text-[#F4C430] disabled:opacity-40"
                     >
                       <Undo2 className="h-3 w-3" />
                       Re-open

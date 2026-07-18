@@ -3788,3 +3788,24 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   and reload; (3) catalogue-track titles in the Tracks column are now LINKS to /track/<slug>
   (new tab); free-typed names stay plain text. lint 0 errors, tsc clean, build OK. Committed:
   AdminClaims.tsx + claims.ts.
+
+- **2026-07-18 (AdminClaims buttons equal height):** In progress / Done / Re-open / delete-X all
+  fixed to h-6 inline-flex (border vs borderless buttons rendered different heights). Committed:
+  AdminClaims.tsx.
+
+- **2026-07-18 (IDEA discussed, NOT built — auto-detecting tracks in whitelisted videos):** owner
+  proposed: download the customer's YouTube video, re-upload it PRIVATE to a TVMS test channel,
+  let Content ID claim it there, read the claims via API -> learn which tracks are in the video ->
+  revive channel whitelisting. Assessment given to owner: the chain BREAKS at "read claims via
+  API" — claim details on one's own videos are visible only in YouTube Studio, NOT in the public
+  Data API (that data lives in the Partner/Content ID API, which needs CMS access TVMS cannot
+  get); workarounds are parsing claim-notification emails (fragile, slow, unordered) or scraping
+  Studio (ToS breach, brittle). Also videos.insert costs ~1600 quota units => ~6 uploads/day on
+  the default 10k quota; downloads of YouTube videos violate ToS + need a real server with
+  proxies; re-uploading customers' videos is legally gray. RECOMMENDED ALTERNATIVE (much simpler,
+  fully in TVMS's hands): OWN AUDIO FINGERPRINTING — TVMS owns the catalogue, so fingerprint the
+  ~1000 tracks once (open-source: Chromaprint/Olaf/Panako class tools), then for each new video on
+  a whitelisted channel download AUDIO ONLY (yt-dlp -x, ~1-2MB/min, ToS-gray but no YouTube
+  account involved) on a small VPS (~$5-15/mo) and match locally — minutes per video, no YouTube
+  quota, no re-upload, no test channel. Output = track list per video -> auto-ticket with tracks
+  attached. Owner to decide; NOT built.
