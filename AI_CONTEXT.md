@@ -3542,3 +3542,25 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   file has other columns, and reading it with these rules writes the wrong data into the wrong
   fields. When a second format is supported, add the name to that array (and teach the reader the
   layout).
+
+- **2026-07-18 (link preview: big branded banner + cache notes):** owner: Telegram preview still
+  showed the old Epic Adventure desert photo and Google SERP still shows the Lovable favicon.
+  Diagnosis: index.html was ALREADY correct (gold favicon set + 512 logo og:image since 07-08);
+  both leftovers were CACHES — Telegram's server-side link-preview cache (clearing the local app
+  cache does nothing; only @WebpageBot refreshes it) and Google's favicon cache (updates on its
+  own recrawl schedule, days–weeks; live favicon.ico is already the gold logo, verified).
+  Upgraded the preview to the FruityNest-style big card: generated a branded 1200x630
+  `public/images/og-cover.jpg` (~96KB progressive JPEG; cinema-hall hero bg darkened left, gold
+  soundwave logo + "TV MUSIC STORE" wordmark, Playfair headline "Premium Cinematic Music
+  Licensing" with Premium in #F4C430, Inter subline "Music for trailers, film, games, ads &
+  creator projects", tvmusicstore.com in gold; wording kept honesty-safe — no "original/exclusive"
+  claims; built with PIL from src/assets/cinema-hero-wide.png + logo.svg geometry; generator
+  script kept outside repo). index.html: og:image + twitter:image -> /images/og-cover.jpg
+  (+og:image:type/width 1200/height 630/alt), twitter:card summary -> **summary_large_image**.
+  IMPORTANT for future edits: if og-cover.jpg is ever redesigned, RENAME it (og-cover-2.jpg etc.)
+  and update both meta tags — messengers cache the image by URL. After each deploy that changes
+  previews: paste https://tvmusicstore.com/ to @WebpageBot in Telegram to force-refresh. Lovable
+  traces remain only in dev files (vite.config.ts lovable-tagger, package.json, README) — they do
+  not ship to the built site and don't affect the favicon; removing them is optional cleanup.
+  Owner still to do: run deploy.bat, then @WebpageBot; for Google, optionally request re-indexing
+  of the homepage in Search Console to nudge the favicon recrawl.

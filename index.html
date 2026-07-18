@@ -29,20 +29,23 @@
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://tvmusicstore.com/" />
-    <!-- Brand logo card (Telegram/social link previews). For a bold full-bleed
-         banner later: drop a 1200x630 image as /images/og-cover.png, point
-         og:image + twitter:image at it and switch the card to summary_large_image. -->
-    <meta property="og:image" content="https://tvmusicstore.com/images/icons/web-app-manifest-512x512.png" />
-    <meta property="og:image:width" content="512" />
-    <meta property="og:image:height" content="512" />
+    <!-- Full-bleed 1200x630 branded banner (cinema hall + gold logo) for
+         Telegram/social link previews. Source file: public/images/og-cover.jpg.
+         After changing it, bump the filename (og-cover-2.jpg) so messengers
+         re-fetch instead of serving their cached copy. -->
+    <meta property="og:image" content="https://tvmusicstore.com/images/og-cover.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="TV Music Store — Premium Cinematic Music Licensing" />
 
-    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="TV Music Store — Royalty-Free Cinematic Music Licensing" />
     <meta
       name="twitter:description"
       content="Royalty-free cinematic and production music for YouTube, ads, films, trailers and games. Subscriptions with WAV, stems and commercial licensing."
     />
-    <meta name="twitter:image" content="https://tvmusicstore.com/images/icons/web-app-manifest-512x512.png" />
+    <meta name="twitter:image" content="https://tvmusicstore.com/images/og-cover.jpg" />
 
     <!-- Structured data: readable by search engines AND JS-less bots (ChatGPT, social) -->
     <script type="application/ld+json">
