@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" style="background-color:#090a0c">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -154,10 +154,83 @@
         ]
       }
     </script>
+
+    <!-- CRITICAL app-shell CSS (inline so it applies on the FIRST paint, before
+         the built CSS chunk loads). This is what removes the cold-load flicker:
+         the dark background + the header bar with the logo are painted from
+         frame 1, in the SAME position the real <Navigation> will occupy, so
+         nothing flashes white and nothing "pops in". React's createRoot()
+         replaces #root's children on its first commit, so the shell disappears
+         the moment the app is ready — no JS, no timers, no fade needed. -->
+    <style>
+      html, body { background-color: #090a0c; }
+      body { margin: 0; }
+      #app-shell {
+        position: fixed;
+        inset: 0;
+        background-color: #090a0c;
+        z-index: 0;
+      }
+      #app-shell .shell-nav {
+        position: fixed;
+        top: 0; left: 0; right: 0;
+        height: 64px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        background-color: rgba(9, 10, 12, 0.85);
+      }
+      #app-shell .shell-nav-inner {
+        max-width: 80rem;
+        height: 100%;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+      }
+      #app-shell .shell-logo {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #fafafa;
+        font-family: 'Inter', 'Inter Fallback', Arial, sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.22em;
+        line-height: 1;
+        white-space: nowrap;
+      }
+      #app-shell .shell-logo img {
+        height: 32px;
+        width: auto;
+        display: block;
+      }
+      @media (min-width: 640px) {
+        #app-shell .shell-nav-inner { padding: 0 24px; }
+      }
+      @media (min-width: 768px) {
+        #app-shell .shell-nav { height: 80px; }
+        #app-shell .shell-logo { font-size: 16px; }
+        #app-shell .shell-logo img { height: 36px; }
+      }
+    </style>
   </head>
 
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Static shell: shown from the very first paint until React mounts and
+           replaces it. Matches the real header geometry so the logo does not
+           move when the app takes over. aria-hidden so it never reaches AT. -->
+      <div id="app-shell" aria-hidden="true">
+        <header class="shell-nav">
+          <div class="shell-nav-inner">
+            <span class="shell-logo">
+              <img src="/images/icons/logo-header.png" alt="" />
+              TV Music Store
+            </span>
+          </div>
+        </header>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

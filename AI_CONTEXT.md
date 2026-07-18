@@ -3954,3 +3954,60 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   (c) whatever the owner brings. Read this file top-to-bottom first; AGENTS.md has the standing
   rules (honesty rules included — whitelisting still must not be promised anywhere
   customer-facing).
+
+- **2026-07-18 (⚠️ UNRESOLVED — cold-load flicker fixes DID NOT visibly help; next chat START
+  HERE):** after deploying the "cold-load polish" (self-hosted preloaded fonts, logo preload,
+  session-hint avatar, persisted SFX search count) the owner reports NONE of the four flickers
+  changed: font still swaps, logo still pops in, guest icon still flips to the avatar, the search
+  placeholder still flips to the count. The code IS live on main (verified on GitHub), so the
+  fixes are deployed but not effective as observed. Debugging leads, in order:
+  1. VERIFY WHAT'S ACTUALLY SERVED: view-source of https://tvmusicstore.com/ — are the
+     <link rel="preload" href="/fonts/inter-latin-400-normal.woff2"> lines there? Does
+     /fonts/inter-latin-400-normal.woff2 return 200 with font/woff2? If not — Cloudflare served a
+     stale index.html or the fonts folder didn't build; check the Pages build log / cache.
+  2. HINT-BASED FIXES ONLY WORK FROM THE SECOND LOAD: the avatar hint and the sfx count are
+     seeded into localStorage by the FIRST visit running the new JS. If the owner tested with a
+     single Ctrl+F5 right after deploy, the flips were expected that one time. Ask him to reload
+     twice and re-check (also: Ctrl+F5 does NOT clear localStorage, so this should stick).
+  3. THE SITE IS A CLIENT-RENDERED SPA: first paint happens only after the ~1.7MB JS bundle
+     downloads and runs. Element "pop-in" (logo appearing, sections assembling, fonts settling)
+     may partly be REACT MOUNT ORDER + entrance animations, not resource timing — in that case
+     preloads can't fix it and the real work is: render the header/logo statically or reserve
+     space, review LoadingScreen.tsx / Navigation mount, and consider code-splitting the bundle
+     (vite chunk warning exists) so first paint comes sooner.
+  4. Record a fresh frame-by-frame after (1)-(3) to see WHICH of the four remain.
+  Also note: the AI's cloud working clone was reset to origin/main at end of session — the
+  owner's deploy.bat had already pushed everything; no work was lost.
+
+- **2026-07-18 (cold-load flicker — ROOT CAUSE fixed with a static app-shell):** picked up the
+  ⚠️ UNRESOLVED item above. Diagnosis: the earlier fixes (preloaded self-hosted fonts, logo
+  preload, session-hint avatar, persisted SFX count) were all correct AND live on main, but they
+  could not fix the flicker because the real cause is architectural — the site is a client-rendered
+  SPA whose `index.html` ships an EMPTY `<div id="root">`. First paint is therefore blank/white
+  until the ~1.72 MB JS bundle (497 KB gzip) downloads and React mounts; only then does the header,
+  logo and all text appear at once and the entrance animations run. `LoadingScreen.tsx` exists but
+  is imported NOWHERE, so there was no boot shell at all. Preloading a resource makes it *ready*
+  but cannot move first paint earlier on an SPA, so nothing the owner filmed changed.
+  FIX (2 files, no JS, no SSR): (1) `index.html` now renders a STATIC APP-SHELL inside `#root` —
+  a fixed dark header bar (`#090a0c`, = `--background` 220 14% 4%) with the logo image + "TV MUSIC
+  STORE" wordmark, geometry matched to the real `<Navigation>` (max-w 80rem, h-16/md:h-20, px-4/
+  sm:px-6, logo h-8/md:h-9, Inter 600 uppercase tracking .22em). Critical CSS for it is INLINED in
+  a `<style>` in <head> so it applies on the very first paint, before the built CSS chunk (line 217
+  in dist) loads; `<html>` also gets an inline `background-color:#090a0c`. React's `createRoot().
+  render()` replaces `#root`'s children on its first commit, so the shell vanishes the instant the
+  app is ready — no timers, no fade. Result: frame 1 is already the branded dark page with the logo
+  in its final position → no white flash, no logo pop-in, no blank gap. (2) `src/index.css`: all 9
+  self-hosted @font-face switched `font-display: swap` → `optional` — with the preloaded same-origin
+  woff2 the real font is ready before first paint, and `optional` never swaps, killing the font
+  "jump"; the metric-matched Inter/Outfit Fallbacks stay as the no-reflow safety net for a rare
+  slow first load. Guest→avatar and SFX-placeholder flips are inherent to client rendering on a
+  TRUE first visit (no data yet) — the shell renders neither, so nothing flips within it, and from
+  the 2nd load the localStorage hints seed them on frame 1 (already in place). lint 0 errors, build
+  OK, shell + fonts verified in dist. Files written back to the owner's repo (index.html,
+  src/index.css) and byte-verified against the cloud build. OWNER: run deploy.bat, hard-refresh
+  (Ctrl+F5), and — best test — open an Incognito window (empty cache/localStorage = true cold load)
+  and film the reload: the header+logo should be there from the first frame on the dark background.
+  If ANY flicker remains, it's the homepage sections assembling via framer-motion entrance
+  animations (separate from the four originals) — next lever is to soften/skip those on first mount.
+  NOTE (housekeeping, not done): ~60 stale `vite.config.ts.timestamp-*.mjs` temp files sit in the
+  repo root — safe to delete / gitignore when convenient.
