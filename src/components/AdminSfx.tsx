@@ -339,22 +339,6 @@ const AdminSfx = ({ view = "manage" }: { view?: "manage" | "upload" }) => {
             {selected.length > 0 && (
               <div className="ml-auto flex flex-wrap items-center gap-2">
                 <span className="font-body text-xs text-muted-foreground">{selected.length} selected</span>
-                <select
-                  defaultValue=""
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    e.target.value = "";
-                    if (v) void run({ action: "update_sfx", ids: selected, fields: { categoryId: v } }, "Category set");
-                  }}
-                  className={`${inputCls} py-1.5 text-xs`}
-                >
-                  <option value="">Move to category…</option>
-                  {cats.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.title}
-                    </option>
-                  ))}
-                </select>
                 <button
                   type="button"
                   disabled={busy}
@@ -384,6 +368,11 @@ const AdminSfx = ({ view = "manage" }: { view?: "manage" | "upload" }) => {
             )}
           </div>
 
+          {/* Table on the left, the category checkboxes on the right — the
+              Tracks Edit pattern: tick a category and the selection moves
+              there on click, no Apply button. */}
+          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_13rem]">
+          <div className="space-y-4">
           <div className="overflow-hidden rounded-lg border border-border/60">
             <div className="grid grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_9rem_7rem_5rem_5rem] items-center gap-2 border-b border-border/60 bg-secondary/40 px-3 py-2.5 font-body text-xs uppercase tracking-wide text-muted-foreground">
               <span />
@@ -476,6 +465,120 @@ const AdminSfx = ({ view = "manage" }: { view?: "manage" | "upload" }) => {
               </button>
             </div>
           )}
+          </div>
+
+          {/* ---- Right column: categories as write-on-click checkboxes ---- */}
+          <aside className="rounded-xl border border-border bg-card p-4 xl:sticky xl:top-24">
+            <p className="font-body text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Categories
+            </p>
+            {selected.length === 0 ? (
+              <p className="mt-2.5 font-body text-xs text-muted-foreground">
+                Select sounds on the left, then tick the category they belong to.
+              </p>
+            ) : (
+              <div className="mt-2.5 space-y-1">
+                {(() => {
+                  const sel = sounds.filter((s) => selected.includes(s.id));
+                  return cats.map((c) => {
+                    const inCat = sel.filter((s) => s.category_id === c.id).length;
+                    const all = sel.length > 0 && inCat === sel.length;
+                    const some = inCat > 0 && !all;
+                    // The whole selection lives in this category — its
+                    // subcategories become tickable too.
+                    const showSubs = all && c.subs.length > 0;
+                    return (
+                      <div key={c.id}>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            void run(
+                              {
+                                action: "update_sfx",
+                                ids: selected,
+                                fields: { categoryId: all ? "" : c.id, subcategoryId: "" },
+                              },
+                              all ? "Category cleared" : `Moved to ${c.title}`,
+                            )
+                          }
+                          className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-foreground/[0.04]"
+                        >
+                          <span
+                            className={`flex h-[16px] w-[16px] shrink-0 items-center justify-center rounded border transition-colors ${
+                              all
+                                ? "border-[#F4C430] bg-[#F4C430]"
+                                : some
+                                  ? "border-[#F4C430]/70"
+                                  : "border-border"
+                            }`}
+                          >
+                            {all && <Check className="h-3 w-3 text-background" />}
+                            {some && <span className="h-0.5 w-2 rounded bg-[#F4C430]" />}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate font-body text-xs text-foreground">
+                            {c.title}
+                          </span>
+                          <span className="shrink-0 font-body text-[10px] tabular-nums text-muted-foreground">
+                            {c.count}
+                          </span>
+                        </button>
+                        {showSubs && (
+                          <div className="mb-1 ml-5 space-y-0.5">
+                            {c.subs.map((sb) => {
+                              const inSub = sel.filter((s) => s.subcategory_id === sb.id).length;
+                              const allSub = inSub === sel.length;
+                              const someSub = inSub > 0 && !allSub;
+                              return (
+                                <button
+                                  key={sb.id}
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() =>
+                                    void run(
+                                      {
+                                        action: "update_sfx",
+                                        ids: selected,
+                                        fields: { subcategoryId: allSub ? "" : sb.id },
+                                      },
+                                      allSub ? "Subcategory cleared" : `Tagged ${sb.title}`,
+                                    )
+                                  }
+                                  className="flex w-full items-center gap-2 rounded-md px-1.5 py-0.5 text-left transition-colors hover:bg-foreground/[0.04]"
+                                >
+                                  <span
+                                    className={`flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded border transition-colors ${
+                                      allSub
+                                        ? "border-[#F4C430] bg-[#F4C430]"
+                                        : someSub
+                                          ? "border-[#F4C430]/70"
+                                          : "border-border"
+                                    }`}
+                                  >
+                                    {allSub && <Check className="h-2.5 w-2.5 text-background" />}
+                                    {someSub && <span className="h-0.5 w-1.5 rounded bg-[#F4C430]" />}
+                                  </span>
+                                  <span className="min-w-0 flex-1 truncate font-body text-[11px] text-muted-foreground">
+                                    {sb.title}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
+                {cats.length === 0 && (
+                  <p className="font-body text-xs text-muted-foreground">
+                    No categories yet — create them on the Categories tab.
+                  </p>
+                )}
+              </div>
+            )}
+          </aside>
+          </div>
         </>
       )}
 

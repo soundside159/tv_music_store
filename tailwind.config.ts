@@ -15,8 +15,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        display: ['Outfit', 'Arial', 'sans-serif'],
-        body: ['Inter', 'Arial', 'sans-serif'],
+        display: ['Outfit', 'Outfit Fallback', 'Arial', 'sans-serif'],
+        body: ['Inter', 'Inter Fallback', 'Arial', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",

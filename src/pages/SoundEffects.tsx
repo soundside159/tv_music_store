@@ -63,6 +63,12 @@ interface SfxResponse {
 
 const POPULAR = ["Whoosh", "Explosion", "Click", "Notification", "Rain", "Footsteps", "Thunder", "Door", "Fire", "Wind"];
 
+// Module-level answer cache (stale-while-revalidate, same idea as useTracks):
+// navigating back to a query the session has already seen renders INSTANTLY
+// from the last answer while a background refetch swaps fresh data in — no
+// skeletons, no jumping. Skeletons only ever show on a truly first visit.
+const sfxCache = new Map<string, SfxResponse>();
+
 /** The chip with the self-drawing coloured left rim — the homepage "Browse by"
  *  look, reused on the Browse by Category panels (owner request). */
 const ArcChip = ({ to, label, index }: { to: string; label: string; index: number }) => (
@@ -105,18 +111,28 @@ const SoundEffects = () => {
   const [search, setSearch] = useState(q);
 
   const load = useCallback(async () => {
-    setLoading(true);
     const sp = new URLSearchParams({ page: String(page) });
     if (q) sp.set("q", q);
     if (category) sp.set("cat", category);
     if (sub) sp.set("sub", sub);
+    const key = sp.toString();
+
+    // Seen this exact query before? Paint it NOW, refresh quietly behind.
+    const cached = sfxCache.get(key);
+    if (cached) {
+      setData(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     try {
-      const res = await fetch(`/api/sfx?${sp.toString()}`);
+      const res = await fetch(`/api/sfx?${key}`);
       const d = (await res.json()) as SfxResponse & { ok?: boolean };
       if (!res.ok || !d.ok) throw new Error("Failed");
+      sfxCache.set(key, d);
       setData(d);
     } catch {
-      setData(null);
+      if (!cached) setData(null);
     } finally {
       setLoading(false);
     }
@@ -317,9 +333,41 @@ const SoundEffects = () => {
           </div>
         )}
 
+        {/* ---------- Landing skeletons: the sections keep their footprint
+            while the very first answer loads, so "Browse by Category" never
+            jumps up when the data lands. Cached visits skip this entirely. ---------- */}
+        {isLanding && loading && cats.length === 0 && (
+          <div aria-hidden>
+            <section className="mt-12">
+              <div className="h-7 w-52 animate-pulse rounded bg-foreground/[0.06]" />
+              <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="aspect-[3/2] animate-pulse rounded-xl border border-white/5 bg-foreground/[0.05]"
+                    style={{ animationDelay: `${i * 90}ms` }}
+                  />
+                ))}
+              </div>
+            </section>
+            <section className="mt-12">
+              <div className="h-7 w-56 animate-pulse rounded bg-foreground/[0.06]" />
+              <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="h-28 animate-pulse rounded-xl border border-border/40 bg-foreground/[0.04]"
+                    style={{ animationDelay: `${i * 90}ms` }}
+                  />
+                ))}
+              </div>
+            </section>
+          </div>
+        )}
+
         {/* ---------- Landing: Popular Categories (artwork cards) ---------- */}
-        {isLanding && popularCats.length > 0 && (
-          <section className="mt-12">
+        {isLanding && !loading && popularCats.length > 0 && (
+          <section className="mt-12 animate-fade-in">
             <h2 className="text-xl text-foreground md:text-2xl">Popular Categories</h2>
             <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
               {popularCats.map((c) => (
@@ -350,8 +398,8 @@ const SoundEffects = () => {
         )}
 
         {/* ---------- Landing: Browse by Category (arc-lit chips) ---------- */}
-        {isLanding && (
-          <section className="mt-12">
+        {isLanding && !(loading && cats.length === 0) && (
+          <section className="mt-12 animate-fade-in">
             <h2 className="text-xl text-foreground md:text-2xl">Browse by Category</h2>
             <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {cats.map((c) => (

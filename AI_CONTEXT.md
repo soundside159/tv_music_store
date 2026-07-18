@@ -3893,3 +3893,27 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   actual situation: sounds uploaded before the category existed have category_id NULL — assign
   them in Admin -> SFX -> select -> "Move to category…"). lint 0 errors, build OK. Committed:
   SoundEffects.tsx.
+
+- **2026-07-18 (font flash SITE-WIDE fixed + SFX landing loads smoothly + AdminSfx category column):**
+  (1) FONT JUMP ("шрифт прыгает, как дешёвая html-страница"): fonts were loaded via CSS @import at
+  the top of src/index.css — the download started only after the CSS parsed, so every load showed
+  fallback Arial with DIFFERENT metrics, then swapped. Fix: the Google Fonts stylesheet (Inter +
+  Outfit, display=swap) moved into index.html with preconnect to fonts.googleapis.com /
+  fonts.gstatic.com; PLUS metric-matched fallback @font-faces in index.css ('Inter Fallback' /
+  'Outfit Fallback' = local Arial with size-adjust/ascent/descent/line-gap overrides — Inter uses
+  the published next/font numbers) inserted into --font-body/--font-display and
+  tailwind.config.ts fontFamily. Result: even when the swap happens, glyph metrics match — no
+  reflow. NOTE for future font changes: keep the <link> in index.html and the fallback overrides
+  in sync.
+  (2) SFX LANDING no longer jumps: module-level answer cache (sfxCache keyed by querystring,
+  stale-while-revalidate like useTracks) — revisits render instantly with no skeletons; on a true
+  first visit the Popular Categories + Browse by Category sections render pulse SKELETONS with the
+  same footprint (5 cards + 6 panels) so nothing shifts when data lands; real sections fade in
+  (animate-fade-in). Category/search rows keep the earlier skeleton behaviour, now cache-aware.
+  (3) ADMIN SFX Library: the "Move to category…" dropdown is GONE; a RIGHT COLUMN (sticky,
+  Tracks-Edit style) lists all categories as write-on-click checkboxes — tick = selection moves
+  to that category (gold check; dash = partial), untick = category cleared; when the WHOLE
+  selection sits in one category its subcategories appear indented and tick the same way
+  (update_sfx subcategoryId). With nothing selected the panel says to select sounds first.
+  lint 0 errors, build OK. Committed: index.html, index.css, tailwind.config.ts,
+  SoundEffects.tsx, AdminSfx.tsx.

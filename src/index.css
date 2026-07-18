@@ -1,4 +1,27 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap');
+/* Fonts are loaded from index.html (<link rel=preconnect> + stylesheet) — a CSS
+   @import here started the download LATE (after this file parsed), which is
+   exactly the "cheap html page" font flash the owner saw on every load. */
+
+/* Metric-matched fallbacks: while Inter/Outfit download, Arial is served with
+   ITS METRICS OVERRIDDEN to match the real font — so when the swap happens,
+   nothing changes size and the layout does not jump. (Inter values are the
+   published next/font ones; Outfit's are from its font metrics.) */
+@font-face {
+  font-family: 'Inter Fallback';
+  src: local('Arial');
+  size-adjust: 107.4%;
+  ascent-override: 90.2%;
+  descent-override: 22.48%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Outfit Fallback';
+  src: local('Arial');
+  size-adjust: 100.3%;
+  ascent-override: 100%;
+  descent-override: 25%;
+  line-gap-override: 0%;
+}
 
 @tailwind base;
 @tailwind components;
@@ -57,8 +80,8 @@
     --sidebar-ring: 0 0% 96%;
 
     /* Typography */
-    --font-display: 'Outfit', Arial, sans-serif;
-    --font-body: 'Inter', Arial, sans-serif;
+    --font-display: 'Outfit', 'Outfit Fallback', Arial, sans-serif;
+    --font-body: 'Inter', 'Inter Fallback', Arial, sans-serif;
   }
 
   .dark {
