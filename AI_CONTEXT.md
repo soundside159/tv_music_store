@@ -3882,3 +3882,14 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   SoundEffects.tsx, AdminSfx.tsx, Admin.tsx, adminNav.ts, api/sfx.ts, api/admin/sfx.ts.
   STILL OPEN on SFX (unchanged): payout weighting (1.0/0.2 + 50% cap) in the revenue engine, SFX
   licence PDF, favourites/packs, pricing-page copy, SEO pass.
+
+- **2026-07-18 (SFX category page: sounds "appeared then vanished" — FIXED):** classic stale-data
+  flash: opening a category rendered the PREVIOUS query's rows (page 1 of ALL sounds fetched for
+  the landing) while the category query was in flight; when the real answer arrived (0 sounds if
+  none are assigned to that category) the rows vanished. Fix in SoundEffects.tsx: while `loading`,
+  the list renders 8 pulse-skeleton placeholder rows (same geometry as real rows, staggered
+  delays) and NEVER the previous answer's sounds; the empty state in a category now says "No
+  sounds in this category yet — they appear once sounds are assigned to it." (likely the owner's
+  actual situation: sounds uploaded before the category existed have category_id NULL — assign
+  them in Admin -> SFX -> select -> "Move to category…"). lint 0 errors, build OK. Committed:
+  SoundEffects.tsx.

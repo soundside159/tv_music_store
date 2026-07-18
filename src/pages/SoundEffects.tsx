@@ -456,9 +456,37 @@ const SoundEffects = () => {
               )}
             </div>
 
-            {/* TuneTank-style rows: tile · name · waveform · duration · download */}
+            {/* TuneTank-style rows: tile · name · waveform · duration · download.
+                While a NEW query loads, the previous answer's rows must NOT
+                show (they are a different category/search — the owner saw them
+                flash and vanish): placeholders hold the space instead. */}
             <div className="mt-4 overflow-hidden rounded-lg border border-border/40 bg-card/25">
-              {(data?.sounds ?? []).map((s) => {
+              {loading &&
+                Array.from({ length: 8 }).map((_, i) => (
+                  <div
+                    key={i}
+                    aria-hidden
+                    className="flex items-center gap-3 border-b border-border/30 px-3 py-2 last:border-b-0"
+                  >
+                    <div className="h-11 w-11 shrink-0 animate-pulse rounded-lg bg-foreground/[0.06]" />
+                    <div className="flex w-36 flex-col gap-1.5 sm:w-48">
+                      <div
+                        className="h-3.5 w-3/4 animate-pulse rounded bg-foreground/[0.06]"
+                        style={{ animationDelay: `${i * 90}ms` }}
+                      />
+                      <div
+                        className="h-3 w-1/2 animate-pulse rounded bg-foreground/[0.04]"
+                        style={{ animationDelay: `${i * 90}ms` }}
+                      />
+                    </div>
+                    <div
+                      className="hidden h-9 min-w-0 flex-1 animate-pulse rounded bg-foreground/[0.04] md:block"
+                      style={{ animationDelay: `${i * 90}ms` }}
+                    />
+                  </div>
+                ))}
+              {!loading &&
+                (data?.sounds ?? []).map((s) => {
                 const isPlaying = playingId === s.id;
                 return (
                   <div
@@ -529,7 +557,9 @@ const SoundEffects = () => {
 
               {!loading && (data?.sounds.length ?? 0) === 0 && (
                 <p className="px-4 py-10 text-center font-body text-sm text-muted-foreground">
-                  Nothing here yet.
+                  {current
+                    ? "No sounds in this category yet — they appear once sounds are assigned to it."
+                    : "Nothing here yet."}
                 </p>
               )}
             </div>
