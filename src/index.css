@@ -359,3 +359,15 @@
 .arc-draw {
   animation: arc-draw 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
+
+/* Claim form: "you forgot the track" nudge — quick horizontal shake. */
+@keyframes claim-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+.claim-shake {
+  animation: claim-shake 0.4s ease;
+}

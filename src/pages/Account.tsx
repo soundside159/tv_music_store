@@ -277,29 +277,41 @@ const Account = () => {
   const [claimBusy, setClaimBusy] = useState(false);
 
   // Which tracks are in the video (at least ONE is required — a claim without
-  // a track tells us nothing). Two ways in: type ANY name and hit Add (free
-  // text, no search-as-you-type — the Downloads button is the list), or open
-  // "Downloads" — a playable list (waveform + Select), 10 per page. Picked
-  // tracks become removable chips; the input hides after a pick and comes back
-  // via the persistent "Used more? + Add used track" button below it.
-  const [claimTracks, setClaimTracks] = useState<
-    { key: string; slug: string | null; title: string }[]
-  >([]);
-  const [trackQuery, setTrackQuery] = useState("");
+  // a track tells us nothing). The customer just TYPES names into rows — no
+  // Add button, no search-as-you-type. A white "+" below the rows adds another
+  // row, as many as they like. "Downloads" opens a playable list (waveform +
+  // Select), 10 per page, which fills the first empty row. Duplicates (same
+  // track or same typed name) are refused. Submit is always clickable — with
+  // no track it shakes the rows red instead of being greyed out.
+  const [trackRows, setTrackRows] = useState<
+    { rid: number; text: string; slug: string | null }[]
+  >([{ rid: 1, text: "", slug: null }]);
+  const nextRid = useRef(2);
+  const [trackError, setTrackError] = useState(false);
+  const [trackShake, setTrackShake] = useState(false);
+  const [urlError, setUrlError] = useState(false);
   const [dlOpen, setDlOpen] = useState(false);
   const [dlPickPage, setDlPickPage] = useState(1);
-  const [addingMore, setAddingMore] = useState(false);
   const trackInputRef = useRef<HTMLInputElement>(null);
 
-  const pickedKeys = useMemo(() => new Set(claimTracks.map((t) => t.key)), [claimTracks]);
-  const pickerVisible = claimTracks.length === 0 || addingMore;
+  const rowTitles = useMemo(
+    () => new Set(trackRows.map((r) => r.text.trim().toLowerCase()).filter(Boolean)),
+    [trackRows],
+  );
 
-  // "Downloads" list under the field: the customer's library minus already
-  // picked tracks, 10 per page with numbered pages.
+  const shakeTracks = () => {
+    setTrackError(true);
+    setTrackShake(true);
+    window.setTimeout(() => setTrackShake(false), 450);
+    trackInputRef.current?.focus();
+  };
+
+  // "Downloads" list under the rows: the customer's library minus tracks
+  // already in a row, 10 per page with numbered pages.
   const DL_PICK_PER_PAGE = 10;
   const dlPickTracks = useMemo(
-    () => downloadedTracks.filter((t) => !pickedKeys.has(t.id)),
-    [downloadedTracks, pickedKeys],
+    () => downloadedTracks.filter((t) => !rowTitles.has(t.title.trim().toLowerCase())),
+    [downloadedTracks, rowTitles],
   );
   const dlPickPages = Math.max(1, Math.ceil(dlPickTracks.length / DL_PICK_PER_PAGE));
   const safeDlPickPage = Math.min(dlPickPage, dlPickPages);
@@ -308,35 +320,78 @@ const Account = () => {
     safeDlPickPage * DL_PICK_PER_PAGE,
   );
 
-  const addClaimTrack = (entry: { key: string; slug: string | null; title: string }) => {
-    setClaimTracks((list) => (list.some((x) => x.key === entry.key) ? list : [...list, entry]));
-    setTrackQuery("");
-    setDlOpen(false);
-    setAddingMore(false);
-  };
-
-  const pickTrack = (t: CatalogTrack) => addClaimTrack({ key: t.id, slug: t.slug, title: t.title });
-
-  /** Free-text add: whatever the customer typed. A pasted /track/<slug> link
-   *  or an exact catalogue title silently resolves to the real track (the
-   *  owner then sees its composer); anything else is kept as plain text. */
-  const addTypedTrack = () => {
-    const value = trackQuery.trim();
-    if (!value) return;
-    const slugMatch = /\/track\/([a-z0-9-]+)/i.exec(value);
-    if (slugMatch) {
-      const t = liveTracks.find((x) => x.slug.toLowerCase() === slugMatch[1].toLowerCase());
-      if (t) {
-        pickTrack(t);
-        return;
-      }
-    }
-    const exact = liveTracks.find((x) => x.title.toLowerCase() === value.toLowerCase());
-    if (exact) {
-      pickTrack(exact);
+  /** Downloads "Select": fill the first empty row, else append a new one. */
+  const pickTrack = (t: CatalogTrack) => {
+    if (rowTitles.has(t.title.trim().toLowerCase())) {
+      toast("Already added");
       return;
     }
-    addClaimTrack({ key: `txt:${value.toLowerCase()}`, slug: null, title: value });
+    setTrackError(false);
+    setTrackRows((rows) => {
+      const empty = rows.findIndex((r) => !r.text.trim());
+      if (empty >= 0) {
+        const next = [...rows];
+        next[empty] = { ...next[empty], text: t.title, slug: t.slug };
+        return next;
+      }
+      return [...rows, { rid: nextRid.current++, text: t.title, slug: t.slug }];
+    });
+  };
+
+  const setRowText = (rid: number, text: string) => {
+    setTrackError(false);
+    setTrackRows((rows) =>
+      rows.map((r) => (r.rid === rid ? { ...r, text, slug: null } : r)),
+    );
+  };
+
+  /** Same track twice (or the same typed name) does not go in. */
+  const dedupeRowOnBlur = (rid: number) => {
+    setTrackRows((rows) => {
+      const row = rows.find((r) => r.rid === rid);
+      const value = row?.text.trim().toLowerCase();
+      if (!row || !value) return rows;
+      const dup = rows.some((r) => r.rid !== rid && r.text.trim().toLowerCase() === value);
+      if (!dup) return rows;
+      toast("Already added");
+      return rows.map((r) => (r.rid === rid ? { ...r, text: "", slug: null } : r));
+    });
+  };
+
+  const addTrackRow = () => {
+    setTrackRows((rows) => [...rows, { rid: nextRid.current++, text: "", slug: null }]);
+  };
+
+  const removeTrackRow = (rid: number) => {
+    setTrackRows((rows) =>
+      rows.length > 1
+        ? rows.filter((r) => r.rid !== rid)
+        : rows.map((r) => (r.rid === rid ? { ...r, text: "", slug: null } : r)),
+    );
+  };
+
+  /** Rows -> what the API wants. A pasted /track/<slug> link or an exact
+   *  catalogue title resolves to the real track (the owner then sees its
+   *  composer); anything else is sent as plain text. Deduped. */
+  const collectTracks = () => {
+    const slugs: string[] = [];
+    const names: string[] = [];
+    const seen = new Set<string>();
+    for (const r of trackRows) {
+      const value = r.text.trim();
+      if (!value || seen.has(value.toLowerCase())) continue;
+      seen.add(value.toLowerCase());
+      const slugMatch = /\/track\/([a-z0-9-]+)/i.exec(value);
+      const byLink = slugMatch
+        ? liveTracks.find((x) => x.slug.toLowerCase() === slugMatch[1].toLowerCase())
+        : undefined;
+      const byTitle = liveTracks.find((x) => x.title.toLowerCase() === value.toLowerCase());
+      const track = byLink ?? byTitle;
+      if (r.slug) slugs.push(r.slug);
+      else if (track) slugs.push(track.slug);
+      else names.push(value);
+    }
+    return { slugs: [...new Set(slugs)], names };
   };
 
   const loadClaims = useCallback(async () => {
@@ -375,6 +430,16 @@ const Account = () => {
   }, [user, loadClaims]);
 
   const submitClaim = async () => {
+    // Submit is never greyed out — missing bits shake red instead.
+    if (!claimUrl.trim()) {
+      setUrlError(true);
+      return;
+    }
+    const { slugs, names } = collectTracks();
+    if (slugs.length === 0 && names.length === 0) {
+      shakeTracks();
+      return;
+    }
     setClaimBusy(true);
     try {
       const res = await fetch("/api/claims", {
@@ -383,17 +448,16 @@ const Account = () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           videoUrl: claimUrl.trim(),
-          trackSlugs: claimTracks.filter((t) => t.slug).map((t) => t.slug),
-          trackNames: claimTracks.filter((t) => !t.slug).map((t) => t.title),
+          trackSlugs: slugs,
+          trackNames: names,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Could not send the request");
       setClaimUrl("");
-      setClaimTracks([]);
-      setTrackQuery("");
+      setTrackRows([{ rid: nextRid.current++, text: "", slug: null }]);
+      setTrackError(false);
       setDlOpen(false);
-      setAddingMore(false);
       await loadClaims();
       toast.success("Sent — we forward it for release within one business day");
     } catch (e) {
@@ -809,94 +873,104 @@ const Account = () => {
                       <input
                         id="claim-video-url"
                         value={claimUrl}
-                        onChange={(e) => setClaimUrl(e.target.value)}
+                        onChange={(e) => {
+                          setClaimUrl(e.target.value);
+                          setUrlError(false);
+                        }}
                         placeholder="https://youtube.com/watch?v=..."
-                        className="h-9 w-full rounded-lg border border-border bg-background px-3 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
+                        className={`h-9 w-full rounded-lg border bg-background px-3 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none ${
+                          urlError
+                            ? "claim-shake border-red-500 focus:border-red-500"
+                            : "border-border focus:border-[#F4C430]"
+                        }`}
                       />
+                      {urlError && (
+                        <p className="mt-1.5 font-body text-xs text-red-400">
+                          Paste the YouTube link first.
+                        </p>
+                      )}
                     </div>
 
                     <div>
                       <label
-                        htmlFor="claim-track-search"
+                        htmlFor="claim-track-0"
                         className="mb-1.5 block font-body text-xs font-semibold uppercase tracking-wide text-muted-foreground"
                       >
                         Add the track used in the video
                       </label>
 
-                      {/* Picked tracks as chips. */}
-                      {claimTracks.length > 0 && (
-                        <div className="mb-2.5 flex flex-wrap gap-1.5">
-                          {claimTracks.map((t) => (
-                            <span
-                              key={t.key}
-                              className="inline-flex items-center gap-1.5 rounded-full border border-[#F4C430]/40 bg-[#F4C430]/10 py-1 pl-3 pr-1.5 font-body text-xs text-foreground"
-                            >
-                              {t.title}
+                      {/* One row per track — type anything. The white + below
+                          adds another row; duplicates refuse to go in. */}
+                      <div className={`flex flex-col gap-2 ${trackShake ? "claim-shake" : ""}`}>
+                        {trackRows.map((row, i) => (
+                          <div key={row.rid} className="flex flex-wrap items-center gap-2">
+                            <input
+                              id={i === 0 ? "claim-track-0" : undefined}
+                              ref={i === 0 ? trackInputRef : undefined}
+                              value={row.text}
+                              onChange={(e) => setRowText(row.rid, e.target.value)}
+                              onBlur={() => dedupeRowOnBlur(row.rid)}
+                              placeholder="Track name…"
+                              className={`h-9 w-full max-w-[240px] rounded-lg border bg-background px-3 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none ${
+                                trackError && !row.text.trim()
+                                  ? "border-red-500 focus:border-red-500"
+                                  : "border-border focus:border-[#F4C430]"
+                              }`}
+                            />
+                            {trackRows.length > 1 && (
                               <button
                                 type="button"
-                                onClick={() =>
-                                  setClaimTracks((list) => list.filter((x) => x.key !== t.key))
-                                }
-                                aria-label={`Remove ${t.title}`}
-                                className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                                onClick={() => removeTrackRow(row.rid)}
+                                aria-label="Remove this track"
+                                className="text-muted-foreground transition-colors hover:text-foreground"
                               >
-                                <X className="h-3 w-3" />
+                                <X className="h-3.5 w-3.5" />
                               </button>
-                            </span>
-                          ))}
-                        </div>
+                            )}
+                            {i === 0 && (
+                              <>
+                                <span className="font-body text-xs text-muted-foreground">or</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setDlOpen((v) => !v);
+                                    setDlPickPage(1);
+                                  }}
+                                  className={`inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 font-body text-xs font-semibold transition-colors ${
+                                    dlOpen
+                                      ? "border-[#F4C430] bg-[#F4C430]/10 text-[#F4C430]"
+                                      : "border-border text-muted-foreground hover:border-[#F4C430] hover:text-[#F4C430]"
+                                  }`}
+                                >
+                                  <DownloadIcon className="h-3.5 w-3.5" />
+                                  Downloads
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      {trackError && (
+                        <p className="mt-1.5 font-body text-xs text-red-400">
+                          Enter the track name — we need to know what to release.
+                        </p>
                       )}
 
-                      {/* Free-text entry: type ANY name and press Add — no
-                          search-as-you-type (the Downloads button IS the list).
-                          An exact catalogue title or a pasted /track/ link
-                          still resolves to the real track silently. */}
-                      {pickerVisible && (
-                        <div className="flex flex-wrap items-center gap-2">
-                          <input
-                            id="claim-track-search"
-                            ref={trackInputRef}
-                            value={trackQuery}
-                            onChange={(e) => setTrackQuery(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                addTypedTrack();
-                              }
-                            }}
-                            placeholder="Track name…"
-                            className="h-9 w-full max-w-[240px] rounded-lg border border-border bg-background px-3 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
-                          />
-                          <button
-                            type="button"
-                            disabled={!trackQuery.trim()}
-                            onClick={addTypedTrack}
-                            className="h-9 rounded-lg bg-[#F4C430] px-3.5 font-body text-xs font-semibold text-background transition-colors hover:bg-[#F4C430]/85 disabled:opacity-40"
-                          >
-                            Add
-                          </button>
-                          <span className="font-body text-xs text-muted-foreground">or</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDlOpen((v) => !v);
-                              setDlPickPage(1);
-                            }}
-                            className={`inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 font-body text-xs font-semibold transition-colors ${
-                              dlOpen
-                                ? "border-[#F4C430] bg-[#F4C430]/10 text-[#F4C430]"
-                                : "border-border text-muted-foreground hover:border-[#F4C430] hover:text-[#F4C430]"
-                            }`}
-                          >
-                            <DownloadIcon className="h-3.5 w-3.5" />
-                            Downloads
-                          </button>
-                        </div>
-                      )}
+                      {/* Always-there white + : one more track row. */}
+                      <button
+                        type="button"
+                        onClick={addTrackRow}
+                        aria-label="Add another track"
+                        title="Add another track"
+                        className="mt-2 flex h-8 w-8 items-center justify-center rounded-lg border border-border text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
 
                       {/* The playable downloads list: play + waveform + Select,
                           10 per page with numbered pages. */}
-                      {pickerVisible && dlOpen && (
+                      {dlOpen && (
                         <div className="mt-3">
                           {dlPickTracks.length === 0 ? (
                             <p className="font-body text-xs text-muted-foreground">
@@ -933,35 +1007,11 @@ const Account = () => {
                           )}
                         </div>
                       )}
-
-                      {/* Persistent "add another" — always BELOW the picker, it
-                          never disappears once at least one track is in. */}
-                      {claimTracks.length > 0 && (
-                        <div className="mt-3 flex items-center gap-2">
-                          <span className="font-body text-xs text-muted-foreground">Used more?</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (!addingMore) {
-                                setAddingMore(true);
-                                window.setTimeout(() => trackInputRef.current?.focus(), 0);
-                              } else {
-                                trackInputRef.current?.focus();
-                              }
-                            }}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 font-body text-xs font-semibold text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                            Add used track
-                          </button>
-                        </div>
-                      )}
                     </div>
 
                     <button
                       type="submit"
-                      disabled={claimBusy || !claimUrl.trim() || claimTracks.length === 0}
-                      title={claimTracks.length === 0 ? "Add at least one track first" : undefined}
+                      disabled={claimBusy}
                       className="self-start rounded-lg bg-[#F4C430] px-5 py-2 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85 disabled:opacity-50"
                     >
                       {claimBusy ? "Sending…" : "Submit"}

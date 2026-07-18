@@ -3759,3 +3759,20 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   listed in Tracks with an italic "typed by customer" note; search also matches them + the video
   title. lint 0 errors, tsc clean on claims.ts, build OK. Committed to owner's repo: Account.tsx,
   claims.ts, AdminClaims.tsx.
+
+- **2026-07-18 (claim form v5 — rows + always-active Submit):** owner feedback round 4 on
+  `src/pages/Account.tsx`: (1) the "Add" button is GONE — the track picker is now N plain input
+  ROWS (state trackRows [{rid,text,slug}]); the customer just types a name per row; a PERSISTENT
+  white "+" button under the rows (replaces "Used more? + Add used track") appends another row,
+  unlimited. (2) Submit is ALWAYS clickable: with an empty URL the url field shakes red with
+  "Paste the YouTube link first."; with no track the rows container shakes red (new `claim-shake`
+  keyframes in src/index.css) + red hint "Enter the track name — we need to know what to release.";
+  errors clear on typing. (3) DUPLICATES refused: same typed name (case-insensitive) clears itself
+  on blur with an "Already added" toast; Downloads "Select" checks the same set; final dedupe in
+  collectTracks() before POST. Downloads "Select" fills the FIRST EMPTY row (else appends one) —
+  the playable list itself (waveform, 10/page, numbered pages) is unchanged; rows already holding
+  a downloaded track drop out of that list by title. Rows with slug (picked) or whose text
+  matches an exact catalogue title / pasted /track/ link resolve to trackSlugs, the rest go as
+  trackNames — same POST contract as v4, so claims.ts is untouched this round. Rows >1 get a
+  small X (removes the row; the last row just clears). lint 0 errors, build OK. Committed to
+  owner's repo: Account.tsx + index.css.
