@@ -3720,3 +3720,20 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   server already returned user_id in ?all=1. Done tab shows the resolved date instead of created.
   Dropped useMemo gymnastics (≤200 rows, plain filters). lint 0 errors, build OK. Committed to
   owner's repo: AdminClaims.tsx + Admin.tsx.
+
+- **2026-07-18 (customer claim form v3 — owner's 5-point feedback):** `src/pages/Account.tsx`
+  reworked again per owner: (1) Favourites button REMOVED (Downloads only). (2) Status pills
+  (new/resolved) removed from the customer's list — customers don't need our workflow. (3) The
+  "Downloads" button now LIGHTS UP gold when open and opens a PLAYABLE list below the field —
+  new light `ClaimPickRow` component (round play/pause via the global usePlayer() engine + title +
+  the standard WaveformPreview with seek + a "Select" button on the right; the full TrackRow was
+  overkill), 10 tracks per page with NUMBERED page buttons (1 2 3…), already-picked tracks drop
+  out of the list. (4) Label reworded to "Add the track used in the video — search it, paste its
+  link, or pick from your downloads"; the search input also ACCEPTS A PASTED TRACK-PAGE LINK
+  (/track/<slug> auto-picks); typed-search dropdown unchanged but only opens while typing. After
+  the FIRST pick the picker collapses to "Used more? [+ Add used track]" which reopens it —
+  replaced the old always-visible input + "Used more than one track?" hint. (5) The section is
+  now TWO separate cards: "Copyright Claims" (form) on top, "Sent requests" below — each sent
+  request shows the video link (clickable, truncated) with its named tracks underneath and the
+  SENT DATE on the right (created_at now mapped client-side) instead of a status pill.
+  lint 0 errors, build OK. Committed to owner's repo: Account.tsx only.
