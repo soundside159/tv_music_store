@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, ClipboardCopy, ExternalLink, RefreshCw, Undo2 } from "lucide-react";
+import { Check, ClipboardCopy, ExternalLink, RefreshCw, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 
 // Admin "Copyright Claims" — the customer claim-release tickets from
@@ -50,6 +50,9 @@ const AdminClaims = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => 
   const [tab, setTab] = useState<Tab>("new");
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
+  // Checkbox selection — for "Copy links" (send a batch to the Content ID
+  // provider in one paste). Cleared on tab switch and reload.
+  const [selected, setSelected] = useState<Set<number>>(new Set());
 
   const load = async () => {
     setLoading(true);
@@ -88,6 +91,7 @@ const AdminClaims = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => 
         })),
       );
       setError(null);
+      setSelected(new Set());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load");
     } finally {
@@ -136,6 +140,41 @@ const AdminClaims = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => 
     }
   };
 
+  const deleteClaim = async (id: number) => {
+    if (!window.confirm("Delete this request? This cannot be undone.")) return;
+    setBusyId(id);
+    try {
+      const r = await fetch(`/api/claims?id=${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!r.ok) {
+        const d = (await r.json().catch(() => ({}))) as { error?: string };
+        throw new Error(d.error ?? "Failed to delete");
+      }
+      setClaims((list) => (list ? list.filter((c) => c.id !== id) : list));
+      setSelected((s) => {
+        const next = new Set(s);
+        next.delete(id);
+        return next;
+      });
+      toast.success("Deleted");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const toggleSelect = (id: number) => {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   const q = query.trim().toLowerCase();
   const matches = (c: Claim) =>
     !q ||
@@ -163,6 +202,15 @@ const AdminClaims = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => 
     ["done", "Done", counts.done],
   ];
 
+  const selectedRows = rows.filter((c) => selected.has(c.id));
+  const allSelected = rows.length > 0 && selectedRows.length === rows.length;
+
+  const copySelected = () => {
+    const links = selectedRows.map((c) => c.videoUrl);
+    if (links.length === 0) return;
+    void copyText(links.join("\n"), `${links.length} link${links.length > 1 ? "s" : ""}`);
+  };
+
   return (
     <div className="rounded-xl border border-border bg-card p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -189,7 +237,10 @@ const AdminClaims = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => 
             <button
               key={id}
               type="button"
-              onClick={() => setTab(id)}
+              onClick={() => {
+                setTab(id);
+                setSelected(new Set());
+              }}
               className={`rounded-md px-3 py-1.5 font-body text-xs font-semibold transition-colors ${
                 tab === id
                   ? "bg-secondary text-[#F4C430]"
@@ -206,6 +257,18 @@ const AdminClaims = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => 
           onChange={(e) => setQuery(e.target.value)}
           className="w-full max-w-xs rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground focus:border-[#F4C430] focus:outline-none"
         />
+        {/* Appears once at least one video is ticked: one paste for the
+            Content ID provider. */}
+        {selectedRows.length > 0 && (
+          <button
+            type="button"
+            onClick={copySelected}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[#F4C430] px-3 py-2 font-body text-xs font-bold text-background transition-colors hover:bg-[#F4C430]/85"
+          >
+            <ClipboardCopy className="h-3.5 w-3.5" />
+            Copy {selectedRows.length} link{selectedRows.length > 1 ? "s" : ""}
+          </button>
+        )}
       </div>
 
       {error && <p className="mt-4 font-body text-xs text-red-400">{error}</p>}
@@ -226,6 +289,17 @@ const AdminClaims = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => 
         <table className="mt-4 w-full font-body text-sm">
           <thead>
             <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <th className="w-8 py-2 pr-3">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={() =>
+                    setSelected(allSelected ? new Set() : new Set(rows.map((c) => c.id)))
+                  }
+                  title={allSelected ? "Select none" : "Select all"}
+                  className="accent-[#F4C430]"
+                />
+              </th>
               <th className="py-2 pr-4">Date</th>
               <th className="py-2 pr-4">Customer</th>
               <th className="py-2 pr-4">Video</th>
@@ -236,6 +310,14 @@ const AdminClaims = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => 
           <tbody>
             {rows.map((c) => (
               <tr key={c.id} className="border-b border-border/50 align-top">
+                <td className="py-3 pr-3">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(c.id)}
+                    onChange={() => toggleSelect(c.id)}
+                    className="accent-[#F4C430]"
+                  />
+                </td>
                 <td className="whitespace-nowrap py-3 pr-4 text-muted-foreground">
                   {day(tab === "done" ? (c.resolvedAt ?? c.createdAt) : c.createdAt)}
                 </td>
@@ -296,7 +378,15 @@ const AdminClaims = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => 
                     <ul className="space-y-0.5">
                       {c.tracks.map((t) => (
                         <li key={t.id}>
-                          <span className="text-foreground">{t.title}</span>
+                          {/* Catalogue track — the title links to its page. */}
+                          <a
+                            href={`/track/${t.slug}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-foreground hover:text-[#F4C430] hover:underline"
+                          >
+                            {t.title}
+                          </a>
                           <span className="ml-1.5 text-xs text-muted-foreground">
                             {t.composer ?? "TV Music Store"}
                           </span>
@@ -345,6 +435,17 @@ const AdminClaims = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => 
                       Re-open
                     </button>
                   )}
+                  {/* Delete — works from any tab. */}
+                  <button
+                    type="button"
+                    disabled={busyId === c.id}
+                    onClick={() => void deleteClaim(c.id)}
+                    title="Delete request"
+                    aria-label="Delete request"
+                    className="ml-1.5 inline-flex h-6 w-6 items-center justify-center rounded-md border border-border align-middle text-muted-foreground transition-colors hover:border-red-400 hover:text-red-400 disabled:opacity-40"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
                 </td>
               </tr>
             ))}

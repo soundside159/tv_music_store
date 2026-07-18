@@ -14,6 +14,7 @@ import { getSessionUser, json, OWNER_EMAIL, readJson, type Ctx } from "./_utils"
 // GET                             — his own requests (admins: ?all=1 for every
 //                                   one, incl. customer + per-track composer).
 // PATCH { id, status }            — admin only: new / in_progress / done.
+// DELETE ?id=<n>                  — admin only: remove the ticket entirely.
 //
 // THE VALIDATION MATTERS. A claim can only be released against a video that
 // YouTube will actually show us: a PRIVATE video is invisible to the API, so we
@@ -373,5 +374,19 @@ export const onRequestPatch = async (ctx: Ctx) => {
     .bind(status, id)
     .run();
 
+  return json({ ok: true });
+};
+
+export const onRequestDelete = async (ctx: Ctx) => {
+  if (!ctx.env.DB) return json({ error: "DB not bound" }, 503);
+  const user = await getSessionUser(ctx);
+  const isAdmin = user && (user.role === "admin" || user.email === OWNER_EMAIL);
+  if (!isAdmin) return json({ error: "Admins only" }, 403);
+  await ensureClaimsTable(ctx);
+
+  const id = Number(new URL(ctx.request.url).searchParams.get("id"));
+  if (!Number.isInteger(id)) return json({ error: "Bad request" }, 400);
+
+  await ctx.env.DB.prepare(`DELETE FROM claim_requests WHERE id = ?1`).bind(id).run();
   return json({ ok: true });
 };

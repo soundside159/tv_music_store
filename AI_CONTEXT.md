@@ -3776,3 +3776,15 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   trackNames — same POST contract as v4, so claims.ts is untouched this round. Rows >1 get a
   small X (removes the row; the last row just clears). lint 0 errors, build OK. Committed to
   owner's repo: Account.tsx + index.css.
+
+- **2026-07-18 (AdminClaims: delete + track links + batch Copy):** owner asked how he actually
+  ships links to the Content ID provider + wanted delete. BACKEND `claims.ts`: NEW
+  `onRequestDelete` (admin only, DELETE /api/claims?id=N — permanent row delete). ADMIN UI
+  `AdminClaims.tsx`: (1) every row got a small X delete button (right of In progress/Done/Re-open,
+  works from ALL tabs, window.confirm guard, removes from state + selection); (2) CHECKBOX column
+  (gold accent) + select-all checkbox in the header; when ≥1 ticked, a gold "Copy N links" button
+  appears in the toolbar (next to search) — copies the selected videos' YouTube URLs
+  newline-joined, same pattern as AdminWhitelist's claim workflow; selection clears on tab switch
+  and reload; (3) catalogue-track titles in the Tracks column are now LINKS to /track/<slug>
+  (new tab); free-typed names stay plain text. lint 0 errors, tsc clean, build OK. Committed:
+  AdminClaims.tsx + claims.ts.
