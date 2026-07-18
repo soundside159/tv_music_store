@@ -3938,3 +3938,19 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   the first frame.
   lint 0 errors, build OK (fonts verified in dist/). Committed: index.html, index.css,
   useAuth.ts, SoundEffects.tsx, public/fonts/* (9 woff2 + 2 licenses).
+
+- **2026-07-18 (END OF CHAT — hand-off summary):** everything above dated 2026-07-18 from "STRIPE
+  LIVE + claims/whitelist decisions" onward happened in ONE chat. Shipped today: Copyright Claims
+  (customer form v5 with track rows + admin view with tabs/copy/delete/profile-links), customer
+  whitelisting PAUSED + full honesty sweep, SFX storefront redesign (landing per mockup + TuneTank
+  category pages + admin SFX/Bulk SFX Upload + category artwork/popular + right-column category
+  checkboxes), and the cold-load polish (self-hosted preloaded fonts, logo preload, session hint
+  avatar, SFX placeholder persistence). All committed to the owner's repo; owner deploys via
+  deploy.bat as usual. NEXT CANDIDATES for the new chat (owner picks): (a) fingerprinting
+  PROTOTYPE (see the three fingerprinting entries above — local PC utility, 10-20 main-version
+  mp3s, accuracy + track-confusion test; architecture and constraints all recorded); (b) SFX P2 —
+  payout weighting (track 1.0 / sound 0.2, 50% cap — decided 2026-07-13, docs/SFX_PLAN.md) in the
+  revenue engine + SFX licence PDF (no Content ID language) + favourites/packs/pricing copy;
+  (c) whatever the owner brings. Read this file top-to-bottom first; AGENTS.md has the standing
+  rules (honesty rules included — whitelisting still must not be promised anywhere
+  customer-facing).
