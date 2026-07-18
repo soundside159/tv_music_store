@@ -6,12 +6,12 @@ This file is the quick working map for AI assistants and developers. The full pr
 
 TVMUSICSTORE is a cinematic music subscription site (model V2). Three composers, ~1000 tracks total. Monetization: Free (3 downloads/month) / Pro $7/mo annual / Max $15/mo annual subscriptions (Tunetank-style), plus one-time Sync licenses ($199/$399) and adaptation/custom services. Revenue: 50% platform, 50% author pool split by downloads.
 
-Core positioning: curated cinematic catalog from real, named composers (no AI music), licensed to you directly, with Content ID claims on licensed uses **sent for release within one business day** and channel monitoring as the trust hook.
+Core positioning: curated cinematic catalog from real, named composers (no AI music), licensed to you directly, with Content ID claims on licensed uses **sent for release within one business day** as the trust hook.
 
 ⚠️ **Copy rules — never break these (they are honesty rules, not style rules):**
 - The catalogue is **NON-EXCLUSIVE**. Composers may licence the same track elsewhere. Never imply exclusivity or "only here".
 - We promise the **request**, not the outcome: *"we send it for release within one business day"*. NEVER "claims removed in 24h", "claim-free", or any guarantee about YouTube's own processing time — removal happens inside Content ID and is not ours to promise.
-- "Whitelisting" on our side is **channel monitoring**: we watch registered channels and send claims on new uploads for release automatically. It is not prevention.
+- "Whitelisting" on our side is **channel monitoring**: we watch registered channels and send claims on new uploads for release automatically. It is not prevention. **PAUSED for customers since 2026-07-18** (owner decision): no customer-facing text may mention or promise whitelisting/monitoring; the offer is the per-video claim release (paste the link in Account → Copyright Claims). Admin whitelist tooling, `wl_channels` data and APIs remain intact for a possible re-enable.
 - Older planning docs (`docs/SITE_OVERVIEW.md`, `docs/PAGES_SPEC.md`, `docs/TVMUSICSTORE_MASTER_PLAN.md`) still contain the old "removed within 24h" wording. They are historical — this file and `AI_CONTEXT.md` win.
 
 Full business model: `docs/TVMUSICSTORE_MASTER_PLAN.md` (V2). Page-by-page spec: `docs/PAGES_SPEC.md`.
@@ -127,7 +127,7 @@ Planned app areas:
 - `/licensing` (built): use-case table across Free/Pro/Max/Sync + FAQ accordion; linked from the header
 - `/artist/:slug` (built on mocks): composer hero (bio, styles, stats), published tracks list, plan/custom CTAs; slugs from `src/mocks/composers.ts`
 - `/blog`: SEO content
-- `/account`: customer dashboard (downloads, license, whitelist, claims, billing) — built on mock hooks; guest sees a sign-in prompt. A DevPersonaSwitcher (enable with `?dev=1`, disable `?dev=0`) previews the site as guest/free/pro/max/canceled/composer/admin
+- `/account`: customer dashboard (downloads, license, claims, billing; whitelist section paused 2026-07-18) — built on mock hooks; guest sees a sign-in prompt. A DevPersonaSwitcher (enable with `?dev=1`, disable `?dev=0`) previews the site as guest/free/pro/max/canceled/composer/admin
 - `/composer` (built on mocks): dashboard (daily downloads bars, month earnings estimate, top tracks), my tracks table, upload form (UI-only), earnings by month with statements, claim/brief requests, profile. Composer resolved via `useComposer()`; admin persona previews as composer 1
 - `/admin` (built on mocks, admin persona only): Dashboard (MRR, subscribers, free→paid, funnel, revenue streams), Finance (payout periods with per-composer lines, generate statements / mark paid, split settings), Tracks (moderation queue + catalog), Customers (mini-CRM), Requests (whitelist/claims/briefs). Remaining planned modules: Playlists, Plans editor, Analytics deep-dive, Marketing, Blog
 - `/terms`, `/privacy`, `/license-agreement`: legal pages

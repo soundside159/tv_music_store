@@ -28,12 +28,8 @@ const faq: { q: string; a: string }[] = [
     a: "Yes. Tracks you downloaded and used in projects during an active subscription stay licensed for those projects forever. New downloads or new projects need an active subscription or a one-time sync license.",
   },
   {
-    q: "How does channel whitelisting work?",
-    a: "Add your YouTube channel in your account and we watch it: new uploads are sent for claim release automatically, within one business day, without you asking. The release itself happens inside YouTube's Content ID system, so we cannot put a clock on YouTube — but the request goes out fast, usually before you even see the claim. Pro covers 3 channels, Max covers 10.",
-  },
-  {
     q: "What if I get a copyright claim?",
-    a: "Every track in the catalog is Content ID registered by its composer, so a claim can appear — it is not a strike and it does not hurt your channel. Paste the video link in your account and we send it for release within one business day, on any plan including Free. Adding your channel to monitoring is better still: we watch it and send claims on new uploads for release without you asking.",
+    a: "Every track in the catalog is Content ID registered by its composer, so a claim can appear — it is not a strike and it does not hurt your channel. Paste the video link in your account (Copyright Claims), tell us which track it is, and we send it for release within one business day, on any plan including Free.",
   },
   {
     q: "What formats do I get?",
@@ -57,7 +53,6 @@ const compareRows: CompareRow[] = [
   { label: "Small teams (up to 5 people)", values: { free: false, pro: true, max: true } },
   { label: "Paid ads & sponsored content", values: { free: false, pro: false, max: true } },
   { label: "Client & commercial work", values: { free: false, pro: false, max: true } },
-  { label: "Whitelisted YouTube channels", values: { free: "—", pro: "3", max: "10" } },
   { label: "Claims sent for release in 1 business day", values: { free: true, pro: true, max: true } },
   { label: "Priority support", values: { free: false, pro: false, max: true } },
 ];
@@ -205,7 +200,7 @@ const Pricing = () => {
   useSeo({
     title: "Plans & Pricing — Royalty-Free Music Subscription | TV Music Store",
     description:
-      "Simple royalty-free music pricing: Pro $7/mo and Max $15/mo (billed annually) with unlimited downloads, WAV + stems, commercial licensing and YouTube channel whitelisting. Plus one-time track licenses from $15.",
+      "Simple royalty-free music pricing: Pro $7/mo and Max $15/mo (billed annually) with unlimited downloads, WAV + stems and commercial licensing. Plus one-time track licenses from $15.",
     path: "/pricing",
     // The pricing FAQ as FAQPage schema — the block AI answer engines quote
     // when someone asks what a royalty-free subscription costs or covers.

@@ -54,7 +54,10 @@ export const accountNavGroups: { label: string; items: NavItem[] }[] = [
   {
     label: "Music",
     items: [
-      { id: "whitelist", label: "YouTube Whitelisting", icon: Youtube },
+      // Customer channel whitelisting is PAUSED (owner decision 2026-07-18):
+      // the "YouTube Whitelisting" item is hidden, claims are handled per-video
+      // via Copyright Claims. Admin tooling + data stay; re-add the item here
+      // to bring it back.
       { id: "license", label: "Licenses", icon: FileText },
       { id: "claims", label: "Copyright Claims", icon: ShieldCheck },
     ],
@@ -108,6 +111,7 @@ export const adminNavGroups: { label: string; items: NavItem[] }[] = [
       { id: "licenses", label: "Licenses", icon: FileText },
       { id: "campaigns", label: "Campaigns", icon: Send },
       { id: "whitelist", label: "Whitelisting", icon: Youtube },
+      { id: "claims", label: "Copyright Claims", icon: ShieldCheck },
     ],
   },
   {

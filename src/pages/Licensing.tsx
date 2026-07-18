@@ -26,7 +26,7 @@ const rows: Row[] = [
   { label: "Games & apps (embedded)", free: false, pro: false, max: false, sync: true },
   { label: "Downloads", free: "3 / month", pro: "Unlimited", max: "Unlimited", sync: "Per track" },
   { label: "WAV + stems", free: false, pro: false, max: true, sync: true },
-  { label: "Channel whitelisting", free: "—", pro: "3", max: "10", sync: "—" },
+  { label: "Claims sent for release in 1 business day", free: true, pro: true, max: true, sync: true },
 ];
 
 const faq = [
@@ -36,7 +36,7 @@ const faq = [
   },
   {
     q: "What happens if I get a Content ID claim?",
-    a: "All tracks are registered in Content ID by their composers — that is what stops other people stealing them, and it means a claim can still appear on your video. Add your channel to monitoring and we watch your new uploads and send them for release automatically. If a claim does land, paste the video link in your account: we send it for release within one business day (composers work weekdays). The release itself runs through YouTube's Content ID system, so the clock on YouTube is not ours to set — the request is. The video must be Public or Unlisted: a private video is invisible to YouTube's API, so no one can clear a claim on it.",
+    a: "All tracks are registered in Content ID by their composers — that is what stops other people stealing them, and it means a claim can still appear on your video. If a claim lands, paste the video link in your account (Copyright Claims) and tell us which track it is: we send it for release within one business day (composers work weekdays). The release itself runs through YouTube's Content ID system, so the clock on YouTube is not ours to set — the request is. The video must be Public or Unlisted: a private video is invisible to YouTube's API, so no one can clear a claim on it.",
   },
   {
     q: "Can I use one subscription for multiple clients?",
@@ -72,7 +72,7 @@ const Licensing = () => {
   useSeo({
     title: "Music Licensing — What Every Plan Covers | TV Music Store",
     description:
-      "What each TV Music Store license covers: YouTube monetization and Content ID whitelisting, client and commercial work, paid ads, TV and streaming broadcast, WAV and stems.",
+      "What each TV Music Store license covers: YouTube monetization and Content ID claim release, client and commercial work, paid ads, TV and streaming broadcast, WAV and stems.",
     path: "/licensing",
     jsonLd: {
       "@context": "https://schema.org",

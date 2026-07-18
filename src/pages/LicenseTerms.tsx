@@ -116,8 +116,7 @@ const LicenseTerms = () => (
       </P>
       <UL
         items={[
-          "Monitored channels: add your YouTube channel(s) in your account, up to your plan's limit. While your subscription is active we watch those channels for new uploads and send them for claim release proactively — usually before you notice the claim. Anything you publish while active stays covered; videos published after your subscription ends are not.",
-          "Any single claim: paste the video link in your account (Content ID claims), or send it with your License Number to contact@tvmusicstore.com. We send it for release within one business day.",
+          "Any claim: paste the video link in your account (Copyright Claims) — naming the track(s) helps us route it — or send it with your License Number to contact@tvmusicstore.com. We send it for release within one business day.",
           "The video must be Public or Unlisted. A private video is invisible to YouTube's API, so a claim on it cannot be found or released by anyone — publish it first, then send us the link.",
         ]}
       />

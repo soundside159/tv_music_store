@@ -80,8 +80,9 @@ export const sendWelcomeEmail = async (env: Env, to: string, name?: string | nul
       <li><b>Use it</b> within your plan: on the free plan, add a credit to TV Music Store in your description.</li>
     </ol>
     <p style="margin:0 0 20px;color:#444;font-size:14px;line-height:1.7">
-      Upgrading unlocks unlimited downloads, WAV + stems, no attribution, and channel whitelisting so we
-      clear YouTube Content&nbsp;ID claims on your videos.
+      Upgrading unlocks unlimited downloads, WAV + stems and no attribution. And if a YouTube
+      Content&nbsp;ID claim ever appears on your video, send us the link from your account —
+      we submit it for release within one business day, on any plan.
     </p>
     <p style="margin:0 0 26px;text-align:center">
       <a href="https://tvmusicstore.com/catalog"

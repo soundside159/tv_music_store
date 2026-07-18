@@ -27,7 +27,7 @@ const GOLD = "#F4C430";
 const trustPoints = [
   // NOTE (honesty rule): we promise the REQUEST, not YouTube's outcome — hence
   // "send claims for release", never "claims removed".
-  { icon: ShieldCheck, label: "Content ID handled", text: "Add your channel and we send claims on our music for release." },
+  { icon: ShieldCheck, label: "Content ID handled", text: "Got a claim on our music? We send it for release within one business day." },
   { icon: Users, label: "Written by humans", text: "100% human-made music — never AI-generated." },
   { icon: Layers, label: "Stems included", text: "Includes separate stems for easy editing." },
   { icon: Check, label: "License instantly", text: "Clear licenses, PDF certificate right after download." },

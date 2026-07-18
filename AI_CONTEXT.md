@@ -3603,3 +3603,93 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   invoice.payment_failed, charge.refunded, charge.dispute.created,
   charge.dispute.funds_withdrawn. Test path: with TEST keys buy a license with 4242 card,
   check Account->Licenses + Admin->Finance, then switch keys to live.
+
+- **2026-07-18 (STRIPE LIVE + claims/whitelist decisions — PLAN for next chat):**
+  (1) STRIPE ACTIVATED LIVE: activation was stuck because Stripe demanded company.vat_id /
+  registration_number (sole trader has neither); support bot's workaround = zeros in the VAT
+  field, submission went through. Support chat is the tool of choice when onboarding sticks —
+  they see requirements.currently_due. Owner declined Stripe Climate; skipped public Stripe
+  profile (it exposes his HOME address). Stripe Tax threshold monitoring enabled (category
+  General — Electronically Supplied Services). Statement descriptor TVMUSICSTORE.COM / TVMUSIC.
+  STATE at time of writing: new card-payment code deployed; owner testing cart "Pay with card"
+  on TEST keys (4242); then he switches Cloudflare STRIPE_SECRET_KEY to sk_live_, creates the
+  LIVE webhook endpoint /api/stripe/webhook (all events), swaps STRIPE_WEBHOOK_SECRET to its
+  whsec_, redeploys, checks /api/health.
+  (2) OWNER DECISIONS on Content ID (после обсуждения):
+  - BUILD NOW — solo claim flow only:
+    a. ADMIN "Copyright Claims" section: claim_requests already collects tickets
+       (functions/api/claims.ts, GET ?all=1 exists, NO admin UI yet). Table: date, customer
+       (name+email), video link, chosen tracks + each track's composer, status
+       (new/in progress/done), mark-handled. 
+    b. TRACK PICKER in the customer claim form (Account -> Content ID claims): search-first
+       combobox in site style — type track name, dropdown of catalogue matches with the
+       customer's OWN DOWNLOADS ranked first; selected tracks shown as removable chips;
+       multiple tracks per video. NO giant checkbox lists. Store track ids on the ticket
+       (claim_requests: add track refs — JSON column or claim_tracks child table; check
+       existing schema in claims.ts first).
+  - DISABLE whitelisting for customers TEMPORARILY + remove it from all promises/texts:
+    hide/disable Account "My Channels" (MyChannels.tsx) for customers; SWEEP all mentions of
+    channel whitelisting from: Pricing plan feature lists + FAQs, Licensing page FAQ,
+    LicenseTerms.tsx §6 (careful — legal text; keep per-claim release by License Number as THE
+    offer), Account texts, index.html meta description + JSON-LD (Product offers descriptions
+    + FAQPage whitelisting Q), docs where user-facing. KEEP the admin whitelist tooling,
+    wl_channels data and APIs intact (re-enable later); composer agreement §6 language re
+    whitelisted channels stays (harmless) unless it promises customer-facing whitelisting.
+    HONESTY RULES apply: promise = "we send the claim for release within one business day".
+  - POSTPONED (owner will think): whitelist monitoring auto-tickets ("we saw your new video,
+    confirm tracks" emails REJECTED as spammy service); composer-side claim queue + Identifyy
+    support-email template (one composer is on Identifyy — claims released only via their
+    support, so the queue should generate a ready-to-send support email text); composer
+    whitelist-channel list.
+  - FYI recorded: direct YouTube Content ID/CMS access is not attainable for TVMS — YouTube
+    requires EXCLUSIVE rights to the fingerprinted catalogue + moderation resources; TVMS
+    catalogue is non-exclusive by design, disqualified at the door. Current model (composers'
+    own providers + site routes release requests) is the way.
+
+- **2026-07-18 (Copyright Claims admin + claim track picker BUILT; customer whitelisting PAUSED + full text sweep):**
+  Executed both "BUILD NOW" items and the whitelist pause from the 07-18 plan entry above.
+  BACKEND `functions/api/claims.ts`: new `track_ids` TEXT column on claim_requests (JSON array of
+  track ids; added via guarded ALTER in ensureClaimsTable, self-healing like wl_channels.channel_ref —
+  legacy track_id/composer_id still filled with the FIRST named track). POST now accepts
+  `trackSlugs: string[]` (max 10; legacy `trackSlug` still works); re-submitting the same open video
+  MERGES newly named tracks into the existing ticket instead of duplicating. GET returns per claim
+  `tracks: [{id,slug,title,composer}]` (one IN() query; composer = composers.display_name, null =
+  house catalog) + keeps legacy track_title; `?all=1` (admin) adds user_email/user_name/user_id.
+  NEW `onRequestPatch` (admin only): `{id, status}` with status new|in_progress|done; resolved_at is
+  set on done, cleared otherwise.
+  CUSTOMER FORM (`src/pages/Account.tsx`, Copyright Claims section): search-first track combobox in
+  site style — type a name, dropdown of up to 8 catalogue matches with the customer's OWN DOWNLOADED
+  tracks ranked first (gold "downloaded" badge; empty query shows their download library); picked
+  tracks become removable gold chips; multiple tracks per video; submit POSTs trackSlugs. The claim
+  list rows now show the named tracks under the URL. Uses the already-loaded useTracks() +
+  useMyDownloads() — no new fetches.
+  ADMIN VIEW: NEW `src/components/AdminClaims.tsx` + nav item "Copyright Claims" (ShieldCheck) in
+  the admin Customers group (`src/lib/adminNav.ts`) + section "claims" in `src/pages/Admin.tsx`
+  (also dropped unused mock imports there). Table: date / customer (name+email) / video (open +
+  copy-link) / tracks with each track's composer (tells the owner WHOSE provider gets the release) /
+  status pill; actions In progress / Done / Re-open (PATCH), search filter (video, email, track,
+  composer), "Show done" toggle (done rows hidden by default), open-count in the header, Refresh.
+  WHITELISTING PAUSED FOR CUSTOMERS (owner decision, temporary): Account nav item "YouTube
+  Whitelisting" removed and MyChannels unmounted (component file, /api/whitelist, wl_channels data
+  and ALL admin whitelist tooling kept intact — to re-enable: restore the nav item in adminNav.ts
+  accountNavGroups, "whitelist" in Account.tsx SectionId/SECTION_IDS + the MyChannels render).
+  TEXT SWEEP — every customer-facing whitelisting/monitoring promise removed or made conditional:
+  Pricing.tsx (whitelisting FAQ q deleted, claim FAQ reworded to per-video flow, compare row
+  "Whitelisted YouTube channels" removed, SEO description), Licensing.tsx (compare row -> "Claims
+  sent for release in 1 business day", Content ID FAQ reworded, SEO description), LicenseTerms.tsx
+  §6 ("Monitored channels" bullet REMOVED; per-claim release via account/License Number is THE
+  offer; "What we commit to" paragraph untouched), Index.tsx feature card, CancelSubscriptionModal
+  LOSES list, mocks/plans.ts highlights (whitelistSlots field kept — typed), index.html (meta
+  description, keywords, og:description, JSON-LD Product + both offer descriptions, FAQPage:
+  whitelisting Q replaced with a claim-release Q, Pro-vs-Max answer reworded),
+  functions/_middleware.ts prerender descriptions (3), welcome email in functions/api/_email.ts,
+  and the SEO guides (src/content/guides.ts + guidesRound2.ts): TVMS-specific
+  monitoring/whitelisting promises rewritten to the per-video claim flow; industry-generic
+  whitelisting explanations KEPT but made conditional ("some libraries offer..."). Honesty rule
+  intact everywhere: we promise the REQUEST — "sent for release within one business day".
+  AGENTS.md updated (positioning line, copy-rule 3 now records the pause, /account section list).
+  VERIFIED in the working copy: npm run lint 0 errors (25 pre-existing warnings), tsc (es2022) on
+  claims.ts/_middleware.ts/_email.ts clean, vite build OK; tsc -p tsconfig.app.json still shows
+  ONLY the pre-existing Composer.tsx(10) error (untouched). Existing prod tickets keep working —
+  track_ids self-heals on first request. OWNER: run deploy.bat; then check /account -> Copyright
+  Claims (form + picker) and /admin -> Copyright Claims.

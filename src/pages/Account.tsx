@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Download as DownloadIcon, X } from "lucide-react";
 import { accountNavGroups, adminNavGroups, composerNavItems } from "@/lib/adminNav";
 import MenuGroupHeader from "@/components/MenuGroupHeader";
 import MenuTreeLines from "@/components/MenuTreeLines";
@@ -20,7 +20,6 @@ import {
   useSubscription,
 } from "@/hooks/useMockData";
 import { toast } from "sonner";
-import MyChannels from "@/components/MyChannels";
 import { SectionPanel } from "@/components/SectionHeading";
 import CancelSubscriptionModal from "@/components/CancelSubscriptionModal";
 import NotificationsSettings from "@/components/NotificationsSettings";
@@ -39,7 +38,6 @@ type SectionId =
   | "downloads"
   | "favourites"
   | "license"
-  | "whitelist"
   | "claims"
   | "billing"
   | "support"
@@ -56,7 +54,6 @@ const SECTION_IDS: SectionId[] = [
   "downloads",
   "favourites",
   "license",
-  "whitelist",
   "claims",
   "billing",
   "support",
@@ -206,24 +203,62 @@ const Account = () => {
   // is actually visible on YouTube before accepting it: a private video cannot
   // have its claim released by anyone, so promising it would be a lie.
   const [claims, setClaims] = useState<
-    { id: number; videoUrl: string; status: string; trackTitle?: string | null }[]
+    { id: number; videoUrl: string; status: string; tracks: { id: string; title: string }[] }[]
   >([]);
   const [claimUrl, setClaimUrl] = useState("");
   const [claimBusy, setClaimBusy] = useState(false);
+
+  // Which tracks are in the video — search-first picker (no checkbox walls):
+  // type a name, pick from the dropdown (your downloaded tracks come first),
+  // picked tracks become removable chips. Several tracks per video is normal.
+  const [claimTracks, setClaimTracks] = useState<
+    { id: string; slug: string; title: string; artist: string }[]
+  >([]);
+  const [trackQuery, setTrackQuery] = useState("");
+  const [trackOpen, setTrackOpen] = useState(false);
+
+  const downloadedIds = useMemo(() => new Set(downloadedTracks.map((t) => t.id)), [downloadedTracks]);
+  const trackSuggestions = useMemo(() => {
+    const q = trackQuery.trim().toLowerCase();
+    const picked = new Set(claimTracks.map((t) => t.id));
+    const pool = q
+      ? liveTracks.filter(
+          (t) => t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q),
+        )
+      : downloadedTracks; // empty query = your library, most recent first
+    const mine = pool.filter((t) => downloadedIds.has(t.id) && !picked.has(t.id));
+    const rest = pool.filter((t) => !downloadedIds.has(t.id) && !picked.has(t.id));
+    return [...mine, ...rest].slice(0, 8);
+  }, [trackQuery, liveTracks, downloadedTracks, downloadedIds, claimTracks]);
+
+  const pickTrack = (t: CatalogTrack) => {
+    setClaimTracks((list) =>
+      list.some((x) => x.id === t.id)
+        ? list
+        : [...list, { id: t.id, slug: t.slug, title: t.title, artist: t.artist }],
+    );
+    setTrackQuery("");
+  };
 
   const loadClaims = useCallback(async () => {
     try {
       const res = await fetch("/api/claims", { credentials: "include" });
       if (!res.ok) return;
       const data = (await res.json()) as {
-        claims?: { id: number; video_url: string; status: string; track_title?: string | null }[];
+        claims?: {
+          id: number;
+          video_url: string;
+          status: string;
+          tracks?: { id: string; title: string }[];
+          track_title?: string | null;
+        }[];
       };
       setClaims(
         (data.claims ?? []).map((c) => ({
           id: c.id,
           videoUrl: c.video_url,
           status: c.status,
-          trackTitle: c.track_title,
+          tracks: c.tracks ?? [],
         })),
       );
     } catch {
@@ -242,11 +277,16 @@ const Account = () => {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ videoUrl: claimUrl.trim() }),
+        body: JSON.stringify({
+          videoUrl: claimUrl.trim(),
+          trackSlugs: claimTracks.map((t) => t.slug),
+        }),
       });
       const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Could not send the request");
       setClaimUrl("");
+      setClaimTracks([]);
+      setTrackQuery("");
       await loadClaims();
       toast.success("Sent — we forward it for release within one business day");
     } catch (e) {
@@ -278,7 +318,7 @@ const Account = () => {
         <main className="mx-auto flex min-h-[60vh] w-full max-w-md flex-col items-center justify-center px-4 pt-20 text-center">
           <h1 className="text-2xl text-foreground">Your account</h1>
           <p className="mt-3 font-body text-sm text-muted-foreground">
-            Sign in to see your downloads, licenses, whitelisted channels and billing.
+            Sign in to see your downloads, licenses and billing.
           </p>
           <Link
             to="/login"
@@ -637,7 +677,9 @@ const Account = () => {
                 with audio, its PDF certificate and the Edit-certificate form. */}
             {section === "license" && <LicensesSection />}
 
-            {section === "whitelist" && <MyChannels />}
+            {/* Customer channel whitelisting is PAUSED (owner decision
+                2026-07-18) — the MyChannels section is unmounted, claims are
+                handled per-video below. Admin tooling and data stay intact. */}
 
             {section === "claims" && (
               <SectionCard title="Content ID claims">
@@ -647,7 +689,7 @@ const Account = () => {
                   Submit YouTube copyright claim removals — they appear below with their status.
                 </p>
                 <form
-                  className="mt-4 flex gap-2"
+                  className="mt-4 flex flex-col gap-3"
                   onSubmit={(e) => {
                     e.preventDefault();
                     void submitClaim();
@@ -657,12 +699,83 @@ const Account = () => {
                     value={claimUrl}
                     onChange={(e) => setClaimUrl(e.target.value)}
                     placeholder="https://youtube.com/watch?v=..."
-                    className="flex-1 rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
+                    className="rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
                   />
+
+                  {/* Which of our tracks are in the video — helps us route the
+                      release to the right composer. Search-first: type a name,
+                      your downloaded tracks are suggested first. */}
+                  <div className="relative">
+                    <input
+                      value={trackQuery}
+                      onChange={(e) => {
+                        setTrackQuery(e.target.value);
+                        setTrackOpen(true);
+                      }}
+                      onFocus={() => setTrackOpen(true)}
+                      onBlur={() => window.setTimeout(() => setTrackOpen(false), 150)}
+                      placeholder="Which track is in the video? Start typing its name…"
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
+                    />
+                    {trackOpen && trackSuggestions.length > 0 && (
+                      <ul className="absolute left-0 right-0 top-full z-20 mt-1 max-h-72 overflow-y-auto rounded-lg border border-border bg-card py-1 shadow-xl">
+                        {trackSuggestions.map((t) => (
+                          <li key={t.id}>
+                            <button
+                              type="button"
+                              // mousedown fires before the input's blur closes the list
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                pickTrack(t);
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-secondary"
+                            >
+                              <span className="min-w-0 flex-1 truncate font-body text-sm text-foreground">
+                                {t.title}
+                                <span className="ml-2 font-body text-xs text-muted-foreground">
+                                  {t.artist}
+                                </span>
+                              </span>
+                              {downloadedIds.has(t.id) && (
+                                <span className="inline-flex shrink-0 items-center gap-1 font-body text-[10px] uppercase tracking-wide text-[#F4C430]">
+                                  <DownloadIcon className="h-3 w-3" />
+                                  downloaded
+                                </span>
+                              )}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
+                  {claimTracks.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {claimTracks.map((t) => (
+                        <span
+                          key={t.id}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-[#F4C430]/40 bg-[#F4C430]/10 py-1 pl-3 pr-1.5 font-body text-xs text-foreground"
+                        >
+                          {t.title}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setClaimTracks((list) => list.filter((x) => x.id !== t.id))
+                            }
+                            aria-label={`Remove ${t.title}`}
+                            className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
                   <button
                     type="submit"
                     disabled={claimBusy || !claimUrl.trim()}
-                    className="rounded-lg bg-[#F4C430] px-4 py-2 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85 disabled:opacity-50"
+                    className="self-start rounded-lg bg-[#F4C430] px-5 py-2 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85 disabled:opacity-50"
                   >
                     {claimBusy ? "Sending…" : "Submit"}
                   </button>
@@ -671,7 +784,14 @@ const Account = () => {
                   <ul className="mt-5 divide-y divide-border/60">
                     {claims.map((c) => (
                       <li key={c.id} className="flex items-center justify-between py-2.5">
-                        <span className="truncate font-body text-sm text-foreground">{c.videoUrl}</span>
+                        <span className="min-w-0 font-body text-sm text-foreground">
+                          <span className="block truncate">{c.videoUrl}</span>
+                          {c.tracks.length > 0 && (
+                            <span className="block truncate font-body text-xs text-muted-foreground">
+                              {c.tracks.map((t) => t.title).join(", ")}
+                            </span>
+                          )}
+                        </span>
                         <span
                           className={`ml-4 shrink-0 rounded-full px-2.5 py-0.5 font-body text-xs ${
                             c.status === "done"

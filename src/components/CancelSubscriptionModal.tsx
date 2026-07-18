@@ -10,7 +10,6 @@ const LOSES = [
   "Unlimited access to music and sound effects",
   "Premium-quality MP3 and WAV downloads",
   "Personal licensing for your projects",
-  "YouTube whitelisting for claim-free publishing",
   "Included PDF license certificates",
 ];
 

@@ -23,11 +23,7 @@ export const mockPlans: PlanConfig[] = [
     commercialLicense: false,
     whitelistSlots: 3,
     prioritySupport: false,
-    highlights: [
-      "Unlimited MP3 downloads",
-      "Personal & small-team license",
-      "Whitelist 3 YouTube channels",
-    ],
+    highlights: ["Unlimited MP3 downloads", "Personal & small-team license"],
   },
   {
     id: "max",
@@ -42,7 +38,6 @@ export const mockPlans: PlanConfig[] = [
     highlights: [
       "Commercial license: ads & client work",
       "WAV format + stems",
-      "Whitelist 10 YouTube channels",
       "Priority support",
     ],
   },

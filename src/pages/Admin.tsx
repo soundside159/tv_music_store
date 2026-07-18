@@ -7,19 +7,13 @@ import MenuGroupHeader from "@/components/MenuGroupHeader";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { useCurrentUser } from "@/hooks/useMockData";
-import {
-  mockAdminStats,
-  mockBriefs,
-  mockClaimRequests,
-  mockComposers,
-  mockComposerTracks,
-  mockWhitelistChannels,
-} from "@/mocks";
+import { mockBriefs, mockComposers, mockComposerTracks } from "@/mocks";
 import AdminContent from "@/components/AdminContent";
 import AdminBulkUpload from "@/components/AdminBulkUpload";
 import AdminSfx from "@/components/AdminSfx";
 import AdminImport from "@/components/AdminImport";
 import AdminWhitelist from "@/components/AdminWhitelist";
+import AdminClaims from "@/components/AdminClaims";
 import AdminCampaign from "@/components/AdminCampaign";
 import AdminInbox from "@/components/AdminInbox";
 import AdminCustomerProfile from "@/components/AdminCustomerProfile";
@@ -49,6 +43,7 @@ type SectionId =
   | "customers"
   | "licenses"
   | "whitelist"
+  | "claims"
   | "campaigns"
   | "mail"
   | "requests";
@@ -71,6 +66,7 @@ const SECTION_IDS: SectionId[] = [
   "customers",
   "licenses",
   "whitelist",
+  "claims",
   "campaigns",
   "mail",
   "requests",
@@ -1192,6 +1188,8 @@ const Admin = () => {
             })()}
 
             {section === "whitelist" && <AdminWhitelist />}
+
+            {section === "claims" && <AdminClaims />}
 
             {section === "campaigns" && <AdminCampaign />}
 

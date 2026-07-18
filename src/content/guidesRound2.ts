@@ -16,7 +16,7 @@ export const guidesRound2: Guide[] = [
     description:
       "Step by step: what to do when a Content ID claim appears on licensed music, how long each route takes, and how to make sure it never happens again.",
     tldr:
-      "Go to the library that licensed you the music — not to YouTube's dispute form. Send them the video URL and your license or account reference and ask them to release the claim and add the channel to monitoring. With TV Music Store, a claim on a licensed use is sent for release within one business day, and monitored channels are sent automatically, before you ask. Disputing through YouTube alone can take up to 30 days, because YouTube gives the claimant that long to respond.",
+      "Go to the library that licensed you the music — not to YouTube's dispute form. Send them the video URL and your license or account reference and ask them to release the claim. With TV Music Store, a claim on a licensed use is sent for release within one business day. Disputing through YouTube alone can take up to 30 days, because YouTube gives the claimant that long to respond.",
     updated: "2026-07-11",
     readMinutes: 4,
     sections: [
@@ -27,7 +27,7 @@ export const guidesRound2: Guide[] = [
           rows: [
             [
               "Ask the library (right way)",
-              "They send the release straight through the Content ID system and put your channel on monitoring",
+              "They confirm your license and send the release straight through the Content ID system",
               "Request goes out within one business day with us",
             ],
             [
@@ -44,7 +44,7 @@ export const guidesRound2: Guide[] = [
           "The video URL — an unlisted or private link is fine.",
           "The track title, and the version if you used an alternate cut.",
           "Your account email or the License Number from the license document.",
-          "Your channel URL — ask for whitelisting in the same message so it never repeats.",
+          "Your channel URL — if the library offers channel whitelisting, ask in the same message so it never repeats.",
         ],
       },
       {
@@ -56,10 +56,10 @@ export const guidesRound2: Guide[] = [
         ],
       },
       {
-        heading: "The real fix: register the channel before you publish, not after",
+        heading: "The fastest route: report it where you licensed it",
         paragraphs: [
-          "Registering your channel with the library means somebody is watching it for you: new uploads that use their music are sent for claim release automatically, without you noticing the claim and without you writing an email. That is the difference between a claim you never think about and a claim you spend an evening on.",
-          "On TV Music Store, monitored-channel slots come with the paid plans. Add the channels the day you subscribe, not the day you get claimed. And publish first — a private video is invisible to YouTube's API, so nobody can act on a claim on it.",
+          "Some libraries let you register channels for monitoring; all serious ones release claims on licensed uses when you report them. Either way, the library — not YouTube's dispute form — is the short path, because the library can confirm your license instantly.",
+          "On TV Music Store, paste the video link in your account (Copyright Claims) and name the track — the claim is sent for release within one business day. And publish first — a private video is invisible to YouTube's API, so nobody can act on a claim on it.",
         ],
       },
     ],
@@ -74,7 +74,7 @@ export const guidesRound2: Guide[] = [
       },
       {
         q: "Will the claim come back on the next video?",
-        a: "It can — releasing a claim only handles the video it was raised on. That is why you register the channel: monitored channels get their new uploads sent for release automatically, so you do not have to report each one.",
+        a: "It can — releasing a claim only handles the video it was raised on. Report each claimed video the same way; the request takes a minute and goes out within one business day.",
       },
       {
         q: "Can I speed up a YouTube dispute?",

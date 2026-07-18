@@ -77,8 +77,7 @@ export const guides: Guide[] = [
       {
         heading: "How to prevent claims before they happen",
         bullets: [
-          "Whitelist your channel: give the library your channel URL and it tells YouTube to stop matching your uploads. Do this before you publish, not after.",
-          "Whitelist every channel you publish on, including a second brand channel or a client's channel.",
+          "Some libraries offer channel whitelisting — you give them your channel URL and they stop matching your uploads. If yours does, register every channel you publish on before you publish; if not, claims are released per video on request.",
           "Keep the license PDF / receipt. If a claim appears anyway, it is the fastest way to clear it.",
           "Do not re-upload the raw music file as a standalone \"track\" video — that will be claimed, correctly.",
         ],
@@ -86,7 +85,7 @@ export const guides: Guide[] = [
       {
         heading: "What happens on TV Music Store",
         paragraphs: [
-          "Every plan lets you publish on YouTube. Paid plans include channel monitoring — we watch the channels you register and send claims on your new uploads for release automatically, within one business day, without you asking. Pro covers a small number of channels, Max covers more and adds the commercial license needed for ads and client work. On the Free plan you get a limited number of downloads a month and you report a claim yourself: paste the video link in your account and we send it for release the same way.",
+          "Every plan lets you publish on YouTube. If a claim appears, paste the video link in your account (Copyright Claims) and name the track — we send the claim for release within one business day, on every plan including Free. Paid plans add unlimited downloads; Max adds WAV + stems and the commercial license needed for ads and client work.",
           "See the current plan limits and prices on the pricing page.",
         ],
       },
@@ -94,11 +93,11 @@ export const guides: Guide[] = [
     faq: [
       {
         q: "Is royalty-free music safe for monetized YouTube videos?",
-        a: "Yes, provided you hold a license that covers YouTube and you have whitelisted your channel with the library. Monetization stays with you.",
+        a: "Yes, provided you hold a license that covers YouTube. Monetization stays with you — if a Content ID claim appears, the library confirms your license and has it released.",
       },
       {
         q: "Does a Content ID claim hurt my channel?",
-        a: "No. A claim is not a copyright strike. It does not affect standing; it can affect the revenue of that one video until it is released, which is why whitelisting in advance matters.",
+        a: "No. A claim is not a copyright strike. It does not affect standing; it can affect the revenue of that one video until it is released, which is why it is worth reporting it straight away.",
       },
       {
         q: "Do I need a new license for every video?",
@@ -116,9 +115,9 @@ export const guides: Guide[] = [
     title: "Content ID Claims on Licensed Music: Why They Happen and How to Clear Them",
     h1: "Why did licensed music get a Content ID claim, and how do I remove it?",
     description:
-      "A Content ID claim on music you paid for is normal, not a strike. Here is what the system actually does, how whitelisting removes claims, and what to do if one appears.",
+      "A Content ID claim on music you paid for is normal, not a strike. Here is what the system actually does, how claims get released, and what to do if one appears.",
     tldr:
-      "A Content ID claim on licensed music happens because the library registered the track in YouTube's fingerprint database to stop unlicensed use — the system matches audio, it cannot see your receipt. It is not a copyright strike and it does not endanger your channel. Whitelisting your channel with the library prevents claims; if one has already appeared, send the library your video URL and licence and it is released, usually within a few working days.",
+      "A Content ID claim on licensed music happens because the library registered the track in YouTube's fingerprint database to stop unlicensed use — the system matches audio, it cannot see your receipt. It is not a copyright strike and it does not endanger your channel. If a claim appears, send the library your video URL and licence and it is released, usually within a few working days.",
     updated: "2026-07-11",
     readMinutes: 4,
     sections: [
@@ -130,15 +129,15 @@ export const guides: Guide[] = [
             ["What it is", "Automated audio match", "Legal takedown request"],
             ["Effect on the channel", "None", "Serious — 3 strikes closes the channel"],
             ["Effect on the video", "Monetization may be redirected until released", "Video removed"],
-            ["How it is resolved", "Library releases the claim / whitelists the channel", "Retraction or counter-notification"],
+            ["How it is resolved", "Library confirms your license and releases the claim", "Retraction or counter-notification"],
           ],
         },
       },
       {
-        heading: "Whitelisting: the fix that works before the problem",
+        heading: "Whitelisting: prevention some libraries offer",
         paragraphs: [
-          "Whitelisting means the library tells YouTube: this channel is licensed, stop matching it. Once your channel is on that list, uploads using the catalogue pass through without claims.",
-          "Add the channel before you publish. A whitelist entry applies going forward — it is not retroactive for videos already claimed, though those can be released individually.",
+          "Whitelisting means the library tells YouTube: this channel is licensed, stop matching it. Once a channel is on that list, uploads using the catalogue pass through without claims. Not every library offers it — it depends on their Content ID setup.",
+          "Where whitelisting is not offered, claims are released individually: report each claimed video and it clears. Either way an entry is not retroactive — videos already claimed are released one by one.",
         ],
       },
       {
@@ -146,7 +145,7 @@ export const guides: Guide[] = [
         bullets: [
           "Do not dispute it blindly in YouTube Studio — go to the library first; it is faster.",
           "Send: the video URL, the track name, and your account or license reference.",
-          "Ask them to whitelist the channel at the same time so it does not repeat.",
+          "If the library offers channel whitelisting, ask for it in the same message so it does not repeat.",
           "Keep publishing — the claim does not stop the video from being live.",
         ],
       },
@@ -158,11 +157,11 @@ export const guides: Guide[] = [
       },
       {
         q: "How long does it take to clear a claim?",
-        a: "It depends on the library. TV Music Store releases claims for licensed customers on request; whitelisting your channel in advance avoids the wait entirely.",
+        a: "It depends on the library. TV Music Store submits the release within one business day of your request; the release itself then runs through YouTube's Content ID system, usually within a day.",
       },
       {
         q: "Will the claim take my ad revenue?",
-        a: "Revenue for the affected video can be held or redirected while the claim is open, which is why it is worth whitelisting before publishing rather than after.",
+        a: "Revenue for the affected video can be held or redirected while the claim is open, which is why it is worth reporting the claim as soon as it appears.",
       },
     ],
     related: ["royalty-free-music-for-youtube", "music-license-for-client-work"],
@@ -251,7 +250,7 @@ export const guides: Guide[] = [
           "The license document / receipt for each track used.",
           "Track title, composer and the license tier.",
           "For broadcast or festival delivery: a cue sheet (see the sync licensing guide).",
-          "The channel whitelist request, if the video goes on the client's YouTube channel.",
+          "A note on Content ID: if a claim appears on the client's upload, report the video link to the library for release.",
         ],
       },
       {
@@ -489,7 +488,7 @@ export const guides: Guide[] = [
       {
         heading: "What we charge",
         paragraphs: [
-          "TV Music Store has a free tier with a small monthly download allowance, two subscription tiers (Pro for creators, Max for commercial and client work with WAV, stems and more whitelist slots), and three one-time track licenses — Personal, Commercial and Professional. Current prices are on the pricing page; they are worldwide and perpetual for the uses each tier lists.",
+          "TV Music Store has a free tier with a small monthly download allowance, two subscription tiers (Pro for creators, Max for commercial and client work with WAV and stems), and three one-time track licenses — Personal, Commercial and Professional. Current prices are on the pricing page; they are worldwide and perpetual for the uses each tier lists.",
         ],
       },
     ],
@@ -572,7 +571,7 @@ export const guides: Guide[] = [
         heading: "Where podcasts trip over the license",
         bullets: [
           "Sponsor reads and ad inserts make the show commercial — even a small show.",
-          "The YouTube video version is a separate surface: whitelist that channel.",
+          "The YouTube video version is a separate surface: if Content ID claims it, report the video for release.",
           "Dynamic ad insertion means your episode is monetized after publication — the license must already cover it.",
           "Network deals often require the network, not you, to hold the license. Check before you sign.",
         ],
@@ -594,7 +593,7 @@ export const guides: Guide[] = [
       },
       {
         q: "Do I need a separate license for the YouTube version?",
-        a: "Not a separate license, but you should whitelist the YouTube channel so Content ID does not claim the episode.",
+        a: "Not a separate license, but if Content ID claims the YouTube version, report it to the library — a licensed episode is released quickly.",
       },
     ],
     related: ["royalty-free-music-for-youtube", "music-license-for-client-work"],

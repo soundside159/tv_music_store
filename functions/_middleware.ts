@@ -235,13 +235,13 @@ const STATIC_PAGES: Record<string, { title: string; description: string; heading
   "/pricing": {
     title: "Pricing — Royalty-Free Music Subscriptions | TV Music Store",
     description:
-      "Free, Pro and Max plans: unlimited downloads, WAV and stems, commercial licensing and YouTube whitelisting. Or license a single track one-time.",
+      "Free, Pro and Max plans: unlimited downloads, WAV and stems, and commercial licensing. Or license a single track one-time.",
     heading: "Pricing",
   },
   "/licensing": {
     title: "Licensing — What You Get With Every Track | TV Music Store",
     description:
-      "How TV Music Store licensing works: what is covered, where you can use the music, YouTube Content ID whitelisting and one-time track licenses.",
+      "How TV Music Store licensing works: what is covered, where you can use the music, YouTube Content ID claim release and one-time track licenses.",
     heading: "Licensing",
   },
   "/sync": {
@@ -287,7 +287,7 @@ const buildSeo = async (env: Env, url: URL): Promise<Seo | null> => {
       title:
         "TV Music Store — Royalty-Free Cinematic Music Licensing for YouTube, Ads & Film",
       description:
-        "Royalty-free cinematic and production music for YouTube, ads, films, trailers and games. Subscriptions with WAV, stems, commercial licensing and YouTube whitelisting, plus one-time track licenses.",
+        "Royalty-free cinematic and production music for YouTube, ads, films, trailers and games. Subscriptions with WAV, stems and commercial licensing, plus one-time track licenses.",
       path: "/",
       body: shell(
         "Royalty-Free Cinematic Music",
