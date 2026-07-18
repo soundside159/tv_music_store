@@ -3707,3 +3707,16 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   yet…", "No favourites yet."); helper line "Used more than one track? Add each of them."; whole
   form capped at max-w-xl. No backend changes. lint 0 errors, build OK. Committed to owner's repo
   (Account.tsx only).
+
+- **2026-07-18 (AdminClaims redesign — owner: h-scroll + checkbox + no profile click "что за цирк"):**
+  `src/components/AdminClaims.tsx` rebuilt on the Users-view pattern: STATUS TABS
+  New / In progress / Done (pill tabs w/ counts, same styling as the Users filter tabs) replace the
+  status column + "Show done" checkbox — a row jumps tabs when its status changes (toast says where
+  it went: "Moved to In progress" / "Done — moved to Done" / "Re-opened — moved to New"). The
+  full YouTube URL is gone — compact gold "Watch" link (opens the video) + copy-link icon, so the
+  table fits WITHOUT the horizontal scrollbar (min-w removed, overflow wrapper removed). CUSTOMER
+  IS CLICKABLE: AdminClaims now takes `onOpenCustomer` and Admin.tsx passes `setProfileUserId`
+  (same as Inbox) — clicking the name/email opens the mini-CRM AdminCustomerProfile popup; the
+  server already returned user_id in ?all=1. Done tab shows the resolved date instead of created.
+  Dropped useMemo gymnastics (≤200 rows, plain filters). lint 0 errors, build OK. Committed to
+  owner's repo: AdminClaims.tsx + Admin.tsx.

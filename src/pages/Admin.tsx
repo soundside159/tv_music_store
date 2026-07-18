@@ -1189,7 +1189,7 @@ const Admin = () => {
 
             {section === "whitelist" && <AdminWhitelist />}
 
-            {section === "claims" && <AdminClaims />}
+            {section === "claims" && <AdminClaims onOpenCustomer={setProfileUserId} />}
 
             {section === "campaigns" && <AdminCampaign />}
 
