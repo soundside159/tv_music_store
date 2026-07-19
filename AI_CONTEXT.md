@@ -4034,3 +4034,110 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   name/tags search), tool-home (browser Bulk vs PyQt6 desktop) TBD after inspecting the
   owner's real library (year/ -> arbitrarily-named subfolders -> WAV + sibling .txt/.doc
   with tags+description). Awaiting the owner to connect the sound-library folder.
+
+- **2026-07-18 (SFX smart bulk upload — SCANNER built + tested on the real library):** owner
+  connected the sound library (Z:\...\Женя Гужа звуки\Готовые к заливке — year folders → dated
+  pack subfolders, each = ONE pack: N WAV "versions" + a sibling tag file). Reality found by a real
+  scan: 4922 WAV, 631 .txt (2018–23) + 101 .docx (2024+), NO legacy binary .doc. One tag file per
+  PACK (not per sound); format = Title line → description prose → comma tag list(s). Built a
+  stdlib-only Python SCANNER (runs on owner PC AND testable headless on the device VM):
+  scanner_core.py (walk, parse txt via encodings / docx via zipfile+xml, dedupe WAVs by name+size,
+  skip nested-dup folders, skip Ableton project scaffolding — "* Project"/Samples/Processed/
+  Consolidate/Imported/Recorded/Backup/Freeze, clean sound names "01_Glitch Sfx.wav"→"Glitch Sfx
+  01", WAV duration via stdlib wave) + taxonomy.py (HYBRID matcher: map to existing site categories
+  else propose from a BLEND taxonomy — human-friendly TuneTank-style names kept honest to our
+  actual content). Owner approved the blend. FINAL 19 categories w/ sound counts from the real run:
+  Game & UI 943, Transitions 920, Technology & Sci-Fi 384, Impacts 376, Scary & Horror 314,
+  Cinematic & Trailer 225, Nature 221, Foley & Objects 204, Magic & Fantasy 200, Cartoon & Funny
+  176, Seasonal & Holiday 119, Weather 70, Bells & Musical 65, Voice & Human 57, Sports 50,
+  Transport 40, Logo & Intro 33, Weapons & Fighting 31, Animals 22. Some have subcats (Transitions:
+  Whoosh/Swoosh/Swish/Risers; Impacts: Booms/Hits/Stingers/Explosions; Game & UI: Interface&Clicks/
+  Coins&Win/Pops&Dings; Technology: Glitch/Sci-Fi&Space/Digital&Beeps; Nature: Water/Fire/Forest).
+  After Ableton exclusion: 687 packs / 4897 sounds, 58 flagged "review", 4 packs no-text. Live site
+  /api/sfx has only TEST categories (New Cat/test 2) + 14 test sounds — so hybrid will mostly CREATE
+  new. Delivered a styled Excel REVIEW workbook (Читай меня / План категорий / Звуки[dropdowns+status
+  colors] / Паки / На проверку) to the owner twice (v1 then v2 with the blended taxonomy). Tool
+  source lives in the cloud at /tmp/sfx_uploader (taxonomy.py, scanner_core.py); scan outputs on the
+  owner PC in Z:\...\Готовые к заливке\_sfx_scan (CSV — owner can delete). DECISIONS locked: each
+  WAV = its own sfx row (TuneTank-style); description SAVED and to be fed into SFX search (sfx table
+  has NO description column yet → add lazy ALTER + include in name/tags search); categories HYBRID.
+  NEXT: (1) build the PyQt6 desktop app (choose folder → Scan → table on screen → Export Excel →
+  later Upload) with a one-click start.bat; (2) the UPLOAD stage = create categories/subcats +
+  per sound: encode 320/128 mp3 preview + upload preview & WAV (kind=sfx) + create_sfx + update_sfx
+  tags/category/description; needs either a token-auth bulk import endpoint or reuse admin session.
+  Also still open from before: SFX FAQ shipped; SFX P2 payout weighting / licence PDF unchanged.
+
+- **2026-07-18 (SFX uploader — PyQt6 desktop app SHIPPED, step 1 scan+export):** built and
+  delivered the desktop tool to the owner's repo at `sfx_uploader/` (gitignored — added
+  `sfx_uploader/` to .gitignore so deploy.bat never commits it). Files: app.py (PyQt6 GUI:
+  folder pick → threaded Scan with progress → on-screen table with inline Category combo-delegate
+  editing + status colors → Export Excel), scanner_core.py, taxonomy.py, export_excel.py
+  (reusable build_review_workbook from row/pack dicts), requirements.txt (PyQt6, openpyxl),
+  start.bat (one-click Windows launcher: creates .venv, pip installs, runs — needs Python 3.10+
+  on PATH), README_RU.txt. Verified: py_compile clean, logic + Excel export tested, and the whole
+  MainWindow constructed under QT_QPA_PLATFORM=offscreen (all widget/enum API valid). All files
+  byte-verified after write. The "Загрузка на сайт" panel exists but is DISABLED (URL+token fields
+  present) — upload is the next step. NEXT (upload stage): (1) add a token-auth path to the site's
+  admin APIs — accept `X-Admin-Token: <ADMIN_API_TOKEN>` (new CF secret) alongside the admin session
+  in requireAdmin / on /api/admin/upload-audio + /api/admin/sfx — so the desktop tool can push
+  headless (same pattern the future fingerprinting utility needs); (2) uploader.py client: read
+  approved Excel/scan, upsert_category/upsert_subcategory, per sound encode 320/128 mp3 preview
+  (lameenc pure-python, or ffmpeg fallback; WAV via stdlib wave+audioop for 16/24-bit PCM),
+  upload preview (kind=preview) + WAV (kind=sfx), create_sfx, update_sfx (tags+category), and set
+  description — REQUIRES adding a `description` column to the sfx table (lazy ALTER) + create_sfx/
+  update_sfx to accept it + include it in /api/sfx search (owner decided description feeds SFX
+  search). Idempotent via a content hash / skip-already-uploaded. Categories still HYBRID; owner
+  reviewing the category plan in the delivered Excel before upload.
+
+- **2026-07-18 (SFX bulk upload — BACKEND token + client SHIPPED, step 2):** built the upload
+  stage end to end. BACKEND (committed to repo, needs a deploy): `_utils.ts` — new Env
+  `ADMIN_API_TOKEN` + exported `adminTokenOk(ctx)` (checks `x-admin-token` header; false when the
+  secret is unset so nothing changes until set). `admin/sfx.ts` — requireAdmin accepts the token as
+  owner; `ensureSfxTables` now ALTERs a `description TEXT` column onto sfx (self-heal); `create_sfx`
+  extended to take tags[] + description + status in ONE call (was tags=[] draft only) so the
+  uploader needs no per-sound follow-up; `update_sfx` also accepts description. `admin/upload-audio.ts`
+  — token treated as admin (restructured the session/composer gate to allow no-session token calls;
+  guarded the per-composer perms block with `&& user`). `sfx.ts` (public) — search now also matches
+  `description` (owner's "description feeds SFX search"). lint 0 errors, vite build OK, tsc clean on
+  the touched files. CLIENT: `sfx_uploader/uploader.py` — Uploader(base,token,root,ledger): slugify
+  matching the server, ensure_categories (upsert_category/upsert_subcategory, ids = slug /
+  `${cat}-${slug}`), encode_preview (320 kbps MP3 via **lameenc** on stdlib wave+audioop PCM16;
+  **ffmpeg** fallback for float/exotic WAV), per sound: upload preview (kind=preview) + WAV
+  (kind=sfx) → create_sfx published w/ category/subcategory/tags/description; idempotent+resumable
+  via a local ledger (~/.sfx_uploaded.json keyed by rel_path); run() reports ok/skip/fail and honors
+  a stop flag. `app.py` — upload panel now LIVE: URL+token fields (persisted in ~/.sfx_uploader.json),
+  "Загрузить на сайт" (threaded UploadWorker + progress + log pane + Стоп), plus "Импорт правок из
+  Excel…" (reads the edited Звуки sheet, matches by Rel path, applies Category/Subcategory/name/tags/
+  description back into the table). requirements += requests, lameenc. Verified: py_compile, offscreen
+  full-window build, real MP3 encode from a generated WAV. README_RU updated with the exact Cloudflare
+  step. OWNER TOKEN generated: `tvms_ec03076be7e9a059b309df30c74b3a6ef82400a6110511c5` (set as CF
+  secret ADMIN_API_TOKEN + paste into the app). OWNER STEPS: (1) deploy.bat to push the backend;
+  (2) add the ADMIN_API_TOKEN secret in CF + Deploy; (3) in the app: scan → (import Excel edits) →
+  Загрузить. Uploads publish immediately (public /api/sfx shows status='published' only). NOTE: WAVs
+  ~1.5–2GB total, ~3 API calls/sound — long run, resumable. STILL OPEN: SFX P2 payout weighting /
+  licence PDF; fingerprinting prototype.
+
+- **2026-07-18 (SFX taxonomy v3 — concrete, PER-SOUND, owner-approved):** owner rejected the broad
+  buckets ("Cinematic & Trailer is not a sound type", "where are the swooshes", "Game & UI too
+  generic — people search a specific sound"). Reworked into a concrete, task-oriented taxonomy AND
+  switched classification from PER-PACK to PER-SOUND: each WAV is placed by its OWN filename (weight
+  4) + pack title (2) + pack tags (1), so a "Whoosh Swoosh to Bass Hits" pack now splits across
+  Whooshes/Impacts instead of one bucket. taxonomy.py rewritten = 36 categories; Swoosh is a
+  SUBCATEGORY inside **Whooshes** (owner: "swoosh goes into whoosh, I'll add a Popular-Categories
+  subsection"). Dropped Cinematic & Trailer (a mood) and Fighting (only false hits like "Basketball
+  Kick"). scanner_core.classify now takes (name,title,tags,existing); scan() classifies each sound,
+  pack row = mode of its sounds, needs_review counts SOUNDS; export_excel plan counts per-sound.
+  Real re-scan on the library (Ableton excluded): 687 packs / 4897 sounds, 366 review (~7.5%).
+  Category sound-counts: Whooshes 701, Impacts 445, Horror & Tension 317, Coins & Rewards 263,
+  Game 255, Foley & Objects 221, Magic 208, Funny 186, Water 171, Buttons & UI 161, Transitions 154,
+  Pops & Dings 140, Notification 135, Human 119, Seasonal 115, Clicks & Typing 114, Glitch 100,
+  Bells & Musical 96, Digital & Beeps 88, Ambiences 80, Fire 76, Logo & Intro 69, Explosions 60,
+  Sci-Fi & Space 60, Risers & Sweeps 50, Transport 46, Booms 39, Voice Clips 31, Weather 30, Wind 30,
+  Weapons 26, Animals 25, Mechanical 24, Swishes 22, Braams & Stingers 13, Alarm 6. Subcats:
+  Whooshes(Whoosh/Swoosh), Water(Rain/Waves/Splash), Voice Clips(Scream/Laugh/Whisper). Owner
+  approved this list. Delivered new SFX_review_v3.xlsx (built via the shipped export_excel, so it's
+  tested) + updated taxonomy.py/scanner_core.py/export_excel.py to sfx_uploader/. app.py unchanged
+  (CATS = taxonomy keys, auto-updates). NOTE Voice Clips reality: scream/laugh/whisper exist, but
+  baby/hello/crying ≈ none, so no such subcats. Uploader/backend from the prior entry unchanged and
+  still valid. NEXT: owner reviews v3 categories → then deploy backend + set ADMIN_API_TOKEN + run
+  the upload.

@@ -1,4 +1,4 @@
-import { getSessionUser, json, newId, OWNER_EMAIL, readJson, type Ctx, type D1Database } from "../_utils";
+import { adminTokenOk, getSessionUser, json, newId, OWNER_EMAIL, readJson, type Ctx, type D1Database, type SessionUser } from "../_utils";
 
 // Admin API for the SOUND EFFECTS library (see docs/SFX_PLAN.md).
 //
@@ -17,6 +17,10 @@ import { getSessionUser, json, newId, OWNER_EMAIL, readJson, type Ctx, type D1Da
 const PAGE_SIZE = 50;
 
 const requireAdmin = async (ctx: Ctx) => {
+  // Headless tools (SFX uploader) authenticate with the admin token, no session.
+  if (adminTokenOk(ctx)) {
+    return { user: { id: "admin-token", email: OWNER_EMAIL, name: "admin token", role: "admin" } as SessionUser };
+  }
   const user = await getSessionUser(ctx);
   if (!user) return { error: json({ error: "Not signed in" }, 401) };
   if (user.role !== "admin" && user.email !== OWNER_EMAIL) {
@@ -74,6 +78,13 @@ export const ensureSfxTables = async (db: D1Database) => {
   // after the table shipped, so self-heal it in.
   try {
     await db.prepare(`ALTER TABLE sfx_categories ADD COLUMN popular INTEGER NOT NULL DEFAULT 0`).run();
+  } catch {
+    // column already there
+  }
+  // Per-sound description (from the pack's txt/docx) — added after the table
+  // shipped. Feeds the public SFX search alongside name + tags.
+  try {
+    await db.prepare(`ALTER TABLE sfx ADD COLUMN description TEXT`).run();
   } catch {
     // column already there
   }
@@ -259,13 +270,22 @@ export const onRequestPost = async (ctx: Ctx) => {
       }
       if (!/^sfx\//.test(wavKey)) return json({ error: "an uploaded WAV master is required" }, 400);
 
+      // The bulk uploader sends tags + description + status in this ONE call
+      // (one row per file), so it doesn't need a follow-up update per sound.
+      const tags = Array.isArray(body.tags)
+        ? (body.tags as unknown[]).filter((t) => typeof t === "string").slice(0, 30)
+        : [];
+      const description = typeof body.description === "string" ? body.description.slice(0, 1000) : "";
+      const status = body.status === "published" ? "published" : "draft";
+
       const id = newId("sfx");
       const code = 1000 + Math.floor(Math.random() * 9000);
       await db
         .prepare(
           `INSERT INTO sfx (id, slug, code, name, composer_id, category_id, subcategory_id, tags,
-                            duration, preview_src, wav_key, wav_size, wav_crc, import_no, status, moderation_status)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, 'draft', 'approved')`,
+                            duration, preview_src, wav_key, wav_size, wav_crc, import_no, description,
+                            status, moderation_status)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, 'approved')`,
         )
         .bind(
           id,
@@ -275,13 +295,15 @@ export const onRequestPost = async (ctx: Ctx) => {
           body.composerId || null,
           body.categoryId || null,
           body.subcategoryId || null,
-          JSON.stringify([]),
+          JSON.stringify(tags),
           body.duration ?? "",
           previewSrc,
           wavKey,
           Math.round(body.wavSize ?? 0),
           (body.wavCrc ?? 0) >>> 0,
           body.importNo ?? null,
+          description,
+          status,
         )
         .run();
       return json({ ok: true, id });
@@ -297,6 +319,7 @@ export const onRequestPost = async (ctx: Ctx) => {
       if (typeof f.subcategoryId === "string") next.subcategory_id = f.subcategoryId || null;
       if (typeof f.composerId === "string") next.composer_id = f.composerId || null;
       if (Array.isArray(f.tags)) next.tags = JSON.stringify(f.tags.slice(0, 30));
+      if (typeof f.description === "string") next.description = f.description.slice(0, 1000);
       if (f.status === "draft" || f.status === "published") next.status = f.status;
       if (typeof f.importNo === "string") next.import_no = f.importNo.trim().slice(0, 20) || null;
       const keys = Object.keys(next);

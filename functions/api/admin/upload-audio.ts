@@ -1,4 +1,4 @@
-import { getSessionUser, json, OWNER_EMAIL, type Ctx } from "../_utils";
+import { adminTokenOk, getSessionUser, json, OWNER_EMAIL, type Ctx } from "../_utils";
 
 // POST /api/admin/upload-audio?kind=<kind>&filename=<base> — admin only.
 // Body = raw file bytes; content-type header decides the extension.
@@ -46,14 +46,16 @@ export const ensureUploadPermColumns = async (db: { prepare: (q: string) => { ru
 export const onRequestPost = async (ctx: Ctx) => {
   if (!ctx.env.DB) return json({ error: "DB not bound" }, 503);
 
+  // Headless tools (SFX uploader) authenticate with the admin token, no session.
+  const tokenAdmin = adminTokenOk(ctx);
   const user = await getSessionUser(ctx);
-  if (!user) return json({ error: "Not signed in" }, 401);
-  const isAdmin = user.role === "admin" || user.email === OWNER_EMAIL;
+  if (!user && !tokenAdmin) return json({ error: "Not signed in" }, 401);
+  const isAdmin = tokenAdmin || (!!user && (user.role === "admin" || user.email === OWNER_EMAIL));
   // Composers may upload track material too (their Add-track flow encodes
   // previews client-side and zips WAVs/stems, same as the admin pipeline).
   // Being a composer = having a `composers` profile (independent of role).
-  let allowed = isAdmin || user.role === "composer";
-  if (!allowed) {
+  let allowed = isAdmin || (!!user && user.role === "composer");
+  if (!allowed && user) {
     const cmp = await ctx.env.DB.prepare(`SELECT id FROM composers WHERE user_id = ?1 LIMIT 1`)
       .bind(user.id)
       .first();
@@ -84,7 +86,7 @@ export const onRequestPost = async (ctx: Ctx) => {
   }
   // Per-composer upload permissions (admins bypass): music and sounds are two
   // separate rights. Hiding the tab in the UI is convenience — THIS is the gate.
-  if (!isAdmin) {
+  if (!isAdmin && user) {
     await ensureUploadPermColumns(ctx.env.DB);
     const perms = await ctx.env.DB.prepare(
       `SELECT COALESCE(can_upload_tracks, 1) AS tracks, COALESCE(can_upload_sfx, 0) AS sfx

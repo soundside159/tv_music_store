@@ -29,8 +29,11 @@ export const onRequestGet = async (ctx: Ctx) => {
   const where: string[] = [`s.status = 'published'`];
   const binds: unknown[] = [];
   if (q) {
+    // Search matches the name, the tags AND the description (owner's decision:
+    // the pack description feeds SFX search, not just the tags).
     where.push(
-      `(lower(s.name) LIKE ?${binds.length + 1} OR lower(COALESCE(s.tags, '')) LIKE ?${binds.length + 1})`,
+      `(lower(s.name) LIKE ?${binds.length + 1} OR lower(COALESCE(s.tags, '')) LIKE ?${binds.length + 1}` +
+        ` OR lower(COALESCE(s.description, '')) LIKE ?${binds.length + 1})`,
     );
     binds.push(`%${q.toLowerCase()}%`);
   }

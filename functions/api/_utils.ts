@@ -56,6 +56,10 @@ export interface Env {
    *  spend for Admin → Usage (GET /v1/organization/costs). Different key from
    *  OPENAI_API_KEY; create it in Settings → Organization → Admin keys. */
   OPENAI_ADMIN_KEY?: string;
+  /** Shared secret for headless admin tooling (the SFX bulk uploader and the
+   *  future fingerprinting utility). Set it in Cloudflare and send it as the
+   *  `x-admin-token` request header; a valid token is treated as the owner. */
+  ADMIN_API_TOKEN?: string;
 }
 
 export interface Ctx {
@@ -123,6 +127,15 @@ export const getSessionUser = async (ctx: Ctx): Promise<SessionUser | null> => {
 
 /** The site owner: this email automatically gets the admin role. */
 export const OWNER_EMAIL = "soundside159@gmail.com";
+
+/** True when the request carries a valid `x-admin-token` matching the
+ *  ADMIN_API_TOKEN secret. Lets local admin tools (the SFX bulk uploader, the
+ *  fingerprinting utility) act as the owner without a browser session. When the
+ *  secret is unset this always returns false, so nothing changes until you set it. */
+export const adminTokenOk = (ctx: Ctx): boolean => {
+  const t = ctx.request.headers.get("x-admin-token");
+  return !!ctx.env.ADMIN_API_TOKEN && !!t && t === ctx.env.ADMIN_API_TOKEN;
+};
 
 const PBKDF2_ITERATIONS = 100_000;
 
