@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   AudioLines,
@@ -16,6 +16,8 @@ import Footer from "@/components/Footer";
 import WaveformPreview from "@/components/WaveformPreview";
 import { useSeo } from "@/hooks/useSeo";
 import { buildSfxFaq, sfxFaqJsonLd } from "@/content/sfxFaq";
+import { usePlayer } from "@/components/PlayerProvider";
+import type { CatalogTrack } from "@/data/catalogTracks";
 
 // Public Sound Effects pages (see docs/SFX_PLAN.md + the owner's mockups):
 //
@@ -45,6 +47,30 @@ interface Sound {
   previewSrc: string;
   artist: string | null;
 }
+/** Play a sound effect through the SHARED global player: adapt it to the
+ *  track shape the engine understands, tagged isSfx so the bottom bar hides
+ *  track-only controls. id is prefixed so it never collides with a real track. */
+const sfxTrackId = (id: string) => `sfx:${id}`;
+const sfxToTrack = (s: Sound): CatalogTrack => ({
+  id: sfxTrackId(s.id),
+  slug: s.id,
+  title: s.name,
+  artist: s.artist || "TV Music Store",
+  category: "production",
+  genre: "",
+  mood: "",
+  useCase: "",
+  styleOf: "",
+  bpm: 0,
+  duration: s.duration || "",
+  priceFrom: 0,
+  description: "",
+  tags: s.tags,
+  collectionIds: [],
+  audioVersions: [{ id: "full", label: "SFX", src: s.previewSrc, duration: s.duration || "" }],
+  isSfx: true,
+});
+
 interface Category {
   id: string;
   title: string;
@@ -160,43 +186,19 @@ const SoundEffects = () => {
     void load();
   }, [load]);
 
-  // ---- playback: one preview at a time, with a live waveform ----------------
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [playingId, setPlayingId] = useState<string | null>(null);
-  const [prog, setProg] = useState(0);
+  // ---- playback: through the SHARED global player (bottom bar) ---------------
+  const player = usePlayer();
+  const activeSfxId =
+    player.activeTrack?.isSfx ? player.activeTrack.id : null;
+  const isActive = (s: Sound) => activeSfxId === sfxTrackId(s.id);
 
   const play = (s: Sound, seekTo?: number) => {
     if (!s.previewSrc) return;
-    if (playingId === s.id && seekTo === undefined) {
-      audioRef.current?.pause();
-      setPlayingId(null);
-      return;
-    }
-    if (!audioRef.current) audioRef.current = new Audio();
-    const a = audioRef.current;
-    if (playingId !== s.id) {
-      a.src = s.previewSrc;
-      setProg(0);
-    }
-    a.onended = () => {
-      setPlayingId(null);
-      setProg(0);
-    };
-    a.ontimeupdate = () => {
-      if (Number.isFinite(a.duration) && a.duration > 0) setProg(a.currentTime / a.duration);
-    };
-    if (seekTo !== undefined) {
-      const apply = () => {
-        if (Number.isFinite(a.duration) && a.duration > 0) {
-          a.currentTime = seekTo * a.duration;
-          setProg(seekTo);
-        }
-      };
-      if (Number.isFinite(a.duration) && a.duration > 0) apply();
-      else a.onloadedmetadata = apply;
-    }
-    void a.play();
-    setPlayingId(s.id);
+    const track = sfxToTrack(s);
+    // The visible list becomes the prev/next queue, so the bottom bar can skip
+    // through the sounds on the page.
+    const queue = (data?.sounds ?? []).map(sfxToTrack);
+    player.playVersion(track, track.audioVersions[0], seekTo ?? null, queue);
   };
 
   /** Waveform click: seek inside the playing sound, or start it there. */
@@ -571,7 +573,7 @@ const SoundEffects = () => {
                 ))}
               {!loading &&
                 (data?.sounds ?? []).map((s) => {
-                const isPlaying = playingId === s.id;
+                const isPlaying = isActive(s) && player.isPlaying;
                 return (
                   <div
                     key={s.id}
@@ -613,7 +615,7 @@ const SoundEffects = () => {
                       active={isPlaying}
                       durationRatio={1}
                       onSeek={(p) => seek(s, p)}
-                      progress={isPlaying ? prog : 0}
+                      progress={isActive(s) ? player.progress : 0}
                       src={s.previewSrc}
                       className="hidden h-9 min-w-0 flex-1 md:block"
                     />

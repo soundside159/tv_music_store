@@ -54,6 +54,9 @@ export interface CatalogTrack {
   categoryIds?: string[];
   /** True when the track ships stems (shown as a STEMS badge; Max-plan download). */
   hasStems?: boolean;
+  /** True when this "track" is really a SOUND EFFECT adapted to play through the
+   *  shared global player. The bottom bar hides track-only controls for it. */
+  isSfx?: boolean;
   /** The "#" from the owner's source spreadsheet (admin only, NOT unique —
    *  several tracks may share one). Imported via Admin → Import. */
   importNo?: string;

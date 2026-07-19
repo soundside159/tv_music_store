@@ -4181,3 +4181,21 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   src/components/AdminSfx.tsx. OWNER NEXT: (a) delete his test sounds; (b) deploy.bat (ships the two
   frontend changes); (c) in the app re-Scan (new taxonomy = subcats) then Load — subcategory chips
   will then appear on every category tile. Uploader/backend unchanged.
+
+- **2026-07-19 (SFX admin selection bar moved + SFX join the GLOBAL player):** two owner requests.
+  (1) In Admin -> SFX the "N selected / Publish / Unpublish / Delete" bar lived in the search/filter
+  row and pushed the table down when it wrapped. Moved it into the TOP header row next to
+  "SFX / Library (N) / Categories" with ml-auto (Tracks-Edit pattern) so it never shifts the table
+  (AdminSfx.tsx). (2) SFX now play through the shared bottom mini-player instead of a local
+  new Audio(): SoundEffects.tsx got an sfxToTrack() adapter (SFX -> CatalogTrack tagged isSfx:true,
+  id prefixed "sfx:", version {id:"full",src:previewSrc}); its row play/seek now call
+  player.playVersion(track, version, seekTo, queue) with the visible list as the prev/next queue, and
+  row state derives from player.activeTrack/isPlaying/progress (local audioRef/playingId/prog removed).
+  Added `isSfx?: boolean` to CatalogTrack (catalogTracks.ts). PlayerProvider.tsx bottom bar is now
+  SFX-aware: for isSfx it renders the title as plain text (SFX has no /track page), hides BPM, and
+  hides the track-only action group (Favorite / Buy License / Download) — keeps play/skip + waveform
+  + time + volume. So a sound plays in the persistent bottom bar and keeps playing across navigation
+  like tracks. Admin preview still uses its own local play (internal, left as-is). lint 0 errors,
+  build OK. Delivered: AdminSfx.tsx, SoundEffects.tsx, PlayerProvider.tsx, catalogTracks.ts.
+  OWNER: deploy.bat (frontend only, no re-upload needed for the player). NOTE: the subcategory
+  taxonomy from the previous turn still needs a re-scan+re-upload to populate subcats on tiles.

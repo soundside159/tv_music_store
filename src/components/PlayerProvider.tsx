@@ -74,14 +74,24 @@ export const PlayerProvider = ({ children }: { children: ReactNode }) => {
                 <SkipForward className="h-4 w-4" />
               </button>
               <div className="min-w-0">
-                <Link
-                  to={`/track/${currentTrack.slug}`}
-                  className={`block truncate font-body text-sm font-medium transition-colors ${
-                    isPlaying ? "text-[#F4C430]" : "text-foreground hover:text-[#F4C430]"
-                  }`}
-                >
-                  {currentTrack.title}
-                </Link>
+                {currentTrack.isSfx ? (
+                  <span
+                    className={`block truncate font-body text-sm font-medium ${
+                      isPlaying ? "text-[#F4C430]" : "text-foreground"
+                    }`}
+                  >
+                    {currentTrack.title}
+                  </span>
+                ) : (
+                  <Link
+                    to={`/track/${currentTrack.slug}`}
+                    className={`block truncate font-body text-sm font-medium transition-colors ${
+                      isPlaying ? "text-[#F4C430]" : "text-foreground hover:text-[#F4C430]"
+                    }`}
+                  >
+                    {currentTrack.title}
+                  </Link>
+                )}
                 {/* "by <artist>" like the track rows — the version label here
                     either duplicated the title or just said "Main". */}
                 {currentTrack.artistSlug ? (
@@ -111,7 +121,7 @@ export const PlayerProvider = ({ children }: { children: ReactNode }) => {
                 <span className="tabular-nums text-foreground/80">
                   {formatClock(progress * durationToSeconds(currentVersion.duration))}/{currentVersion.duration}
                 </span>
-                <span className="tabular-nums">{currentTrack.bpm} BPM</span>
+                {!currentTrack.isSfx && <span className="tabular-nums">{currentTrack.bpm} BPM</span>}
               </div>
               <div className="hidden items-center gap-2 sm:flex">
                 <Volume2 className="h-4 w-4 text-muted-foreground" />
@@ -126,6 +136,7 @@ export const PlayerProvider = ({ children }: { children: ReactNode }) => {
                   aria-label="Volume"
                 />
               </div>
+              {!currentTrack.isSfx && (
               <div className="flex items-center gap-5 text-muted-foreground">
                 <ActionIcon
                   label={favIds.has(currentTrack.id) ? "Remove from favourites" : "Favorite"}
@@ -167,6 +178,7 @@ export const PlayerProvider = ({ children }: { children: ReactNode }) => {
                   <Download className="h-5 w-5 stroke-[1.6]" />
                 </ActionIcon>
               </div>
+              )}
             </div>
           </div>
         </div>

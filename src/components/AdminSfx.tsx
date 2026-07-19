@@ -290,6 +290,38 @@ const AdminSfx = ({ view = "manage" }: { view?: "manage" | "upload" }) => {
             ))}
           </div>
         )}
+        {/* Selection actions live in the TOP header (like Tracks Edit) so they
+            never push the table down. */}
+        {view === "manage" && tab === "library" && selected.length > 0 && (
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <span className="font-body text-xs text-muted-foreground">{selected.length} selected</span>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void run({ action: "update_sfx", ids: selected, fields: { status: "published" } }, "Published")}
+              className={btnCls}
+            >
+              Publish
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void run({ action: "update_sfx", ids: selected, fields: { status: "draft" } }, "Unpublished")}
+              className={btnCls}
+            >
+              Unpublish
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void removeSelected()}
+              className="rounded-lg border border-red-400/50 px-3 py-1.5 font-body text-xs font-semibold text-red-400 transition-colors hover:bg-red-400/10"
+            >
+              <Trash2 className="mr-1 inline h-3.5 w-3.5" />
+              Delete
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ===================== LIBRARY ===================== */}
@@ -335,37 +367,6 @@ const AdminSfx = ({ view = "manage" }: { view?: "manage" | "upload" }) => {
               <option value="draft">Drafts</option>
               <option value="published">Live</option>
             </select>
-
-            {selected.length > 0 && (
-              <div className="ml-auto flex flex-wrap items-center gap-2">
-                <span className="font-body text-xs text-muted-foreground">{selected.length} selected</span>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void run({ action: "update_sfx", ids: selected, fields: { status: "published" } }, "Published")}
-                  className={btnCls}
-                >
-                  Publish
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void run({ action: "update_sfx", ids: selected, fields: { status: "draft" } }, "Unpublished")}
-                  className={btnCls}
-                >
-                  Unpublish
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void removeSelected()}
-                  className="rounded-lg border border-red-400/50 px-3 py-1.5 font-body text-xs font-semibold text-red-400 transition-colors hover:bg-red-400/10"
-                >
-                  <Trash2 className="mr-1 inline h-3.5 w-3.5" />
-                  Delete
-                </button>
-              </div>
-            )}
           </div>
 
           {/* Table on the left, the category checkboxes on the right — the
