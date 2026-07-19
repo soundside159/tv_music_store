@@ -4159,3 +4159,25 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   export_excel.py/app.py to sfx_uploader/. Owner's upload workflow confirmed: open app → Scan →
   Load (Excel import only needed if he hand-edits categories in the sheet). Everything now ready to
   go live: deploy backend + set ADMIN_API_TOKEN + upload.
+
+- **2026-07-18/19 (SFX upload LIVE + Browse-by-Category UX + subcats + admin select-all):** the
+  bulk upload works end to end — owner set ADMIN_API_TOKEN and uploaded ~300 sounds; categories were
+  auto-created. TOKEN 401 TROUBLESHOOTING (resolved): /api/health now reports `admin_token`
+  (added the field to health.ts); the 401 was a Cloudflare Pages gotcha — a secret only reaches a
+  deployment CREATED AFTER it's set in the correct environment (Production). Fix = set the secret in
+  Production + Retry deployment (a git-push deploy with a real change also works). Then owner asked:
+  (1) BROWSE-BY-CATEGORY: on the SFX landing the category TILE should NOT be clickable — only the
+  subcategory chips inside (TuneTank model). Fixed SoundEffects.tsx: header is now a plain <div>
+  (was a <Link>); subcategory chips (ArcChip) are the only links; categories with no subcats show a
+  single "All {title}" chip so the tile is never a dead end. (2) SUBCATEGORIES for every category:
+  rewrote taxonomy.py with data-grounded subcats for all 36 categories (keywords taken from the real
+  per-category sound-name vocabulary), e.g. Whooshes→Whoosh/Swoosh/Swipe/Bass Hit, Animals→Cat/
+  Birds/Horse/Wolf/Bat/Dog, Clicks & Typing→Mouse Click/Keyboard/Clock/Phone, Bells & Musical→Bells/
+  Chimes/Drum/Flute/Strings, etc. best_subcategory already assigns them; the uploader's
+  ensure_categories already creates subcategories, so a RE-SCAN + RE-UPLOAD populates them. (3)
+  ADMIN SELECT-ALL: added a header checkbox to Admin → SFX library that selects/deselects all VISIBLE
+  (current page) sounds in one click (union/removal), like Tracks Edit — no more 300 clicks. lint 0
+  errors, build OK. Delivered: taxonomy.py (sfx_uploader/), src/pages/SoundEffects.tsx,
+  src/components/AdminSfx.tsx. OWNER NEXT: (a) delete his test sounds; (b) deploy.bat (ships the two
+  frontend changes); (c) in the app re-Scan (new taxonomy = subcats) then Load — subcategory chips
+  will then appear on every category tile. Uploader/backend unchanged.

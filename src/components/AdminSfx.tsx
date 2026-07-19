@@ -375,7 +375,36 @@ const AdminSfx = ({ view = "manage" }: { view?: "manage" | "upload" }) => {
           <div className="space-y-4">
           <div className="overflow-hidden rounded-lg border border-border/60">
             <div className="grid grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_9rem_7rem_5rem_5rem] items-center gap-2 border-b border-border/60 bg-secondary/40 px-3 py-2.5 font-body text-xs uppercase tracking-wide text-muted-foreground">
-              <span />
+              {(() => {
+                // Select-all-visible (this page), like Tracks Edit.
+                const visIds = sounds.map((s) => s.id);
+                const allSel = visIds.length > 0 && visIds.every((id) => selected.includes(id));
+                const someSel = visIds.some((id) => selected.includes(id));
+                return (
+                  <button
+                    type="button"
+                    aria-label="Select all on this page"
+                    title="Select all on this page"
+                    onClick={() =>
+                      setSelected((prev) => {
+                        if (allSel) return prev.filter((id) => !visIds.includes(id));
+                        const set = new Set(prev);
+                        visIds.forEach((id) => set.add(id));
+                        return Array.from(set);
+                      })
+                    }
+                    className={`flex h-[18px] w-[18px] items-center justify-center justify-self-center rounded border transition-colors ${
+                      allSel || someSel ? "border-[#F4C430] bg-[#F4C430]" : "border-border hover:border-[#F4C430]/60"
+                    }`}
+                  >
+                    {allSel ? (
+                      <Check className="h-3 w-3 text-background" />
+                    ) : someSel ? (
+                      <span className="h-0.5 w-2.5 rounded-full bg-background" />
+                    ) : null}
+                  </button>
+                );
+              })()}
               <span />
               <span>Sound</span>
               <span>Category</span>

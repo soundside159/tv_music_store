@@ -440,32 +440,35 @@ const SoundEffects = () => {
                   key={c.id}
                   className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-[#F4C430]/50"
                 >
-                  <Link
-                    to={`/sound-effects/${c.id}`}
-                    className="group flex items-center gap-2.5"
-                  >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground transition-colors group-hover:text-[#F4C430]">
+                  {/* Header is a NON-clickable container (owner request) — only
+                      the subcategory chips below are clickable links. */}
+                  <div className="flex items-center gap-2.5">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground">
                       <AudioLines className="h-3.5 w-3.5" />
                     </span>
-                    <span className="truncate font-body text-sm font-semibold text-foreground transition-colors group-hover:text-[#F4C430]">
+                    <span className="truncate font-body text-sm font-semibold text-foreground">
                       {c.title}
                     </span>
                     <span className="ml-auto shrink-0 font-body text-xs tabular-nums text-muted-foreground">
                       {c.count.toLocaleString("en-US")}
                     </span>
-                  </Link>
-                  {c.subs.length > 0 && (
-                    <div className="mt-3.5 flex flex-wrap gap-2">
-                      {c.subs.slice(0, 12).map((s, i) => (
+                  </div>
+                  <div className="mt-3.5 flex flex-wrap gap-2">
+                    {c.subs.length > 0 ? (
+                      c.subs.slice(0, 14).map((s, i) => (
                         <ArcChip
                           key={s.id}
                           to={`/sound-effects/${c.id}?sub=${encodeURIComponent(s.id)}`}
                           label={s.title}
                           index={i}
                         />
-                      ))}
-                    </div>
-                  )}
+                      ))
+                    ) : (
+                      // No subcategories yet -> one chip that opens the whole category,
+                      // so the tile is never a dead end.
+                      <ArcChip to={`/sound-effects/${c.id}`} label={`All ${c.title}`} index={0} />
+                    )}
+                  </div>
                 </div>
               ))}
               {cats.length === 0 && !loading && (
