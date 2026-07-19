@@ -23,5 +23,6 @@ export const onRequestGet = async (ctx: Ctx) => {
         : "missing",
     r2: ctx.env.R2 ? "bound" : "not bound",
     openai: ctx.env.OPENAI_API_KEY ? "configured" : "missing",
+    admin_token: ctx.env.ADMIN_API_TOKEN ? "configured" : "missing",
   });
 };
