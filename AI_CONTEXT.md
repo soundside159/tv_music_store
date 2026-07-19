@@ -4141,3 +4141,21 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   baby/hello/crying ≈ none, so no such subcats. Uploader/backend from the prior entry unchanged and
   still valid. NEXT: owner reviews v3 categories → then deploy backend + set ADMIN_API_TOKEN + run
   the upload.
+
+- **2026-07-18 (SFX taxonomy — inheritance + long tail keyworded, 0 uncategorised):** owner asked
+  that sounds with no confident category INHERIT their pack's dominant category so he doesn't sort
+  them by hand. Added that to scanner_core.scan (per pack: mode of its sounds' categories; blank
+  sounds -> that category, status "inherited"; fully-unknown packs stay blank). Found that the ~366
+  "review" flags were misleading — only ~80 sounds (12 packs) were TRULY blank, and those packs were
+  homogeneous real types missing from the vocab (Heart Beat, Vinyl Scratches, Violin, Flute, Bubble
+  Wrap, Scotch Tape, Perfume Spray, Bat Wings, Mad Scientist's Lab, Rewind, Stamp, Sizzling Fry), so
+  inheritance couldn't help them (no dominant cat). Added keywords for all of them: Human += heart
+  beat; Transitions += rewind; Sci-Fi & Space += lab/laboratory; Animals += bat/wings; Foley &
+  Objects += stamp/vinyl/scratch/record scratch/sizzle/fry/bubble wrap/tape/scotch tape/spray/
+  aerosol/perfume/rustle; Bells & Musical += violin/flute/strings/cello/guitar. Re-scan: 687 packs /
+  4897 sounds, **0 uncategorised**, needs_review 271 (all of which DO have a category — just
+  low-confidence, they upload fine). Added an "inherited" status colour (light violet) to
+  export_excel + app. Delivered SFX_review_final.xlsx + updated taxonomy.py/scanner_core.py/
+  export_excel.py/app.py to sfx_uploader/. Owner's upload workflow confirmed: open app → Scan →
+  Load (Excel import only needed if he hand-edits categories in the sheet). Everything now ready to
+  go live: deploy backend + set ADMIN_API_TOKEN + upload.
