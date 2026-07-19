@@ -45,6 +45,45 @@ export const onRequestGet = async (ctx: Ctx) => {
     where.push(`s.subcategory_id = ?${binds.length + 1}`);
     binds.push(sub);
   }
+
+  // AI SEARCH mode: /api/sfx-ai-search routes the query to category ids + keywords;
+  // here we match ANY of them (across the whole library), so a described need
+  // pulls sounds from several shelves at once. cat/sub/q filters don't apply.
+  const csv = (k: string, cap: number) =>
+    (url.searchParams.get(k) ?? "")
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .slice(0, cap);
+  const aiCats = csv("cats", 5);
+  const aiSubs = csv("subs", 8);
+  const aiTerms = csv("terms", 8).map((t) => t.toLowerCase().slice(0, 40));
+  if (aiCats.length || aiSubs.length || aiTerms.length) {
+    const ors: string[] = [];
+    if (aiCats.length) {
+      const ph = aiCats.map((c) => {
+        binds.push(c);
+        return `?${binds.length}`;
+      });
+      ors.push(`s.category_id IN (${ph.join(",")})`);
+    }
+    if (aiSubs.length) {
+      const ph = aiSubs.map((c) => {
+        binds.push(c);
+        return `?${binds.length}`;
+      });
+      ors.push(`s.subcategory_id IN (${ph.join(",")})`);
+    }
+    for (const t of aiTerms) {
+      binds.push(`%${t}%`);
+      const p = binds.length;
+      ors.push(
+        `(lower(s.name) LIKE ?${p} OR lower(COALESCE(s.tags,'')) LIKE ?${p} OR lower(COALESCE(s.description,'')) LIKE ?${p})`,
+      );
+    }
+    where.push(`(${ors.join(" OR ")})`);
+  }
+
   const whereSql = `WHERE ${where.join(" AND ")}`;
 
   const totalRow = await db

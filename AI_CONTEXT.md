@@ -4199,3 +4199,25 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   build OK. Delivered: AdminSfx.tsx, SoundEffects.tsx, PlayerProvider.tsx, catalogTracks.ts.
   OWNER: deploy.bat (frontend only, no re-upload needed for the player). NOTE: the subcategory
   taxonomy from the previous turn still needs a re-scan+re-upload to populate subcats on tiles.
+
+- **2026-07-19 (SFX AI SEARCH — Search / AI toggle, real Popular chips):** the sounds page now
+  has the same two-way search as the music catalog. NEW ENDPOINT functions/api/sfx-ai-search.ts
+  (public POST): mirrors /api/ai-search — the customer's words + a COMPACT digest of the SFX
+  vocabulary (category + subcategory TITLES only, never sound descriptions) go to gpt-4o-mini,
+  which returns {categoryIds, subcategoryIds, keywords}. Cheap "router" model (~fraction of a cent),
+  answers cached in D1 (sfx_ai_cache, 7 days), 8/min/IP throttle (sfx_ai_hits). functions/api/sfx.ts
+  gained AI-mode params cats=/subs=/terms= (comma lists, capped 5/8/8): when present it matches ANY
+  of them across the WHOLE published library (name/tags/description LIKE for terms, id IN for
+  cats/subs) and ignores cat/sub/q — so one described need pulls sounds off several shelves. Also
+  (earlier turn) q= now searches description too, not just name+tags. FRONTEND SoundEffects.tsx:
+  a "Search | AI Search" pill toggle above the box (aiMode state); AI submit navigates to
+  /sound-effects/?ai=<text>; load() has an AI branch (POST sfx-ai-search -> GET /api/sfx with routed
+  cats/subs/terms); results header reads 'N sounds for "<query>"'; isLanding/paging/All-categories all
+  account for ai. POPULAR chips under the box are no longer hardcoded words — they are the TOP 10
+  categories by real published sound count (popularChips = cats sorted by count desc), each a link to
+  /sound-effects/<catId> (owner's pick: "Top categories by sound count"). Requires OPENAI_API_KEY
+  (already set for music AI search) — 503 if missing. lint 0 errors, build OK; all 3 files verified
+  byte-for-byte on the owner's repo after commit. Delivered: functions/api/sfx-ai-search.ts,
+  functions/api/sfx.ts, src/pages/SoundEffects.tsx. OWNER: deploy.bat (backend + frontend). Still
+  pending from prior turns: re-scan+re-upload sounds with the new subcategory taxonomy so subcat
+  chips populate.

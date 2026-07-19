@@ -89,8 +89,6 @@ interface SfxResponse {
   categories: Category[];
 }
 
-const POPULAR = ["Whoosh", "Explosion", "Click", "Notification", "Rain", "Footsteps", "Thunder", "Door", "Fire", "Wind"];
-
 // Module-level answer cache (stale-while-revalidate, same idea as useTracks):
 // navigating back to a query the session has already seen renders INSTANTLY
 // from the last answer while a background refetch swaps fresh data in — no
@@ -142,14 +140,49 @@ const SoundEffects = () => {
   const navigate = useNavigate();
 
   const q = params.get("q") ?? "";
+  const ai = params.get("ai") ?? "";
   const sub = params.get("sub") ?? "";
   const page = Math.max(1, Number(params.get("page") ?? 1) || 1);
 
   const [data, setData] = useState<SfxResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState(q);
+  const [search, setSearch] = useState(q || ai);
+  const [aiMode, setAiMode] = useState(!!ai);
 
   const load = useCallback(async () => {
+    // ---- AI search: route the query to categories/keywords, then pull the
+    // matching sounds from across the whole library (cat/sort filters ignored).
+    if (ai) {
+      setLoading(true);
+      try {
+        const r = await fetch("/api/sfx-ai-search", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ q: ai }),
+        });
+        const route = (await r.json()) as {
+          categoryIds?: string[];
+          subcategoryIds?: string[];
+          keywords?: string[];
+          error?: string;
+        };
+        if (!r.ok) throw new Error(route.error || "AI search failed");
+        const sp = new URLSearchParams({ page: String(page) });
+        if (route.categoryIds?.length) sp.set("cats", route.categoryIds.join(","));
+        if (route.subcategoryIds?.length) sp.set("subs", route.subcategoryIds.join(","));
+        if (route.keywords?.length) sp.set("terms", route.keywords.join(","));
+        const res = await fetch(`/api/sfx?${sp.toString()}`);
+        const d = (await res.json()) as SfxResponse & { ok?: boolean };
+        if (!res.ok || !d.ok) throw new Error("Failed");
+        setData(d);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "AI search failed");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     const sp = new URLSearchParams({ page: String(page) });
     if (q) sp.set("q", q);
     if (category) sp.set("cat", category);
@@ -180,7 +213,7 @@ const SoundEffects = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, q, category, sub]);
+  }, [page, q, category, sub, ai]);
 
   useEffect(() => {
     void load();
@@ -250,8 +283,14 @@ const SoundEffects = () => {
   };
 
   const submitSearch = (value: string) => {
+    const v = value.trim();
+    if (aiMode) {
+      // AI search always runs across the whole library (sort/filters reset).
+      if (v) navigate(`/sound-effects/?ai=${encodeURIComponent(v)}`);
+      return;
+    }
     const next = new URLSearchParams();
-    if (value.trim()) next.set("q", value.trim());
+    if (v) next.set("q", v);
     if (category) navigate(`/sound-effects/?${next.toString()}`);
     else setParams(next);
   };
@@ -266,7 +305,9 @@ const SoundEffects = () => {
 
   const cats = data?.categories ?? [];
   const current = cats.find((c) => c.id === category);
-  const isLanding = !category && !q;
+  const isLanding = !category && !q && !ai;
+  // Popular chips = the biggest categories (real popularity, auto-updating).
+  const popularChips = [...cats].sort((a, b) => b.count - a.count).slice(0, 10);
   const libSize = data?.librarySize ?? readLibSize();
   const popularCats = cats.filter((c) => c.popular);
 
@@ -316,27 +357,55 @@ const SoundEffects = () => {
             : "Premium royalty-free sound effects for video, gaming, podcasts, and creative content. Every sound comes in studio-quality WAV format with commercial licensing included."}
         </p>
 
+        {/* Search / AI Search toggle (same idea as the music catalog). In AI
+            mode the query is described in words and routed by the model across
+            the whole library; sort/category filters reset. */}
+        <div className="mt-6 inline-flex rounded-lg border border-border bg-card/60 p-0.5">
+          {(
+            [
+              ["keyword", "Search"],
+              ["ai", "AI Search"],
+            ] as const
+          ).map(([mode, label]) => {
+            const on = aiMode === (mode === "ai");
+            return (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setAiMode(mode === "ai")}
+                className={`rounded-[7px] px-3.5 py-1.5 font-body text-xs font-medium transition-colors ${
+                  on ? "bg-[#F4C430] text-black" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
         <form
           onSubmit={(e) => {
             e.preventDefault();
             submitSearch(search);
           }}
-          className="relative mt-6"
+          className="relative mt-3"
         >
           <span className="pointer-events-none absolute left-4 top-1/2 flex -translate-y-1/2 items-center gap-2 text-muted-foreground">
             <AudioLines className="h-4 w-4" />
-            <span className="hidden font-body text-sm sm:inline">Sound Effects</span>
+            <span className="hidden font-body text-sm sm:inline">{aiMode ? "AI Search" : "Sound Effects"}</span>
             <span className="hidden h-4 w-px bg-border sm:inline-block" />
           </span>
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={
-              libSize > 0
-                ? `Search ${libSize.toLocaleString("en-US")} sound effects…`
-                : "Search for sound effects"
+              aiMode
+                ? "Describe the sound you need — e.g. tense riser before a jump scare"
+                : libSize > 0
+                  ? `Search ${libSize.toLocaleString("en-US")} sound effects…`
+                  : "Search for sound effects"
             }
-            className="h-12 w-full rounded-xl border border-border bg-card pl-12 pr-11 font-body text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-[#F4C430]/70 focus:outline-none sm:pl-40"
+            className="h-12 w-full rounded-xl border border-border bg-card pl-12 pr-11 font-body text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-[#F4C430]/70 focus:outline-none sm:pl-36"
           />
           <button
             type="submit"
@@ -347,23 +416,19 @@ const SoundEffects = () => {
           </button>
         </form>
 
-        {isLanding && (
+        {isLanding && popularChips.length > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <span className="font-body text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Popular:
             </span>
-            {POPULAR.map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => {
-                  setSearch(p);
-                  navigate(`/sound-effects/?q=${encodeURIComponent(p)}`);
-                }}
+            {popularChips.map((c) => (
+              <Link
+                key={c.id}
+                to={`/sound-effects/${c.id}`}
                 className="rounded-full border border-border bg-card/60 px-3 py-1 font-body text-xs text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
               >
-                {p.toLowerCase()}
-              </button>
+                {c.title}
+              </Link>
             ))}
           </div>
         )}
@@ -532,10 +597,10 @@ const SoundEffects = () => {
                 {loading
                   ? "Loading…"
                   : `${(data?.total ?? 0).toLocaleString("en-US")} sound${data?.total === 1 ? "" : "s"}${
-                      q ? ` for “${q}”` : ""
+                      ai ? ` for “${ai}”` : q ? ` for “${q}”` : ""
                     }`}
               </p>
-              {(category || q) && (
+              {(category || q || ai) && (
                 <Link to="/sound-effects" className="font-body text-sm text-muted-foreground hover:text-[#F4C430]">
                   All categories
                 </Link>
