@@ -1,4 +1,5 @@
 import {
+  adminTokenOk,
   getSessionUser,
   getVocabularies,
   json,
@@ -22,6 +23,10 @@ import { parseManifest } from "../_zipStream";
 //        bulk_update_tracks
 
 const requireAdmin = async (ctx: Ctx) => {
+  // Desktop tools (SFX uploader, track re-sort) authenticate with the
+  // ADMIN_API_TOKEN header instead of a browser session — same bypass the
+  // SFX admin + upload endpoints use.
+  if (adminTokenOk(ctx)) return { user: { id: "token", email: OWNER_EMAIL, role: "admin" } };
   const user = await getSessionUser(ctx);
   if (!user) return { error: json({ error: "Not signed in" }, 401) };
   if (user.role !== "admin" && user.email !== OWNER_EMAIL) {

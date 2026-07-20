@@ -1,4 +1,4 @@
-import { getSessionUser, json, OWNER_EMAIL, type Ctx } from "./_utils";
+import { adminTokenOk, getSessionUser, json, OWNER_EMAIL, type Ctx } from "./_utils";
 import { ensureTrackCodes } from "./_codes";
 
 interface TrackRow {
@@ -42,8 +42,12 @@ export const onRequestGet = async (ctx: Ctx) => {
   // to see bulk-uploaded tracks before they're published.
   let includeDrafts = false;
   if (new URL(ctx.request.url).searchParams.get("drafts") === "1") {
-    const user = await getSessionUser(ctx);
-    includeDrafts = !!user && (user.role === "admin" || user.email === OWNER_EMAIL);
+    if (adminTokenOk(ctx)) {
+      includeDrafts = true;
+    } else {
+      const user = await getSessionUser(ctx);
+      includeDrafts = !!user && (user.role === "admin" || user.email === OWNER_EMAIL);
+    }
   }
 
   // `cover` / `cover_thumb` are added lazily by the admin editor; older DBs may

@@ -4221,3 +4221,35 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   functions/api/sfx.ts, src/pages/SoundEffects.tsx. OWNER: deploy.bat (backend + frontend). Still
   pending from prior turns: re-scan+re-upload sounds with the new subcategory taxonomy so subcat
   chips populate.
+
+- **2026-07-20 (DreadStudio TRACK RE-SORT — map into existing vocab, tool + review):** owner's
+  DreadStudio tracks were auto-classified by the site AI and came out badly. Rebuilt as a
+  reviewable, deterministic re-sort into the OWNER'S EXISTING vocab only (no new genres/moods/
+  playlists/categories — his explicit call). SOURCE = All Tracks_cleaned.xlsx (cols: #, Envato
+  Title, BPM, Lengths, alt title, Style, Description, 30 Tags) — NOTE it has NO explicit facet
+  columns, only Style + 30 tags + description, so classification is DERIVED. Live vocab pulled from
+  /api/content: 17 genres, 25 moods, 29 use cases, 5 categories (Cinematic Stories/High Impact/Dark
+  Suspense/Creator Music/Game OST), 43 playlists in 7 themes. Scope RIGHT NOW = only the uploaded
+  batch #1670–1795 (126 tracks; owner has ~1670-1795 live, not all 1803). Match key = import_no
+  (the '#', unique in the sheet, = the number in Tracks Edit).
+  BUILT (kept in the cloud session, regen on request): sfx_uploader/taxonomy_tracks.py (keyword
+  mapping Style+tags+desc -> vocab, WORD-BOUNDARY matching so 'cat' doesn't hit 'edu-cat-ion';
+  genre stays tight ~1.1/track; category = Creator Music + strong-signal extra; playlists up to 4)
+  and build_review.py -> DreadStudio_1670-1795_review.xlsx (3 sheets: Как читать / Re-sort review /
+  Coverage; flags: genre-gap for Corp/Funk/Jazz/Motivational/X-Mas which have no exact site genre,
+  seasonal for X-Mas/Halloween, *-fallback). Owner APPROVED the review as-is ("норм все").
+  DELIVERED to sfx_uploader/: resort_core.py + resort_app.py (PyQt6). The APPLY tool reads the
+  APPROVED review Excel (source of truth — honors owner edits), matches by import_no (title guard),
+  then per track calls /api/admin/content action=bulk_update_tracks with facets{genre/mood/useCase:
+  {remove:CURRENT, add:NEW}} + categoryChanges + playlistChanges {remove:current, add:new} — i.e.
+  CLEARS all current Genre/Mood/UseCase + playlist + category membership ("снять все галочки") then
+  SETS approved. Tags, descriptions, covers, BPM, COLLECTIONS untouched. Auth reuses
+  ~/.sfx_uploader.json url+token. Two buttons: «Проверить» (dry-run, no writes) / «Применить».
+  BACKEND CHANGES (need deploy.bat): functions/api/admin/content.ts + functions/api/tracks.ts —
+  added adminTokenOk() bypass to requireAdmin / the ?drafts=1 gate (was session-only), so the
+  desktop tool can read drafts and POST bulk_update_tracks with the token. tsc 0 errors, lint 0
+  errors, plan-builder unit-tested offline (126/126 matched, clear+set correct). OWNER NEXT:
+  (1) deploy.bat FIRST (token bypass only works on the new deployment); (2) run
+  `python sfx_uploader/resort_app.py`, pick the review xlsx, «Проверить» then «Применить». Future
+  batches: same tool on a new approved review file; ask Claude to generate the review for the new
+  # range.
