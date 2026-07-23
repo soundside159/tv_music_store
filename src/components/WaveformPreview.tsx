@@ -142,6 +142,17 @@ const WaveformPreview = ({
   const innerRef = useRef<HTMLDivElement | null>(null);
   const [barCount, setBarCount] = useState(0);
 
+  // Per-instance jitter around minLoadingMs so a freshly (re)mounted list does
+  // NOT reveal every row at the same instant — each waveform holds its loading
+  // scan for a slightly different time (~0.45×–1.45× the base: some quicker,
+  // some slower), which reads as organic loading instead of a synced blink.
+  // Only matters for cached previews; an uncached one takes longer to fetch +
+  // decode than this hold anyway, so its real load time wins. Fixed once per
+  // mount, so a remount (filter/theme switch) re-rolls a new value.
+  const [holdMs] = useState(() =>
+    minLoadingMs > 0 ? Math.round(minLoadingMs * (0.45 + Math.random())) : 0,
+  );
+
   // Measure the (duration-scaled) inner container and derive the bar count.
   // Width is quantized to 20px so window dragging doesn't recompute per pixel.
   useEffect(() => {
@@ -180,11 +191,12 @@ const WaveformPreview = ({
     const startedAt = performance.now();
 
     // Reveal the bars, but never before the scan bar has been on screen for
-    // minLoadingMs — so a freshly (re)mounted list shimmers uniformly instead
-    // of cached rows popping in instantly.
+    // holdMs (a jittered minLoadingMs) — so a freshly (re)mounted list shimmers
+    // organically, each row landing at its own moment, instead of cached rows
+    // popping in instantly or all snapping in together.
     const reveal = (next: number[]) => {
       if (cancelled) return;
-      const wait = Math.max(0, minLoadingMs - (performance.now() - startedAt));
+      const wait = Math.max(0, holdMs - (performance.now() - startedAt));
       const commit = () => {
         if (cancelled) return;
         setPeaks(next);
@@ -206,7 +218,7 @@ const WaveformPreview = ({
       cancelled = true;
       if (holdTimer) window.clearTimeout(holdTimer);
     };
-  }, [barCount, fallbackPeaks, src, minLoadingMs]);
+  }, [barCount, fallbackPeaks, src, holdMs]);
 
   const safeDurationRatio = Math.max(0.08, Math.min(1, durationRatio));
 
