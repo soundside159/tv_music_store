@@ -837,6 +837,53 @@ export const onRequestPost = async (ctx: Ctx) => {
       return json({ ok: true });
     }
 
+    case "renumber_track": {
+      // Set a track's import_no, INSERTING it into the ordered list: if `target`
+      // is already used (within the same composer), the run of consecutive
+      // occupied numbers from `target` up is each bumped +1 until the first gap
+      // (so 200→(200 becomes 201, 201→202, …) and it stops at the first free
+      // number). Renumbering one composer's library never touches another's.
+      if (!body.id) return json({ error: "id required" }, 400);
+      const target = parseInt(String(body.importNo ?? "").trim(), 10);
+      if (!Number.isFinite(target) || target < 1) {
+        return json({ error: "importNo must be a positive whole number" }, 400);
+      }
+      const moved = await db
+        .prepare(`SELECT id, composer_id FROM tracks WHERE id = ?1`)
+        .bind(body.id)
+        .first<{ id: string; composer_id: string | null }>();
+      if (!moved) return json({ error: "Track not found" }, 404);
+      const rows = moved.composer_id
+        ? await db
+            .prepare(`SELECT id, import_no FROM tracks WHERE composer_id = ?1`)
+            .bind(moved.composer_id)
+            .all<{ id: string; import_no: string | null }>()
+        : await db
+            .prepare(`SELECT id, import_no FROM tracks WHERE composer_id IS NULL`)
+            .all<{ id: string; import_no: string | null }>();
+      const occupied = new Map<number, string>();
+      for (const r of rows.results) {
+        if (r.id === moved.id) continue;
+        const n = parseInt((r.import_no ?? "").trim(), 10);
+        if (Number.isFinite(n) && !occupied.has(n)) occupied.set(n, r.id);
+      }
+      const updates: { id: string; num: number }[] = [];
+      if (occupied.has(target)) {
+        const run: string[] = [];
+        let n = target;
+        while (occupied.has(n)) {
+          run.push(occupied.get(n) as string);
+          n += 1;
+        }
+        run.forEach((id, i) => updates.push({ id, num: target + i + 1 }));
+      }
+      updates.push({ id: moved.id, num: target });
+      for (const u of updates) {
+        await db.prepare(`UPDATE tracks SET import_no = ?1 WHERE id = ?2`).bind(String(u.num), u.id).run();
+      }
+      return json({ ok: true, changes: updates.map((u) => ({ id: u.id, importNo: String(u.num) })) });
+    }
+
     case "update_track": {
       if (!body.id) return json({ error: "id required" }, 400);
       const title = body.title?.trim();

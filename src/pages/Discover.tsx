@@ -4,6 +4,7 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { TrackRowList, TrackRowSkeletonList } from "@/components/TrackRowPlayer";
 import { useTracks } from "@/hooks/useTracks";
+import { interleaveByComposerRecency } from "@/lib/catalogSort";
 import { useVocabularies } from "@/hooks/useContent";
 import { useSeo } from "@/hooks/useSeo";
 import {
@@ -119,7 +120,9 @@ const DiscoverTag = ({ group, slug }: { group: DiscoverGroup; slug: string }) =>
     facetValuesInCatalog(tracks, facet).find((value) => tagSlug(value) === slug) ??
     slug.replace(/-/g, " ");
 
-  const exact = tracksWithTag(tracks, facet, slug);
+  // Newest-first by each composer's index (chess-board interleave), so a theme /
+  // genre page leads with the freshest tracks across all authors.
+  const exact = interleaveByComposerRecency(tracksWithTag(tracks, facet, slug));
   const related = relatedTracks(exact, tracks, RELATED_LIMIT);
 
   const title = `${label} Music — Royalty-Free ${label} Tracks | TV Music Store`;

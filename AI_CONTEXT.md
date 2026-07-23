@@ -4345,3 +4345,38 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   resort_app.py → Проверить → Применить. NOTE import_no 1..383 = Lumine Wave (DreadStudio is
   1670-1795, no overlap). tsc 0, lint 0, build OK for all frontend/backend changes. deploy.bat for
   the plan/plaque/entitlement changes.
+
+- **2026-07-23 (Tracks Edit → Export xlsx):** new admin export in AdminTracksEdit.tsx. Toolbar
+  "Export xlsx" button opens a dialog: pick Composer (All + every profile) and tick which columns
+  to include (#/import_no, Code, Title, Composer, Genre, Mood, Use case, Categories, Playlists, BPM,
+  Duration, Status; defaults = #/Title/Composer/Genre/Mood/Use case/Categories/Playlists). Rows are
+  sorted by import_no DESCENDING (newest = biggest # on top). Categories/Playlists come from the
+  ContentItemLite.trackIds membership; genre/mood/useCase are the stored " / " strings. Real .xlsx
+  via `write-excel-file` (v4, added dependency) loaded with a DYNAMIC import from
+  'write-excel-file/browser' (bare specifier fails — the pkg only exposes ./browser|./node|
+  ./universal subpath exports), so it's a lazy chunk, not in the main bundle. Blank cells → null,
+  numeric columns typed as Number. Added `Download` to the lucide import. tsc 0, lint 0, build OK.
+  DEPENDENCY: package.json + package-lock.json updated — Cloudflare installs write-excel-file on the
+  next build, so plain deploy.bat is enough (no manual npm install for the deployed site).
+
+- **2026-07-23 (Tracks Edit: editable # + cascade + sort + page size):** (1) double-click a track's
+  "#" (import_no) to edit inline (Enter=save, Esc=cancel). (2) Backend content.ts action
+  renumber_track { id, importNo }: INSERTS the number into the ordered list — if target is occupied
+  (within the SAME composer only), the run of consecutive occupied numbers from target up is bumped
+  +1 each until the first gap, then stops (200→ pushes 200→201,201→202,… stops at first free). Never
+  ripples another composer's library. Returns changes[]; frontend applies via onApplyOverrides.
+  (3) sort==="id" is now DESCENDING (biggest/newest on top; blanks always last). (4) rows-per-page
+  options now [20,50,200,500]. tsc 0, lint 0, build OK. deploy.bat to ship.
+
+- **2026-07-23 (catalog "New" = per-composer index interleave):** "New" sorted by created_at (upload
+  date) → showed old tracks, since bulk uploads share an upload date. Rewrote: src/lib/catalogSort.ts
+  interleaveByComposerRecency() groups tracks by composer, sorts each by import_no DESC (bigger =
+  newer), then deals round-robin by rank (every composer's newest first, then 2nd-newest, … — a
+  "chess-board" interleave). Composer order within a row is daily-seed-shuffled (fair + stable within
+  a day); tracks with no numeric index sink to the bottom by created_at. sortTracks("New") now calls
+  it. Also applied on Discover theme/genre/mood pages (src/pages/Discover.tsx: exact =
+  interleaveByComposerRecency(tracksWithTag(...))). importNo is on public catalog tracks (useTracks
+  maps import_no→importNo; /api/tracks selects it). Featured/Recommended (default) unchanged =
+  admin-TRENDING tracks pinned first (site_config trending_track_ids, set via Admin→Content
+  set_trending picker — MANUAL, not likes) + diverse daily genre round-robin; Popular = by real
+  download counts. tsc 0, lint 0, build OK. deploy.bat to ship.

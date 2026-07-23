@@ -96,6 +96,53 @@ export const buildRecommendedRank = (
   return new Map(ranked.map((t, i) => [t.id, i]));
 };
 
+/**
+ * "New" ordering that respects each COMPOSER's own recency index (import_no —
+ * bigger = newer). Composers write different amounts and use different number
+ * ranges, so a global sort would bury one author under another. Instead we sort
+ * each composer's tracks newest-first, then deal them out round-robin by rank:
+ * every composer's newest track first, then every composer's 2nd-newest, etc.
+ * (a "chess-board" interleave). The composer order within a row is seed-shuffled
+ * so the very top stays fair and refreshes daily; pagination is stable within a
+ * day. Tracks with no numeric index sink to the bottom (newest upload first).
+ */
+export const interleaveByComposerRecency = (
+  list: CatalogTrack[],
+  seed = dailySeed(),
+): CatalogTrack[] => {
+  const idx = (t: CatalogTrack): number | null => {
+    const n = parseInt((t.importNo ?? "").trim(), 10);
+    return Number.isFinite(n) ? n : null;
+  };
+  const groups = new Map<string, CatalogTrack[]>();
+  const noIndex: CatalogTrack[] = [];
+  for (const t of list) {
+    if (idx(t) === null) {
+      noIndex.push(t);
+      continue;
+    }
+    const key = (t.artist ?? "").trim().toLowerCase() || "—";
+    const arr = groups.get(key) ?? [];
+    arr.push(t);
+    groups.set(key, arr);
+  }
+  for (const arr of groups.values()) arr.sort((a, b) => (idx(b) as number) - (idx(a) as number));
+
+  const rand = mulberry32(seed);
+  const order = seededShuffle([...groups.keys()], rand);
+  const maxLen = order.reduce((m, k) => Math.max(m, groups.get(k)?.length ?? 0), 0);
+
+  const out: CatalogTrack[] = [];
+  for (let row = 0; row < maxLen; row += 1) {
+    for (const key of order) {
+      const arr = groups.get(key);
+      if (arr && row < arr.length) out.push(arr[row]);
+    }
+  }
+  noIndex.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+  return [...out, ...noIndex];
+};
+
 /** Sort helpers used by the Catalog page. `rank` = buildRecommendedRank output. */
 export const sortTracks = (
   list: CatalogTrack[],
@@ -106,13 +153,10 @@ export const sortTracks = (
     (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER);
 
   if (mode === "New") {
-    // Live rows carry createdAt; mock fallback has none — keep the legacy
-    // "reversed source order" behaviour there so New still changes something.
-    const anyDates = list.some((t) => t.createdAt);
-    if (!anyDates) return [...list].reverse();
-    return [...list].sort(
-      (a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? "") || byRank(a, b),
-    );
+    // Newest per composer, interleaved (see interleaveByComposerRecency). Uses
+    // the import_no index, not the upload date — bulk-uploaded old + new tracks
+    // share an upload date, so the date told the wrong story.
+    return interleaveByComposerRecency(list);
   }
   if (mode === "Popular") {
     // Real download counts; ties fall back to the diverse mix so a young

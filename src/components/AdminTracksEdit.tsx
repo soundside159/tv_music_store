@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, ChevronLeft, ChevronRight, ExternalLink, GripVertical, Loader2, Minus, Music, Pause, Play, Search, Sparkles, Star, UploadCloud, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Download, ExternalLink, GripVertical, Loader2, Minus, Music, Pause, Play, Search, Sparkles, Star, UploadCloud, X } from "lucide-react";
 import { toast } from "sonner";
 import WaveformPreview from "@/components/WaveformPreview";
 import { generateDescriptionApi } from "@/lib/coverArt";
@@ -8,6 +8,7 @@ import { renameWavInBundle } from "@/lib/wavBundle";
 import { decodeAudio, encodeMp3, formatDuration, wavToMp3Pair } from "@/lib/audioEncoding";
 import { crc32File } from "@/lib/crc32";
 import { cleanVersionLabel } from "@/lib/downloadTrack";
+import type { XlsxCell } from "@/lib/miniXlsx";
 import { parseXlsx } from "@/lib/xlsxRead";
 import { usePlayer } from "@/components/playerContext";
 import { splitFilterValues } from "@/components/TrackRowPlayer";
@@ -257,6 +258,25 @@ const fieldsOf = (t: CatalogTrack): SingleFields => ({
   hasStems: t.hasStems ?? false,
 });
 
+// Columns offered by the "Export xlsx" dialog. `num` cells export as numbers.
+const EXPORT_COLUMNS: { key: string; label: string; num?: boolean }[] = [
+  { key: "importNo", label: "#", num: true },
+  { key: "code", label: "Code", num: true },
+  { key: "title", label: "Title" },
+  { key: "composer", label: "Composer" },
+  { key: "genre", label: "Genre" },
+  { key: "mood", label: "Mood" },
+  { key: "useCase", label: "Use case" },
+  { key: "categories", label: "Categories" },
+  { key: "playlists", label: "Playlists" },
+  { key: "bpm", label: "BPM", num: true },
+  { key: "duration", label: "Duration" },
+  { key: "status", label: "Status" },
+];
+const DEFAULT_EXPORT_COLS = [
+  "importNo", "title", "composer", "genre", "mood", "useCase", "categories", "playlists",
+];
+
 const AdminTracksEdit = ({
   tracks,
   vocabularies,
@@ -322,6 +342,104 @@ const AdminTracksEdit = ({
   const [search, setSearch] = useState("");
   const [composer, setComposer] = useState("all");
   const [sort, setSort] = useState<SortMode>("default");
+
+  // --- inline "#" (import_no) edit: double-click the number, type, Enter. The
+  // backend inserts it into the list, cascading existing numbers up on collision.
+  const [editIdFor, setEditIdFor] = useState<string | null>(null);
+  const [editIdVal, setEditIdVal] = useState("");
+  const escIdEdit = useRef(false);
+
+  const submitRenumber = async (track: CatalogTrack) => {
+    setEditIdFor(null);
+    const raw = editIdVal.trim();
+    if (!raw || raw === (track.importNo ?? "").trim()) return;
+    const n = parseInt(raw, 10);
+    if (!Number.isFinite(n) || n < 1) {
+      toast.error("Enter a positive whole number");
+      return;
+    }
+    try {
+      const res = await fetch("/api/admin/content", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "renumber_track", id: track.id, importNo: String(n) }),
+      });
+      const d = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        changes?: { id: string; importNo: string }[];
+      };
+      if (!res.ok || !d.ok) throw new Error(d.error || "Could not change #");
+      const overrides: Record<string, Partial<CatalogTrack>> = {};
+      for (const c of d.changes ?? []) overrides[c.id] = { importNo: c.importNo };
+      onApplyOverrides(overrides);
+      const shifted = (d.changes?.length ?? 1) - 1;
+      toast.success(`# set to ${n}${shifted > 0 ? ` · ${shifted} shifted up` : ""}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not change #");
+    }
+  };
+
+  // --- xlsx export (pick composer + columns; rows sorted by # descending) ---
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportComposer, setExportComposer] = useState("all");
+  const [exportCols, setExportCols] = useState<Set<string>>(() => new Set(DEFAULT_EXPORT_COLS));
+  const [exporting, setExporting] = useState(false);
+
+  const exportValue = (t: CatalogTrack, key: string): string | number => {
+    switch (key) {
+      case "importNo": return t.importNo ?? "";
+      case "code": return t.code ?? "";
+      case "title": return t.title;
+      case "composer": return t.artist ?? "";
+      case "genre": return t.genre ?? "";
+      case "mood": return t.mood ?? "";
+      case "useCase": return t.useCase ?? "";
+      case "categories":
+        return categories.filter((c) => c.trackIds.includes(t.id)).map((c) => c.title).join(" / ");
+      case "playlists":
+        return playlists.filter((p) => p.trackIds.includes(t.id)).map((p) => p.title).join(" / ");
+      case "bpm": return t.bpm ?? "";
+      case "duration": return t.duration ?? "";
+      case "status":
+        return t.moderation === "pending" ? "review" : t.status === "draft" ? "draft" : "live";
+      default: return "";
+    }
+  };
+
+  const doExport = async () => {
+    const cols = EXPORT_COLUMNS.filter((c) => exportCols.has(c.key));
+    if (cols.length === 0) return;
+    setExporting(true);
+    try {
+      const rows = tracks
+        .filter((t) => exportComposer === "all" || (t.artist ?? "") === exportComposer)
+        // Newest first: biggest import_no on top, blanks at the bottom.
+        .sort((a, b) => (parseInt(b.importNo || "0", 10) || 0) - (parseInt(a.importNo || "0", 10) || 0));
+      const header: XlsxCell[] = cols.map((c) => ({ v: c.label, bold: true }));
+      const body: XlsxCell[][] = rows.map((t) =>
+        cols.map((c) => {
+          const v = exportValue(t, c.key);
+          if (c.num && v !== "" && v != null && !Number.isNaN(Number(v))) return { v: Number(v) };
+          return { v: v == null ? "" : String(v) };
+        }),
+      );
+      const widths = cols.map((c) =>
+        ["title", "categories", "playlists"].includes(c.key)
+          ? 34
+          : ["genre", "mood", "useCase", "composer"].includes(c.key)
+            ? 22
+            : 12,
+      );
+      const { downloadXlsx } = await import("@/lib/miniXlsx");
+      const tag = exportComposer === "all" ? "all" : exportComposer.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+      downloadXlsx([header, ...body], widths, `tvmusicstore-tracks-${tag}.xlsx`);
+      setExportOpen(false);
+    } finally {
+      setExporting(false);
+    }
+  };
   // Status tabs: Live / Drafts / Review (composer uploads awaiting moderation).
   const [statusTab, setStatusTab] = useState<"live" | "drafts" | "review">("live");
   const [page, setPage] = useState(1);
@@ -1206,17 +1324,21 @@ const AdminTracksEdit = ({
       list = [...list].sort((a, b) => (set.has(b.id) ? 1 : 0) - (set.has(a.id) ? 1 : 0));
     }
     if (sort === "id") {
-      // The spreadsheet "#" — numeric when it can be, text otherwise; tracks
-      // without a number sink to the bottom instead of pretending to be 0.
-      const num = (t: CatalogTrack) => {
+      // Sort by the spreadsheet "#" DESCENDING — biggest (newest) on top, as the
+      // owner reads the list. Tracks without a number always sink to the bottom.
+      const num = (t: CatalogTrack): number | null => {
         const raw = (t.importNo ?? "").trim();
-        if (!raw) return Number.POSITIVE_INFINITY;
+        if (!raw) return null;
         const n = Number(raw);
-        return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY;
+        return Number.isFinite(n) ? n : null;
       };
       list = [...list].sort((a, b) => {
-        const d = num(a) - num(b);
-        return d !== 0 ? d : a.title.localeCompare(b.title);
+        const na = num(a);
+        const nb = num(b);
+        if (na === null && nb === null) return a.title.localeCompare(b.title);
+        if (na === null) return 1;
+        if (nb === null) return -1;
+        return nb - na || a.title.localeCompare(b.title);
       });
     }
     return list;
@@ -2074,6 +2196,96 @@ const AdminTracksEdit = ({
             </select>
           )}
 
+          <button
+            type="button"
+            onClick={() => {
+              setExportComposer(composer);
+              setExportOpen(true);
+            }}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 font-body text-sm text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
+          >
+            <Download className="h-4 w-4" /> Export xlsx
+          </button>
+
+          {exportOpen && (
+            <div
+              className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"
+              onClick={() => setExportOpen(false)}
+            >
+              <div
+                className="my-8 w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3 className="font-body text-lg font-semibold text-foreground">Export tracks to Excel</h3>
+                <p className="mt-1 font-body text-xs text-muted-foreground">
+                  Rows are sorted by # — newest (biggest number) on top.
+                </p>
+
+                <label className="mt-4 block">
+                  <span className="font-body text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Composer
+                  </span>
+                  <select
+                    value={exportComposer}
+                    onChange={(e) => setExportComposer(e.target.value)}
+                    className={`${inputCls} mt-1 w-full`}
+                  >
+                    <option value="all">All composers ({totalWithComposer})</option>
+                    {composers.map((c) => (
+                      <option key={c.name} value={c.name}>
+                        {c.name} ({c.count})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <div className="mt-4">
+                  <span className="font-body text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Columns
+                  </span>
+                  <div className="mt-2 grid grid-cols-2 gap-1.5">
+                    {EXPORT_COLUMNS.map((c) => (
+                      <label key={c.key} className="flex items-center gap-2 font-body text-sm text-foreground">
+                        <input
+                          type="checkbox"
+                          checked={exportCols.has(c.key)}
+                          onChange={() =>
+                            setExportCols((prev) => {
+                              const n = new Set(prev);
+                              if (n.has(c.key)) n.delete(c.key);
+                              else n.add(c.key);
+                              return n;
+                            })
+                          }
+                          className="h-4 w-4 accent-[#F4C430]"
+                        />
+                        {c.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-6 flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setExportOpen(false)}
+                    className="font-body text-sm text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void doExport()}
+                    disabled={exporting || exportCols.size === 0}
+                    className="rounded-lg bg-[#F4C430] px-4 py-2 font-body text-sm font-bold text-background transition-colors hover:bg-[#F4C430]/85 disabled:opacity-50"
+                  >
+                    {exporting ? "Exporting…" : "Export xlsx"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Selection cluster: one Apply saves the side panels + the fields panel. */}
           {hasSelection && (
             <div className="ml-auto flex items-center gap-2">
@@ -2272,15 +2484,53 @@ const AdminTracksEdit = ({
                     {active ? <Pause className="h-3.5 w-3.5" /> : <Play className="ml-0.5 h-3.5 w-3.5" />}
                   </button>
 
-                  {/* Spreadsheet "#" — several tracks may legitimately share one. */}
-                  <span
-                    className={`truncate font-body text-xs tabular-nums ${
-                      t.importNo ? "text-foreground/80" : "text-muted-foreground/40"
-                    }`}
-                    title={t.importNo ? `Spreadsheet #${t.importNo}` : "No # imported yet"}
-                  >
-                    {t.importNo || "—"}
-                  </span>
+                  {/* Spreadsheet "#" — double-click to edit; the backend inserts
+                      it and cascades existing numbers up on a collision. */}
+                  {editIdFor === t.id ? (
+                    <input
+                      autoFocus
+                      type="number"
+                      min={1}
+                      value={editIdVal}
+                      onChange={(e) => setEditIdVal(e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          e.currentTarget.blur();
+                        } else if (e.key === "Escape") {
+                          escIdEdit.current = true;
+                          e.currentTarget.blur();
+                        }
+                      }}
+                      onBlur={() => {
+                        if (escIdEdit.current) {
+                          escIdEdit.current = false;
+                          setEditIdFor(null);
+                          return;
+                        }
+                        void submitRenumber(t);
+                      }}
+                      className="w-12 shrink-0 rounded border border-[#F4C430] bg-background px-1 py-0.5 text-center font-body text-xs tabular-nums text-foreground focus:outline-none"
+                    />
+                  ) : (
+                    <span
+                      onDoubleClick={() => {
+                        setEditIdVal((t.importNo ?? "").trim());
+                        setEditIdFor(t.id);
+                      }}
+                      className={`shrink-0 cursor-pointer truncate rounded px-1 font-body text-xs tabular-nums hover:bg-[#F4C430]/10 hover:text-[#F4C430] ${
+                        t.importNo ? "text-foreground/80" : "text-muted-foreground/40"
+                      }`}
+                      title={
+                        t.importNo
+                          ? `#${t.importNo} — double-click to change`
+                          : "No # yet — double-click to set"
+                      }
+                    >
+                      {t.importNo || "—"}
+                    </span>
+                  )}
 
                   <div className="flex min-w-0 items-center gap-3">
                     <span className="group/aithumb relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/50 bg-secondary">
@@ -2644,7 +2894,7 @@ const AdminTracksEdit = ({
               }}
               className={`${inputCls} py-1.5`}
             >
-              {[20, 50, 200].map((n) => (
+              {[20, 50, 200, 500].map((n) => (
                 <option key={n} value={n}>
                   {n}
                 </option>
