@@ -8,7 +8,7 @@ import { ensureStripeColumns, stripeCall } from "./_stripe";
 // stored in plan_config.stripe_price_monthly / stripe_price_annual, so the
 // owner never has to click anything in the Stripe dashboard.
 
-interface PlanRow {
+export interface PlanRow {
   id: string;
   name: string;
   price_monthly: number;
@@ -17,7 +17,7 @@ interface PlanRow {
   stripe_price_annual: string | null;
 }
 
-const ensurePrices = async (
+export const ensurePrices = async (
   key: string,
   ctx: Ctx,
   plan: PlanRow,

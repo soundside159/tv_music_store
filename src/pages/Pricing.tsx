@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Check, Minus } from "lucide-react";
-import { toast } from "sonner";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import {
@@ -12,7 +11,7 @@ import {
 } from "@/components/ui/accordion";
 import { usePlans, useSubscription } from "@/hooks/useMockData";
 import { useAuthSession } from "@/hooks/useAuth";
-import { BILLING_ENABLED, openBillingPortal, startCheckout } from "@/lib/billing";
+import { BILLING_ENABLED, openBillingPortal, startCheckout, switchPlan } from "@/lib/billing";
 import { useSeo } from "@/hooks/useSeo";
 import type { BillingInterval, PlanConfig, PlanId } from "@/types/domain";
 
@@ -100,24 +99,27 @@ const PlanCard = ({
           ? "Your plan"
           : includedInCurrent
             ? "Included in your plan"
-            : busy
-              ? "Redirecting..."
-              : "Select plan";
+            : switchBlocked
+              ? `Switch to ${plan.name}`
+              : busy
+                ? "Redirecting..."
+                : "Select plan";
 
   const onSelect = async () => {
     if (plan.id === "free" || busy || !BILLING_ENABLED || includedInCurrent) return;
-    if (switchBlocked) {
-      toast("You already have an active subscription", {
-        description:
-          "Cancel it in Plan & Billing first, then subscribe to the new plan — otherwise you'd be billed for both.",
-        action: { label: "Manage", onClick: () => void openBillingPortal() },
-      });
-      return;
-    }
     setBusy(true);
     try {
-      if (isCurrent) await openBillingPortal();
-      else await startCheckout(plan.id, interval);
+      if (isCurrent) {
+        await openBillingPortal();
+      } else if (switchBlocked) {
+        // In-place upgrade/downgrade — Stripe prorates, no second subscription.
+        const ok = window.confirm(
+          `Switch to ${plan.name} now? Your subscription changes immediately and Stripe charges only the prorated difference.`,
+        );
+        if (ok) await switchPlan(plan.id, interval);
+      } else {
+        await startCheckout(plan.id, interval);
+      }
     } finally {
       setBusy(false);
     }

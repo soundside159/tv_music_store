@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { refreshSession } from "@/hooks/useAuth";
 import type { BillingInterval, PlanId } from "@/types/domain";
 
 // Frontend helpers for Stripe subscription billing.
@@ -58,6 +59,34 @@ export const startCheckout = async (
     return;
   }
   window.location.href = res.url;
+};
+
+/** Switch an EXISTING subscription to another plan/interval in place. Stripe
+ *  prorates the difference — no second subscription, no "cancel first". Falls
+ *  back to a normal Checkout when there is no active subscription yet. */
+export const switchPlan = async (
+  plan: Exclude<PlanId, "free">,
+  interval: BillingInterval,
+): Promise<void> => {
+  if (!BILLING_ENABLED) return;
+  const res = await post("/api/stripe/change-plan", { plan, interval });
+  if (res.status === 401) {
+    window.dispatchEvent(new CustomEvent("tvms:open-auth"));
+    return;
+  }
+  if (res.status === 409) {
+    // No active subscription yet — do a fresh checkout instead.
+    await startCheckout(plan, interval);
+    return;
+  }
+  if (!(res as { ok?: boolean }).ok) {
+    toast.error(res.error ?? "Could not change your plan. Try again.");
+    return;
+  }
+  toast.success(`You're on ${plan === "max" ? "Max" : "Pro"} now`, {
+    description: "Your plan changed immediately — Stripe only charges the prorated difference.",
+  });
+  await refreshSession(); // pull the new plan into the app session
 };
 
 /** Open the Stripe Billing Portal (manage / cancel / payment method). */

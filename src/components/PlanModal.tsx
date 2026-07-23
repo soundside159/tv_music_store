@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Check, X } from "lucide-react";
 import { usePlans, useSubscription } from "@/hooks/useMockData";
 import { useAuthSession } from "@/hooks/useAuth";
-import { BILLING_ENABLED, openBillingPortal, startCheckout } from "@/lib/billing";
+import { BILLING_ENABLED, openBillingPortal, startCheckout, switchPlan } from "@/lib/billing";
 import type { BillingInterval, PlanConfig } from "@/types/domain";
 
 // Global "Pick a plan" popup (tunetank-style). Opened via openPlanModal()
@@ -17,7 +17,6 @@ const PlanCard = ({
   interval,
   isCurrent,
   activePlan,
-  onBlocked,
   onDone,
 }: {
   plan: PlanConfig;
@@ -25,7 +24,6 @@ const PlanCard = ({
   isCurrent: boolean;
   /** The paid plan the customer is subscribed to right now (null if none). */
   activePlan: string | null;
-  onBlocked: () => void;
   onDone: () => void;
 }) => {
   const [busy, setBusy] = useState(false);
@@ -45,21 +43,31 @@ const PlanCard = ({
       ? "Manage plan"
       : includedInCurrent
         ? "Included in your plan"
-        : busy
-          ? "Redirecting…"
-          : "Get plan";
+        : switchBlocked
+          ? `Switch to ${plan.name}`
+          : busy
+            ? "Redirecting…"
+            : "Get plan";
 
   const onClick = async () => {
     if (!BILLING_ENABLED || busy || includedInCurrent) return;
-    if (switchBlocked) {
-      onBlocked();
-      return;
-    }
     setBusy(true);
     try {
-      if (isCurrent) await openBillingPortal();
-      else if (plan.id !== "free") await startCheckout(plan.id, interval);
-      onDone();
+      if (isCurrent) {
+        await openBillingPortal();
+      } else if (switchBlocked) {
+        // In-place upgrade/downgrade: no second subscription, Stripe prorates.
+        const ok = window.confirm(
+          `Switch to ${plan.name} now? Your subscription changes immediately and Stripe charges only the prorated difference.`,
+        );
+        if (ok) {
+          await switchPlan(plan.id, interval);
+          onDone();
+        }
+      } else if (plan.id !== "free") {
+        await startCheckout(plan.id, interval);
+        onDone();
+      }
     } finally {
       setBusy(false);
     }
@@ -125,7 +133,6 @@ const PlanModal = () => {
   const subscription = useSubscription();
   const { status } = useAuthSession();
   const [open, setOpen] = useState(false);
-  const [blocked, setBlocked] = useState(false);
   const [interval, setInterval] = useState<BillingInterval>("annual");
   const [heading, setHeading] = useState<{ title: string; subtitle: string }>({
     title: "Pick a plan",
@@ -140,7 +147,6 @@ const PlanModal = () => {
         subtitle: ctx.subtitle || "Unlock unlimited downloads, lossless WAV & stems, and full commercial licensing.",
       });
       setInterval("annual");
-      setBlocked(false);
       setOpen(true);
     };
     window.addEventListener("tvms:pick-plan", show);
@@ -167,7 +173,6 @@ const PlanModal = () => {
     subscription.status === "active"
       ? subscription.plan
       : null;
-  const activeName = activePlan ? activePlan.replace(/^\w/, (c) => c.toUpperCase()) : "";
 
   return (
     <div
@@ -240,33 +245,10 @@ const PlanModal = () => {
               interval={interval}
               isCurrent={activePlan === p.id}
               activePlan={activePlan}
-              onBlocked={() => setBlocked(true)}
               onDone={close}
             />
           ))}
         </div>
-
-        {blocked && (
-          <div
-            className="mt-5 rounded-xl border p-4 text-center"
-            style={{ borderColor: "rgba(244,196,48,0.4)", backgroundColor: "rgba(244,196,48,0.07)" }}
-          >
-            <p className="font-body text-sm font-semibold text-foreground">
-              You already have an active subscription{activeName ? ` (${activeName})` : ""}.
-            </p>
-            <p className="mx-auto mt-1 max-w-md font-body text-xs leading-5 text-muted-foreground">
-              Cancel it first, then subscribe to the new plan — otherwise you'd be billed for both.
-              You keep access until the end of the period you already paid for.
-            </p>
-            <button
-              type="button"
-              onClick={() => void openBillingPortal()}
-              className="mt-3 rounded-lg bg-[#F4C430] px-4 py-2 font-body text-sm font-bold text-background transition-colors hover:bg-[#F4C430]/85"
-            >
-              Manage subscription
-            </button>
-          </div>
-        )}
 
         <div className="mt-6 text-center">
           <Link

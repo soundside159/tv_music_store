@@ -14,12 +14,23 @@ const CREDIT = "Music from tvmusicstore.com";
 
 const PLAN_NAME: Record<string, string> = { pro: "Pro", max: "Max" };
 
-const perks = [
-  { icon: Download, title: "Unlimited downloads", body: "No counter, no daily cap." },
-  { icon: Music4, title: "WAV, 320 kbps & stems", body: "Studio masters, not previews." },
-  { icon: ShieldCheck, title: "Commercial license", body: "Clients, ads, monetised channels." },
-  { icon: FileText, title: "PDF certificate per track", body: "In Account → Licenses." },
-];
+// Per-plan perks — must match the Compare-plans table on /pricing:
+//   Pro  = unlimited downloads, MP3 320, personal/creator use (teams ≤5).
+//   Max  = adds lossless WAV + stems and full commercial licensing.
+const perksFor = (plan: string) =>
+  plan === "max"
+    ? [
+        { icon: Download, title: "Unlimited downloads", body: "No counter, no daily cap." },
+        { icon: Music4, title: "WAV, 320 kbps & stems", body: "Studio masters, not previews." },
+        { icon: ShieldCheck, title: "Commercial license", body: "Clients, paid ads, sponsored content, brands." },
+        { icon: FileText, title: "PDF certificate per track", body: "In Account → Licenses." },
+      ]
+    : [
+        { icon: Download, title: "Unlimited downloads", body: "No counter, no daily cap." },
+        { icon: Music4, title: "MP3 320 kbps", body: "High-quality MP3 for every track." },
+        { icon: ShieldCheck, title: "Personal & creator license", body: "Your videos, social, YouTube, podcasts. Teams up to 5." },
+        { icon: FileText, title: "PDF certificate per track", body: "In Account → Licenses." },
+      ];
 
 const WelcomeModal = () => {
   const navigate = useNavigate();
@@ -63,6 +74,7 @@ const WelcomeModal = () => {
 
   const close = () => setOpen(false);
   const planName = PLAN_NAME[subscription?.plan ?? ""] ?? "";
+  const activePerks = perksFor(subscription?.plan ?? "");
 
   const copy = async () => {
     try {
@@ -117,7 +129,7 @@ const WelcomeModal = () => {
           </div>
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            {perks.map(({ icon: Icon, title, body }) => (
+            {activePerks.map(({ icon: Icon, title, body }) => (
               <div
                 key={title}
                 className="rounded-xl border border-border/60 bg-background/40 p-3.5"
