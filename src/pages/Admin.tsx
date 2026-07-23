@@ -129,6 +129,10 @@ interface AdminLicense {
   userEmail: string;
   userName: string;
   trackTitle: string;
+  provider?: "stripe" | "paypal" | null;
+  feeCents?: number | null;
+  netCents?: number | null;
+  paymentIntent?: string | null;
 }
 
 /** The owner account — its Admin checkbox is locked so he can't demote himself. */
@@ -1237,10 +1241,11 @@ const Admin = () => {
                   }
                   return (
                     <div className="overflow-x-auto">
-                      <table className="w-full min-w-[880px] font-body text-sm">
+                      <table className="w-full min-w-[1040px] font-body text-sm">
                         <thead>
                           <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
                             <th className="py-2 pr-4">License Code</th>
+                            <th className="py-2 pr-4">Payment</th>
                             <th className="py-2 pr-4">Kind</th>
                             <th className="py-2 pr-4">Buyer</th>
                             <th className="py-2 pr-4">Track</th>
@@ -1262,6 +1267,51 @@ const Admin = () => {
                                 >
                                   {l.id}
                                 </a>
+                              </td>
+                              <td className="py-2.5 pr-4">
+                                {l.reference ? (() => {
+                                  const isStripe = l.provider === "stripe" || l.reference.startsWith("cs_");
+                                  const isTest = l.reference.startsWith("cs_test_");
+                                  const base = `https://dashboard.stripe.com/${isTest ? "test/" : ""}`;
+                                  // pi_… deep-links straight to the payment; otherwise open a
+                                  // dashboard search pre-filled with the session id.
+                                  const url = isStripe
+                                    ? l.paymentIntent
+                                      ? `${base}payments/${l.paymentIntent}`
+                                      : `${base}search?query=${encodeURIComponent(l.reference)}`
+                                    : null;
+                                  return (
+                                    <div className="flex flex-col gap-0.5">
+                                      <span
+                                        className={`w-fit rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                                          isStripe ? "bg-indigo-500/20 text-indigo-300" : "bg-sky-500/20 text-sky-300"
+                                        }`}
+                                      >
+                                        {isStripe ? "Stripe" : "PayPal"}
+                                      </span>
+                                      {url ? (
+                                        <a
+                                          href={url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          title={`${l.reference} — open in Stripe`}
+                                          className="block max-w-[170px] truncate font-mono text-[11px] text-[#F4C430] hover:underline"
+                                        >
+                                          {l.reference}
+                                        </a>
+                                      ) : (
+                                        <span
+                                          title={l.reference}
+                                          className="block max-w-[170px] select-all truncate font-mono text-[11px] text-muted-foreground"
+                                        >
+                                          {l.reference}
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })() : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
                               </td>
                               <td className="py-2.5 pr-4">
                                 <span
@@ -1290,8 +1340,17 @@ const Admin = () => {
                               </td>
                               <td className="py-2.5 pr-4 text-foreground">{l.trackTitle}</td>
                               <td className="py-2.5 pr-4 capitalize text-muted-foreground">{l.tier}</td>
-                              <td className="py-2.5 pr-4 font-semibold" style={{ color: GOLD }}>
-                                {l.price === null ? "—" : `$${l.price}`}
+                              <td className="py-2.5 pr-4">
+                                <span className="font-semibold" style={{ color: GOLD }}>
+                                  {l.price === null ? "—" : `$${l.price}`}
+                                </span>
+                                {(l.feeCents != null || l.netCents != null) && (
+                                  <span className="block text-[11px] text-muted-foreground">
+                                    {l.feeCents != null && `fee $${(l.feeCents / 100).toFixed(2)}`}
+                                    {l.feeCents != null && l.netCents != null && " · "}
+                                    {l.netCents != null && `net $${(l.netCents / 100).toFixed(2)}`}
+                                  </span>
+                                )}
                               </td>
                               <td className="py-2.5 pr-4 text-muted-foreground">
                                 {l.createdAt ? l.createdAt.slice(0, 10) : "—"}

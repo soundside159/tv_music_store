@@ -105,6 +105,87 @@ const Card = ({ title, children }: { title: string; children: React.ReactNode })
   </div>
 );
 
+/** Book-keeping export: pick a date range → CSV (full transactions) or PDF
+ *  (one-page summary). All figures come from the revenue ledger, so the owner
+ *  never has to reconcile inside Stripe / PayPal. */
+const ReportExport = () => {
+  const today = new Date().toISOString().slice(0, 10);
+  const [from, setFrom] = useState(`${today.slice(0, 8)}01`);
+  const [to, setTo] = useState(today);
+  const [preview, setPreview] = useState<{ count: number; gross: number; tax: number; fee: number; net: number } | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const url = (fmt: string) =>
+    `/api/admin/finance-report?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&format=${fmt}`;
+
+  const runPreview = async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(url("json"), { credentials: "include" });
+      const d = (await r.json()) as { count?: number; summary?: { active: { gross: number; tax: number; fee: number; net: number } } };
+      if (r.ok && d.summary) {
+        setPreview({ count: d.count ?? 0, ...d.summary.active });
+      } else {
+        toast.error("Could not load report");
+      }
+    } catch {
+      toast.error("Could not load report");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const dollars = (c: number) => `$${(c / 100).toFixed(2)}`;
+  const inputCls =
+    "rounded-lg border border-border bg-background px-3 py-1.5 font-body text-sm text-foreground focus:border-[#F4C430] focus:outline-none";
+  const btnCls =
+    "rounded-lg border border-border px-3 py-1.5 font-body text-xs font-medium text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]";
+
+  return (
+    <Card title="Accountant report">
+      <p className="mb-3 font-body text-xs text-muted-foreground">
+        Pick a date range and export every sale (solo licenses + subscriptions, both processors)
+        with gross, VAT, fees and net — straight from the ledger, no Stripe/PayPal digging.
+      </p>
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="flex flex-col gap-1">
+          <span className="font-body text-[10px] uppercase tracking-wide text-muted-foreground">From</span>
+          <input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} className={inputCls} />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="font-body text-[10px] uppercase tracking-wide text-muted-foreground">To</span>
+          <input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} className={inputCls} />
+        </label>
+        <button type="button" onClick={() => void runPreview()} className={btnCls} disabled={loading}>
+          {loading ? "Loading…" : "Preview"}
+        </button>
+        <a href={url("csv")} className={btnCls}>
+          Export CSV
+        </a>
+        <a href={url("pdf")} target="_blank" rel="noopener noreferrer" className={btnCls}>
+          Export PDF
+        </a>
+      </div>
+      {preview && (
+        <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-1.5 border-t border-border/60 pt-3 font-body text-sm sm:grid-cols-5">
+          {[
+            ["Transactions", String(preview.count)],
+            ["Gross", dollars(preview.gross)],
+            ["VAT", dollars(preview.tax)],
+            ["Fees", dollars(preview.fee)],
+            ["Net", dollars(preview.net)],
+          ].map(([k, v]) => (
+            <div key={k}>
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{k}</div>
+              <div className="font-semibold text-foreground">{v}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+};
+
 const AdminFinance = () => {
   const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -211,6 +292,8 @@ const AdminFinance = () => {
           Export payouts (CSV)
         </button>
       </div>
+
+      <ReportExport />
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* 1 — the month's money */}

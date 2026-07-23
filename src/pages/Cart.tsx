@@ -9,6 +9,11 @@ import { clearCart, removeFromCart, setCartItemTier, useCart } from "@/hooks/use
 
 const GOLD = "#F4C430";
 
+// Payments are Stripe-only for now (simpler reconciliation + accountant reports).
+// The PayPal component + backend stay in place — flip this to true to offer it
+// again alongside the card checkout.
+const PAYPAL_ENABLED = false;
+
 // PayPal JS SDK global (loaded on demand).
 interface PayPalButtonsConfig {
   style?: Record<string, string | number>;
@@ -107,7 +112,10 @@ const PayPalCheckout = ({ disabled }: { disabled: boolean }) => {
           return;
         }
         const script = document.createElement("script");
-        script.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(cfg.clientId)}&currency=USD&intent=capture`;
+        // disable-funding=card,paylater — hide PayPal's own "Debit or Credit Card"
+        // guest button (and Pay Later). Cards are handled by the clean Stripe
+        // "Pay with card" flow above, so PayPal only offers the PayPal login here.
+        script.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(cfg.clientId)}&currency=USD&intent=capture&disable-funding=card,paylater`;
         script.onload = () => !cancelled && setState("ready");
         script.onerror = () => !cancelled && setState("unavailable");
         document.head.appendChild(script);
@@ -143,7 +151,7 @@ const PayPalCheckout = ({ disabled }: { disabled: boolean }) => {
           }
           clearCart();
           toast.success("Payment complete! Your licenses are in your account.");
-          navigate("/account?purchase=success");
+          navigate("/account?section=license&purchase=success");
         },
         onError: (err) => {
           const msg = err instanceof Error ? err.message : "Checkout error. Try again.";
@@ -193,7 +201,7 @@ const Cart = () => {
     if (outcome === "success") {
       clearCart();
       toast.success("Payment complete! Your licenses are in your account.");
-      navigate("/account?purchase=success", { replace: true });
+      navigate("/account?section=license&purchase=success", { replace: true });
     } else if (outcome === "canceled") {
       toast("Checkout canceled — your cart is unchanged.");
       navigate("/cart", { replace: true });
@@ -321,14 +329,18 @@ const Cart = () => {
               </p>
               <div className="mt-5 flex flex-col gap-3">
                 <CardCheckout disabled={count === 0} />
-                <div className="flex items-center gap-3">
-                  <span className="h-px flex-1 bg-border/70" />
-                  <span className="font-body text-[11px] uppercase tracking-wide text-muted-foreground">
-                    or
-                  </span>
-                  <span className="h-px flex-1 bg-border/70" />
-                </div>
-                <PayPalCheckout disabled={count === 0} />
+                {PAYPAL_ENABLED && (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <span className="h-px flex-1 bg-border/70" />
+                      <span className="font-body text-[11px] uppercase tracking-wide text-muted-foreground">
+                        or
+                      </span>
+                      <span className="h-px flex-1 bg-border/70" />
+                    </div>
+                    <PayPalCheckout disabled={count === 0} />
+                  </>
+                )}
               </div>
             </aside>
           </div>

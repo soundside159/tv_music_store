@@ -4296,3 +4296,28 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   so a sloppy manual copy still uploads clean. Tested offline (new + old naming both correct).
   OWNER NEXT: finish copying the 40 per the cheat-sheet, then deploy.bat + run track_app.py
   («Проверить» → «Залить»). Stems: YES upload (Max).
+
+- **2026-07-23 (checkout + licenses + accountant report):** batch of owner-requested tweaks.
+  (1) PayPal disable-funding=card,paylater on the SDK (Cart.tsx) — killed PayPal's ugly guest
+  "Debit or Credit Card" form; Stripe "Pay with card" handles cards. (2) Post-purchase redirect →
+  /account?section=license (was Profile), both Stripe + PayPal paths. (3) Licenses tab: track names
+  now link to /track/<slug>; WAV/MP3 download buttons show a spinner while the server zips (busyKey).
+  (4) Certificate PURCHASE CODE was the raw Stripe session id (cs_… 60+ chars) overflowing the card —
+  now a tidy product-key-style code (prettyPurchaseCode: strip provider prefix, first 16 chars,
+  uppercase, dash-grouped e.g. B1LX-VXRY-W4N1-LN4Q) in license-pdf.ts; traceable via LICENSE NUMBER/
+  ORDER. (5) create_track now accepts importNo (added earlier). (6) Admin Licenses table: new
+  **Payment** column (Stripe/PayPal badge + full reference; Stripe deep-links to the payment via
+  pi_ extracted from revenue_events.provider_ref, else dashboard search; test/live auto from cs_
+  prefix) and per-row **fee/net** (from revenue_events joined on order_id, original event via
+  ROW_NUMBER). admin/licenses.ts + Admin.tsx.
+  DECISION: **Stripe-only** for now (owner's call; TuneTank does solo via Stripe). PayPal hidden in
+  Cart via `PAYPAL_ENABLED = false` flag — component + /api/paypal/* backend left intact, flip flag
+  to re-enable. Reporting doesn't depend on it (ledger is unified).
+  NEW: **Accountant report** — functions/api/admin/finance-report.ts (?from&to&format=json|csv|pdf,
+  admin-only) reads revenue_events over a date range: JSON summary, CSV (full per-transaction:
+  date/type/provider/customer/item/gross/tax/fee/net/currency/status/order/ref, UTF-8 BOM), and a
+  one-page PDF summary (gross/VAT/fees/net, refunds line, breakdown by type + processor) via the
+  zero-dep _pdf buildPdf. UI in AdminFinance.tsx (ReportExport card: from/to date pickers, Preview
+  totals, Export CSV / Export PDF). source values: license/subscription; refunds = status='refunded'
+  on the same row (shown separately, excluded from active totals). tsc 0, lint 0, build OK. OWNER:
+  deploy.bat to see all of it.

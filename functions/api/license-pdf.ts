@@ -165,6 +165,32 @@ const L = 48;
 const R = PAGE_W - L; // 547
 const spaced = (s: string) => s.split("").join(" "); // letterspaced caps
 
+/** Fits a long single-line value (e.g. a Stripe session id) into `maxW` by
+ *  dropping characters from the MIDDLE — keeps the recognisable head + tail so
+ *  it stays traceable, and never runs into the next column. */
+const fitMiddle = (value: string, maxW: number, size: number, font?: "helvB"): string => {
+  if (textWidth(value, size, font) <= maxW) return value;
+  for (let keep = value.length - 1; keep >= 8; keep--) {
+    const head = Math.ceil(keep / 2);
+    const s = `${value.slice(0, head)}…${value.slice(value.length - (keep - head))}`;
+    if (textWidth(s, size, font) <= maxW) return s;
+  }
+  return `${value.slice(0, 6)}…`;
+};
+
+/** A tidy, product-key-style Purchase Code for the certificate. Payment
+ *  references from Stripe/PayPal are long and ugly (cs_live_…, 60+ chars); we
+ *  show a short uppercase, dash-grouped token derived from them — looks like a
+ *  licence key, always fits, and still maps to the order in our records (the
+ *  full LICENSE NUMBER / ORDER on the same certificate identify the purchase).
+ *  Non-payment refs like "Subscription plan" or "—" are shown unchanged. */
+const prettyPurchaseCode = (ref: string): string => {
+  if (!ref || ref === "—" || /\s/.test(ref)) return ref;
+  const core = ref.replace(/^[a-z]{2,6}_(?:test_|live_)?/i, "").replace(/[^a-z0-9]/gi, "");
+  const token = core.slice(0, 16).toUpperCase();
+  return token.replace(/(.{4})(?=.)/g, "$1-") || ref;
+};
+
 /** Word-wraps a short phrase into up to `maxLines` lines that fit `maxW`. */
 const wrapLines = (text: string, maxW: number, size: number, maxLines = 3): string[] => {
   const words = text.split(/\s+/);
@@ -275,7 +301,19 @@ export const buildCertificate = (fields: CertData): Uint8Array => {
   ops.push({ op: "text", text: spaced("LICENSED TO"), x: midX, y: 668, size: 8.5, font: "helvB", color: GOLD_DARK });
   ops.push({ op: "line", x1: midX - 18, y1: 578, x2: midX - 18, y2: 660, width: 0.7, color: RULE_SOFT });
 
-  kv(ops, L, 646, "Purchase Code", fields.paymentRef, { bold: true });
+  // Purchase Code can be a long Stripe session id (cs_test_… / cs_live_…) — keep
+  // it inside the left column so it never overlaps the LICENSED TO block.
+  ops.push({ op: "text", text: "PURCHASE CODE", x: L, y: 646, size: 8, font: "helvB", color: GRAY });
+  ops.push({
+    op: "text",
+    // Short, tidy product-key-style code (fitMiddle stays as a final safety net).
+    text: fitMiddle(prettyPurchaseCode(fields.paymentRef), midX - 18 - (L + 82) - 4, 9.5, "helvB"),
+    x: L + 82,
+    y: 646,
+    size: 9.5,
+    font: "helvB",
+    color: INK,
+  });
   kv(ops, L, 626, "Issued", fields.issued, { bold: true });
   kv(ops, L, 606, "Order", fields.orderNo, { bold: true });
   kv(ops, L, 586, "Type", fields.typeLabel, { bold: true });

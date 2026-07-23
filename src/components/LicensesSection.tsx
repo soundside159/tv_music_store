@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Download, FileText, Music2, Pencil } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Download, FileText, Loader2, Music2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { downloadTrackVersion } from "@/lib/downloadTrack";
 
@@ -196,19 +197,21 @@ const Btn = ({
   children,
   onClick,
   href,
+  loading,
 }: {
   children: React.ReactNode;
   onClick?: () => void;
   href?: string;
+  loading?: boolean;
 }) => {
   const cls =
-    "inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 font-body text-xs font-medium text-foreground transition-colors hover:border-[#F4C430]/60 hover:text-[#F4C430]";
+    "inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 font-body text-xs font-medium text-foreground transition-colors hover:border-[#F4C430]/60 hover:text-[#F4C430] disabled:cursor-default disabled:opacity-60 disabled:hover:border-border disabled:hover:text-foreground";
   return href ? (
     <a href={href} target="_blank" rel="noopener noreferrer" className={cls}>
       {children}
     </a>
   ) : (
-    <button type="button" onClick={onClick} className={cls}>
+    <button type="button" onClick={onClick} disabled={loading} className={cls}>
       {children}
     </button>
   );
@@ -219,6 +222,28 @@ const LicensesSection = () => {
   const [details, setDetails] = useState<CertDetails>(EMPTY);
   const [email, setEmail] = useState("");
   const [editing, setEditing] = useState(false);
+  // Which download button is preparing its file (WAV bundles zip on the server,
+  // so the icon spins until the download actually starts). Key = `${id}:${fmt}`.
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+
+  const doDownload = async (row: LicenseRow, format: "mp3" | "wav") => {
+    if (!row.trackSlug) return;
+    const key = `${row.id}:${format}`;
+    setBusyKey(key);
+    try {
+      await downloadTrackVersion({
+        slug: row.trackSlug,
+        versionId: "main",
+        src: "",
+        title: row.trackTitle,
+        label: "Main",
+        format,
+        ...(format === "mp3" ? { quality: 320 as const } : {}),
+      });
+    } finally {
+      setBusyKey(null);
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -288,9 +313,18 @@ const LicensesSection = () => {
                 )}
               </span>
               <div className="min-w-0">
-                <p className="truncate font-body text-sm font-semibold text-foreground">
-                  {row.trackTitle}
-                </p>
+                {row.trackSlug ? (
+                  <Link
+                    to={`/track/${row.trackSlug}`}
+                    className="block truncate font-body text-sm font-semibold text-foreground transition-colors hover:text-[#F4C430]"
+                  >
+                    {row.trackTitle}
+                  </Link>
+                ) : (
+                  <p className="truncate font-body text-sm font-semibold text-foreground">
+                    {row.trackTitle}
+                  </p>
+                )}
                 <p className="truncate font-body text-xs text-muted-foreground">
                   Issued {fmtDate(row.issuedAt)} · #{row.code}
                   {row.refunded && <span className="ml-2 text-red-400">Refunded</span>}
@@ -313,34 +347,21 @@ const LicensesSection = () => {
             <div className="mt-4 flex flex-wrap gap-2 border-t border-border/50 pt-4">
               {row.trackSlug && (
                 <>
-                  <Btn
-                    onClick={() =>
-                      void downloadTrackVersion({
-                        slug: row.trackSlug!,
-                        versionId: "main",
-                        src: "",
-                        title: row.trackTitle,
-                        label: "Main",
-                        format: "mp3",
-                        quality: 320,
-                      })
-                    }
-                  >
-                    <Download className="h-3.5 w-3.5" /> MP3
+                  <Btn loading={busyKey === `${row.id}:mp3`} onClick={() => void doDownload(row, "mp3")}>
+                    {busyKey === `${row.id}:mp3` ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5" />
+                    )}{" "}
+                    MP3
                   </Btn>
-                  <Btn
-                    onClick={() =>
-                      void downloadTrackVersion({
-                        slug: row.trackSlug!,
-                        versionId: "main",
-                        src: "",
-                        title: row.trackTitle,
-                        label: "Main",
-                        format: "wav",
-                      })
-                    }
-                  >
-                    <Download className="h-3.5 w-3.5" /> WAV
+                  <Btn loading={busyKey === `${row.id}:wav`} onClick={() => void doDownload(row, "wav")}>
+                    {busyKey === `${row.id}:wav` ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5" />
+                    )}{" "}
+                    WAV
                   </Btn>
                 </>
               )}

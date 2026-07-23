@@ -24,6 +24,14 @@ export interface AdminLicenseRow {
   userEmail: string;
   userName: string;
   trackTitle: string;
+  // Money + payment linkage (one-time only; null for subscriptions). Pulled from
+  // the revenue ledger so the owner can see the processor fee / net and jump
+  // straight to the exact payment in Stripe.
+  provider: "stripe" | "paypal" | null;
+  feeCents: number | null;
+  netCents: number | null;
+  /** Stripe PaymentIntent id (pi_…) when known — deep-links to the payment. */
+  paymentIntent: string | null;
 }
 
 export const onRequestGet = async (ctx: Ctx) => {
@@ -39,46 +47,98 @@ export const onRequestGet = async (ctx: Ctx) => {
   const q = (new URL(ctx.request.url).searchParams.get("q") ?? "").trim().toLowerCase();
 
   // --- one-time (sync_orders) ---------------------------------------------
-  const syncRows = await db
-    .prepare(
-      `SELECT o.id, o.tier, o.price, o.stripe_session_id, o.created_at, o.track_id, o.user_id,
+  interface SyncRow {
+    id: string;
+    tier: string;
+    price: number;
+    stripe_session_id: string | null;
+    created_at: string;
+    status: string;
+    track_id: string;
+    user_id: string;
+    user_email: string | null;
+    user_name: string | null;
+    track_title: string | null;
+    gross_cents: number | null;
+    fee_cents: number | null;
+    net_cents: number | null;
+    provider_ref: string | null;
+    provider: string | null;
+  }
+  const BASE_COLS = `o.id, o.tier, o.price, o.stripe_session_id, o.created_at, o.track_id, o.user_id,
               COALESCE(o.status, 'active') AS status,
-              u.email AS user_email, u.name AS user_name, t.title AS track_title
-         FROM sync_orders o
+              u.email AS user_email, u.name AS user_name, t.title AS track_title`;
+  const BASE_JOINS = `FROM sync_orders o
          LEFT JOIN users u ON u.id = o.user_id
-         LEFT JOIN tracks t ON t.id = o.track_id
-        ORDER BY o.created_at DESC
-        LIMIT 500`,
-    )
-    .all<{
-      id: string;
-      tier: string;
-      price: number;
-      stripe_session_id: string | null;
-      created_at: string;
-      status: string;
-      track_id: string;
-      user_id: string;
-      user_email: string | null;
-      user_name: string | null;
-      track_title: string | null;
-    }>();
+         LEFT JOIN tracks t ON t.id = o.track_id`;
+  let syncRows: { results: SyncRow[] };
+  try {
+    // Join the ORIGINAL ledger event per order (rn = 1) for its fee / net and
+    // the provider_ref that carries the Stripe PaymentIntent.
+    syncRows = await db
+      .prepare(
+        `SELECT ${BASE_COLS}, re.gross_cents, re.fee_cents, re.net_cents, re.provider_ref, re.provider
+           ${BASE_JOINS}
+           LEFT JOIN (
+             SELECT order_id, gross_cents, fee_cents, net_cents, provider_ref, provider,
+                    ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY created_at ASC) AS rn
+               FROM revenue_events
+              WHERE source = 'license' AND order_id IS NOT NULL
+           ) re ON re.order_id = o.id AND re.rn = 1
+          ORDER BY o.created_at DESC
+          LIMIT 500`,
+      )
+      .all<SyncRow>();
+  } catch {
+    // revenue_events / window functions unavailable — degrade to no money data.
+    const base = await db
+      .prepare(`SELECT ${BASE_COLS} ${BASE_JOINS} ORDER BY o.created_at DESC LIMIT 500`)
+      .all<Omit<SyncRow, "gross_cents" | "fee_cents" | "net_cents" | "provider_ref" | "provider">>();
+    syncRows = {
+      results: base.results.map((r) => ({
+        ...r,
+        gross_cents: null,
+        fee_cents: null,
+        net_cents: null,
+        provider_ref: null,
+        provider: null,
+      })),
+    };
+  }
 
-  const oneTime: AdminLicenseRow[] = syncRows.results.map((r) => ({
-    id: r.id,
-    kind: "one-time",
-    // A refunded purchase is shown, but plainly marked void — the owner must be
-    // able to see that this code no longer validates.
-    tier: r.status === "refunded" ? `${r.tier} (refunded)` : r.tier,
-    price: r.price,
-    reference: r.stripe_session_id ?? "",
-    createdAt: r.created_at,
-    validUntil: null,
-    userId: r.user_id ?? "",
-    userEmail: r.user_email ?? "",
-    userName: r.user_name ?? "",
-    trackTitle: r.track_title ?? prettify(r.track_id),
-  }));
+  const oneTime: AdminLicenseRow[] = syncRows.results.map((r) => {
+    // provider_ref is "<pi_… | cs_…>:<slug>:<tier>" — the leading token is the
+    // Stripe PaymentIntent when the payment had one.
+    const refToken = (r.provider_ref ?? "").split(":")[0];
+    const paymentIntent = refToken.startsWith("pi_") ? refToken : null;
+    const provider: "stripe" | "paypal" | null =
+      r.provider === "stripe" || r.provider === "paypal"
+        ? r.provider
+        : r.stripe_session_id?.startsWith("cs_")
+          ? "stripe"
+          : r.stripe_session_id
+            ? "paypal"
+            : null;
+    return {
+      id: r.id,
+      kind: "one-time",
+      // A refunded purchase is shown, but plainly marked void — the owner must be
+      // able to see that this code no longer validates.
+      tier: r.status === "refunded" ? `${r.tier} (refunded)` : r.tier,
+      price: r.price,
+      reference: r.stripe_session_id ?? "",
+      createdAt: r.created_at,
+      validUntil: null,
+      userId: r.user_id ?? "",
+      userEmail: r.user_email ?? "",
+      userName: r.user_name ?? "",
+      trackTitle: r.track_title ?? prettify(r.track_id),
+      provider,
+      feeCents: r.fee_cents,
+      netCents: r.net_cents,
+      paymentIntent,
+    };
+  });
 
   // --- subscription (plan_licenses) ---------------------------------------
   await ensurePlanLicensesTable(db);
@@ -117,6 +177,10 @@ export const onRequestGet = async (ctx: Ctx) => {
       userEmail: r.user_email ?? "",
       userName: r.user_name ?? "",
       trackTitle: r.track_title ?? prettify(r.track_id),
+      provider: null,
+      feeCents: null,
+      netCents: null,
+      paymentIntent: null,
     }));
   } catch {
     // table not present yet — no subscription codes issued
