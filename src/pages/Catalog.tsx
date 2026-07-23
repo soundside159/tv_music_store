@@ -76,6 +76,9 @@ const matchesOption = (value: string, option: string) => value.toLowerCase().inc
 // list scrolls into view.
 const PAGE_SIZE = 20;
 const LOAD_MORE_STEP = 20;
+// Minimum on-screen time for a row's waveform loading scan — long enough to read
+// as "fresh tracks loaded" when the filter / sort changes (see WaveformPreview).
+const WAVE_MIN_LOADING_MS = 650;
 /** How many "related" tracks may follow a narrow result set (see discovery.ts). */
 const RELATED_LIMIT = 30;
 
@@ -301,6 +304,14 @@ const Catalog = () => {
   // of MOUNTED rows is limited.
   const pagedTracks = filteredTracks.slice(0, visibleCount);
   const hasMore = visibleCount < filteredTracks.length;
+
+  // Changing any of these filters hides/shows or reorders rows, but React REUSES
+  // each row (keyed by track.id) — so a cached waveform would just pop straight
+  // back in with no loading scan. Feeding this signature to every row's
+  // waveReloadKey replays the loading scan across the whole list on each switch
+  // (the "fresh tracks loaded" feel). Search text is deliberately excluded, or
+  // every keystroke would restart the shimmer.
+  const reshimmerKey = `${activeCollectionId ?? ""}|${categoryParam ?? ""}|${filters.useCase}|${filters.genre}|${filters.mood}|${sort}|${aiRes ? "ai" : ""}`;
 
   const aiPlaylists = aiRes ? allPlaylists.filter((pl) => aiRes.playlistIds.includes(pl.id)) : [];
   const aiCollections = aiRes ? musicCollections.filter((c) => aiRes.collectionIds.includes(c.id)) : [];
@@ -599,6 +610,8 @@ const Catalog = () => {
                         playedProgress={playedProgress}
                         selectedVersion={mainVersion}
                         track={track}
+                        waveMinLoadingMs={WAVE_MIN_LOADING_MS}
+                        waveReloadKey={reshimmerKey}
                       />
                       </Fragment>
                     );
