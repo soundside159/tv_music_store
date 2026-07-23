@@ -123,6 +123,7 @@ export const TrackRow = ({
   selectedVersion,
   track,
   waveMinLoadingMs,
+  waveReloadKey,
 }: {
   activePlayer: ActivePlayer | null;
   entranceDelay?: number;
@@ -142,6 +143,8 @@ export const TrackRow = ({
   track: CatalogTrack;
   /** Minimum on-screen time for the waveform's loading scan (see WaveformPreview). */
   waveMinLoadingMs?: number;
+  /** Bump to replay the waveform loading scan without remounting (filter switch). */
+  waveReloadKey?: string | number;
 }) => {
   const versionProgress = (versionId: string) => {
     const isActive = activePlayer?.trackId === track.id && activePlayer.versionId === versionId;
@@ -305,6 +308,7 @@ export const TrackRow = ({
         bars={420}
         durationRatio={1}
         minLoadingMs={waveMinLoadingMs}
+        reloadKey={waveReloadKey}
         onSeek={(nextProgress) => onPlayVersion(track, selectedVersion, nextProgress)}
         progress={versionProgress(selectedVersion.id)}
         src={selectedVersion.src}
@@ -405,6 +409,7 @@ export const TrackRow = ({
                     bars={360}
                     durationRatio={getDurationRatio(track, version)}
                     minLoadingMs={waveMinLoadingMs}
+                    reloadKey={waveReloadKey}
                     onSeek={(nextProgress) => onPlayVersion(track, version, nextProgress)}
                     progress={versionProgress(version.id)}
                     src={version.src}
@@ -770,18 +775,19 @@ export const TrackRowList = ({
             selectedVersion={mainVersion}
             track={track}
             waveMinLoadingMs={waveMinLoadingMs}
+            waveReloadKey={resetKey}
           />
         );
 
-        // ALWAYS the same wrapper: the admin session confirms asynchronously,
-        // and if the row's DOM shape changed when the X column appeared, React
-        // remounted every row — the list blinked away and replayed its
-        // entrance stagger (the owner saw it as a loading glitch).
-        // The key folds in resetKey ON PURPOSE: when the caller changes it (a
-        // filter / theme switch) we WANT every row to remount so the loading
-        // scan replays across the whole list.
+        // ALWAYS the same wrapper, keyed by track.id ONLY: the admin session
+        // confirms asynchronously, and if the row's DOM shape changed when the X
+        // column appeared, React remounted every row — the list blinked away and
+        // replayed its entrance stagger (the owner saw it as a loading glitch).
+        // The waveform re-shimmer on a filter/theme switch is driven by
+        // waveReloadKey (a prop), NOT by remounting the row — a switch usually
+        // reuses the row (same track in both lists), so a key change never fired.
         return (
-          <div key={resetKey ? `${resetKey}:${track.id}` : track.id} className="flex items-stretch">
+          <div key={track.id} className="flex items-stretch">
             <div className="min-w-0 flex-1">{row}</div>
             {adminRemove && (
               <button

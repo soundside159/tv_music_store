@@ -12,6 +12,12 @@ interface WaveformPreviewProps {
    *  fresh-load animation when it (re)mounts on a filter/theme switch, instead
    *  of already-seen rows snapping in with no shimmer. 0 = show as soon as ready. */
   minLoadingMs?: number;
+  /** Change this to REPLAY the loading scan without remounting the row. On a
+   *  filter/theme switch React often reuses the row (same track id in both
+   *  lists), so a key-based remount never fires and the cached waveform snapped
+   *  in instantly. Bumping reloadKey re-runs the load effect → the scan shows
+   *  again for minLoadingMs, cached or not. */
+  reloadKey?: string | number;
   onSeek?: (progress: number) => void;
   progress?: number;
   seed?: number;
@@ -134,6 +140,7 @@ const WaveformPreview = ({
   className,
   durationRatio = 1,
   minLoadingMs = 0,
+  reloadKey,
   onSeek,
   progress = 0,
   seed = 0,
@@ -141,17 +148,6 @@ const WaveformPreview = ({
 }: WaveformPreviewProps) => {
   const innerRef = useRef<HTMLDivElement | null>(null);
   const [barCount, setBarCount] = useState(0);
-
-  // Per-instance jitter around minLoadingMs so a freshly (re)mounted list does
-  // NOT reveal every row at the same instant — each waveform holds its loading
-  // scan for a slightly different time (~0.45×–1.45× the base: some quicker,
-  // some slower), which reads as organic loading instead of a synced blink.
-  // Only matters for cached previews; an uncached one takes longer to fetch +
-  // decode than this hold anyway, so its real load time wins. Fixed once per
-  // mount, so a remount (filter/theme switch) re-rolls a new value.
-  const [holdMs] = useState(() =>
-    minLoadingMs > 0 ? Math.round(minLoadingMs * (0.45 + Math.random())) : 0,
-  );
 
   // Measure the (duration-scaled) inner container and derive the bar count.
   // Width is quantized to 20px so window dragging doesn't recompute per pixel.
@@ -187,16 +183,22 @@ const WaveformPreview = ({
     let holdTimer = 0;
     if (barCount <= 0) return;
 
+    // Always drop back to the loading scan when this effect (re)runs — that is
+    // what makes a filter/theme switch re-shimmer a REUSED row, not just a
+    // freshly mounted one.
     setIsLoading(true);
     const startedAt = performance.now();
 
-    // Reveal the bars, but never before the scan bar has been on screen for
-    // holdMs (a jittered minLoadingMs) — so a freshly (re)mounted list shimmers
-    // organically, each row landing at its own moment, instead of cached rows
-    // popping in instantly or all snapping in together.
+    // Per-run jitter around minLoadingMs so the list doesn't reveal every row at
+    // the same instant — each waveform holds its scan for a slightly different
+    // time (~0.45×–1.45× the base: some quicker, some slower), which reads as
+    // organic loading. Only matters for cached previews; an uncached one takes
+    // longer to fetch + decode than this hold anyway, so its real time wins.
+    const hold = minLoadingMs > 0 ? Math.round(minLoadingMs * (0.45 + Math.random())) : 0;
+
     const reveal = (next: number[]) => {
       if (cancelled) return;
-      const wait = Math.max(0, holdMs - (performance.now() - startedAt));
+      const wait = Math.max(0, hold - (performance.now() - startedAt));
       const commit = () => {
         if (cancelled) return;
         setPeaks(next);
@@ -218,7 +220,9 @@ const WaveformPreview = ({
       cancelled = true;
       if (holdTimer) window.clearTimeout(holdTimer);
     };
-  }, [barCount, fallbackPeaks, src, holdMs]);
+    // reloadKey is intentionally a dep: bumping it replays the scan without a remount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [barCount, fallbackPeaks, src, minLoadingMs, reloadKey]);
 
   const safeDurationRatio = Math.max(0.08, Math.min(1, durationRatio));
 
