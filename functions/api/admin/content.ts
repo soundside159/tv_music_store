@@ -647,6 +647,8 @@ export const onRequestPost = async (ctx: Ctx) => {
     };
     /** create_track: "draft" keeps the track off the public catalog. */
     status?: string;
+    /** create_track: recency import number (desktop uploaders; bigger = newer). */
+    importNo?: string;
   }>(ctx.request);
   if (!body?.action) return json({ error: "action required" }, 400);
 
@@ -1091,13 +1093,19 @@ export const onRequestPost = async (ctx: Ctx) => {
       // owner tags them and presses Publish); the single Add-Track form
       // publishes immediately as before.
       const status = body.status === "draft" ? "draft" : "published";
+      // import_no: the owner's recency number (desktop uploaders pass it so
+      // Tracks Edit can sort by it — bigger = newer). "" clears to NULL.
+      const importNo =
+        typeof body.importNo === "string" && body.importNo.trim()
+          ? body.importNo.trim().slice(0, 20)
+          : null;
       await db
         .prepare(
           `INSERT INTO tracks
              (id, slug, title, composer_id, category, genre, mood, use_case, style_of,
               bpm, duration, description, tags, has_stems, cover, cover_thumb,
-              r2_key_wav_zip, r2_key_stems, wav_manifest, stems_manifest, code, status)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, '', ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)`,
+              r2_key_wav_zip, r2_key_stems, wav_manifest, stems_manifest, code, status, import_no)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, '', ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)`,
         )
         .bind(
           trackId,
@@ -1121,6 +1129,7 @@ export const onRequestPost = async (ctx: Ctx) => {
           stemsManifest ? JSON.stringify(stemsManifest) : null,
           code,
           status,
+          importNo,
         )
         .run();
 

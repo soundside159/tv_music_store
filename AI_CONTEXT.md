@@ -4253,3 +4253,29 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   `python sfx_uploader/resort_app.py`, pick the review xlsx, «Проверить» then «Применить». Future
   batches: same tool on a new approved review file; ask Claude to generate the review for the new
   # range.
+
+- **2026-07-23 (YUMMY = owner's OWN tracks → match + recency IDs + track uploader app):** owner's
+  ~383 tracks live in Z:\Render\Мои треки на стоки\Все треки MA title\Yummy (each a subfolder
+  "NN. Title" holding several WAV versions: full/middle/short/commercial/15-60sec). Matched folder
+  names to his master sheet SB_Stocks_2.xlsx (sheet «работа», header ROW 2, data row 3+) by title.
+  KEY LESSON: names live across THREE columns — MA title (col2), AJ title (col1), Alternative title
+  (col0); some tracks have MA="-". Match priority MA→AJ→Alt→MA-paren-parts (topmost row wins =
+  newest, owner said table top = newest). All 383 matched (373 exact MA + 10 via AJ/Alt). Built ONE
+  review xlsx (Yummy_треки_для_заливки.xlsx) with Description + Tags (Tags 20, else 30 Tags) + bpm +
+  Durations, and a RECENCY ID column: table-top(newest) → biggest ID, oldest → 1 (owner wants
+  bigger=newer like DreadStudio, for import_no sorting in Tracks Edit). Owner APPROVED.
+  UPLOAD DECISION: app, NOT site bulk. Composer = Lumine Wave (id resolved live from /api/content).
+  BUILT sfx_uploader/track_core.py + track_app.py (PyQt6): scans folder, groups WAV versions per
+  track (Main = no-suffix / "full" / longest; labels cleaned from filenames), reads approved xlsx
+  for id/tags/desc/bpm by folder title, encodes mp3 320+128 previews (lameenc→ffmpeg fallback),
+  uploads previews (kind=preview/preview128) + each WAV master (kind=master) with CRC32 (zlib.crc32
+  = standard zip CRC, matches _zipStream), calls create_track status=draft under Lumine Wave with
+  versions[]+wavManifest+tags+description+bpm+importNo=ID. Mirrors src/components/AdminBulkUpload.tsx
+  exactly. Resumable ledger ~/.yummy_uploaded.json (by folder). Buttons «Проверить»/«Залить». Reuses
+  ~/.sfx_uploader.json url+token. BACKEND: functions/api/admin/content.ts create_track now accepts
+  importNo (sets tracks.import_no at creation) — NEEDS deploy.bat. tsc 0, lint 0; version-grouping +
+  read_plan tested offline (383 rows, Main/labels correct). OWNER NEXT: (1) deploy.bat (importNo +
+  the earlier token-bypass on content.ts/tracks.ts); (2) run `python sfx_uploader/track_app.py`, pick
+  Yummy folder + the approved xlsx, «Проверить» then «Залить» (drafts). AFTER upload: classify these
+  drafts into Genre/Mood/UseCase/Categories/Playlists like DreadStudio (derive from tags+desc) and
+  publish. NOTE: temp _yummy_manifest.tsv was moved to Yummy\_to_delete\ (owner deletes).
