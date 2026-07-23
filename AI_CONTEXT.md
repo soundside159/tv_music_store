@@ -4321,3 +4321,27 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   totals, Export CSV / Export PDF). source values: license/subscription; refunds = status='refunded'
   on the same row (shown separately, excluded from active totals). tsc 0, lint 0, build OK. OWNER:
   deploy.bat to see all of it.
+
+- **2026-07-23 (Lumine Wave classification + plan/plaque/entitlement fixes):** (A) Welcome plaques
+  were one perks list for both plans → split per-plan (WelcomeModal.tsx perksFor): Pro = MP3 320 +
+  personal/creator license; Max = WAV+stems + commercial. Matches /pricing Compare table + backend.
+  (B) Pro-can-download-WAV was NOT a bug — download.ts already gates wav/stems to max-only; owner
+  sees it because ADMIN downloads at max level (intentional test override). Real Pro = MP3 only.
+  (C) Plan switch Pro→Max: replaced the broken "cancel first" (Stripe cancels at period end → block
+  never lifted) with in-place proration: functions/api/stripe/change-plan.ts updates the existing
+  sub's item price (proration_behavior always_invoice on upgrade / create_prorations on downgrade) +
+  metadata[plan] so the webhook maps it; billing.ts switchPlan(); PlanModal + Pricing now call it
+  ("Switch to Max", window.confirm) instead of blocking; removed the old blocked-panel. checkout.ts
+  exports ensurePrices/PlanRow. (D) PayPal-only-Stripe from prior turn stands.
+  (E) CLASSIFICATION of Lumine Wave (owner's own cinematic tracks, uploaded as drafts, import_no
+  1..383): built sfx_uploader/taxonomy_cine.py (cinematic-tuned — defaults to Cinematic not Creator
+  Music; genres Action/Horror/Suspense/Fantasy/Orchestral/Neo-Classical/Electronic/Ethnic + Cinematic
+  backbone; word-boundary matching) and build_cine_review.py → LumineWave_classify_review.xlsx
+  (resort-tool columns: #=import_no, Title, Genre, Mood, Use case, Categories, Playlists). Derived
+  from the Yummy table's tags+descriptions into existing music vocab only. Distribution: genre
+  Cinematic 366 / Action 103 / Orchestral 95 / Suspense 50 / Horror 34 / Fantasy 23; category High
+  Impact 284 / Cinematic Stories 265 / Dark Suspense 99 / Game OST 27 / Creator Music 30. Applied
+  with the SAME resort_app.py (matches by import_no + title guard). OWNER: review the xlsx, then
+  resort_app.py → Проверить → Применить. NOTE import_no 1..383 = Lumine Wave (DreadStudio is
+  1670-1795, no overlap). tsc 0, lint 0, build OK for all frontend/backend changes. deploy.bat for
+  the plan/plaque/entitlement changes.
