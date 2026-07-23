@@ -122,6 +122,7 @@ export const TrackRow = ({
   playedProgress,
   selectedVersion,
   track,
+  waveMinLoadingMs,
 }: {
   activePlayer: ActivePlayer | null;
   entranceDelay?: number;
@@ -139,6 +140,8 @@ export const TrackRow = ({
   playedProgress: Record<string, number>;
   selectedVersion: TrackAudioVersion;
   track: CatalogTrack;
+  /** Minimum on-screen time for the waveform's loading scan (see WaveformPreview). */
+  waveMinLoadingMs?: number;
 }) => {
   const versionProgress = (versionId: string) => {
     const isActive = activePlayer?.trackId === track.id && activePlayer.versionId === versionId;
@@ -301,6 +304,7 @@ export const TrackRow = ({
         active={mainIsPlaying}
         bars={420}
         durationRatio={1}
+        minLoadingMs={waveMinLoadingMs}
         onSeek={(nextProgress) => onPlayVersion(track, selectedVersion, nextProgress)}
         progress={versionProgress(selectedVersion.id)}
         src={selectedVersion.src}
@@ -400,6 +404,7 @@ export const TrackRow = ({
                     active={active && globalIsPlaying}
                     bars={360}
                     durationRatio={getDurationRatio(track, version)}
+                    minLoadingMs={waveMinLoadingMs}
                     onSeek={(nextProgress) => onPlayVersion(track, version, nextProgress)}
                     progress={versionProgress(version.id)}
                     src={version.src}
@@ -683,19 +688,63 @@ export const TrackRowList = ({
   tracks,
   adminRemove,
   hideTags,
+  pageSize,
+  resetKey,
+  waveMinLoadingMs,
 }: {
   tracks: CatalogTrack[];
   /** Admin-only: renders a small X at the right of every row (remove from list). */
   adminRemove?: ((trackId: string) => void) | null;
   /** Hides the tag pills (tight containers — e.g. the account's Download history). */
   hideTags?: boolean;
+  /** When set, rows MOUNT in batches of this size and more load as the sentinel
+   *  below scrolls into view. Each mounted row fetches + decodes its preview MP3
+   *  to draw the waveform, so a 100-track theme page would otherwise decode 100
+   *  files at once and stall the equalizer. Unset = render everything (default). */
+  pageSize?: number;
+  /** Changing this string RESETS pagination to the top and remounts every row —
+   *  so a filter / theme switch replays the loading scan on the whole list (not
+   *  just the newly-added rows) and forces each waveform to re-measure & redraw. */
+  resetKey?: string;
+  /** Minimum on-screen time for each row's waveform loading scan — see
+   *  WaveformPreview. Makes the fresh-load shimmer perceptible on cached rows. */
+  waveMinLoadingMs?: number;
 }) => {
   const engine = usePlayer();
   const staggerDone = useEntranceStagger();
 
+  const paginated = pageSize != null;
+  const [visibleCount, setVisibleCount] = useState(paginated ? pageSize : tracks.length);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // New filter / theme (resetKey changed) or a shorter list: back to the top.
+  useEffect(() => {
+    setVisibleCount(paginated ? (pageSize as number) : tracks.length);
+  }, [resetKey, paginated, pageSize, tracks.length]);
+
+  const shown = paginated ? tracks.slice(0, visibleCount) : tracks;
+  const hasMore = paginated && visibleCount < tracks.length;
+
+  // Load the next batch when the sentinel comes into view (300px early).
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !hasMore) return;
+    const step = pageSize ?? 20;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setVisibleCount((current) => Math.min(current + step, tracks.length));
+        }
+      },
+      { rootMargin: "300px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, pageSize, tracks.length]);
+
   return (
     <div className="rounded-lg border border-border/30 bg-card/25">
-      {tracks.map((track, index) => {
+      {shown.map((track, index) => {
         const mainVersion = track.audioVersions[0];
         const expanded = engine.expandedTrackId === track.id;
         const mainIsPlaying =
@@ -720,6 +769,7 @@ export const TrackRowList = ({
             playedProgress={engine.playedProgress}
             selectedVersion={mainVersion}
             track={track}
+            waveMinLoadingMs={waveMinLoadingMs}
           />
         );
 
@@ -727,8 +777,11 @@ export const TrackRowList = ({
         // and if the row's DOM shape changed when the X column appeared, React
         // remounted every row — the list blinked away and replayed its
         // entrance stagger (the owner saw it as a loading glitch).
+        // The key folds in resetKey ON PURPOSE: when the caller changes it (a
+        // filter / theme switch) we WANT every row to remount so the loading
+        // scan replays across the whole list.
         return (
-          <div key={track.id} className="flex items-stretch">
+          <div key={resetKey ? `${resetKey}:${track.id}` : track.id} className="flex items-stretch">
             <div className="min-w-0 flex-1">{row}</div>
             {adminRemove && (
               <button
@@ -744,6 +797,26 @@ export const TrackRowList = ({
           </div>
         );
       })}
+
+      {/* Infinite scroll: crossing this mounts the next batch of rows. The two
+          pulsing placeholders match the row height so nothing below jumps. */}
+      {hasMore && (
+        <div ref={sentinelRef} aria-hidden="true">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-2.5 border-b border-border/30 px-2 py-1.5 last:border-b-0"
+            >
+              <div className="h-14 w-14 shrink-0 animate-pulse rounded-md bg-foreground/[0.06]" />
+              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                <div className="h-3.5 w-1/3 animate-pulse rounded bg-foreground/[0.06]" />
+                <div className="h-3 w-1/5 animate-pulse rounded bg-foreground/[0.04]" />
+              </div>
+              <div className="hidden h-8 w-1/3 animate-pulse rounded bg-foreground/[0.04] md:block" />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

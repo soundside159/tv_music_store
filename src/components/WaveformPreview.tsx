@@ -7,6 +7,11 @@ interface WaveformPreviewProps {
   bars?: number;
   className?: string;
   durationRatio?: number;
+  /** Minimum time the "loading" scan bar stays on screen, even when the peaks
+   *  are already cached and resolve instantly. Lets a whole list flash the same
+   *  fresh-load animation when it (re)mounts on a filter/theme switch, instead
+   *  of already-seen rows snapping in with no shimmer. 0 = show as soon as ready. */
+  minLoadingMs?: number;
   onSeek?: (progress: number) => void;
   progress?: number;
   seed?: number;
@@ -128,6 +133,7 @@ const WaveformPreview = ({
   active = false,
   className,
   durationRatio = 1,
+  minLoadingMs = 0,
   onSeek,
   progress = 0,
   seed = 0,
@@ -167,34 +173,40 @@ const WaveformPreview = ({
 
   useEffect(() => {
     let cancelled = false;
+    let holdTimer = 0;
     if (barCount <= 0) return;
 
-    if (!src) {
-      setPeaks(fallbackPeaks);
-      setIsLoading(false);
-      return;
-    }
-
     setIsLoading(true);
+    const startedAt = performance.now();
 
-    getPeaks(src, barCount)
-      .then((nextPeaks) => {
-        if (!cancelled) {
-          setPeaks(nextPeaks);
-          setIsLoading(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setPeaks(Array.from({ length: barCount }, () => 0.08));
-          setIsLoading(false);
-        }
-      });
+    // Reveal the bars, but never before the scan bar has been on screen for
+    // minLoadingMs — so a freshly (re)mounted list shimmers uniformly instead
+    // of cached rows popping in instantly.
+    const reveal = (next: number[]) => {
+      if (cancelled) return;
+      const wait = Math.max(0, minLoadingMs - (performance.now() - startedAt));
+      const commit = () => {
+        if (cancelled) return;
+        setPeaks(next);
+        setIsLoading(false);
+      };
+      if (wait <= 0) commit();
+      else holdTimer = window.setTimeout(commit, wait);
+    };
+
+    if (!src) {
+      reveal(fallbackPeaks ?? []);
+    } else {
+      getPeaks(src, barCount)
+        .then((nextPeaks) => reveal(nextPeaks))
+        .catch(() => reveal(Array.from({ length: barCount }, () => 0.08)));
+    }
 
     return () => {
       cancelled = true;
+      if (holdTimer) window.clearTimeout(holdTimer);
     };
-  }, [barCount, fallbackPeaks, src]);
+  }, [barCount, fallbackPeaks, src, minLoadingMs]);
 
   const safeDurationRatio = Math.max(0.08, Math.min(1, durationRatio));
 

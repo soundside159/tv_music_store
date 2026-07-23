@@ -40,6 +40,14 @@ const GROUP_BLURB: Record<DiscoverGroup, string> = {
 
 const RELATED_LIMIT = 24;
 
+// Rows mount 20 at a time (then more on scroll): every mounted row fetches +
+// decodes a preview MP3 for its waveform, so dumping a whole 100-track theme
+// page in at once made the equalizer stutter. Mirrors the catalog.
+const PAGE_SIZE = 20;
+// Minimum time the waveform loading scan shows — long enough to read as "fresh
+// tracks loaded" on every row when the theme / filter changes, cached or not.
+const WAVE_MIN_LOADING_MS = 650;
+
 /** /discover — the hub: every mood, genre and use case, all crawlable links. */
 const DiscoverIndex = () => {
   const { tracks } = useTracks();
@@ -177,7 +185,12 @@ const DiscoverTag = ({ group, slug }: { group: DiscoverGroup; slug: string }) =>
           {isLoading ? (
             <TrackRowSkeletonList count={6} />
           ) : exact.length > 0 ? (
-            <TrackRowList tracks={exact} />
+            <TrackRowList
+              tracks={exact}
+              pageSize={PAGE_SIZE}
+              resetKey={`${group}/${slug}`}
+              waveMinLoadingMs={WAVE_MIN_LOADING_MS}
+            />
           ) : (
             <p className="rounded-lg border border-border/40 bg-card/25 p-8 text-center font-body text-sm text-muted-foreground">
               No {label.toLowerCase()} tracks yet — browse the{" "}
@@ -198,7 +211,11 @@ const DiscoverTag = ({ group, slug }: { group: DiscoverGroup; slug: string }) =>
               </span>
               <span className="h-px flex-1 bg-border/40" />
             </div>
-            <TrackRowList tracks={related} />
+            <TrackRowList
+              tracks={related}
+              resetKey={`${group}/${slug}`}
+              waveMinLoadingMs={WAVE_MIN_LOADING_MS}
+            />
           </section>
         )}
 

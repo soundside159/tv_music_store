@@ -617,7 +617,9 @@ const orderCert = (
   paymentRef: a.paymentRef || "—",
   issued: fmtDate(a.issued),
   orderNo: a.orderNo,
-  typeLabel: `One-time · ${cap(tier)}`,
+  // Just the tier ("Commercial" / "Professional" …). "One-time · " read oddly
+  // in the certificate, and the full definition is spelled out lower down.
+  typeLabel: cap(tier),
   trackTitle: a.trackTitle,
   composer: a.composer || "TV Music Store",
   trackPage: trackUrl(a.trackSlug),
