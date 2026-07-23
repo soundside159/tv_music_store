@@ -54,10 +54,53 @@ const groupKey = (t: CatalogTrack): string => {
   return first(t.genre) || first(t.mood) || "other";
 };
 
+const importNoOf = (t: CatalogTrack): number | null => {
+  const n = parseInt((t.importNo ?? "").trim(), 10);
+  return Number.isFinite(n) ? n : null;
+};
+
 /**
- * Rank map (track id -> position) for the Recommended order. Featured ids come
- * first (seed-shuffled among themselves); the rest are grouped by primary genre
- * and dealt one-per-group in rotation (groups and their contents seed-shuffled).
+ * Per-COMPOSER recency percentile: 0 = that composer's oldest track, 1 = their
+ * newest, ranked by import_no. Each composer is scored on their OWN id range, so
+ * a prolific author's #1500 and a small author's #120 both read as "newest" (≈1)
+ * — no single big catalog dominates the top just by having larger numbers.
+ * Tracks with no numeric index count as oldest (0).
+ */
+export const composerRecencyPercentile = (tracks: CatalogTrack[]): Map<string, number> => {
+  const byComposer = new Map<string, CatalogTrack[]>();
+  for (const t of tracks) {
+    const key = (t.artist ?? "").trim().toLowerCase() || "—";
+    const arr = byComposer.get(key) ?? [];
+    arr.push(t);
+    byComposer.set(key, arr);
+  }
+  const out = new Map<string, number>();
+  for (const arr of byComposer.values()) {
+    const numbered = arr
+      .filter((t) => importNoOf(t) !== null)
+      .sort((a, b) => (importNoOf(a) as number) - (importNoOf(b) as number));
+    const n = numbered.length;
+    numbered.forEach((t, i) => out.set(t.id, n <= 1 ? 1 : i / (n - 1)));
+    for (const t of arr) if (importNoOf(t) === null) out.set(t.id, 0);
+  }
+  return out;
+};
+
+// How hard the default "Featured" mix leans on newness. The remainder is a
+// daily-seeded jitter, so the order stays diverse and refreshes each day instead
+// of freezing into a strict newest-first wall. 0 = pure random, 1 = strict
+// newest-first per composer.
+export const RECENCY_WEIGHT = 0.62;
+
+/**
+ * Rank map (track id -> position) for the Recommended / "Featured" order:
+ *   1. Admin-featured (trending) ids pinned first, seed-shuffled among themselves.
+ *   2. The rest grouped by primary genre and dealt one-per-group in rotation
+ *      (genre diversity), BUT within each genre newer tracks come first — each
+ *      track scored by its composer-relative recency (see composerRecencyPercentile)
+ *      blended with a daily jitter. So the first rows lead with every genre's
+ *      freshest tracks across composers, and older ones sink to later rows
+ *      (surfaced on scroll), which is what the owner wanted for the default view.
  */
 export const buildRecommendedRank = (
   tracks: CatalogTrack[],
@@ -65,9 +108,18 @@ export const buildRecommendedRank = (
   seed = dailySeed(),
 ): Map<string, number> => {
   const rand = mulberry32(seed);
+  const recency = composerRecencyPercentile(tracks);
   const featuredSet = new Set(featuredIds);
   const featured = tracks.filter((t) => featuredSet.has(t.id));
   const rest = tracks.filter((t) => !featuredSet.has(t.id));
+
+  // Stable per-track score = mostly composer-relative recency (newer = higher),
+  // plus a seeded jitter. Precomputed (not called inside sort) so the comparator
+  // stays transitive and the order is deterministic within a day.
+  const score = new Map<string, number>();
+  for (const t of rest) {
+    score.set(t.id, RECENCY_WEIGHT * (recency.get(t.id) ?? 0) + (1 - RECENCY_WEIGHT) * rand());
+  }
 
   const groups = new Map<string, CatalogTrack[]>();
   for (const t of rest) {
@@ -77,8 +129,13 @@ export const buildRecommendedRank = (
     groups.set(key, list);
   }
   const groupOrder = seededShuffle([...groups.keys()], rand);
-  const shuffledGroups = new Map(
-    groupOrder.map((key) => [key, seededShuffle(groups.get(key) ?? [], rand)]),
+  // Within each genre: newest-leaning first, so the round-robin below deals the
+  // freshest track of every genre into the first rows.
+  const sortedGroups = new Map(
+    groupOrder.map((key) => [
+      key,
+      [...(groups.get(key) ?? [])].sort((a, b) => (score.get(b.id) ?? 0) - (score.get(a.id) ?? 0)),
+    ]),
   );
 
   // Deal one track per group in rotation until every group is exhausted.
@@ -86,7 +143,7 @@ export const buildRecommendedRank = (
   let row = 0;
   while (mixed.length < rest.length) {
     for (const key of groupOrder) {
-      const list = shuffledGroups.get(key) ?? [];
+      const list = sortedGroups.get(key) ?? [];
       if (row < list.length) mixed.push(list[row]);
     }
     row += 1;

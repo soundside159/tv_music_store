@@ -4,6 +4,7 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { TrackRowList, TrackRowSkeletonList } from "@/components/TrackRowPlayer";
 import { useTracks } from "@/hooks/useTracks";
+import { interleaveByComposerRecency } from "@/lib/catalogSort";
 import { useComposers, useContentReady } from "@/hooks/useContent";
 
 /**
@@ -19,7 +20,11 @@ const Artist = () => {
   const { tracks, isLoading } = useTracks();
 
   const composer = composers.find((c) => c.slug === slug);
-  const artistTracks = tracks.filter((t) => t.artistSlug === slug);
+  // Newest → oldest by this composer's import_no (bigger = newer); tracks with no
+  // index fall to the bottom by upload date. The list used to render in raw API
+  // order, which looked random (e.g. #7 above #345). One composer here, so the
+  // chess-board interleave collapses to a plain newest-first sort.
+  const artistTracks = interleaveByComposerRecency(tracks.filter((t) => t.artistSlug === slug));
 
   if (!ready) {
     return (
