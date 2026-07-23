@@ -4279,3 +4279,20 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   Yummy folder + the approved xlsx, «Проверить» then «Залить» (drafts). AFTER upload: classify these
   drafts into Genre/Mood/UseCase/Categories/Playlists like DreadStudio (derive from tags+desc) and
   publish. NOTE: temp _yummy_manifest.tsv was moved to Yummy\_to_delete\ (owner deletes).
+
+- **2026-07-23 (Yummy pack_01: 40 remastered tracks + stems merge):** owner has 40 tracks
+  remastered with variations + stems in Z:\Render\Yummy Sounds (Variations + stems)\пачка для
+  Yummy_01 (each folder = version WAVs "(FULL MIX)/(NO-DRUMS)/(UNDERSCORE)… - BPM X" + stems/
+  subfolder + .flp). All 40 matched by title to the numbered Yummy folders. Renamed 273 stem files
+  in-place adding "- stem -" (owner's request: "Always Together - bass - BPM 137" → "… - stem -
+  bass - …"). Copy into Yummy: owner does it MANUALLY (Z: copy too slow via bridge; got frustrated).
+  I copied 2 fully (124, 232 — old wavs moved to their _old/ subfolder, new+stems in) + 1 partial
+  (191 Adrenaline Seeker: old in _old, new not finished). Delivered cheat-sheet _куда_копировать.txt
+  (pack folder → numbered Yummy folder) to the pack folder. track_core.py/track_app.py UPDATED to
+  handle the new structure: versions = top-level WAVs (Main = the one with "full" in name, e.g. FULL
+  MIX), stems = stems/ subfolder → uploaded as masters into stemsManifest (create_track flips STEMS
+  badge, Max-plan download), BPM read from "- BPM 98" filename, .flp/_old/ ignored, and a FORGIVING
+  filter: if any top-level wav has "BPM" the non-BPM leftovers (old full/middle/short) are ignored
+  so a sloppy manual copy still uploads clean. Tested offline (new + old naming both correct).
+  OWNER NEXT: finish copying the 40 per the cheat-sheet, then deploy.bat + run track_app.py
+  («Проверить» → «Залить»). Stems: YES upload (Max).
