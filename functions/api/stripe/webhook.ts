@@ -1,5 +1,6 @@
 import { json, newId, type Ctx } from "../_utils";
 import { allocateEvent, recordRevenueEvent, reverseEvent } from "../_revenue";
+import { sendReceiptEmail } from "../_email";
 import {
   mapStripeStatus,
   stripeCall,
@@ -8,6 +9,32 @@ import {
   upsertSubscription,
   verifyStripeSignature,
 } from "./_stripe";
+
+const SITE_URL = "https://tvmusicstore.com";
+
+/** "$12.00" for USD, "12.00 EUR" otherwise. */
+const fmtMoney = (cents: number, currency = "usd"): string => {
+  const v = (Math.max(0, cents) / 100).toFixed(2);
+  const cur = currency.toUpperCase();
+  return cur === "USD" ? `$${v}` : `${v} ${cur}`;
+};
+
+/** "18 July 2026" from a unix seconds timestamp (now if missing). */
+const fmtDate = (unixSec?: number | null): string => {
+  const d = unixSec ? new Date(unixSec * 1000) : new Date();
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+};
+
+/** Buyer's email + name for the receipt (null if the user row is gone). */
+const getUserContact = async (
+  ctx: Ctx,
+  userId: string,
+): Promise<{ email: string; name: string | null } | null> => {
+  const row = await ctx.env.DB.prepare(`SELECT email, name FROM users WHERE id = ?1`)
+    .bind(userId)
+    .first<{ email: string | null; name: string | null }>();
+  return row?.email ? { email: row.email, name: row.name ?? null } : null;
+};
 
 // POST /api/stripe/webhook — Stripe calls this; never call it from the frontend.
 // Handled events: checkout.session.completed, customer.subscription.updated,
@@ -43,6 +70,10 @@ interface StripeInvoice {
   total_tax_amounts?: { amount: number }[];
   currency?: string;
   charge?: string | null;
+  created?: number | null;
+  number?: string | null; // human invoice number, e.g. "A1B2-0001"
+  hosted_invoice_url?: string | null; // the tax document (PDF + page)
+  invoice_pdf?: string | null;
   lines?: { data?: { period?: { start?: number; end?: number } }[] };
 }
 
@@ -57,9 +88,24 @@ interface StripeCharge {
  * we fall back to Stripe's standard 2.9% + 30c so the ledger is never wrong in
  * the composer's favour by accident.
  */
-const recordStripeInvoice = async (ctx: Ctx, key: string, inv: StripeInvoice): Promise<void> => {
+const recordStripeInvoice = async (
+  ctx: Ctx,
+  key: string,
+  inv: StripeInvoice,
+  sendReceipt: boolean,
+): Promise<void> => {
   const gross = inv.amount_paid ?? 0;
   if (!inv.id || gross <= 0 || !inv.subscription) return;
+
+  // Stripe redelivers webhooks (and fires both invoice.paid AND
+  // invoice.payment_succeeded); the ledger no-ops on a repeat, but we must not
+  // email the customer twice — so remember whether THIS invoice is new here.
+  const already = await ctx.env.DB.prepare(
+    `SELECT 1 AS hit FROM revenue_events WHERE provider_ref = ?1`,
+  )
+    .bind(inv.id)
+    .first<{ hit: number }>();
+  const isFirstDelivery = !already;
 
   // Which of our users is this? (subscriptions carry user_id in metadata)
   const sub = await stripeCall<StripeSubscription>(key, "GET", `/subscriptions/${inv.subscription}`);
@@ -100,6 +146,40 @@ const recordStripeInvoice = async (ctx: Ctx, key: string, inv: StripeInvoice): P
     periodStart,
     periodEnd,
   });
+
+  // Branded receipt with a link to the Stripe invoice PDF — once per invoice,
+  // and only from the canonical invoice.paid event (not its twin).
+  if (sendReceipt && isFirstDelivery) {
+    const contact = await getUserContact(ctx, userId);
+    if (contact) {
+      const currency = inv.currency ?? "usd";
+      const planName = (sub.metadata?.plan ?? "Pro").replace(/^\w/, (c) => c.toUpperCase());
+      const interval = sub.metadata?.interval ?? "";
+      const period =
+        periodStart && periodEnd
+          ? `${fmtDate(Math.floor(new Date(periodStart).getTime() / 1000))} – ${fmtDate(
+              Math.floor(new Date(periodEnd).getTime() / 1000),
+            )}`
+          : "";
+      const metaRows = [{ label: "Date", value: fmtDate(inv.created) }];
+      if (inv.number) metaRows.push({ label: "Invoice", value: inv.number });
+      if (period) metaRows.push({ label: "Billing period", value: period });
+      await sendReceiptEmail(ctx.env, contact.email, {
+        subject: `Your TV Music Store receipt — ${planName} plan`,
+        name: contact.name,
+        heading: "Payment received",
+        intro: `Thanks — your ${planName} plan${interval ? ` (${interval})` : ""} payment went through. Your invoice is below.`,
+        lineItems: [
+          { label: `${planName} plan${interval ? ` · ${interval}` : ""}`, value: fmtMoney(gross - tax, currency) },
+        ],
+        vatText: tax > 0 ? fmtMoney(tax, currency) : null,
+        totalText: fmtMoney(gross, currency),
+        metaRows,
+        invoiceUrl: inv.hosted_invoice_url ?? inv.invoice_pdf ?? null,
+        secondary: { label: "Manage your plan →", url: `${SITE_URL}/account?section=billing` },
+      });
+    }
+  }
 };
 
 
@@ -114,6 +194,7 @@ interface LicenseCartSession {
   id?: string;
   client_reference_id?: string | null;
   payment_intent?: string | null;
+  invoice?: string | null; // set because we enable invoice_creation on the session
   metadata?: Record<string, string>;
   currency?: string;
   total_details?: { amount_tax?: number };
@@ -172,11 +253,18 @@ const fulfillLicenseCart = async (ctx: Ctx, key: string, s: LicenseCartSession):
   const taxTotal = s.total_details?.amount_tax ?? 0;
   const currency = (s.currency ?? "usd").toLowerCase();
 
+  const capTier = (t: string) => t.replace(/^\w/, (c) => c.toUpperCase());
+  const receiptLines: { label: string; value: string }[] = [];
+
   for (const item of items) {
-    const track = await ctx.env.DB.prepare(`SELECT id FROM tracks WHERE slug = ?1`)
+    const track = await ctx.env.DB.prepare(`SELECT id, title FROM tracks WHERE slug = ?1`)
       .bind(item.slug)
-      .first<{ id: string }>();
+      .first<{ id: string; title: string | null }>();
     const trackId = track?.id ?? item.slug;
+    receiptLines.push({
+      label: `${track?.title ?? item.slug} — ${capTier(item.tier)} license`,
+      value: fmtMoney(item.priceCents, currency),
+    });
 
     // The licence row. Its id goes into the ledger event, so a refund can
     // void exactly this licence (see reverseEvent).
@@ -205,6 +293,48 @@ const fulfillLicenseCart = async (ctx: Ctx, key: string, s: LicenseCartSession):
     });
     // A one-off license has no cycle to wait for — split it right away.
     if (eventId) await allocateEvent(ctx.env.DB, eventId);
+  }
+
+  // Branded receipt with a link to the Stripe invoice PDF. We only reach here
+  // once per session (the sync_orders guard above), so this sends exactly once.
+  const contact = await getUserContact(ctx, userId);
+  if (contact) {
+    // Authoritative totals + the tax document come from the Stripe invoice that
+    // invoice_creation produced; fall back to our computed totals if absent.
+    let grandTotal = itemsTotal + taxTotal;
+    let vat = taxTotal;
+    let invoiceUrl: string | null = null;
+    let invoiceNumber: string | null = null;
+    let createdSec: number | null = null;
+    if (s.invoice) {
+      try {
+        const invObj = await stripeCall<StripeInvoice>(key, "GET", `/invoices/${s.invoice}`);
+        grandTotal = invObj.amount_paid ?? grandTotal;
+        const invTax =
+          invObj.tax ?? (invObj.total_tax_amounts ?? []).reduce((n, t) => n + (t.amount ?? 0), 0);
+        vat = invTax ?? vat;
+        invoiceUrl = invObj.hosted_invoice_url ?? invObj.invoice_pdf ?? null;
+        invoiceNumber = invObj.number ?? null;
+        createdSec = invObj.created ?? null;
+      } catch {
+        // keep the computed fallback
+      }
+    }
+    const metaRows = [{ label: "Date", value: fmtDate(createdSec) }];
+    if (invoiceNumber) metaRows.push({ label: "Invoice", value: invoiceNumber });
+    const plural = receiptLines.length === 1 ? "license" : "licenses";
+    await sendReceiptEmail(ctx.env, contact.email, {
+      subject: "Your TV Music Store purchase & invoice",
+      name: contact.name,
+      heading: "Thanks for your purchase",
+      intro: `Your ${receiptLines.length} track ${plural} ${receiptLines.length === 1 ? "is" : "are"} ready in your account. Your invoice is below.`,
+      lineItems: receiptLines,
+      vatText: vat > 0 ? fmtMoney(vat, currency) : null,
+      totalText: fmtMoney(grandTotal, currency),
+      metaRows,
+      invoiceUrl,
+      secondary: { label: "Your licenses & certificates →", url: `${SITE_URL}/account?section=license` },
+    });
   }
 };
 
@@ -270,9 +400,14 @@ export const onRequestPost = async (ctx: Ctx) => {
     // Every PAID subscription invoice is booked into the revenue ledger: gross,
     // the VAT Stripe collected, Stripe's own fee, and the cycle the payment
     // covers. The split runs when that cycle closes (see functions/api/_revenue.ts).
-    case "invoice.paid":
+    case "invoice.paid": {
+      await recordStripeInvoice(ctx, key, event.data.object as unknown as StripeInvoice, true);
+      break;
+    }
     case "invoice.payment_succeeded": {
-      await recordStripeInvoice(ctx, key, event.data.object as unknown as StripeInvoice);
+      // Twin of invoice.paid — books the ledger if it arrives first, but never
+      // sends the receipt (invoice.paid owns that, so no double email).
+      await recordStripeInvoice(ctx, key, event.data.object as unknown as StripeInvoice, false);
       break;
     }
     // Money went back to the customer. The invoice drops out of the revenue

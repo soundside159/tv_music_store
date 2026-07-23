@@ -94,7 +94,10 @@ export const onRequestPost = async (ctx: Ctx) => {
     mode: "subscription",
     "line_items[0][price]": priceId,
     "line_items[0][quantity]": 1,
-    success_url: `${origin}/account?checkout=success`,
+    // Land on the Billing dashboard (plan + period + invoices), the subscription
+    // twin of the Licenses page a one-time purchase returns to. checkout=success
+    // still triggers the Welcome modal.
+    success_url: `${origin}/account?section=billing&checkout=success`,
     cancel_url: `${origin}/pricing?checkout=canceled`,
     client_reference_id: user.id,
     allow_promotion_codes: true,

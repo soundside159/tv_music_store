@@ -66,6 +66,86 @@ export const sendCampaignEmail = async (
   }
 };
 
+export interface ReceiptEmail {
+  subject: string;
+  name?: string | null;
+  heading: string; // e.g. "Payment received"
+  intro: string; // one-line lead
+  /** Product rows: description → price. */
+  lineItems: { label: string; value: string }[];
+  vatText?: string | null; // formatted VAT, or null to hide the row
+  totalText: string; // formatted grand total
+  /** Small meta rows under the total (Date, Invoice #, Payment method…). */
+  metaRows: { label: string; value: string }[];
+  invoiceUrl?: string | null; // Stripe hosted invoice / receipt (the tax document)
+  secondary?: { label: string; url: string } | null; // "View your licenses" etc.
+}
+
+/**
+ * Branded purchase receipt — sent after a successful charge (subscription renewal
+ * or a one-time licence cart). Carries the amounts and a button to the real
+ * Stripe invoice/receipt PDF the customer can hand to their accountant. Never
+ * throws: a receipt email must not fail the webhook that books the money.
+ */
+export const sendReceiptEmail = async (env: Env, to: string, r: ReceiptEmail): Promise<void> => {
+  const itemRows = r.lineItems
+    .map(
+      (li) => `
+      <tr>
+        <td style="padding:9px 0;color:#444;font-size:14px;border-bottom:1px solid #f1f1f1">${escapeHtml(li.label)}</td>
+        <td style="padding:9px 0;color:#222;font-size:14px;text-align:right;white-space:nowrap;border-bottom:1px solid #f1f1f1">${escapeHtml(li.value)}</td>
+      </tr>`,
+    )
+    .join("");
+  const vatRow = r.vatText
+    ? `<tr><td style="padding:9px 0;color:#666;font-size:13px">VAT</td><td style="padding:9px 0;color:#666;font-size:13px;text-align:right">${escapeHtml(r.vatText)}</td></tr>`
+    : "";
+  const metaRows = r.metaRows
+    .map(
+      (m) => `
+      <tr>
+        <td style="padding:2px 0;color:#999;font-size:12px">${escapeHtml(m.label)}</td>
+        <td style="padding:2px 0;color:#777;font-size:12px;text-align:right">${escapeHtml(m.value)}</td>
+      </tr>`,
+    )
+    .join("");
+  const invoiceButton = r.invoiceUrl
+    ? `<p style="margin:0 0 14px;text-align:center">
+        <a href="${r.invoiceUrl}"
+          style="display:inline-block;background:#F4C430;color:#111;font-size:14px;font-weight:bold;text-decoration:none;padding:12px 26px;border-radius:8px">
+          Download invoice (PDF)
+        </a>
+      </p>`
+    : "";
+  const secondary = r.secondary
+    ? `<p style="margin:0;text-align:center">
+        <a href="${r.secondary.url}" style="color:#b8860b;font-size:13px;text-decoration:none">${escapeHtml(r.secondary.label)}</a>
+      </p>`
+    : "";
+
+  const inner = `
+    <h1 style="margin:0 0 8px;color:#111;font-size:21px">${escapeHtml(r.heading)}</h1>
+    <p style="margin:0 0 18px;color:#444;font-size:14px;line-height:1.7">${escapeHtml(r.intro)}</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 8px">
+      ${itemRows}
+      ${vatRow}
+      <tr>
+        <td style="padding:12px 0 0;color:#111;font-size:15px;font-weight:bold">Total</td>
+        <td style="padding:12px 0 0;color:#111;font-size:15px;font-weight:bold;text-align:right">${escapeHtml(r.totalText)}</td>
+      </tr>
+    </table>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 24px;border-top:1px solid #eee;padding-top:8px">
+      ${metaRows}
+    </table>
+    ${invoiceButton}
+    ${secondary}`;
+  try {
+    await sendEmail(env, to, r.subject, shell(inner));
+  } catch {
+    // never block the webhook on an email failure
+  }
+};
+
 /** Welcome email sent once when a new account is created. Never throws. */
 export const sendWelcomeEmail = async (env: Env, to: string, name?: string | null): Promise<void> => {
   const inner = `

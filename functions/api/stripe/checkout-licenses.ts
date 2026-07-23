@@ -38,6 +38,10 @@ export const onRequestPost = async (ctx: Ctx) => {
     mode: "payment",
     client_reference_id: user.id,
     customer_email: user.email,
+    // Make Stripe issue a real INVOICE (with a PDF + hosted page) for the one-off
+    // purchase too — a `payment` session only produces a receipt otherwise. This
+    // is the tax document we link in the branded receipt email (see webhook.ts).
+    "invoice_creation[enabled]": "true",
     // Cart clears itself and forwards to /account when it sees checkout=success.
     success_url: `${origin}/cart?checkout=success`,
     cancel_url: `${origin}/cart?checkout=canceled`,
