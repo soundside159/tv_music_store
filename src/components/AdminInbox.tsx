@@ -281,9 +281,11 @@ const AdminInbox = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => v
         )}
       </div>
 
-      <div className="grid gap-0 md:grid-cols-[20rem_1fr]">
+      {/* minmax(0,1fr) + min-w-0: a long unbroken word in a message must WRAP,
+          not stretch the conversation column past the card (it did). */}
+      <div className="grid gap-0 md:grid-cols-[20rem_minmax(0,1fr)]">
         {/* Thread list */}
-        <div className="max-h-[70vh] overflow-y-auto border-b border-border md:border-b-0 md:border-r">
+        <div className="min-w-0 max-h-[70vh] overflow-y-auto border-b border-border md:border-b-0 md:border-r">
           {loading ? (
             <p className="px-4 py-6 font-body text-sm text-muted-foreground">Loading…</p>
           ) : threads.length === 0 ? (
@@ -362,7 +364,7 @@ const AdminInbox = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => v
         </div>
 
         {/* Conversation / compose */}
-        <div className="flex min-h-[50vh] flex-col">
+        <div className="flex min-h-[50vh] min-w-0 flex-col">
           {composing ? (
             <div className="flex flex-col gap-2 p-4">
               <h3 className="flex items-center gap-2 font-body text-sm font-semibold text-foreground">
@@ -492,9 +494,9 @@ const AdminInbox = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => v
                       {m.direction === "out" ? "You" : detail.thread.name || detail.thread.email} · {fmt(m.created_at)}
                     </p>
                     {m.subject && (
-                      <p className="mb-1 font-body text-xs font-semibold text-foreground">{m.subject}</p>
+                      <p className="mb-1 font-body text-xs font-semibold text-foreground [overflow-wrap:anywhere]">{m.subject}</p>
                     )}
-                    <p className="whitespace-pre-wrap break-words font-body text-sm text-foreground/90">{m.body}</p>
+                    <p className="min-w-0 whitespace-pre-wrap font-body text-sm text-foreground/90 [overflow-wrap:anywhere]">{m.body}</p>
                   </div>
                 ))}
               </div>

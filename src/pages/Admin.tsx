@@ -1239,129 +1239,147 @@ const Admin = () => {
                   if (rows.length === 0) {
                     return <p className="font-body text-sm text-muted-foreground">No matching licenses.</p>;
                   }
+                  // Row list instead of a 1040px table: everything fits the box
+                  // width (no horizontal scrollbar), long values truncate, and
+                  // the columns collapse into a card on small screens.
+                  const GRID =
+                    "lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1.1fr)_minmax(0,1.3fr)_minmax(0,0.8fr)_6.5rem]";
                   return (
-                    <div className="overflow-x-auto">
-                      <table className="w-full min-w-[1040px] font-body text-sm">
-                        <thead>
-                          <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                            <th className="py-2 pr-4">License Code</th>
-                            <th className="py-2 pr-4">Payment</th>
-                            <th className="py-2 pr-4">Kind</th>
-                            <th className="py-2 pr-4">Buyer</th>
-                            <th className="py-2 pr-4">Track</th>
-                            <th className="py-2 pr-4">Tier / Plan</th>
-                            <th className="py-2 pr-4">Price</th>
-                            <th className="py-2 pr-4">Issued</th>
-                            <th className="py-2">Valid until</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {rows.map((l) => (
-                            <tr key={`${l.kind}-${l.id}`} className="border-b border-border/50 last:border-0">
-                              <td className="py-2.5 pr-4">
+                    <div className="font-body text-sm">
+                      <div
+                        className={`hidden border-b border-border pb-2 text-xs uppercase tracking-wide text-muted-foreground lg:grid lg:gap-4 ${GRID}`}
+                      >
+                        <span>License &amp; payment</span>
+                        <span>Buyer</span>
+                        <span>Track</span>
+                        <span>Amount</span>
+                        <span className="text-right">Issued</span>
+                      </div>
+                      <ul className="divide-y divide-border/50">
+                        {rows.map((l) => {
+                          const isStripe = l.provider === "stripe" || l.reference.startsWith("cs_");
+                          const isTest = l.reference.startsWith("cs_test_");
+                          const payBase = `https://dashboard.stripe.com/${isTest ? "test/" : ""}`;
+                          // pi_… deep-links straight to the payment; otherwise a
+                          // dashboard search pre-filled with the session id.
+                          const payUrl =
+                            l.reference && isStripe
+                              ? l.paymentIntent
+                                ? `${payBase}payments/${l.paymentIntent}`
+                                : `${payBase}search?query=${encodeURIComponent(l.reference)}`
+                              : null;
+                          // plan_licenses rows minted for a track the customer
+                          // BOUGHT carry plan "license" — spell that out instead
+                          // of the confusing "License plan".
+                          const tierLabel =
+                            l.kind === "subscription"
+                              ? l.tier.toLowerCase() === "license plan"
+                                ? "Purchased track — download certificate"
+                                : l.tier
+                              : `${l.tier} license`;
+                          return (
+                            <li
+                              key={`${l.kind}-${l.id}`}
+                              className={`grid gap-2 py-3 lg:items-center lg:gap-4 ${GRID} grid-cols-1`}
+                            >
+                              {/* License code + kind/provider badges + payment ref */}
+                              <div className="min-w-0">
                                 <a
                                   href={`/api/license-pdf?${l.kind === "subscription" ? "code" : "order"}=${encodeURIComponent(l.id)}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="font-mono text-xs text-[#F4C430] hover:underline"
+                                  title="Open the certificate PDF"
+                                  className="block truncate font-mono text-xs text-[#F4C430] hover:underline"
                                 >
                                   {l.id}
                                 </a>
-                              </td>
-                              <td className="py-2.5 pr-4">
-                                {l.reference ? (() => {
-                                  const isStripe = l.provider === "stripe" || l.reference.startsWith("cs_");
-                                  const isTest = l.reference.startsWith("cs_test_");
-                                  const base = `https://dashboard.stripe.com/${isTest ? "test/" : ""}`;
-                                  // pi_… deep-links straight to the payment; otherwise open a
-                                  // dashboard search pre-filled with the session id.
-                                  const url = isStripe
-                                    ? l.paymentIntent
-                                      ? `${base}payments/${l.paymentIntent}`
-                                      : `${base}search?query=${encodeURIComponent(l.reference)}`
-                                    : null;
-                                  return (
-                                    <div className="flex flex-col gap-0.5">
-                                      <span
-                                        className={`w-fit rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                                          isStripe ? "bg-indigo-500/20 text-indigo-300" : "bg-sky-500/20 text-sky-300"
-                                        }`}
+                                <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
+                                  <span
+                                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                      l.kind === "subscription"
+                                        ? "bg-[#F4C430]/15 text-[#F4C430]"
+                                        : "bg-secondary text-muted-foreground"
+                                    }`}
+                                  >
+                                    {l.kind === "subscription" ? "Subscription" : "One-time"}
+                                  </span>
+                                  {l.reference && (
+                                    <span
+                                      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                                        isStripe ? "bg-indigo-500/20 text-indigo-300" : "bg-sky-500/20 text-sky-300"
+                                      }`}
+                                    >
+                                      {isStripe ? "Stripe" : "PayPal"}
+                                    </span>
+                                  )}
+                                  {l.reference &&
+                                    (payUrl ? (
+                                      <a
+                                        href={payUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        title={`${l.reference} — open in Stripe`}
+                                        className="min-w-0 max-w-[11rem] truncate font-mono text-[10px] text-muted-foreground hover:text-[#F4C430] hover:underline"
                                       >
-                                        {isStripe ? "Stripe" : "PayPal"}
+                                        {l.reference}
+                                      </a>
+                                    ) : (
+                                      <span
+                                        title={l.reference}
+                                        className="min-w-0 max-w-[11rem] select-all truncate font-mono text-[10px] text-muted-foreground"
+                                      >
+                                        {l.reference}
                                       </span>
-                                      {url ? (
-                                        <a
-                                          href={url}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          title={`${l.reference} — open in Stripe`}
-                                          className="block max-w-[170px] truncate font-mono text-[11px] text-[#F4C430] hover:underline"
-                                        >
-                                          {l.reference}
-                                        </a>
-                                      ) : (
-                                        <span
-                                          title={l.reference}
-                                          className="block max-w-[170px] select-all truncate font-mono text-[11px] text-muted-foreground"
-                                        >
-                                          {l.reference}
-                                        </span>
-                                      )}
-                                    </div>
-                                  );
-                                })() : (
-                                  <span className="text-muted-foreground">—</span>
-                                )}
-                              </td>
-                              <td className="py-2.5 pr-4">
-                                <span
-                                  className={`rounded-full px-2 py-0.5 text-xs ${
-                                    l.kind === "subscription"
-                                      ? "bg-[#F4C430]/15 text-[#F4C430]"
-                                      : "bg-secondary text-muted-foreground"
-                                  }`}
-                                >
-                                  {l.kind === "subscription" ? "Subscription" : "One-time"}
-                                </span>
-                              </td>
-                              <td className="py-2.5 pr-4">
+                                    ))}
+                                </div>
+                              </div>
+                              {/* Buyer */}
+                              <div className="min-w-0">
                                 {l.userId ? (
                                   <button
                                     type="button"
                                     onClick={() => setProfileUserId(l.userId)}
-                                    className="block text-left text-foreground hover:text-[#F4C430]"
+                                    title="Open customer profile"
+                                    className="block max-w-full truncate text-left text-foreground hover:text-[#F4C430]"
                                   >
                                     {l.userName || l.userEmail.split("@")[0]}
                                   </button>
                                 ) : (
-                                  <span className="block text-foreground">{l.userName || l.userEmail.split("@")[0]}</span>
+                                  <span className="block truncate text-foreground">
+                                    {l.userName || l.userEmail.split("@")[0]}
+                                  </span>
                                 )}
-                                <span className="block text-xs text-muted-foreground">{l.userEmail}</span>
-                              </td>
-                              <td className="py-2.5 pr-4 text-foreground">{l.trackTitle}</td>
-                              <td className="py-2.5 pr-4 capitalize text-muted-foreground">{l.tier}</td>
-                              <td className="py-2.5 pr-4">
+                                <span className="block truncate text-xs text-muted-foreground">{l.userEmail}</span>
+                              </div>
+                              {/* Track + tier/plan */}
+                              <div className="min-w-0">
+                                <span className="block truncate text-foreground">{l.trackTitle}</span>
+                                <span className="block truncate text-xs capitalize text-muted-foreground">
+                                  {tierLabel}
+                                </span>
+                              </div>
+                              {/* Amount */}
+                              <div className="min-w-0">
                                 <span className="font-semibold" style={{ color: GOLD }}>
                                   {l.price === null ? "—" : `$${l.price}`}
                                 </span>
                                 {(l.feeCents != null || l.netCents != null) && (
-                                  <span className="block text-[11px] text-muted-foreground">
+                                  <span className="block truncate text-[11px] text-muted-foreground">
                                     {l.feeCents != null && `fee $${(l.feeCents / 100).toFixed(2)}`}
                                     {l.feeCents != null && l.netCents != null && " · "}
                                     {l.netCents != null && `net $${(l.netCents / 100).toFixed(2)}`}
                                   </span>
                                 )}
-                              </td>
-                              <td className="py-2.5 pr-4 text-muted-foreground">
-                                {l.createdAt ? l.createdAt.slice(0, 10) : "—"}
-                              </td>
-                              <td className="py-2.5 text-muted-foreground">
-                                {l.validUntil ? l.validUntil.slice(0, 10) : "—"}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                              </div>
+                              {/* Dates */}
+                              <div className="text-xs text-muted-foreground lg:text-right">
+                                <span className="block">{l.createdAt ? l.createdAt.slice(0, 10) : "—"}</span>
+                                {l.validUntil && <span className="block">until {l.validUntil.slice(0, 10)}</span>}
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
                     </div>
                   );
                 })()}

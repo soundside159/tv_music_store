@@ -4146,3 +4146,22 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   plan state looks wrong on the site. tsc clean (isolated es2022). Lesson recorded next to the
   invoice.subscription / items.current_period_end entries: on every new Stripe field read, check the
   2025+ ("basil"+) changelog first — dahlia keeps moving fields off the objects.
+
+- **2026-07-24 (round 5: Licenses view redesign + mail text-wrap fix):**
+  (1) ADMIN -> LICENSES: the 9-column table (min-w 1040px + overflow-x-auto -> the "strange scrollbar")
+  replaced by a responsive ROW LIST that always fits the box: slim uppercase header (lg+), each row =
+  grid [license 1.5fr | buyer 1.1fr | track 1.3fr | amount 0.8fr | dates 6.5rem] with min-w-0 +
+  truncate everywhere; the License column stacks the code (PDF link) over kind + provider badges +
+  the truncated payment ref (Stripe deep-link kept); Buyer = name (profile link) over email; Track =
+  title over tier/plan; Amount = price over fee/net; Dates = issued over "until …". Below lg the row
+  collapses into a card (grid-cols-1). DATA NOTE verified while restyling: plan_licenses rows minted
+  when a customer downloads a track he BOUGHT carry plan='license' (by design in download.ts) — they
+  rendered as the confusing tier "License plan"; the UI now labels them "Purchased track — download
+  certificate". One-time rows render "<Tier> license".
+  (2) TEXT-WRAP BUG (owner screenshot: a long unbroken string stretched the Inbox sideways for both
+  admin and the customer): the conversation column was `md:grid-cols-[20rem_1fr]` — bare 1fr's
+  min-content grows with an unbreakable word. Fixed: `minmax(0,1fr)` + min-w-0 on both columns
+  (AdminInbox), and message bodies (AdminInbox + customer SupportSection) now use
+  `[overflow-wrap:anywhere]` (break-words doesn't shrink min-content); message subject too.
+  eslint 0 errors on all three files. Rule of thumb recorded: any chat/user-text column needs
+  minmax(0,1fr)/min-w-0 + overflow-wrap:anywhere.

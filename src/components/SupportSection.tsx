@@ -150,7 +150,9 @@ const SupportSection = () => {
                   <p className="mb-1 font-body text-[11px] text-muted-foreground">
                     {m.direction === "in" ? "You" : "Support"} · {fmt(m.created_at)}
                   </p>
-                  <p className="whitespace-pre-wrap break-words font-body text-sm text-foreground/90">{m.body}</p>
+                  {/* overflow-wrap:anywhere — a long unbroken word wraps instead
+                      of stretching the chat sideways. */}
+                  <p className="min-w-0 whitespace-pre-wrap font-body text-sm text-foreground/90 [overflow-wrap:anywhere]">{m.body}</p>
                 </div>
               ))
             )}
