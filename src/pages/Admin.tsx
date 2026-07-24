@@ -202,7 +202,13 @@ const Admin = () => {
   const [licPrices, setLicPrices] = useState<{ personal: string; commercial: string; professional: string } | null>(null);
   const [licBusy, setLicBusy] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
+  // top OR bottom anchor: near the viewport's lower edge the menu is pinned to
+  // the bottom instead ("pushed up"), and maxH + overflow-y keep every field
+  // reachable even when the composer/cue-sheet blocks make it taller than the
+  // screen.
+  const [menuPos, setMenuPos] = useState<{ top: number | null; bottom: number | null; right: number; maxH: number } | null>(
+    null,
+  );
   const [pseudonymDraftFor, setPseudonymDraftFor] = useState<string | null>(null);
   // Cue-sheet form inside the ⋯ menu (loaded when the menu opens).
   const [cueDraft, setCueDraft] = useState<Record<string, string>>({});
@@ -1005,9 +1011,16 @@ const Admin = () => {
                                         return;
                                       }
                                       const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                                      // If there isn't enough room under the button, pin the
+                                      // menu to the bottom of the window instead — otherwise the
+                                      // cue-sheet fields at its end are cut off and unreachable.
+                                      const below = window.innerHeight - r.bottom - 6;
+                                      const fromTop = below >= 480;
                                       setMenuPos({
-                                        top: r.bottom + 6,
+                                        top: fromTop ? r.bottom + 6 : null,
+                                        bottom: fromTop ? null : 12,
                                         right: Math.max(8, window.innerWidth - r.right),
+                                        maxH: fromTop ? below - 6 : window.innerHeight - 24,
                                       });
                                       setOpenMenuId(u.id);
                                       setPseudonymDraftFor(null);
@@ -1052,8 +1065,13 @@ const Admin = () => {
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setOpenMenuId(null)} />
                   <div
-                    className="fixed z-50 w-72 rounded-xl border border-border bg-card p-4 shadow-2xl"
-                    style={{ top: menuPos.top, right: menuPos.right }}
+                    className="fixed z-50 w-72 overflow-y-auto overscroll-contain rounded-xl border border-border bg-card p-4 shadow-2xl"
+                    style={{
+                      top: menuPos.top ?? "auto",
+                      bottom: menuPos.bottom ?? "auto",
+                      right: menuPos.right,
+                      maxHeight: menuPos.maxH,
+                    }}
                   >
                     <p className="mb-3 truncate font-body text-xs text-muted-foreground">{u.email}</p>
                     <label
