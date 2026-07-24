@@ -576,9 +576,7 @@ const SoundEffects = () => {
                     <span className="truncate font-body text-sm font-semibold text-foreground">
                       {c.title}
                     </span>
-                    <span className="ml-auto shrink-0 font-body text-xs tabular-nums text-muted-foreground">
-                      {c.count.toLocaleString("en-US")}
-                    </span>
+                    {/* Sound counts removed from the panels (owner request). */}
                   </div>
                   <div className="mt-3.5 flex flex-wrap gap-2">
                     {c.subs.length > 0 ? (

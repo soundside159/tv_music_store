@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Download, Heart, Pause, Play, ShoppingCart, SkipBack, SkipForward, Volume2 } from "lucide-react";
 import { openDownloadOptions } from "@/lib/downloadTrack";
@@ -24,6 +24,18 @@ export const PlayerProvider = ({ children }: { children: ReactNode }) => {
   const currentTrack = engine.activeTrack;
   const currentVersion = engine.activeVersion;
   const favIds = useFavourites();
+
+  // The mini-player is FIXED over the viewport bottom — without this, page
+  // bottoms (the footer's "© TV Music Store" line, last list rows) sit hidden
+  // behind the bar whenever a track is loaded. Reserve the bar's height on
+  // <body> only while the bar exists, so silent pages keep their layout.
+  const barVisible = !!(currentTrack && currentVersion);
+  useEffect(() => {
+    document.body.style.paddingBottom = barVisible ? "5.5rem" : "";
+    return () => {
+      document.body.style.paddingBottom = "";
+    };
+  }, [barVisible]);
 
   // Prev/next walk the list the track was started from (playlist, collection,
   // catalog…). Dimmed + inert at the ends of that list.

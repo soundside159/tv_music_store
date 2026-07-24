@@ -4345,3 +4345,12 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   collections still override with their own art). The cinema og-cover.jpg STAYS on disk as an
   alternative. RULE unchanged: any redesign = bump the filename (og-cover-3.jpg) — messengers
   cache by URL; refresh Telegram via @WebpageBot after deploy.
+
+- **2026-07-24 (SFX panel counts removed + footer no longer hides under the mini-player):**
+  (1) Browse-by-Category panels on /sound-effects lost the per-category sound count number
+  (owner request; counts still exist in the category page headers / admin). (2) The fixed
+  mini-player overlapped page bottoms — the footer's "© TV Music Store" line sat behind the bar
+  whenever a track was loaded. Fix in PlayerProvider: while the bar is mounted,
+  document.body.style.paddingBottom = "5.5rem" (cleared when the player empties / on unmount), so
+  EVERY page reserves the bar's height only when the bar exists — no dead space on silent pages.
+  eslint 0 on both.
