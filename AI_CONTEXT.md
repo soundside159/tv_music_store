@@ -4381,3 +4381,10 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   doesn't exist yet). (2) The body padding under the mini-player was too tall (pages already carry
   their own bottom padding, so the bar's full height double-counted): 5.5rem -> 4rem per the
   owner ("ниже процентов на 25"). eslint 0 errors.
+
+- **2026-07-24 (SFX pages up to 500 + footer padding final):** (1) Admin -> SFX Library: new
+  "Show 50/200/500" per-page select — GET /api/admin/sfx accepts ?per= (clamped 10..500);
+  pageSize/pages in the response follow it. Select-all-on-page + the new Assign composer select
+  now cover up to 500 sounds per click (update_sfx already capped ids at 500) — assigning a 6k
+  library to GarnaVutka = 12 page-passes on Show 500. (2) Mini-player body padding trimmed again
+  4rem -> 3rem (owner). eslint 0 errors.

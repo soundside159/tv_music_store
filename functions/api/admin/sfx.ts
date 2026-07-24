@@ -125,6 +125,9 @@ export const onRequestGet = async (ctx: Ctx) => {
   const status = url.searchParams.get("status") ?? ""; // "" = any
   // "" = any composer, "house" = no composer assigned, else a composer id.
   const composer = url.searchParams.get("composer") ?? "";
+  // Rows per page: 50 default, up to 500 — bulk composer assignment on a 6k+
+  // library needs big pages (update_sfx already accepts 500 ids per call).
+  const per = Math.min(500, Math.max(10, Number(url.searchParams.get("per") ?? PAGE_SIZE) || PAGE_SIZE));
 
   const where: string[] = [];
   const binds: unknown[] = [];
@@ -164,7 +167,7 @@ export const onRequestGet = async (ctx: Ctx) => {
               preview_src, wav_size, import_no, status, created_at
          FROM sfx ${whereSql}
         ORDER BY created_at DESC, name ASC
-        LIMIT ${PAGE_SIZE} OFFSET ${(page - 1) * PAGE_SIZE}`,
+        LIMIT ${per} OFFSET ${(page - 1) * per}`,
     )
     .bind(...binds)
     .all<{
@@ -210,9 +213,9 @@ export const onRequestGet = async (ctx: Ctx) => {
   return json({
     ok: true,
     page,
-    pageSize: PAGE_SIZE,
+    pageSize: per,
     total,
-    pages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+    pages: Math.max(1, Math.ceil(total / per)),
     sounds: rows.results.map((r) => ({
       ...r,
       tags: r.tags ? (JSON.parse(r.tags) as string[]) : [],

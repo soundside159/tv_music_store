@@ -136,6 +136,9 @@ const AdminSfx = ({ view = "manage" }: { view?: "manage" | "upload" }) => {
   const [status, setStatus] = useState("");
   // "" = all, "house" = no composer, else a composer id (money follows this!).
   const [composerFilter, setComposerFilter] = useState("");
+  // Rows per page — up to 500, so bulk composer assignment doesn't take
+  // 50-sound bites out of a 6k library.
+  const [perPage, setPerPage] = useState(50);
   const [selected, setSelected] = useState<string[]>([]);
 
   const load = useCallback(async () => {
@@ -144,6 +147,7 @@ const AdminSfx = ({ view = "manage" }: { view?: "manage" | "upload" }) => {
     if (cat) params.set("cat", cat);
     if (status) params.set("status", status);
     if (composerFilter) params.set("composer", composerFilter);
+    if (perPage !== 50) params.set("per", String(perPage));
     try {
       const res = await fetch(`/api/admin/sfx?${params.toString()}`, { credentials: "include" });
       const d = (await res.json()) as SfxData & { ok?: boolean; error?: string };
@@ -152,7 +156,7 @@ const AdminSfx = ({ view = "manage" }: { view?: "manage" | "upload" }) => {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Load failed");
     }
-  }, [page, q, cat, status, composerFilter]);
+  }, [page, q, cat, status, composerFilter, perPage]);
 
   useEffect(() => {
     void load();
@@ -413,6 +417,21 @@ const AdminSfx = ({ view = "manage" }: { view?: "manage" | "upload" }) => {
               {(data?.composers ?? []).map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.display_name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={perPage}
+              onChange={(e) => {
+                setPerPage(Number(e.target.value));
+                setPage(1);
+              }}
+              title="Rows per page — select-all + Assign composer work on the whole page"
+              className={`${inputCls} py-2`}
+            >
+              {[50, 200, 500].map((n) => (
+                <option key={n} value={n}>
+                  Show {n}
                 </option>
               ))}
             </select>
