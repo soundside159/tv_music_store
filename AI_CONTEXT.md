@@ -4295,3 +4295,16 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   (composerRecencyPercentile by import_no, 0..1) is blended in as `fresh = recency * 2` — worth up
   to one facet match, so a strong match still wins but among peers the newest track surfaces; the
   no-overlap fallback now shows the NEWEST 4 instead of the first 4. eslint 0.
+
+- **2026-07-24 (/sync reconciled with the real license tiers — owner chose "rewrite"):** the /sync
+  page still advertised the LEGACY tunetank-era "Sync Standard $199 / Sync Broadcast $399" tiers
+  that never existed in checkout (buttons just led to /catalog), while the real one-time system is
+  Personal/Commercial/Professional on every track page — two conflicting price lists on a LIVE
+  shop. Sync.tsx rewritten: shows the REAL three tiers with LIVE prices (useLicenseTiers — follows
+  the admin-editable license_prices), Professional highlighted (it covers TV/radio/films/games —
+  everything "Sync Broadcast" promised); the "Request a quote" form was a DEAD placeholder
+  (preventDefault, no handler) — it now composes a prefilled mailto:contact@tvmusicstore.com.
+  Pricing.tsx: the "$199 Standard / $399 Broadcast" section text + the TV/film FAQ answer reworded
+  to the real tiers (no hardcoded prices — they're admin-editable); button label "Sync licensing"
+  -> "Single-track licensing". Middleware /sync prerender copy had no prices — untouched.
+  eslint 0 on both.

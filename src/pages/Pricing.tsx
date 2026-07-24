@@ -36,7 +36,7 @@ const faq: { q: string; a: string }[] = [
   },
   {
     q: "Do I need a subscription for TV, film or game projects?",
-    a: "Broadcast, film, trailers and in-game use are covered by one-time Sync licenses ($199–399 per track), not by subscriptions. See Sync licensing below.",
+    a: "Broadcast, film, trailers and in-game use are covered by one-time track licenses, not by subscriptions: every track page offers Personal, Commercial and Professional — Professional includes TV & radio broadcast, films, games and apps, with WAV and stems. Pay once, licensed forever.",
   },
 ];
 
@@ -308,15 +308,16 @@ const Pricing = () => {
           <div>
             <h2 className="text-xl text-foreground">Need a license for one track only?</h2>
             <p className="mt-2 max-w-lg font-body text-sm text-muted-foreground">
-              TV, film, trailers and games are covered by one-time Sync licenses — $199 Standard,
-              $399 Broadcast with stems included. Pay once, licensed forever.
+              Every track can be licensed one-time on its track page — Personal, Commercial or
+              Professional. Professional covers TV, film, trailers and games, with WAV and stems
+              included. Pay once, licensed forever.
             </p>
           </div>
           <Link
             to="/sync"
             className="mt-4 inline-block rounded-lg border border-[#F4C430]/70 px-5 py-2.5 font-body text-sm font-semibold text-[#F4C430] transition-colors duration-300 hover:bg-[#F4C430] hover:text-background md:mt-0"
           >
-            Sync licensing
+            Single-track licensing
           </Link>
         </section>
 
