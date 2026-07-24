@@ -40,18 +40,24 @@ export const onRequestGet = async (ctx: Ctx) => {
   await ensureRevenueTables(db);
   await allocateDue(db);
 
+  // The page's month axis is WHEN THE MONEY ARRIVED (created_at) — same axis
+  // as the Payments list and the accountant report. It used to be the cycle's
+  // period_end, which filed an annual subscription paid today under NEXT YEAR
+  // (the month dropdown then even DEFAULTED to 2027-07 and everything looked
+  // empty/lopsided). Composer split tables below keep their own allocation
+  // month — payouts happen when a cycle closes, that part is correct.
+  const nowMonth = new Date().toISOString().slice(0, 7);
   const months = await db
     .prepare(
-      `SELECT DISTINCT substr(COALESCE(period_end, created_at), 1, 7) AS month
+      `SELECT DISTINCT substr(created_at, 1, 7) AS month
          FROM revenue_events ORDER BY month DESC LIMIT 36`,
     )
     .all<{ month: string }>();
+  const monthList = months.results.map((m) => m.month);
+  if (!monthList.includes(nowMonth)) monthList.unshift(nowMonth);
 
   const url = new URL(ctx.request.url);
-  const month =
-    url.searchParams.get("month") ??
-    months.results[0]?.month ??
-    new Date().toISOString().slice(0, 7);
+  const month = url.searchParams.get("month") ?? nowMonth;
 
   // P&L of the month, by where the money came from.
   const totals = await db
@@ -63,7 +69,7 @@ export const onRequestGet = async (ctx: Ctx) => {
               SUM(fee_cents) AS fee,
               SUM(net_cents) AS net
          FROM revenue_events
-        WHERE substr(COALESCE(period_end, created_at), 1, 7) = ?1
+        WHERE substr(created_at, 1, 7) = ?1
           AND status != 'refunded'
         GROUP BY source`,
     )
@@ -184,7 +190,7 @@ export const onRequestGet = async (ctx: Ctx) => {
 
   return json({
     month,
-    months: months.results.map((m) => m.month),
+    months: monthList,
     policy,
     releaseDate: releaseDateOf(month, policy.holdbackDays),
     balances,

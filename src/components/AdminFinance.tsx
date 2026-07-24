@@ -166,13 +166,29 @@ const ReportExport = () => {
         with gross, VAT, fees and net — straight from the ledger, no Stripe/PayPal digging.
       </p>
       <div className="flex flex-wrap items-end gap-3">
+        {/* onClick showPicker(): the browser's calendar opens from a click
+            anywhere on the field, not only on the tiny icon. */}
         <label className="flex flex-col gap-1">
           <span className="font-body text-[10px] uppercase tracking-wide text-muted-foreground">From</span>
-          <input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} className={inputCls} />
+          <input
+            type="date"
+            value={from}
+            max={to}
+            onClick={(e) => e.currentTarget.showPicker?.()}
+            onChange={(e) => setFrom(e.target.value)}
+            className={`${inputCls} cursor-pointer`}
+          />
         </label>
         <label className="flex flex-col gap-1">
           <span className="font-body text-[10px] uppercase tracking-wide text-muted-foreground">To</span>
-          <input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} className={inputCls} />
+          <input
+            type="date"
+            value={to}
+            min={from}
+            onClick={(e) => e.currentTarget.showPicker?.()}
+            onChange={(e) => setTo(e.target.value)}
+            className={`${inputCls} cursor-pointer`}
+          />
         </label>
         <button type="button" onClick={() => void runPreview()} className={btnCls} disabled={loading}>
           {loading ? "Loading…" : "Preview"}

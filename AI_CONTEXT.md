@@ -4221,3 +4221,16 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   payments but no certs, one invoice covers many certs — merged view would need weird code-less
   rows). Subscription rows in Licenses keep the "—" in Payment BY DESIGN; their money + Stripe
   links live in Finance -> Payments. eslint 0 on both files.
+
+- **2026-07-24 (round 9: Finance month axis unified + date pickers + Licenses Type column):**
+  owner's screenshot showed the Finance month dropdown DEFAULTING to 2027-07 (annual subs' period
+  end) with "Money this month $696 / Subscriptions x7" there and Payments empty — the whole page's
+  month axis (months list, default month, P&L totals, Sources) was period_end-based. All switched to
+  substr(created_at,1,7) = the month the money ARRIVED (matches Payments list + accountant report);
+  default month = the CURRENT calendar month (always present in the dropdown). The composer split /
+  payout tables keep the allocation month on purpose (cycle-close model). (2) Accountant-report
+  From/To date inputs open the browser calendar on a click anywhere in the field
+  (showPicker()). (3) LICENSES: new "Type" column (One-time / Subscription badge moved out from
+  under the code); Payment column now leads with a gold "Stripe ↗" link (payUrl) + the raw ref in
+  small mono underneath; subscription rows keep "—" (their money = Finance -> Payments).
+  eslint 0, finance.ts tsc-clean (isolated).

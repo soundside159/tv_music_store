@@ -1261,13 +1261,14 @@ const Admin = () => {
                   // width (no horizontal scrollbar), long values truncate, and
                   // the columns collapse into a card on small screens.
                   const GRID =
-                    "lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,1.2fr)_minmax(0,0.7fr)_6.5rem]";
+                    "lg:grid-cols-[minmax(0,1.15fr)_6.5rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.15fr)_minmax(0,0.7fr)_6.5rem]";
                   return (
                     <div className="font-body text-sm">
                       <div
                         className={`hidden border-b border-border pb-2 text-xs uppercase tracking-wide text-muted-foreground lg:grid lg:gap-4 ${GRID}`}
                       >
                         <span>License</span>
+                        <span>Type</span>
                         <span>Payment</span>
                         <span>Buyer</span>
                         <span>Track</span>
@@ -1301,7 +1302,7 @@ const Admin = () => {
                               key={`${l.kind}-${l.id}`}
                               className={`grid gap-2 py-3 lg:items-center lg:gap-4 ${GRID} grid-cols-1`}
                             >
-                              {/* License code + kind badge */}
+                              {/* License code (opens the certificate PDF) */}
                               <div className="min-w-0">
                                 <a
                                   href={`/api/license-pdf?${l.kind === "subscription" ? "code" : "order"}=${encodeURIComponent(l.id)}`}
@@ -1312,8 +1313,11 @@ const Admin = () => {
                                 >
                                   {l.id}
                                 </a>
+                              </div>
+                              {/* Type */}
+                              <div className="min-w-0">
                                 <span
-                                  className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                  className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                                     l.kind === "subscription"
                                       ? "bg-[#F4C430]/15 text-[#F4C430]"
                                       : "bg-secondary text-muted-foreground"
@@ -1322,37 +1326,37 @@ const Admin = () => {
                                   {l.kind === "subscription" ? "Subscription" : "One-time"}
                                 </span>
                               </div>
-                              {/* Payment: provider badge + ref. Subscription
-                                  certificates have no payment of their own — the
-                                  plan's payments live in Money -> Finance. */}
+                              {/* Payment: gold "Open in Stripe" link + the raw ref.
+                                  Subscription certificates have no payment of their
+                                  own — the plan's payments live in Money -> Finance. */}
                               <div className="min-w-0">
                                 {l.reference ? (
                                   <>
-                                    <span
-                                      className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                                        isStripe ? "bg-indigo-500/20 text-indigo-300" : "bg-sky-500/20 text-sky-300"
-                                      }`}
-                                    >
-                                      {isStripe ? "Stripe" : "PayPal"}
-                                    </span>
                                     {payUrl ? (
                                       <a
                                         href={payUrl}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        title={`${l.reference} — open in Stripe`}
-                                        className="mt-1 block truncate font-mono text-[10px] text-muted-foreground hover:text-[#F4C430] hover:underline"
+                                        title="Open this payment in Stripe — refund it there if needed"
+                                        className="text-xs font-semibold text-[#F4C430] hover:underline"
                                       >
-                                        {l.reference}
+                                        {isStripe ? "Stripe ↗" : "PayPal"}
                                       </a>
                                     ) : (
                                       <span
-                                        title={l.reference}
-                                        className="mt-1 block select-all truncate font-mono text-[10px] text-muted-foreground"
+                                        className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                                          isStripe ? "bg-indigo-500/20 text-indigo-300" : "bg-sky-500/20 text-sky-300"
+                                        }`}
                                       >
-                                        {l.reference}
+                                        {isStripe ? "Stripe" : "PayPal"}
                                       </span>
                                     )}
+                                    <span
+                                      title={l.reference}
+                                      className="mt-0.5 block select-all truncate font-mono text-[10px] text-muted-foreground"
+                                    >
+                                      {l.reference}
+                                    </span>
                                   </>
                                 ) : (
                                   <span
