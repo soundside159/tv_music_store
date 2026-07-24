@@ -123,6 +123,8 @@ export const onRequestGet = async (ctx: Ctx) => {
   const cat = url.searchParams.get("cat") ?? "";
   const sub = url.searchParams.get("sub") ?? "";
   const status = url.searchParams.get("status") ?? ""; // "" = any
+  // "" = any composer, "house" = no composer assigned, else a composer id.
+  const composer = url.searchParams.get("composer") ?? "";
 
   const where: string[] = [];
   const binds: unknown[] = [];
@@ -141,6 +143,12 @@ export const onRequestGet = async (ctx: Ctx) => {
   if (status) {
     where.push(`status = ?${binds.length + 1}`);
     binds.push(status);
+  }
+  if (composer === "house") {
+    where.push(`composer_id IS NULL`);
+  } else if (composer) {
+    where.push(`composer_id = ?${binds.length + 1}`);
+    binds.push(composer);
   }
   const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
 
@@ -249,7 +257,12 @@ export const onRequestPost = async (ctx: Ctx) => {
       tags?: string[];
       status?: string;
       importNo?: string;
+      description?: string;
     };
+    // create_sfx also takes these at the TOP level (one call per file from the
+    // bulk uploader) — they were missing from the type, runtime was fine.
+    tags?: unknown[];
+    status?: string;
     // categories
     title?: string;
     description?: string;

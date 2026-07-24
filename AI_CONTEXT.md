@@ -4354,3 +4354,23 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   document.body.style.paddingBottom = "5.5rem" (cleared when the player empties / on unmount), so
   EVERY page reserves the bar's height only when the bar exists — no dead space on silent pages.
   eslint 0 on both.
+
+- **2026-07-24 (SFX composer attribution + SFX FINALLY in the payout engine — owner asked "will
+  GarnaVutka get paid for sound downloads?"):** honest audit results:
+  (1) DISPLAY: /api/sfx already joins composers and the page renders "by <artist>" — sounds
+  showing "TV Music Store" simply have composer_id NULL. The AdminSfx UPLOAD tab has a composer
+  select that defaults to "House (no composer)" — the owner's upload almost certainly went in as
+  House. FIX PATH built: Admin -> SFX -> Library got an "Assign composer…" select in the
+  selection-actions cluster (update_sfx fields.composerId, confirm dialog; "house" clears) — select
+  all of GarnaVutka's sounds and assign her once. Also a composer FILTER dropdown in the toolbar
+  (server: GET /api/admin/sfx?composer=<id>|house).
+  (2) MONEY — the gap that mattered: sfx_downloads was NEVER wired into the split (the P2 item);
+  sound downloads earned composers NOTHING. `pointsForCycle` in _revenue.ts now also reads
+  sfx_downloads: one unique sound = 0.2 points (SFX_POINT), sounds capped at 50% of a cycle's
+  combined points when the payer took both kinds (sounds-only payer -> 100% to SFX composers) —
+  exactly the spec decided 2026-07-13; own-works exclusion applies to sounds too; try/catch for
+  pre-sfx DBs; points rounded to 4 decimals (splitByPoints handles fractions fine). NOTE: only
+  affects cycles allocated AFTER deploy; downloads of unassigned ("House") sounds still earn
+  nobody — assign composers BEFORE real traffic. Also fixed pre-existing type gaps in
+  admin/sfx.ts readJson generic (top-level tags/status, fields.description). tsc clean (isolated),
+  eslint 0 on AdminSfx.

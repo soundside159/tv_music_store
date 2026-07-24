@@ -282,8 +282,9 @@ interface EventRow {
 
 /**
  * The points a payer earned for the composers during one subscription cycle:
- * DISTINCT tracks, countable formats only (MP3 320 / WAV / stems — never MP3
- * 128), never his own tracks if he happens to be a composer himself.
+ * DISTINCT tracks (1.0 each; countable formats only — MP3 320 / WAV / stems,
+ * never MP3 128) + DISTINCT sound effects (0.2 each, capped — see below),
+ * never his own works if he happens to be a composer himself.
  */
 const pointsForCycle = async (
   db: D1Database,
@@ -306,7 +307,63 @@ const pointsForCycle = async (
     )
     .bind(userId, from, to)
     .all<{ composer_id: string; points: number }>();
-  return rows.results.map((r) => ({ composerId: r.composer_id, points: r.points }));
+
+  // Sound-effect downloads of the same cycle (their own table — a sound is not
+  // a track). SFX weighting (owner decision 2026-07-13, docs/SFX_PLAN.md): one
+  // unique SOUND = 0.2 of a track's point, and when the payer took BOTH kinds
+  // the sounds together are capped at 50% of the cycle's points — a sounds-only
+  // customer still sends 100% to the SFX composers. try/catch: the sfx tables
+  // may not exist on older databases.
+  const SFX_POINT = 0.2;
+  const SFX_SHARE_CAP = 0.5;
+  let sfxRows: { composer_id: string; sounds: number }[] = [];
+  try {
+    sfxRows = (
+      await db
+        .prepare(
+          `SELECT s.composer_id AS composer_id, COUNT(DISTINCT s.sfx_id) AS sounds
+             FROM sfx_downloads s
+             LEFT JOIN composers c ON c.id = s.composer_id
+            WHERE s.user_id = ?1
+              AND s.created_at >= ?2
+              AND s.created_at < ?3
+              AND s.composer_id IS NOT NULL
+              AND (c.user_id IS NULL OR c.user_id <> ?1)
+            GROUP BY s.composer_id`,
+        )
+        .bind(userId, from, to)
+        .all<{ composer_id: string; sounds: number }>()
+    ).results;
+  } catch {
+    // no sfx tables yet — tracks only
+  }
+
+  const byComposer = new Map<string, number>();
+  let trackTotal = 0;
+  for (const r of rows.results) {
+    byComposer.set(r.composer_id, (byComposer.get(r.composer_id) ?? 0) + r.points);
+    trackTotal += r.points;
+  }
+
+  let sfxPoints = sfxRows.map((r) => ({ composerId: r.composer_id, pts: r.sounds * SFX_POINT }));
+  const sfxTotal = sfxPoints.reduce((sum, p) => sum + p.pts, 0);
+  if (trackTotal > 0 && sfxTotal > 0) {
+    // Cap: with cap 0.5 the sounds' points may at most EQUAL the tracks' points.
+    const maxSfx = (trackTotal * SFX_SHARE_CAP) / (1 - SFX_SHARE_CAP);
+    if (sfxTotal > maxSfx) {
+      const scale = maxSfx / sfxTotal;
+      sfxPoints = sfxPoints.map((p) => ({ ...p, pts: p.pts * scale }));
+    }
+  }
+  for (const p of sfxPoints) {
+    byComposer.set(p.composerId, (byComposer.get(p.composerId) ?? 0) + p.pts);
+  }
+
+  return Array.from(byComposer.entries()).map(([composerId, points]) => ({
+    composerId,
+    // 4 decimals — enough precision, no float noise in the ledger.
+    points: Math.round(points * 10000) / 10000,
+  }));
 };
 
 /** Allocates ONE booked payment. Safe to call twice (status guards it). */

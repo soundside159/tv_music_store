@@ -134,6 +134,8 @@ const AdminSfx = ({ view = "manage" }: { view?: "manage" | "upload" }) => {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("");
   const [status, setStatus] = useState("");
+  // "" = all, "house" = no composer, else a composer id (money follows this!).
+  const [composerFilter, setComposerFilter] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
 
   const load = useCallback(async () => {
@@ -141,6 +143,7 @@ const AdminSfx = ({ view = "manage" }: { view?: "manage" | "upload" }) => {
     if (q.trim()) params.set("q", q.trim());
     if (cat) params.set("cat", cat);
     if (status) params.set("status", status);
+    if (composerFilter) params.set("composer", composerFilter);
     try {
       const res = await fetch(`/api/admin/sfx?${params.toString()}`, { credentials: "include" });
       const d = (await res.json()) as SfxData & { ok?: boolean; error?: string };
@@ -149,7 +152,7 @@ const AdminSfx = ({ view = "manage" }: { view?: "manage" | "upload" }) => {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Load failed");
     }
-  }, [page, q, cat, status]);
+  }, [page, q, cat, status, composerFilter]);
 
   useEffect(() => {
     void load();
@@ -295,6 +298,34 @@ const AdminSfx = ({ view = "manage" }: { view?: "manage" | "upload" }) => {
         {view === "manage" && tab === "library" && selected.length > 0 && (
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <span className="font-body text-xs text-muted-foreground">{selected.length} selected</span>
+            {/* Assign the selection to a composer — this is who the download
+                MONEY follows in the payout split, so it must be settable here. */}
+            <select
+              value=""
+              disabled={busy}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === "") return;
+                const name =
+                  v === "house"
+                    ? "House (no composer)"
+                    : (data?.composers.find((c) => c.id === v)?.display_name ?? v);
+                if (!window.confirm(`Assign ${selected.length} sound(s) to ${name}?`)) return;
+                void run(
+                  { action: "update_sfx", ids: selected, fields: { composerId: v === "house" ? "" : v } },
+                  `Assigned to ${name}`,
+                );
+              }}
+              className="rounded-lg border border-border bg-background px-2 py-1.5 font-body text-xs text-foreground focus:border-[#F4C430] focus:outline-none"
+            >
+              <option value="">Assign composer…</option>
+              <option value="house">House (no composer)</option>
+              {(data?.composers ?? []).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.display_name}
+                </option>
+              ))}
+            </select>
             <button
               type="button"
               disabled={busy}
@@ -366,6 +397,24 @@ const AdminSfx = ({ view = "manage" }: { view?: "manage" | "upload" }) => {
               <option value="">Any status</option>
               <option value="draft">Drafts</option>
               <option value="published">Live</option>
+            </select>
+            {/* Composer filter — attribution drives the payout split, so the
+                owner needs to see at a glance whose sounds are whose. */}
+            <select
+              value={composerFilter}
+              onChange={(e) => {
+                setComposerFilter(e.target.value);
+                setPage(1);
+              }}
+              className={`${inputCls} py-2`}
+            >
+              <option value="">All composers</option>
+              <option value="house">House (no composer)</option>
+              {(data?.composers ?? []).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.display_name}
+                </option>
+              ))}
             </select>
           </div>
 
