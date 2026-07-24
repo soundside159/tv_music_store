@@ -57,6 +57,8 @@ export interface Subscription {
   interval: BillingInterval | null; // null for free
   status: SubscriptionStatus;
   currentPeriodEnd: string; // ISO date
+  /** Canceled in the billing portal — stays active until currentPeriodEnd. */
+  cancelAtPeriodEnd?: boolean;
   /** MP3 downloads used in the current period (relevant for free plan). */
   downloadsUsedThisPeriod: number;
 }

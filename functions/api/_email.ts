@@ -4,10 +4,10 @@ import { sendEmail, type Env } from "./_utils";
 
 const shell = (inner: string) => `
 <div style="margin:0 auto;max-width:480px;font-family:Arial,Helvetica,sans-serif">
-  <div style="background:#111;padding:22px 20px;text-align:center;border-radius:12px 12px 0 0">
-    <img src="https://tvmusicstore.com/images/icons/web-app-manifest-192x192.png" width="44" height="44" alt="TV Music Store"
-      style="display:block;margin:0 auto 10px;border-radius:10px"/>
-    <span style="color:#F4C430;font-size:16px;font-weight:bold;letter-spacing:3px">TV MUSIC STORE</span>
+  <div style="background:#111;padding:28px 20px 24px;text-align:center;border-radius:12px 12px 0 0">
+    <img src="https://tvmusicstore.com/images/icons/web-app-manifest-192x192.png" width="80" height="80" alt="TV Music Store"
+      style="display:block;margin:0 auto 14px;border-radius:18px"/>
+    <span style="color:#F4C430;font-size:17px;font-weight:bold;letter-spacing:4px">TV MUSIC STORE</span>
   </div>
   <div style="background:#fff;border:1px solid #eee;border-top:0;padding:32px 26px;color:#222">
     ${inner}
@@ -77,7 +77,11 @@ export interface ReceiptEmail {
   totalText: string; // formatted grand total
   /** Small meta rows under the total (Date, Invoice #, Payment method…). */
   metaRows: { label: string; value: string }[];
-  invoiceUrl?: string | null; // Stripe hosted invoice / receipt (the tax document)
+  /** Stripe hosted RECEIPT (says "Paid") — the main button when present. */
+  receiptUrl?: string | null;
+  /** Stripe hosted invoice (a bill-style document: "amount due" + Pay online).
+   *  Button fallback when there is no receipt; otherwise a small text link. */
+  invoiceUrl?: string | null;
   secondary?: { label: string; url: string } | null; // "View your licenses" etc.
 }
 
@@ -109,14 +113,25 @@ export const sendReceiptEmail = async (env: Env, to: string, r: ReceiptEmail): P
       </tr>`,
     )
     .join("");
-  const invoiceButton = r.invoiceUrl
+  // The button opens the PAID document (Stripe receipt). The invoice is a
+  // bill-style PDF ("amount due" + Pay online) — offered as a small link for
+  // customers whose accountant wants it; button fallback when no receipt.
+  const buttonUrl = r.receiptUrl ?? r.invoiceUrl ?? null;
+  const buttonLabel = r.receiptUrl ? "Download receipt (PDF)" : "Download invoice (PDF)";
+  const invoiceButton = buttonUrl
     ? `<p style="margin:0 0 14px;text-align:center">
-        <a href="${r.invoiceUrl}"
+        <a href="${buttonUrl}"
           style="display:inline-block;background:#F4C430;color:#111;font-size:14px;font-weight:bold;text-decoration:none;padding:12px 26px;border-radius:8px">
-          Download invoice (PDF)
+          ${buttonLabel}
         </a>
       </p>`
     : "";
+  const invoiceLink =
+    r.receiptUrl && r.invoiceUrl
+      ? `<p style="margin:0 0 12px;text-align:center">
+          <a href="${r.invoiceUrl}" style="color:#999;font-size:12px;text-decoration:underline">Need an invoice for your records? Open it here</a>
+        </p>`
+      : "";
   const secondary = r.secondary
     ? `<p style="margin:0;text-align:center">
         <a href="${r.secondary.url}" style="color:#b8860b;font-size:13px;text-decoration:none">${escapeHtml(r.secondary.label)}</a>
@@ -138,6 +153,7 @@ export const sendReceiptEmail = async (env: Env, to: string, r: ReceiptEmail): P
       ${metaRows}
     </table>
     ${invoiceButton}
+    ${invoiceLink}
     ${secondary}`;
   try {
     await sendEmail(env, to, r.subject, shell(inner));

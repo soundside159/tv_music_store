@@ -5,6 +5,7 @@ import {
   mapStripeStatus,
   stripeCall,
   type StripeSubscription,
+  subPeriodEnd,
   unixToIso,
   upsertSubscription,
   verifyStripeSignature,
@@ -57,7 +58,10 @@ const applySubscription = async (
     plan,
     interval,
     status: mapStripeStatus(sub.status),
-    currentPeriodEnd: unixToIso(sub.current_period_end),
+    currentPeriodEnd: unixToIso(subPeriodEnd(sub)),
+    // Portal cancel = cancel_at_period_end true, status still "active" —
+    // the account page shows "stays active until <date>" off this flag.
+    cancelAtPeriodEnd: !!sub.cancel_at_period_end,
   });
 };
 
@@ -89,7 +93,50 @@ const invoiceSubscriptionId = (inv: StripeInvoice): string | null =>
 
 interface StripeCharge {
   balance_transaction?: { fee?: number } | string | null;
+  receipt_url?: string | null; // hosted receipt — the "Paid" document
 }
+
+/**
+ * The invoice's charge: real Stripe fee + the hosted receipt URL ("Paid").
+ * Older API versions expose invoice.charge directly; 2025+ versions dropped it,
+ * so we fall back to the invoice's payments list → payment_intent → charge.
+ * Best-effort: returns nulls rather than throwing.
+ */
+const invoiceChargeInfo = async (
+  key: string,
+  inv: StripeInvoice,
+): Promise<{ fee: number | null; receiptUrl: string | null }> => {
+  const readCharge = async (path: string) => {
+    const charge = await stripeCall<StripeCharge>(key, "GET", path);
+    const bt = charge.balance_transaction;
+    return {
+      fee: bt && typeof bt === "object" && typeof bt.fee === "number" ? bt.fee : null,
+      receiptUrl: charge.receipt_url ?? null,
+    };
+  };
+  try {
+    if (inv.charge) return await readCharge(`/charges/${inv.charge}?expand[]=balance_transaction`);
+    // New API: find the payment intent through the invoice's payments.
+    const paid = await stripeCall<{
+      payments?: { data?: { payment?: { payment_intent?: string | { id?: string } | null } }[] };
+    }>(key, "GET", `/invoices/${inv.id}?expand[]=payments`);
+    const piRef = paid.payments?.data?.find((p) => !!p.payment?.payment_intent)?.payment
+      ?.payment_intent;
+    const piId = typeof piRef === "string" ? piRef : (piRef?.id ?? null);
+    if (!piId) return { fee: null, receiptUrl: null };
+    const pi = await stripeCall<{ latest_charge?: string | { id?: string } | null }>(
+      key,
+      "GET",
+      `/payment_intents/${piId}`,
+    );
+    const chargeId =
+      typeof pi.latest_charge === "string" ? pi.latest_charge : (pi.latest_charge?.id ?? null);
+    if (!chargeId) return { fee: null, receiptUrl: null };
+    return await readCharge(`/charges/${chargeId}?expand[]=balance_transaction`);
+  } catch {
+    return { fee: null, receiptUrl: null };
+  }
+};
 
 /**
  * Books one paid invoice. The split is calculated on the NET:
@@ -121,20 +168,10 @@ const recordStripeInvoice = async (ctx: Ctx, key: string, inv: StripeInvoice): P
   const tax =
     inv.tax ?? (inv.total_tax_amounts ?? []).reduce((sum, t) => sum + (t.amount ?? 0), 0);
 
-  let fee = Math.round(gross * 0.029) + 30;
-  if (inv.charge) {
-    try {
-      const charge = await stripeCall<StripeCharge>(
-        key,
-        "GET",
-        `/charges/${inv.charge}?expand[]=balance_transaction`,
-      );
-      const bt = charge.balance_transaction;
-      if (bt && typeof bt === "object" && typeof bt.fee === "number") fee = bt.fee;
-    } catch {
-      // keep the estimate
-    }
-  }
+  // Real fee + the "Paid" receipt document; 2.9% + 30c estimate if the charge
+  // can't be found — never wrong in the composer's favour by accident.
+  const chargeInfo = await invoiceChargeInfo(key, inv);
+  const fee = chargeInfo.fee ?? Math.round(gross * 0.029) + 30;
 
   const line = inv.lines?.data?.[0]?.period;
   const periodStart = unixToIso(line?.start) ?? unixToIso(sub.current_period_end);
@@ -182,8 +219,11 @@ const recordStripeInvoice = async (ctx: Ctx, key: string, inv: StripeInvoice): P
         vatText: tax > 0 ? fmtMoney(tax, currency) : null,
         totalText: fmtMoney(gross, currency),
         metaRows,
+        // Button = the "Paid" receipt; the bill-style invoice stays a small link.
+        receiptUrl: chargeInfo.receiptUrl,
         invoiceUrl: inv.hosted_invoice_url ?? inv.invoice_pdf ?? null,
-        secondary: { label: "Manage your plan →", url: `${SITE_URL}/account?section=billing` },
+        // No "Manage your plan" here (owner's call) — the dashboard is a click away.
+        secondary: null,
       });
     }
   }
@@ -242,15 +282,20 @@ const fulfillLicenseCart = async (ctx: Ctx, key: string, s: LicenseCartSession):
   // Stripe's real fee from the charge's balance transaction; standard
   // 2.9% + 30c if the lookup fails — never wrong in the composer's favour.
   let feeTotal = -1;
+  let cartReceiptUrl: string | null = null;
   if (s.payment_intent) {
     try {
       const pi = await stripeCall<{
-        latest_charge?: { balance_transaction?: { fee?: number } | string | null } | string | null;
+        latest_charge?:
+          | { balance_transaction?: { fee?: number } | string | null; receipt_url?: string | null }
+          | string
+          | null;
       }>(key, "GET", `/payment_intents/${s.payment_intent}?expand[]=latest_charge.balance_transaction`);
       const charge = pi.latest_charge;
       if (charge && typeof charge === "object") {
         const bt = charge.balance_transaction;
         if (bt && typeof bt === "object" && typeof bt.fee === "number") feeTotal = bt.fee;
+        cartReceiptUrl = charge.receipt_url ?? null;
       }
     } catch {
       // keep the estimate
@@ -339,6 +384,7 @@ const fulfillLicenseCart = async (ctx: Ctx, key: string, s: LicenseCartSession):
       vatText: vat > 0 ? fmtMoney(vat, currency) : null,
       totalText: fmtMoney(grandTotal, currency),
       metaRows,
+      receiptUrl: cartReceiptUrl,
       invoiceUrl,
       secondary: { label: "Your licenses & certificates →", url: `${SITE_URL}/account?section=license` },
     });
@@ -399,7 +445,8 @@ export const onRequestPost = async (ctx: Ctx) => {
           plan: "free",
           interval: null,
           status: "canceled",
-          currentPeriodEnd: unixToIso(sub.current_period_end),
+          currentPeriodEnd: unixToIso(subPeriodEnd(sub)),
+          cancelAtPeriodEnd: false,
         });
       }
       break;

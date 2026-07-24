@@ -130,7 +130,8 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   plan TEXT NOT NULL DEFAULT 'free',
   interval TEXT, -- monthly | annual | NULL for free
   status TEXT NOT NULL DEFAULT 'active', -- active | canceled | past_due
-  current_period_end TEXT
+  current_period_end TEXT,
+  cancel_at_period_end INTEGER DEFAULT 0 -- portal cancel: runs to period end
 );
 CREATE INDEX IF NOT EXISTS idx_subs_user ON subscriptions(user_id);
 

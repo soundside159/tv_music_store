@@ -106,6 +106,7 @@ interface ApiMeResponse {
     interval?: string | null;
     status?: string;
     current_period_end?: string | null;
+    cancel_at_period_end?: number | boolean | null;
   } | null;
   downloadsUsedThisMonth?: number;
 }
@@ -135,6 +136,7 @@ const mapSession = (data: ApiMeResponse): AuthSession => {
     interval: (s?.interval as Subscription["interval"]) ?? null,
     status: (s?.status as Subscription["status"]) ?? "active",
     currentPeriodEnd: s?.current_period_end ?? "",
+    cancelAtPeriodEnd: !!s?.cancel_at_period_end,
     downloadsUsedThisPeriod: data.downloadsUsedThisMonth ?? 0,
   };
   return {

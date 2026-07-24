@@ -21,7 +21,6 @@ import {
 } from "@/hooks/useMockData";
 import { toast } from "sonner";
 import { SectionPanel } from "@/components/SectionHeading";
-import CancelSubscriptionModal from "@/components/CancelSubscriptionModal";
 import NotificationsSettings from "@/components/NotificationsSettings";
 import SupportSection from "@/components/SupportSection";
 import FavouritesSection from "@/components/FavouritesSection";
@@ -77,7 +76,7 @@ const fmtDate = (iso: string) => {
     : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 };
 
-/** "Aug 13, 2026" — used in the Cancel Subscription copy. */
+/** "Aug 13, 2026" — used in the plan status line (renews / active until). */
 const fmtDateUS = (iso?: string | null) => {
   if (!iso) return null;
   const d = new Date(iso);
@@ -466,14 +465,15 @@ const Account = () => {
       setClaimBusy(false);
     }
   };
-  // Cancel Subscription card (paid plans only) — benefits run to the end of the
-  // paid period, so we surface subscription.currentPeriodEnd.
-  const [cancelOpen, setCancelOpen] = useState(false);
   // Admins get Max-level access by role, not by paying (see hooks/useAuth.ts) —
   // no upgrade button, nothing to cancel, no billing period to show.
   const adminAccess = user?.role === "admin";
   const isPaidPlan = !adminAccess && !!plan && plan.id !== "free";
   const benefitsUntil = fmtDateUS(subscription?.currentPeriodEnd);
+  // Canceled in the Stripe portal but still running to the end of the paid
+  // period (cancel_at_period_end mirrored from the webhook).
+  const endsAtPeriodEnd =
+    isPaidPlan && (!!subscription?.cancelAtPeriodEnd || subscription?.status === "canceled");
 
   const planSubtitle =
     plan?.id === "max"
@@ -503,7 +503,7 @@ const Account = () => {
     );
   }
 
-  const isCanceled = subscription?.status === "canceled";
+  const isCanceled = endsAtPeriodEnd;
 
   return (
     <div className="min-h-screen bg-background">
@@ -659,7 +659,7 @@ const Account = () => {
             {isCanceled && (
               <div className="rounded-xl border border-[#F4C430]/50 bg-[#F4C430]/10 p-4 font-body text-sm text-foreground">
                 Your {plan?.name} plan is canceled and stays active until{" "}
-                {subscription ? fmtDate(subscription.currentPeriodEnd) : ""}.{" "}
+                {benefitsUntil ?? "the end of your current billing period"}.{" "}
                 <Link to="/pricing" className="font-semibold text-[#F4C430] hover:underline">
                   Resubscribe
                 </Link>
@@ -1088,6 +1088,21 @@ const Account = () => {
                           ? "Full access by role — every format and unlimited downloads, no subscription."
                           : planSubtitle}
                       </p>
+                      {/* Billing status line: renewal date, or — after a portal
+                          cancel — how long the plan keeps running. */}
+                      {isPaidPlan && endsAtPeriodEnd && (
+                        <p className="mt-2 font-body text-sm text-[#F4C430]">
+                          Canceled — active until{" "}
+                          {benefitsUntil ?? "the end of your current billing period"}, then you
+                          switch to Free.
+                        </p>
+                      )}
+                      {isPaidPlan && !endsAtPeriodEnd && benefitsUntil && (
+                        <p className="mt-2 font-body text-sm text-muted-foreground">
+                          Renews on {benefitsUntil}. Cancel anytime via Manage billing — your plan
+                          stays active to the end of the paid period.
+                        </p>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       {!adminAccess && BILLING_ENABLED && plan && plan.id !== "free" && (
@@ -1112,32 +1127,9 @@ const Account = () => {
                   </div>
                 </SectionPanel>
 
-                {isPaidPlan && (
-                  <SectionPanel title="Cancel Subscription">
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                      <p className="max-w-lg font-body text-sm text-muted-foreground">
-                        Cancel anytime.
-                        {benefitsUntil
-                          ? ` Your premium benefits will continue until ${benefitsUntil}.`
-                          : " Your premium benefits will continue until the end of your current billing period."}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => setCancelOpen(true)}
-                        className="rounded-lg border border-border px-4 py-2 font-body text-sm font-semibold text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
-                      >
-                        Cancel subscription
-                      </button>
-                    </div>
-                  </SectionPanel>
-                )}
-
-                <CancelSubscriptionModal
-                  open={cancelOpen}
-                  onClose={() => setCancelOpen(false)}
-                  planName={plan?.name ?? "Pro"}
-                  until={benefitsUntil ?? "the end of your current billing period"}
-                />
+                {/* The separate "Cancel Subscription" card is gone (owner's call):
+                    cancellation lives in the Stripe portal behind Manage billing,
+                    and the "active until" line above says everything else. */}
 
                 {/* No "Account details" card here — name and email already live
                     in Profile; two places to read the same thing is one too many. */}

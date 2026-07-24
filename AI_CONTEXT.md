@@ -3955,428 +3955,145 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   rules (honesty rules included — whitelisting still must not be promised anywhere
   customer-facing).
 
-- **2026-07-18 (⚠️ UNRESOLVED — cold-load flicker fixes DID NOT visibly help; next chat START
-  HERE):** after deploying the "cold-load polish" (self-hosted preloaded fonts, logo preload,
-  session-hint avatar, persisted SFX search count) the owner reports NONE of the four flickers
-  changed: font still swaps, logo still pops in, guest icon still flips to the avatar, the search
-  placeholder still flips to the count. The code IS live on main (verified on GitHub), so the
-  fixes are deployed but not effective as observed. Debugging leads, in order:
-  1. VERIFY WHAT'S ACTUALLY SERVED: view-source of https://tvmusicstore.com/ — are the
-     <link rel="preload" href="/fonts/inter-latin-400-normal.woff2"> lines there? Does
-     /fonts/inter-latin-400-normal.woff2 return 200 with font/woff2? If not — Cloudflare served a
-     stale index.html or the fonts folder didn't build; check the Pages build log / cache.
-  2. HINT-BASED FIXES ONLY WORK FROM THE SECOND LOAD: the avatar hint and the sfx count are
-     seeded into localStorage by the FIRST visit running the new JS. If the owner tested with a
-     single Ctrl+F5 right after deploy, the flips were expected that one time. Ask him to reload
-     twice and re-check (also: Ctrl+F5 does NOT clear localStorage, so this should stick).
-  3. THE SITE IS A CLIENT-RENDERED SPA: first paint happens only after the ~1.7MB JS bundle
-     downloads and runs. Element "pop-in" (logo appearing, sections assembling, fonts settling)
-     may partly be REACT MOUNT ORDER + entrance animations, not resource timing — in that case
-     preloads can't fix it and the real work is: render the header/logo statically or reserve
-     space, review LoadingScreen.tsx / Navigation mount, and consider code-splitting the bundle
-     (vite chunk warning exists) so first paint comes sooner.
-  4. Record a fresh frame-by-frame after (1)-(3) to see WHICH of the four remain.
-  Also note: the AI's cloud working clone was reset to origin/main at end of session — the
-  owner's deploy.bat had already pushed everything; no work was lost.
+- **2026-07-23/24 (Discover/Catalog waveform polish, Featured recency, receipts + emails, and a
+  long Stripe sandbox debug — ONE chat, ends here):**
 
-- **2026-07-18 (cold-load flicker — ROOT CAUSE fixed with a static app-shell):** picked up the
-  ⚠️ UNRESOLVED item above. Diagnosis: the earlier fixes (preloaded self-hosted fonts, logo
-  preload, session-hint avatar, persisted SFX count) were all correct AND live on main, but they
-  could not fix the flicker because the real cause is architectural — the site is a client-rendered
-  SPA whose `index.html` ships an EMPTY `<div id="root">`. First paint is therefore blank/white
-  until the ~1.72 MB JS bundle (497 KB gzip) downloads and React mounts; only then does the header,
-  logo and all text appear at once and the entrance animations run. `LoadingScreen.tsx` exists but
-  is imported NOWHERE, so there was no boot shell at all. Preloading a resource makes it *ready*
-  but cannot move first paint earlier on an SPA, so nothing the owner filmed changed.
-  FIX (2 files, no JS, no SSR): (1) `index.html` now renders a STATIC APP-SHELL inside `#root` —
-  a fixed dark header bar (`#090a0c`, = `--background` 220 14% 4%) with the logo image + "TV MUSIC
-  STORE" wordmark, geometry matched to the real `<Navigation>` (max-w 80rem, h-16/md:h-20, px-4/
-  sm:px-6, logo h-8/md:h-9, Inter 600 uppercase tracking .22em). Critical CSS for it is INLINED in
-  a `<style>` in <head> so it applies on the very first paint, before the built CSS chunk (line 217
-  in dist) loads; `<html>` also gets an inline `background-color:#090a0c`. React's `createRoot().
-  render()` replaces `#root`'s children on its first commit, so the shell vanishes the instant the
-  app is ready — no timers, no fade. Result: frame 1 is already the branded dark page with the logo
-  in its final position → no white flash, no logo pop-in, no blank gap. (2) `src/index.css`: all 9
-  self-hosted @font-face switched `font-display: swap` → `optional` — with the preloaded same-origin
-  woff2 the real font is ready before first paint, and `optional` never swaps, killing the font
-  "jump"; the metric-matched Inter/Outfit Fallbacks stay as the no-reflow safety net for a rare
-  slow first load. Guest→avatar and SFX-placeholder flips are inherent to client rendering on a
-  TRUE first visit (no data yet) — the shell renders neither, so nothing flips within it, and from
-  the 2nd load the localStorage hints seed them on frame 1 (already in place). lint 0 errors, build
-  OK, shell + fonts verified in dist. Files written back to the owner's repo (index.html,
-  src/index.css) and byte-verified against the cloud build. OWNER: run deploy.bat, hard-refresh
-  (Ctrl+F5), and — best test — open an Incognito window (empty cache/localStorage = true cold load)
-  and film the reload: the header+logo should be there from the first frame on the dark background.
-  If ANY flicker remains, it's the homepage sections assembling via framer-motion entrance
-  animations (separate from the four originals) — next lever is to soften/skip those on first mount.
-  NOTE (housekeeping, not done): ~60 stale `vite.config.ts.timestamp-*.mjs` temp files sit in the
-  repo root — safe to delete / gitignore when convenient.
+  **1) Discover theme/genre/mood pages — pagination + waveform fixes.** `/discover/:group/:tag`
+  used to render ALL matching tracks at once; each row fetches+decodes a preview MP3 for its
+  waveform, so a 100-track theme page stuttered the equalizer. `TrackRowList` gained optional
+  props: `pageSize` (mount in batches of N + IntersectionObserver sentinel, like Catalog),
+  `resetKey` (see below), `waveMinLoadingMs`. Discover passes `pageSize={20}`,
+  `resetKey={`${group}/${slug}`}`, `waveMinLoadingMs={650}`. Fixes the lag.
 
-- **2026-07-18 (SFX category SEO/AI-discovery FAQ — TuneTank-style):** every
-  `/sound-effects/:category` page now renders a "Frequently Asked Questions" block
-  (4 templated Q&A per category name, à la tunetank.com/sound-effects/<cat>/) as
-  visible native `<details>` accordions AND mirrors the same Q&A into a schema.org
-  **FAQPage JSON-LD** (via the existing `useSeo` hook, `#route-jsonld`), so Google
-  can show rich results and answer engines can quote clean Q&A. Copy lives in NEW
-  `src/content/sfxFaq.ts` (`buildSfxFaq(title)` + `sfxFaqJsonLd(title)`) — honesty-safe:
-  SFX are our own royalty-free content so "royalty-free / commercial use / no
-  attribution / won't trigger a claim" are true here; plan-accurate (WAV on Pro+Max,
-  Free = listen, commercial = Max). `SoundEffects.tsx` also now sets a proper per-page
-  SEO title/description/canonical for both the category and landing views (it had none
-  before). Questions: Where can I download / royalty-free & YouTube-safe / commercial
-  use / how to download. lint 0 errors, build OK. Committed to owner repo:
-  src/content/sfxFaq.ts (new), src/pages/SoundEffects.tsx. NOTE: JSON-LD is injected at
-  runtime (client-rendered SPA) — Google renders JS so it's fine; for JS-less answer
-  bots a prerender/SSR pass (docs/SEO.md) is the eventual upgrade. IN PROGRESS (next):
-  smart bulk SFX upload — owner decided HYBRID category mapping (map to existing cats,
-  propose new for unmatched, review TABLE before upload), description SAVED + fed into
-  SFX search (sfx table has NO description column yet — add lazy ALTER + include in the
-  name/tags search), tool-home (browser Bulk vs PyQt6 desktop) TBD after inspecting the
-  owner's real library (year/ -> arbitrarily-named subfolders -> WAV + sibling .txt/.doc
-  with tags+description). Awaiting the owner to connect the sound-library folder.
+  **2) Waveform "loading scan" now replays on filter switch — via a PROP, not a remount.** Key
+  insight (owner spotted it): switching a Use Case on `/catalog` is a CLIENT-SIDE filter — React
+  REUSES rows (same `track.id` key), the row is just hidden/shown, so a key-based remount never
+  fires and a cached waveform snaps in instantly. Fix: `WaveformPreview` got a `reloadKey` prop;
+  when it changes the load effect re-runs (`setIsLoading(true)` → scan shows → reveal after hold),
+  so even a REUSED row re-shimmers. Threaded `TrackRow.waveReloadKey` → `WaveformPreview.reloadKey`
+  on BOTH waveform instances. `TrackRowList` passes `resetKey` down as `waveReloadKey`.
+  - Catalog wires `waveReloadKey={reshimmerKey}` where `reshimmerKey` = collection|category|
+    useCase|genre|mood|sort|ai (search text EXCLUDED, else every keystroke restarts the scan).
+  - Per-track JITTER so it looks organic: hold = `minLoadingMs * (0.45 + Math.random())` computed
+    INSIDE the effect each run (~290–940ms around the 650 base). Cached rows shimmer at their own
+    moment, uncached ones take longer naturally. Owner wanted exactly this "fresh tracks loaded"
+    feel. Files: `WaveformPreview.tsx`, `TrackRowPlayer.tsx`, `Discover.tsx`, `Catalog.tsx`.
 
-- **2026-07-18 (SFX smart bulk upload — SCANNER built + tested on the real library):** owner
-  connected the sound library (Z:\...\Женя Гужа звуки\Готовые к заливке — year folders → dated
-  pack subfolders, each = ONE pack: N WAV "versions" + a sibling tag file). Reality found by a real
-  scan: 4922 WAV, 631 .txt (2018–23) + 101 .docx (2024+), NO legacy binary .doc. One tag file per
-  PACK (not per sound); format = Title line → description prose → comma tag list(s). Built a
-  stdlib-only Python SCANNER (runs on owner PC AND testable headless on the device VM):
-  scanner_core.py (walk, parse txt via encodings / docx via zipfile+xml, dedupe WAVs by name+size,
-  skip nested-dup folders, skip Ableton project scaffolding — "* Project"/Samples/Processed/
-  Consolidate/Imported/Recorded/Backup/Freeze, clean sound names "01_Glitch Sfx.wav"→"Glitch Sfx
-  01", WAV duration via stdlib wave) + taxonomy.py (HYBRID matcher: map to existing site categories
-  else propose from a BLEND taxonomy — human-friendly TuneTank-style names kept honest to our
-  actual content). Owner approved the blend. FINAL 19 categories w/ sound counts from the real run:
-  Game & UI 943, Transitions 920, Technology & Sci-Fi 384, Impacts 376, Scary & Horror 314,
-  Cinematic & Trailer 225, Nature 221, Foley & Objects 204, Magic & Fantasy 200, Cartoon & Funny
-  176, Seasonal & Holiday 119, Weather 70, Bells & Musical 65, Voice & Human 57, Sports 50,
-  Transport 40, Logo & Intro 33, Weapons & Fighting 31, Animals 22. Some have subcats (Transitions:
-  Whoosh/Swoosh/Swish/Risers; Impacts: Booms/Hits/Stingers/Explosions; Game & UI: Interface&Clicks/
-  Coins&Win/Pops&Dings; Technology: Glitch/Sci-Fi&Space/Digital&Beeps; Nature: Water/Fire/Forest).
-  After Ableton exclusion: 687 packs / 4897 sounds, 58 flagged "review", 4 packs no-text. Live site
-  /api/sfx has only TEST categories (New Cat/test 2) + 14 test sounds — so hybrid will mostly CREATE
-  new. Delivered a styled Excel REVIEW workbook (Читай меня / План категорий / Звуки[dropdowns+status
-  colors] / Паки / На проверку) to the owner twice (v1 then v2 with the blended taxonomy). Tool
-  source lives in the cloud at /tmp/sfx_uploader (taxonomy.py, scanner_core.py); scan outputs on the
-  owner PC in Z:\...\Готовые к заливке\_sfx_scan (CSV — owner can delete). DECISIONS locked: each
-  WAV = its own sfx row (TuneTank-style); description SAVED and to be fed into SFX search (sfx table
-  has NO description column yet → add lazy ALTER + include in name/tags search); categories HYBRID.
-  NEXT: (1) build the PyQt6 desktop app (choose folder → Scan → table on screen → Export Excel →
-  later Upload) with a one-click start.bat; (2) the UPLOAD stage = create categories/subcats +
-  per sound: encode 320/128 mp3 preview + upload preview & WAV (kind=sfx) + create_sfx + update_sfx
-  tags/category/description; needs either a token-auth bulk import endpoint or reuse admin session.
-  Also still open from before: SFX FAQ shipped; SFX P2 payout weighting / licence PDF unchanged.
+  **3) Catalog "Featured" now leans on NEWNESS; composer page sorts newest-first.**
+  - `catalogSort.ts`: new `composerRecencyPercentile(tracks)` → 0..1 per track, ranked by
+    `import_no` WITHIN each composer (so a 1500-track author's newest and a 100-track author's
+    newest both ≈1 — nobody dominates by having bigger numbers). `buildRecommendedRank` now sorts
+    each genre group by `RECENCY_WEIGHT*recency + (1-RECENCY_WEIGHT)*jitter` (RECENCY_WEIGHT=0.62,
+    daily-seeded), then deals round-robin — so the first rows lead with each genre's freshest
+    tracks across composers, older ones sink (seen on scroll). Tune RECENCY_WEIGHT if needed.
+  - `Artist.tsx` had a BUG: `artistTracks` was rendered in raw API order (looked random, e.g. #7
+    above #345). Now `interleaveByComposerRecency(...)` → strict newest-first by import_no.
 
-- **2026-07-18 (SFX uploader — PyQt6 desktop app SHIPPED, step 1 scan+export):** built and
-  delivered the desktop tool to the owner's repo at `sfx_uploader/` (gitignored — added
-  `sfx_uploader/` to .gitignore so deploy.bat never commits it). Files: app.py (PyQt6 GUI:
-  folder pick → threaded Scan with progress → on-screen table with inline Category combo-delegate
-  editing + status colors → Export Excel), scanner_core.py, taxonomy.py, export_excel.py
-  (reusable build_review_workbook from row/pack dicts), requirements.txt (PyQt6, openpyxl),
-  start.bat (one-click Windows launcher: creates .venv, pip installs, runs — needs Python 3.10+
-  on PATH), README_RU.txt. Verified: py_compile clean, logic + Excel export tested, and the whole
-  MainWindow constructed under QT_QPA_PLATFORM=offscreen (all widget/enum API valid). All files
-  byte-verified after write. The "Загрузка на сайт" panel exists but is DISABLED (URL+token fields
-  present) — upload is the next step. NEXT (upload stage): (1) add a token-auth path to the site's
-  admin APIs — accept `X-Admin-Token: <ADMIN_API_TOKEN>` (new CF secret) alongside the admin session
-  in requireAdmin / on /api/admin/upload-audio + /api/admin/sfx — so the desktop tool can push
-  headless (same pattern the future fingerprinting utility needs); (2) uploader.py client: read
-  approved Excel/scan, upsert_category/upsert_subcategory, per sound encode 320/128 mp3 preview
-  (lameenc pure-python, or ffmpeg fallback; WAV via stdlib wave+audioop for 16/24-bit PCM),
-  upload preview (kind=preview) + WAV (kind=sfx), create_sfx, update_sfx (tags+category), and set
-  description — REQUIRES adding a `description` column to the sfx table (lazy ALTER) + create_sfx/
-  update_sfx to accept it + include it in /api/sfx search (owner decided description feeds SFX
-  search). Idempotent via a content hash / skip-already-uploaded. Categories still HYBRID; owner
-  reviewing the category plan in the delivered Excel before upload.
+  **4) License PDF label.** `license-pdf.ts` `typeLabel` dropped "One-time · " → just the tier
+  (`cap(tier)`), e.g. "Commercial". (Subscription label "Subscription · Max Plan" unchanged.)
+  PENDING / NOT YET APPLIED (owner reviewed a 2nd-AI's advice, I recommended, he didn't confirm):
+  (a) Personal license scope reads "personal, non-commercial" while permitting "Monetized personal
+  content" — recommend rewording scope to "…personal projects, including your own monetized
+  content, but not client work or paid advertising"; (b) Professional scope "full commercial
+  rights" → "a full commercial license" (rights sounds like ownership transfer). Content-ID
+  wording (point 3) is ALREADY correct sitewide ("we send it for release", not "we remove").
 
-- **2026-07-18 (SFX bulk upload — BACKEND token + client SHIPPED, step 2):** built the upload
-  stage end to end. BACKEND (committed to repo, needs a deploy): `_utils.ts` — new Env
-  `ADMIN_API_TOKEN` + exported `adminTokenOk(ctx)` (checks `x-admin-token` header; false when the
-  secret is unset so nothing changes until set). `admin/sfx.ts` — requireAdmin accepts the token as
-  owner; `ensureSfxTables` now ALTERs a `description TEXT` column onto sfx (self-heal); `create_sfx`
-  extended to take tags[] + description + status in ONE call (was tags=[] draft only) so the
-  uploader needs no per-sound follow-up; `update_sfx` also accepts description. `admin/upload-audio.ts`
-  — token treated as admin (restructured the session/composer gate to allow no-session token calls;
-  guarded the per-composer perms block with `&& user`). `sfx.ts` (public) — search now also matches
-  `description` (owner's "description feeds SFX search"). lint 0 errors, vite build OK, tsc clean on
-  the touched files. CLIENT: `sfx_uploader/uploader.py` — Uploader(base,token,root,ledger): slugify
-  matching the server, ensure_categories (upsert_category/upsert_subcategory, ids = slug /
-  `${cat}-${slug}`), encode_preview (320 kbps MP3 via **lameenc** on stdlib wave+audioop PCM16;
-  **ffmpeg** fallback for float/exotic WAV), per sound: upload preview (kind=preview) + WAV
-  (kind=sfx) → create_sfx published w/ category/subcategory/tags/description; idempotent+resumable
-  via a local ledger (~/.sfx_uploaded.json keyed by rel_path); run() reports ok/skip/fail and honors
-  a stop flag. `app.py` — upload panel now LIVE: URL+token fields (persisted in ~/.sfx_uploader.json),
-  "Загрузить на сайт" (threaded UploadWorker + progress + log pane + Стоп), plus "Импорт правок из
-  Excel…" (reads the edited Звуки sheet, matches by Rel path, applies Category/Subcategory/name/tags/
-  description back into the table). requirements += requests, lameenc. Verified: py_compile, offscreen
-  full-window build, real MP3 encode from a generated WAV. README_RU updated with the exact Cloudflare
-  step. OWNER TOKEN generated: `tvms_ec03076be7e9a059b309df30c74b3a6ef82400a6110511c5` (set as CF
-  secret ADMIN_API_TOKEN + paste into the app). OWNER STEPS: (1) deploy.bat to push the backend;
-  (2) add the ADMIN_API_TOKEN secret in CF + Deploy; (3) in the app: scan → (import Excel edits) →
-  Загрузить. Uploads publish immediately (public /api/sfx shows status='published' only). NOTE: WAVs
-  ~1.5–2GB total, ~3 API calls/sound — long run, resumable. STILL OPEN: SFX P2 payout weighting /
-  licence PDF; fingerprinting prototype.
+  **5) Purchase receipts — branded email + real Stripe invoice PDF (owner chose the full option).**
+  - `_email.ts`: new `sendReceiptEmail(env, to, {subject, heading, intro, lineItems[], vatText,
+    totalText, metaRows[], invoiceUrl, secondary})` — branded shell, item table, VAT+Total,
+    "Download invoice (PDF)" button (Stripe hosted invoice), never throws.
+  - `checkout-licenses.ts`: added `invoice_creation[enabled]=true` so ONE-TIME purchases also get
+    a real Stripe invoice PDF (payment mode gives only a receipt otherwise).
+  - `webhook.ts`: sends the receipt on subscription (`invoice.paid` OR `invoice.payment_succeeded`
+    — BOTH cases handled, email deduped by `isFirstDelivery` = revenue_events row not yet present)
+    and on one-time license fulfilment (once, guarded by the existing `sync_orders` check; fetches
+    the created invoice for hosted_invoice_url/number/amounts). Helpers added: `fmtMoney`,
+    `fmtDate`, `getUserContact`.
+  - **API-version hardening (owner's Stripe API = 2026-06-24.dahlia):** newer API removed
+    `invoice.subscription` from the top level. `invoiceSubscriptionId(inv)` now resolves it from
+    `inv.subscription` ?? `inv.parent.subscription_details.subscription` ?? a line item. Without
+    this the whole subscription path silently no-ops on the new API version.
 
-- **2026-07-18 (SFX taxonomy v3 — concrete, PER-SOUND, owner-approved):** owner rejected the broad
-  buckets ("Cinematic & Trailer is not a sound type", "where are the swooshes", "Game & UI too
-  generic — people search a specific sound"). Reworked into a concrete, task-oriented taxonomy AND
-  switched classification from PER-PACK to PER-SOUND: each WAV is placed by its OWN filename (weight
-  4) + pack title (2) + pack tags (1), so a "Whoosh Swoosh to Bass Hits" pack now splits across
-  Whooshes/Impacts instead of one bucket. taxonomy.py rewritten = 36 categories; Swoosh is a
-  SUBCATEGORY inside **Whooshes** (owner: "swoosh goes into whoosh, I'll add a Popular-Categories
-  subsection"). Dropped Cinematic & Trailer (a mood) and Fighting (only false hits like "Basketball
-  Kick"). scanner_core.classify now takes (name,title,tags,existing); scan() classifies each sound,
-  pack row = mode of its sounds, needs_review counts SOUNDS; export_excel plan counts per-sound.
-  Real re-scan on the library (Ableton excluded): 687 packs / 4897 sounds, 366 review (~7.5%).
-  Category sound-counts: Whooshes 701, Impacts 445, Horror & Tension 317, Coins & Rewards 263,
-  Game 255, Foley & Objects 221, Magic 208, Funny 186, Water 171, Buttons & UI 161, Transitions 154,
-  Pops & Dings 140, Notification 135, Human 119, Seasonal 115, Clicks & Typing 114, Glitch 100,
-  Bells & Musical 96, Digital & Beeps 88, Ambiences 80, Fire 76, Logo & Intro 69, Explosions 60,
-  Sci-Fi & Space 60, Risers & Sweeps 50, Transport 46, Booms 39, Voice Clips 31, Weather 30, Wind 30,
-  Weapons 26, Animals 25, Mechanical 24, Swishes 22, Braams & Stingers 13, Alarm 6. Subcats:
-  Whooshes(Whoosh/Swoosh), Water(Rain/Waves/Splash), Voice Clips(Scream/Laugh/Whisper). Owner
-  approved this list. Delivered new SFX_review_v3.xlsx (built via the shipped export_excel, so it's
-  tested) + updated taxonomy.py/scanner_core.py/export_excel.py to sfx_uploader/. app.py unchanged
-  (CATS = taxonomy keys, auto-updates). NOTE Voice Clips reality: scream/laugh/whisper exist, but
-  baby/hello/crying ≈ none, so no such subcats. Uploader/backend from the prior entry unchanged and
-  still valid. NEXT: owner reviews v3 categories → then deploy backend + set ADMIN_API_TOKEN + run
-  the upload.
+  **6) MP3 filename.** `download.ts` single-file download name now includes the composer pseudonym
+  (`composerPart`), matching the WAV zip entries: `tvmusicstore.com_<code>_<Composer>_<Title>.mp3`
+  (was dropping the composer only for MP3).
 
-- **2026-07-18 (SFX taxonomy — inheritance + long tail keyworded, 0 uncategorised):** owner asked
-  that sounds with no confident category INHERIT their pack's dominant category so he doesn't sort
-  them by hand. Added that to scanner_core.scan (per pack: mode of its sounds' categories; blank
-  sounds -> that category, status "inherited"; fully-unknown packs stay blank). Found that the ~366
-  "review" flags were misleading — only ~80 sounds (12 packs) were TRULY blank, and those packs were
-  homogeneous real types missing from the vocab (Heart Beat, Vinyl Scratches, Violin, Flute, Bubble
-  Wrap, Scotch Tape, Perfume Spray, Bat Wings, Mad Scientist's Lab, Rewind, Stamp, Sizzling Fry), so
-  inheritance couldn't help them (no dominant cat). Added keywords for all of them: Human += heart
-  beat; Transitions += rewind; Sci-Fi & Space += lab/laboratory; Animals += bat/wings; Foley &
-  Objects += stamp/vinyl/scratch/record scratch/sizzle/fry/bubble wrap/tape/scotch tape/spray/
-  aerosol/perfume/rustle; Bells & Musical += violin/flute/strings/cello/guitar. Re-scan: 687 packs /
-  4897 sounds, **0 uncategorised**, needs_review 271 (all of which DO have a category — just
-  low-confidence, they upload fine). Added an "inherited" status colour (light violet) to
-  export_excel + app. Delivered SFX_review_final.xlsx + updated taxonomy.py/scanner_core.py/
-  export_excel.py/app.py to sfx_uploader/. Owner's upload workflow confirmed: open app → Scan →
-  Load (Excel import only needed if he hand-edits categories in the sheet). Everything now ready to
-  go live: deploy backend + set ADMIN_API_TOKEN + upload.
+  **7) Subscription success redirect.** `checkout.ts` success_url → `/account?section=billing`
+  (parity with a one-time purchase returning to `/account?section=license`). Welcome modal still
+  fires on `checkout=success`.
 
-- **2026-07-18/19 (SFX upload LIVE + Browse-by-Category UX + subcats + admin select-all):** the
-  bulk upload works end to end — owner set ADMIN_API_TOKEN and uploaded ~300 sounds; categories were
-  auto-created. TOKEN 401 TROUBLESHOOTING (resolved): /api/health now reports `admin_token`
-  (added the field to health.ts); the 401 was a Cloudflare Pages gotcha — a secret only reaches a
-  deployment CREATED AFTER it's set in the correct environment (Production). Fix = set the secret in
-  Production + Retry deployment (a git-push deploy with a real change also works). Then owner asked:
-  (1) BROWSE-BY-CATEGORY: on the SFX landing the category TILE should NOT be clickable — only the
-  subcategory chips inside (TuneTank model). Fixed SoundEffects.tsx: header is now a plain <div>
-  (was a <Link>); subcategory chips (ArcChip) are the only links; categories with no subcats show a
-  single "All {title}" chip so the tile is never a dead end. (2) SUBCATEGORIES for every category:
-  rewrote taxonomy.py with data-grounded subcats for all 36 categories (keywords taken from the real
-  per-category sound-name vocabulary), e.g. Whooshes→Whoosh/Swoosh/Swipe/Bass Hit, Animals→Cat/
-  Birds/Horse/Wolf/Bat/Dog, Clicks & Typing→Mouse Click/Keyboard/Clock/Phone, Bells & Musical→Bells/
-  Chimes/Drum/Flute/Strings, etc. best_subcategory already assigns them; the uploader's
-  ensure_categories already creates subcategories, so a RE-SCAN + RE-UPLOAD populates them. (3)
-  ADMIN SELECT-ALL: added a header checkbox to Admin → SFX library that selects/deselects all VISIBLE
-  (current page) sounds in one click (union/removal), like Tracks Edit — no more 300 clicks. lint 0
-  errors, build OK. Delivered: taxonomy.py (sfx_uploader/), src/pages/SoundEffects.tsx,
-  src/components/AdminSfx.tsx. OWNER NEXT: (a) delete his test sounds; (b) deploy.bat (ships the two
-  frontend changes); (c) in the app re-Scan (new taxonomy = subcats) then Load — subcategory chips
-  will then appear on every category tile. Uploader/backend unchanged.
+  **8) BIG operational lesson — Stripe test setup + Cloudflare deploys (this ate most of the
+  chat).** Symptoms: paid with 4242 but site stayed "free", then "Checkout is unavailable".
+  Root causes and fixes:
+  - `ensurePrices` (checkout.ts) blindly reused `plan_config.stripe_price_*` ids. Those were
+    created in a PREVIOUS Stripe environment; after switching `STRIPE_SECRET_KEY` to a new
+    sandbox they don't exist → Stripe "No such price" → checkout 500 → UI "unavailable". FIXED:
+    ensurePrices now GET-verifies the stored price exists AND is active in the current env, else
+    recreates product+prices (self-heals sandbox / test↔live switches). checkout.ts also wrapped
+    in try/catch → surfaces the real Stripe error (`Stripe: <msg>`) instead of a black-box 500.
+  - **Everything must be ONE Stripe sandbox:** the `sk_test_…` in Cloudflare `STRIPE_SECRET_KEY`,
+    the webhook endpoint, and where the customer clicks subscribe. If the key is from a different
+    env than the endpoint, the endpoint shows **0 event deliveries** and the plan never updates.
+    Owner's sandbox: `acct_1TpnW2GoICMZLpe2`. Copy the FULL revealed keys, never the masked
+    `sk_test_…FKzN` / `whsec_…` display (that placeholder is not a valid key).
+  - **CLOUDFLARE DEPLOY RULE (write this on the wall):** env var / secret changes apply ONLY on a
+    NEW build. `deploy.bat` builds only when there's a NEW commit — if you changed only secrets,
+    git says "nothing to commit / up-to-date" and **no deploy happens**, so the change never goes
+    live. **"Retry deployment" rebuilds an OLD deployment and can REVERT env vars** — do NOT use it
+    to apply env changes. To force a deploy after a secrets-only change: make a trivial code edit
+    (we bump the `build` marker in `functions/api/health.ts`) then run deploy.bat.
+  - **`/api/health`** reports presence of each secret (`stripe`, `stripe_webhook`, `resend`, …)
+    and now a `build` marker to confirm a fresh deploy landed. NOTE: WebFetch/browsers cache it —
+    hit `…/api/health?cb=xyz` to bust the 15-min cache. Current marker: `build:"stripe-fix-2"`
+    (debug aid; safe to keep or remove later).
+  - Webhook endpoint listens to 9 events: checkout.session.completed, invoice.paid,
+    invoice.payment_succeeded, customer.subscription.updated, customer.subscription.deleted,
+    invoice.payment_failed, charge.refunded, charge.dispute.created, charge.dispute.funds_withdrawn.
+  - **RESULT: checkout + subscription CONFIRMED WORKING by the owner.** Receipt emails ship with
+    the same deploy.
 
-- **2026-07-19 (SFX admin selection bar moved + SFX join the GLOBAL player):** two owner requests.
-  (1) In Admin -> SFX the "N selected / Publish / Unpublish / Delete" bar lived in the search/filter
-  row and pushed the table down when it wrapped. Moved it into the TOP header row next to
-  "SFX / Library (N) / Categories" with ml-auto (Tracks-Edit pattern) so it never shifts the table
-  (AdminSfx.tsx). (2) SFX now play through the shared bottom mini-player instead of a local
-  new Audio(): SoundEffects.tsx got an sfxToTrack() adapter (SFX -> CatalogTrack tagged isSfx:true,
-  id prefixed "sfx:", version {id:"full",src:previewSrc}); its row play/seek now call
-  player.playVersion(track, version, seekTo, queue) with the visible list as the prev/next queue, and
-  row state derives from player.activeTrack/isPlaying/progress (local audioRef/playingId/prog removed).
-  Added `isSfx?: boolean` to CatalogTrack (catalogTracks.ts). PlayerProvider.tsx bottom bar is now
-  SFX-aware: for isSfx it renders the title as plain text (SFX has no /track page), hides BPM, and
-  hides the track-only action group (Favorite / Buy License / Download) — keeps play/skip + waveform
-  + time + volume. So a sound plays in the persistent bottom bar and keeps playing across navigation
-  like tracks. Admin preview still uses its own local play (internal, left as-is). lint 0 errors,
-  build OK. Delivered: AdminSfx.tsx, SoundEffects.tsx, PlayerProvider.tsx, catalogTracks.ts.
-  OWNER: deploy.bat (frontend only, no re-upload needed for the player). NOTE: the subcategory
-  taxonomy from the previous turn still needs a re-scan+re-upload to populate subcats on tiles.
+  **9) Stripe Business details clarification (no code):** the "Edit individual" email in Stripe
+  (tvmusicstore@gmail.com) is the account-owner contact — NOT shown to customers. Customer-facing
+  identity on the invoice PDF = Business details legal name + address; the support email customers
+  see = Public details → Customer support information (recommend contact@tvmusicstore.com). Our
+  branded email sends from Resend `EMAIL_FROM` (footer contact@tvmusicstore.com). Statement
+  descriptor TVMUSICSTORE.COM is correct.
 
-- **2026-07-19 (SFX AI SEARCH — Search / AI toggle, real Popular chips):** the sounds page now
-  has the same two-way search as the music catalog. NEW ENDPOINT functions/api/sfx-ai-search.ts
-  (public POST): mirrors /api/ai-search — the customer's words + a COMPACT digest of the SFX
-  vocabulary (category + subcategory TITLES only, never sound descriptions) go to gpt-4o-mini,
-  which returns {categoryIds, subcategoryIds, keywords}. Cheap "router" model (~fraction of a cent),
-  answers cached in D1 (sfx_ai_cache, 7 days), 8/min/IP throttle (sfx_ai_hits). functions/api/sfx.ts
-  gained AI-mode params cats=/subs=/terms= (comma lists, capped 5/8/8): when present it matches ANY
-  of them across the WHOLE published library (name/tags/description LIKE for terms, id IN for
-  cats/subs) and ignores cat/sub/q — so one described need pulls sounds off several shelves. Also
-  (earlier turn) q= now searches description too, not just name+tags. FRONTEND SoundEffects.tsx:
-  a "Search | AI Search" pill toggle above the box (aiMode state); AI submit navigates to
-  /sound-effects/?ai=<text>; load() has an AI branch (POST sfx-ai-search -> GET /api/sfx with routed
-  cats/subs/terms); results header reads 'N sounds for "<query>"'; isLanding/paging/All-categories all
-  account for ai. POPULAR chips under the box are no longer hardcoded words — they are the TOP 10
-  categories by real published sound count (popularChips = cats sorted by count desc), each a link to
-  /sound-effects/<catId> (owner's pick: "Top categories by sound count"). Requires OPENAI_API_KEY
-  (already set for music AI search) — 503 if missing. lint 0 errors, build OK; all 3 files verified
-  byte-for-byte on the owner's repo after commit. Delivered: functions/api/sfx-ai-search.ts,
-  functions/api/sfx.ts, src/pages/SoundEffects.tsx. OWNER: deploy.bat (backend + frontend). Still
-  pending from prior turns: re-scan+re-upload sounds with the new subcategory taxonomy so subcat
-  chips populate.
+  **FOR GOING LIVE (next chat / later):** create a SEPARATE live Stripe webhook endpoint (own
+  signing secret) + swap to live `sk_live_…` keys, all redeployed via deploy.bat (not Retry). Fill
+  Stripe → Business details (+ Tax/VAT if registered) so the invoice PDF is a valid tax document.
+  Decide whether to also enable Stripe's own receipt emails (they'd DOUBLE with our branded one —
+  probably leave Stripe's off). Optionally revisit the two PENDING license-wording tweaks in (4).
+  All work this chat was delivered to the owner's repo and deployed via deploy.bat as usual.
 
-- **2026-07-20 (DreadStudio TRACK RE-SORT — map into existing vocab, tool + review):** owner's
-  DreadStudio tracks were auto-classified by the site AI and came out badly. Rebuilt as a
-  reviewable, deterministic re-sort into the OWNER'S EXISTING vocab only (no new genres/moods/
-  playlists/categories — his explicit call). SOURCE = All Tracks_cleaned.xlsx (cols: #, Envato
-  Title, BPM, Lengths, alt title, Style, Description, 30 Tags) — NOTE it has NO explicit facet
-  columns, only Style + 30 tags + description, so classification is DERIVED. Live vocab pulled from
-  /api/content: 17 genres, 25 moods, 29 use cases, 5 categories (Cinematic Stories/High Impact/Dark
-  Suspense/Creator Music/Game OST), 43 playlists in 7 themes. Scope RIGHT NOW = only the uploaded
-  batch #1670–1795 (126 tracks; owner has ~1670-1795 live, not all 1803). Match key = import_no
-  (the '#', unique in the sheet, = the number in Tracks Edit).
-  BUILT (kept in the cloud session, regen on request): sfx_uploader/taxonomy_tracks.py (keyword
-  mapping Style+tags+desc -> vocab, WORD-BOUNDARY matching so 'cat' doesn't hit 'edu-cat-ion';
-  genre stays tight ~1.1/track; category = Creator Music + strong-signal extra; playlists up to 4)
-  and build_review.py -> DreadStudio_1670-1795_review.xlsx (3 sheets: Как читать / Re-sort review /
-  Coverage; flags: genre-gap for Corp/Funk/Jazz/Motivational/X-Mas which have no exact site genre,
-  seasonal for X-Mas/Halloween, *-fallback). Owner APPROVED the review as-is ("норм все").
-  DELIVERED to sfx_uploader/: resort_core.py + resort_app.py (PyQt6). The APPLY tool reads the
-  APPROVED review Excel (source of truth — honors owner edits), matches by import_no (title guard),
-  then per track calls /api/admin/content action=bulk_update_tracks with facets{genre/mood/useCase:
-  {remove:CURRENT, add:NEW}} + categoryChanges + playlistChanges {remove:current, add:new} — i.e.
-  CLEARS all current Genre/Mood/UseCase + playlist + category membership ("снять все галочки") then
-  SETS approved. Tags, descriptions, covers, BPM, COLLECTIONS untouched. Auth reuses
-  ~/.sfx_uploader.json url+token. Two buttons: «Проверить» (dry-run, no writes) / «Применить».
-  BACKEND CHANGES (need deploy.bat): functions/api/admin/content.ts + functions/api/tracks.ts —
-  added adminTokenOk() bypass to requireAdmin / the ?drafts=1 gate (was session-only), so the
-  desktop tool can read drafts and POST bulk_update_tracks with the token. tsc 0 errors, lint 0
-  errors, plan-builder unit-tested offline (126/126 matched, clear+set correct). OWNER NEXT:
-  (1) deploy.bat FIRST (token bypass only works on the new deployment); (2) run
-  `python sfx_uploader/resort_app.py`, pick the review xlsx, «Проверить» then «Применить». Future
-  batches: same tool on a new approved review file; ask Claude to generate the review for the new
-  # range.
-
-- **2026-07-23 (YUMMY = owner's OWN tracks → match + recency IDs + track uploader app):** owner's
-  ~383 tracks live in Z:\Render\Мои треки на стоки\Все треки MA title\Yummy (each a subfolder
-  "NN. Title" holding several WAV versions: full/middle/short/commercial/15-60sec). Matched folder
-  names to his master sheet SB_Stocks_2.xlsx (sheet «работа», header ROW 2, data row 3+) by title.
-  KEY LESSON: names live across THREE columns — MA title (col2), AJ title (col1), Alternative title
-  (col0); some tracks have MA="-". Match priority MA→AJ→Alt→MA-paren-parts (topmost row wins =
-  newest, owner said table top = newest). All 383 matched (373 exact MA + 10 via AJ/Alt). Built ONE
-  review xlsx (Yummy_треки_для_заливки.xlsx) with Description + Tags (Tags 20, else 30 Tags) + bpm +
-  Durations, and a RECENCY ID column: table-top(newest) → biggest ID, oldest → 1 (owner wants
-  bigger=newer like DreadStudio, for import_no sorting in Tracks Edit). Owner APPROVED.
-  UPLOAD DECISION: app, NOT site bulk. Composer = Lumine Wave (id resolved live from /api/content).
-  BUILT sfx_uploader/track_core.py + track_app.py (PyQt6): scans folder, groups WAV versions per
-  track (Main = no-suffix / "full" / longest; labels cleaned from filenames), reads approved xlsx
-  for id/tags/desc/bpm by folder title, encodes mp3 320+128 previews (lameenc→ffmpeg fallback),
-  uploads previews (kind=preview/preview128) + each WAV master (kind=master) with CRC32 (zlib.crc32
-  = standard zip CRC, matches _zipStream), calls create_track status=draft under Lumine Wave with
-  versions[]+wavManifest+tags+description+bpm+importNo=ID. Mirrors src/components/AdminBulkUpload.tsx
-  exactly. Resumable ledger ~/.yummy_uploaded.json (by folder). Buttons «Проверить»/«Залить». Reuses
-  ~/.sfx_uploader.json url+token. BACKEND: functions/api/admin/content.ts create_track now accepts
-  importNo (sets tracks.import_no at creation) — NEEDS deploy.bat. tsc 0, lint 0; version-grouping +
-  read_plan tested offline (383 rows, Main/labels correct). OWNER NEXT: (1) deploy.bat (importNo +
-  the earlier token-bypass on content.ts/tracks.ts); (2) run `python sfx_uploader/track_app.py`, pick
-  Yummy folder + the approved xlsx, «Проверить» then «Залить» (drafts). AFTER upload: classify these
-  drafts into Genre/Mood/UseCase/Categories/Playlists like DreadStudio (derive from tags+desc) and
-  publish. NOTE: temp _yummy_manifest.tsv was moved to Yummy\_to_delete\ (owner deletes).
-
-- **2026-07-23 (Yummy pack_01: 40 remastered tracks + stems merge):** owner has 40 tracks
-  remastered with variations + stems in Z:\Render\Yummy Sounds (Variations + stems)\пачка для
-  Yummy_01 (each folder = version WAVs "(FULL MIX)/(NO-DRUMS)/(UNDERSCORE)… - BPM X" + stems/
-  subfolder + .flp). All 40 matched by title to the numbered Yummy folders. Renamed 273 stem files
-  in-place adding "- stem -" (owner's request: "Always Together - bass - BPM 137" → "… - stem -
-  bass - …"). Copy into Yummy: owner does it MANUALLY (Z: copy too slow via bridge; got frustrated).
-  I copied 2 fully (124, 232 — old wavs moved to their _old/ subfolder, new+stems in) + 1 partial
-  (191 Adrenaline Seeker: old in _old, new not finished). Delivered cheat-sheet _куда_копировать.txt
-  (pack folder → numbered Yummy folder) to the pack folder. track_core.py/track_app.py UPDATED to
-  handle the new structure: versions = top-level WAVs (Main = the one with "full" in name, e.g. FULL
-  MIX), stems = stems/ subfolder → uploaded as masters into stemsManifest (create_track flips STEMS
-  badge, Max-plan download), BPM read from "- BPM 98" filename, .flp/_old/ ignored, and a FORGIVING
-  filter: if any top-level wav has "BPM" the non-BPM leftovers (old full/middle/short) are ignored
-  so a sloppy manual copy still uploads clean. Tested offline (new + old naming both correct).
-  OWNER NEXT: finish copying the 40 per the cheat-sheet, then deploy.bat + run track_app.py
-  («Проверить» → «Залить»). Stems: YES upload (Max).
-
-- **2026-07-23 (checkout + licenses + accountant report):** batch of owner-requested tweaks.
-  (1) PayPal disable-funding=card,paylater on the SDK (Cart.tsx) — killed PayPal's ugly guest
-  "Debit or Credit Card" form; Stripe "Pay with card" handles cards. (2) Post-purchase redirect →
-  /account?section=license (was Profile), both Stripe + PayPal paths. (3) Licenses tab: track names
-  now link to /track/<slug>; WAV/MP3 download buttons show a spinner while the server zips (busyKey).
-  (4) Certificate PURCHASE CODE was the raw Stripe session id (cs_… 60+ chars) overflowing the card —
-  now a tidy product-key-style code (prettyPurchaseCode: strip provider prefix, first 16 chars,
-  uppercase, dash-grouped e.g. B1LX-VXRY-W4N1-LN4Q) in license-pdf.ts; traceable via LICENSE NUMBER/
-  ORDER. (5) create_track now accepts importNo (added earlier). (6) Admin Licenses table: new
-  **Payment** column (Stripe/PayPal badge + full reference; Stripe deep-links to the payment via
-  pi_ extracted from revenue_events.provider_ref, else dashboard search; test/live auto from cs_
-  prefix) and per-row **fee/net** (from revenue_events joined on order_id, original event via
-  ROW_NUMBER). admin/licenses.ts + Admin.tsx.
-  DECISION: **Stripe-only** for now (owner's call; TuneTank does solo via Stripe). PayPal hidden in
-  Cart via `PAYPAL_ENABLED = false` flag — component + /api/paypal/* backend left intact, flip flag
-  to re-enable. Reporting doesn't depend on it (ledger is unified).
-  NEW: **Accountant report** — functions/api/admin/finance-report.ts (?from&to&format=json|csv|pdf,
-  admin-only) reads revenue_events over a date range: JSON summary, CSV (full per-transaction:
-  date/type/provider/customer/item/gross/tax/fee/net/currency/status/order/ref, UTF-8 BOM), and a
-  one-page PDF summary (gross/VAT/fees/net, refunds line, breakdown by type + processor) via the
-  zero-dep _pdf buildPdf. UI in AdminFinance.tsx (ReportExport card: from/to date pickers, Preview
-  totals, Export CSV / Export PDF). source values: license/subscription; refunds = status='refunded'
-  on the same row (shown separately, excluded from active totals). tsc 0, lint 0, build OK. OWNER:
-  deploy.bat to see all of it.
-
-- **2026-07-23 (Lumine Wave classification + plan/plaque/entitlement fixes):** (A) Welcome plaques
-  were one perks list for both plans → split per-plan (WelcomeModal.tsx perksFor): Pro = MP3 320 +
-  personal/creator license; Max = WAV+stems + commercial. Matches /pricing Compare table + backend.
-  (B) Pro-can-download-WAV was NOT a bug — download.ts already gates wav/stems to max-only; owner
-  sees it because ADMIN downloads at max level (intentional test override). Real Pro = MP3 only.
-  (C) Plan switch Pro→Max: replaced the broken "cancel first" (Stripe cancels at period end → block
-  never lifted) with in-place proration: functions/api/stripe/change-plan.ts updates the existing
-  sub's item price (proration_behavior always_invoice on upgrade / create_prorations on downgrade) +
-  metadata[plan] so the webhook maps it; billing.ts switchPlan(); PlanModal + Pricing now call it
-  ("Switch to Max", window.confirm) instead of blocking; removed the old blocked-panel. checkout.ts
-  exports ensurePrices/PlanRow. (D) PayPal-only-Stripe from prior turn stands.
-  (E) CLASSIFICATION of Lumine Wave (owner's own cinematic tracks, uploaded as drafts, import_no
-  1..383): built sfx_uploader/taxonomy_cine.py (cinematic-tuned — defaults to Cinematic not Creator
-  Music; genres Action/Horror/Suspense/Fantasy/Orchestral/Neo-Classical/Electronic/Ethnic + Cinematic
-  backbone; word-boundary matching) and build_cine_review.py → LumineWave_classify_review.xlsx
-  (resort-tool columns: #=import_no, Title, Genre, Mood, Use case, Categories, Playlists). Derived
-  from the Yummy table's tags+descriptions into existing music vocab only. Distribution: genre
-  Cinematic 366 / Action 103 / Orchestral 95 / Suspense 50 / Horror 34 / Fantasy 23; category High
-  Impact 284 / Cinematic Stories 265 / Dark Suspense 99 / Game OST 27 / Creator Music 30. Applied
-  with the SAME resort_app.py (matches by import_no + title guard). OWNER: review the xlsx, then
-  resort_app.py → Проверить → Применить. NOTE import_no 1..383 = Lumine Wave (DreadStudio is
-  1670-1795, no overlap). tsc 0, lint 0, build OK for all frontend/backend changes. deploy.bat for
-  the plan/plaque/entitlement changes.
-
-- **2026-07-23 (Tracks Edit → Export xlsx):** new admin export in AdminTracksEdit.tsx. Toolbar
-  "Export xlsx" button opens a dialog: pick Composer (All + every profile) and tick which columns
-  to include (#/import_no, Code, Title, Composer, Genre, Mood, Use case, Categories, Playlists, BPM,
-  Duration, Status; defaults = #/Title/Composer/Genre/Mood/Use case/Categories/Playlists). Rows are
-  sorted by import_no DESCENDING (newest = biggest # on top). Categories/Playlists come from the
-  ContentItemLite.trackIds membership; genre/mood/useCase are the stored " / " strings. Real .xlsx
-  via `write-excel-file` (v4, added dependency) loaded with a DYNAMIC import from
-  'write-excel-file/browser' (bare specifier fails — the pkg only exposes ./browser|./node|
-  ./universal subpath exports), so it's a lazy chunk, not in the main bundle. Blank cells → null,
-  numeric columns typed as Number. Added `Download` to the lucide import. tsc 0, lint 0, build OK.
-  DEPENDENCY: package.json + package-lock.json updated — Cloudflare installs write-excel-file on the
-  next build, so plain deploy.bat is enough (no manual npm install for the deployed site).
-
-- **2026-07-23 (Tracks Edit: editable # + cascade + sort + page size):** (1) double-click a track's
-  "#" (import_no) to edit inline (Enter=save, Esc=cancel). (2) Backend content.ts action
-  renumber_track { id, importNo }: INSERTS the number into the ordered list — if target is occupied
-  (within the SAME composer only), the run of consecutive occupied numbers from target up is bumped
-  +1 each until the first gap, then stops (200→ pushes 200→201,201→202,… stops at first free). Never
-  ripples another composer's library. Returns changes[]; frontend applies via onApplyOverrides.
-  (3) sort==="id" is now DESCENDING (biggest/newest on top; blanks always last). (4) rows-per-page
-  options now [20,50,200,500]. tsc 0, lint 0, build OK. deploy.bat to ship.
-
-- **2026-07-23 (catalog "New" = per-composer index interleave):** "New" sorted by created_at (upload
-  date) → showed old tracks, since bulk uploads share an upload date. Rewrote: src/lib/catalogSort.ts
-  interleaveByComposerRecency() groups tracks by composer, sorts each by import_no DESC (bigger =
-  newer), then deals round-robin by rank (every composer's newest first, then 2nd-newest, … — a
-  "chess-board" interleave). Composer order within a row is daily-seed-shuffled (fair + stable within
-  a day); tracks with no numeric index sink to the bottom by created_at. sortTracks("New") now calls
-  it. Also applied on Discover theme/genre/mood pages (src/pages/Discover.tsx: exact =
-  interleaveByComposerRecency(tracksWithTag(...))). importNo is on public catalog tracks (useTracks
-  maps import_no→importNo; /api/tracks selects it). Featured/Recommended (default) unchanged =
-  admin-TRENDING tracks pinned first (site_config trending_track_ids, set via Admin→Content
-  set_trending picker — MANUAL, not likes) + diverse daily genre round-robin; Popular = by real
-  download counts. tsc 0, lint 0, build OK. deploy.bat to ship.
+- **2026-07-24 (sandbox test feedback round 1: receipt email polish + cancel state in Plan & Billing):**
+  (1) RECEIPT EMAIL: "Manage your plan" secondary link REMOVED (owner's call). The gold button now
+  opens the Stripe hosted RECEIPT (the "Paid" document) instead of the invoice — the invoice PDF is a
+  bill by design ("US$84.00 due" + Pay online; Stripe never regenerates it after payment), the receipt
+  says Amount paid. `sendReceiptEmail` gained `receiptUrl`; button label becomes "Download receipt
+  (PDF)" when present, and a small grey "Need an invoice for your records?" link keeps the invoice
+  reachable for accountants. webhook.ts: new `invoiceChargeInfo()` resolves the charge on BOTH old and
+  2025+ API shapes (invoice.charge removed -> /invoices/{id}?expand[]=payments -> payment_intent ->
+  latest_charge) and returns the REAL Stripe fee + receipt_url — on the new API the fee was silently
+  falling back to the 2.9%+30c estimate before this. License-cart receipts take receipt_url from the
+  already-expanded latest_charge.
+  (2) EMAIL SHELL: header logo 44 -> 80px (radius 18, wordmark 17px/ls4) — owner: logo was too small
+  on PC and phone.
+  (3) CANCEL STATE: new lazy column `subscriptions.cancel_at_period_end` (ensureStripeColumns +
+  migration); applySubscription passes sub.cancel_at_period_end; period end now read via new
+  `subPeriodEnd()` helper (2025+ API moved current_period_end onto subscription ITEMS — the top-level
+  read was coming up empty, which is why "active until" never had a date). /api/me returns it with a
+  defensive fallback for pre-column DBs; useAuth maps `Subscription.cancelAtPeriodEnd`.
+  (4) PLAN & BILLING rebuilt per owner: the "Cancel Subscription" card + CancelSubscriptionModal usage
+  REMOVED (component file kept on disk, unmounted); "Your plan" card now carries the status line —
+  active: "Renews on <date>. Cancel anytime via Manage billing…"; after a portal cancel: gold
+  "Canceled — active until <date>, then you switch to Free." The top-of-page canceled banner keys off
+  cancelAtPeriodEnd too (before it only fired after the sub fully ENDED, when plan was already free —
+  i.e. effectively never). NOTE: the owner's test sub canceled BEFORE this deploy won't show the flag
+  retroactively (the webhook that carried it predates the column) — resubscribe + cancel again in test
+  to see the new state.
+  VERIFIED: edited functions files tsc-clean (isolated es2022 run, cloud container); eslint 0 errors on
+  the 3 edited src files (run on the device); full lint/build = deploy.bat on the host as usual.
+  NO-CODE items handed to the owner: Stripe receipts/invoices print the HOME address — change it in
+  Stripe Dashboard -> Settings -> Business details (to the London correspondence address); partner
+  names belong on the site's Terms/Privacy (already there), not on invoices.

@@ -79,10 +79,18 @@ export const verifyStripeSignature = async (
 // subscriptions table helpers
 // ---------------------------------------------------------------------------
 
-/** Adds subscriptions.stripe_customer_id on first use (no manual migration). */
+/** Adds subscriptions.stripe_customer_id + cancel_at_period_end on first use
+ *  (no manual migration — same lazy-ALTER pattern as everywhere else). */
 export const ensureStripeColumns = async (db: D1Database): Promise<void> => {
   try {
     await db.prepare(`ALTER TABLE subscriptions ADD COLUMN stripe_customer_id TEXT`).run();
+  } catch {
+    // column already exists — fine
+  }
+  try {
+    await db
+      .prepare(`ALTER TABLE subscriptions ADD COLUMN cancel_at_period_end INTEGER DEFAULT 0`)
+      .run();
   } catch {
     // column already exists — fine
   }
@@ -95,6 +103,8 @@ export interface SubUpsert {
   interval: string | null;
   status: string;
   currentPeriodEnd: string | null;
+  /** true = customer canceled in the portal; plan stays active until period end. */
+  cancelAtPeriodEnd?: boolean;
 }
 
 /** One live subscription row per user: update the latest or insert a new one. */
@@ -113,15 +123,17 @@ export const upsertSubscription = async (
       .prepare(
         `UPDATE subscriptions
             SET plan = ?1, interval = ?2, status = ?3, current_period_end = ?4,
-                stripe_sub_id = COALESCE(?5, stripe_sub_id),
-                stripe_customer_id = COALESCE(?6, stripe_customer_id)
-          WHERE id = ?7`,
+                cancel_at_period_end = ?5,
+                stripe_sub_id = COALESCE(?6, stripe_sub_id),
+                stripe_customer_id = COALESCE(?7, stripe_customer_id)
+          WHERE id = ?8`,
       )
       .bind(
         s.plan,
         s.interval,
         s.status,
         s.currentPeriodEnd,
+        s.cancelAtPeriodEnd ? 1 : 0,
         s.stripeSubId ?? null,
         s.stripeCustomerId ?? null,
         existing.id,
@@ -131,8 +143,8 @@ export const upsertSubscription = async (
     await db
       .prepare(
         `INSERT INTO subscriptions
-           (id, user_id, stripe_sub_id, stripe_customer_id, plan, interval, status, current_period_end)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
+           (id, user_id, stripe_sub_id, stripe_customer_id, plan, interval, status, current_period_end, cancel_at_period_end)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`,
       )
       .bind(
         newId("sub"),
@@ -143,6 +155,7 @@ export const upsertSubscription = async (
         s.interval,
         s.status,
         s.currentPeriodEnd,
+        s.cancelAtPeriodEnd ? 1 : 0,
       )
       .run();
   }
@@ -166,5 +179,17 @@ export interface StripeSubscription {
   current_period_end?: number;
   cancel_at_period_end?: boolean;
   metadata?: Record<string, string>;
-  items?: { data?: { price?: { id: string; recurring?: { interval?: string } } }[] };
+  items?: {
+    data?: {
+      price?: { id: string; recurring?: { interval?: string } };
+      // 2025+ API versions moved the period off the subscription top level
+      // onto each item — read it from either place (see subPeriodEnd).
+      current_period_end?: number;
+    }[];
+  };
 }
+
+/** The period end, wherever this API version keeps it (top-level was moved to
+ *  the subscription items in the 2025+ schema). */
+export const subPeriodEnd = (sub: StripeSubscription): number | null =>
+  sub.current_period_end ?? sub.items?.data?.find((i) => !!i.current_period_end)?.current_period_end ?? null;

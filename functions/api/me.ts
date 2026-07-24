@@ -26,12 +26,24 @@ export const onRequestGet = async (ctx: Ctx) => {
     user.role = "admin";
   }
 
-  const subscription = await ctx.env.DB.prepare(
-    `SELECT plan, interval, status, current_period_end
-       FROM subscriptions WHERE user_id = ?1 ORDER BY rowid DESC LIMIT 1`,
-  )
-    .bind(user.id)
-    .first();
+  // cancel_at_period_end is a lazy column (added by the Stripe webhook helper)
+  // — fall back to the old shape on databases that don't have it yet.
+  let subscription: Record<string, unknown> | null = null;
+  try {
+    subscription = await ctx.env.DB.prepare(
+      `SELECT plan, interval, status, current_period_end, cancel_at_period_end
+         FROM subscriptions WHERE user_id = ?1 ORDER BY rowid DESC LIMIT 1`,
+    )
+      .bind(user.id)
+      .first();
+  } catch {
+    subscription = await ctx.env.DB.prepare(
+      `SELECT plan, interval, status, current_period_end
+         FROM subscriptions WHERE user_id = ?1 ORDER BY rowid DESC LIMIT 1`,
+    )
+      .bind(user.id)
+      .first();
+  }
 
   // Downloads made under a purchased one-time license don't burn the free
   // limit — mirrors the exclusion in /api/download.
