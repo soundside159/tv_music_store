@@ -111,7 +111,7 @@ export const onRequestGet = async (ctx: Ctx) => {
 
   const recent = await db
     .prepare(
-      `SELECT e.id, e.source, e.provider, e.gross_cents, e.tax_cents, e.fee_cents, e.net_cents,
+      `SELECT e.id, e.source, e.provider, e.provider_ref, e.gross_cents, e.tax_cents, e.fee_cents, e.net_cents,
               e.status, e.created_at, e.period_start, e.period_end, u.email AS user_email
          FROM revenue_events e
          LEFT JOIN users u ON u.id = e.user_id

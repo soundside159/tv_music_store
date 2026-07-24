@@ -33,6 +33,8 @@ interface RevenueEvent {
   id: string;
   source: string;
   provider: string;
+  /** Stripe: invoice id (in_…) for subscriptions, "<pi|cs>:<slug>:<tier>" for carts. */
+  provider_ref?: string | null;
   gross_cents: number;
   tax_cents: number;
   fee_cents: number;
@@ -41,6 +43,17 @@ interface RevenueEvent {
   created_at: string;
   user_email: string | null;
 }
+
+/** Deep link to this payment in the Stripe dashboard — refunds are done THERE;
+ *  the charge.refunded webhook books the reversal and voids the licence here. */
+const stripeLinkFor = (e: RevenueEvent): string | null => {
+  if (e.provider !== "stripe" || !e.provider_ref) return null;
+  const token = e.provider_ref.split(":")[0];
+  const base = `https://dashboard.stripe.com/${e.provider_ref.includes("_test_") ? "test/" : ""}`;
+  if (token.startsWith("in_")) return `${base}invoices/${token}`;
+  if (token.startsWith("pi_")) return `${base}payments/${token}`;
+  return `${base}search?query=${encodeURIComponent(token)}`;
+};
 
 interface Report {
   month: string;
@@ -450,42 +463,27 @@ const AdminFinance = () => {
                   <td className="py-2.5 pr-4 text-right font-semibold tabular-nums text-foreground">
                     {money(e.net_cents)}
                   </td>
+                  {/* Refunds are done IN Stripe (open the payment, press Refund) —
+                      the webhook books the reversal and voids the licence here.
+                      The old in-admin Refund / Mark-only buttons are gone
+                      (owner's call; the server actions still exist if ever needed). */}
                   <td className="py-2.5 text-right">
-                    {e.status !== "refunded" && (
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => {
-                            if (
-                              !window.confirm(
-                                `Refund ${money(e.gross_cents)} to ${e.user_email ?? "this customer"}?\n\n` +
-                                  `The money really goes back through ${
-                                    e.provider === "stripe" ? "Stripe" : "PayPal"
-                                  }, and the licence is voided.`,
-                              )
-                            )
-                              return;
-                            void act({ action: "refund_payment", eventId: e.id }, "Refunded");
-                          }}
-                          className="rounded-md border border-red-400/40 px-2.5 py-1 font-body text-xs text-red-400 transition-colors hover:bg-red-400/10 disabled:opacity-50"
+                    {(() => {
+                      const url = stripeLinkFor(e);
+                      return url ? (
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Open this payment in Stripe — refund it there; the site records it automatically"
+                          className="font-body text-xs font-semibold text-[#F4C430] hover:underline"
                         >
-                          Refund
-                        </button>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          title="Only record it — for money you already returned in the Stripe/PayPal dashboard"
-                          onClick={() => {
-                            if (!window.confirm("Record as refunded WITHOUT sending money?")) return;
-                            void act({ action: "refund_event", eventId: e.id }, "Recorded");
-                          }}
-                          className="rounded-md border border-border px-2 py-1 font-body text-xs text-muted-foreground/70 transition-colors hover:text-foreground disabled:opacity-50"
-                        >
-                          Mark only
-                        </button>
-                      </div>
-                    )}
+                          Stripe ↗
+                        </a>
+                      ) : (
+                        <span className="font-body text-xs text-muted-foreground">—</span>
+                      );
+                    })()}
                   </td>
                 </tr>
               ))}

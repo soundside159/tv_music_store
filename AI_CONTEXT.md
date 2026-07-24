@@ -4188,3 +4188,19 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   the env vars. Reports/Finance need NO change: provider labels are data-driven, so with PayPal off
   no PayPal ever shows; the old PayPal TEST rows disappear with "Clear test transactions" before
   launch. Do NOT resurrect PayPal UI unless the owner asks.
+
+- **2026-07-24 (round 7: Finance refund buttons -> Stripe links; Payments card KEPT):** owner asked
+  whether Refund/Mark-only are needed at all (he refunds in the Stripe dashboard) and whether the
+  Finance -> Payments table is redundant next to Licenses. Decisions:
+  (1) Payments card STAYS — it is the only place SUBSCRIPTION money is visible (Licenses = per-track
+  certificates, not payments: an idle subscriber has payments but no certs, one invoice covers many
+  certs) and it feeds the accountant report.
+  (2) The in-admin Refund / Mark-only BUTTONS removed from AdminFinance.tsx (server actions
+  refund_payment / refund_event kept, unused). Verified chain: a refund pressed in the Stripe
+  dashboard -> charge.refunded webhook -> reverseEvent -> sync_orders 'refunded' -> Licenses shows
+  "(refunded)", cert 410s, totals drop. Mark-only existed for PayPal, which is off.
+  (3) Every Payments row got a "Stripe ↗" deep link (finance.ts recent SELECT now returns
+  provider_ref; in_… -> /invoices/, pi_… -> /payments/, else dashboard search; /test/ prefix when the
+  ref carries _test_) — THIS answers "how do I refund a subscription": open the row's invoice in
+  Stripe, press Refund there. NOTE told to owner: refunding a multi-track cart payment voids ALL
+  licences bought in that payment (one charge). eslint 0 on AdminFinance.tsx.
