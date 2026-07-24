@@ -28,3 +28,4 @@ vite.config.ts.timestamp-*
 
 # Local SFX bulk-upload desktop tool (PyQt6) — not part of the site build
 sfx_uploader/
+_to_delete/
