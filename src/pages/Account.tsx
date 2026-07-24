@@ -25,7 +25,7 @@ import NotificationsSettings from "@/components/NotificationsSettings";
 import SupportSection from "@/components/SupportSection";
 import FavouritesSection from "@/components/FavouritesSection";
 import LicensesSection from "@/components/LicensesSection";
-import { logout, updateProfile } from "@/hooks/useAuth";
+import { logout, refreshSession, updateProfile } from "@/hooks/useAuth";
 import { usePlayer } from "@/components/playerContext";
 import WaveformPreview from "@/components/WaveformPreview";
 import { BILLING_ENABLED, openBillingPortal, openPlanModal } from "@/lib/billing";
@@ -474,6 +474,19 @@ const Account = () => {
   // period (cancel_at_period_end mirrored from the webhook).
   const endsAtPeriodEnd =
     isPaidPlan && (!!subscription?.cancelAtPeriodEnd || subscription?.status === "canceled");
+
+  // Plan & Billing self-heal: when the section opens, re-read the subscription
+  // straight from Stripe (missed webhook, or a cancel made before the
+  // cancel_at_period_end column existed) and refresh the session so the card
+  // shows the truth. Once per page mount.
+  const billingSyncedRef = useRef(false);
+  useEffect(() => {
+    if (section !== "billing" || billingSyncedRef.current || !user || adminAccess) return;
+    billingSyncedRef.current = true;
+    void fetch("/api/stripe/sync-subscription", { method: "POST", credentials: "include" })
+      .then(() => refreshSession())
+      .catch(() => {});
+  }, [section, user, adminAccess]);
 
   // Plan & Billing card copy (per the owner's mockup): a status row with a
   // check bubble + the renewal line, and — below a divider — the upgrade hint

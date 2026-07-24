@@ -4118,3 +4118,13 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   (proration invoiced immediately, not credited to a future invoice).
   VERIFIED: eslint 0 errors on billing.ts/PlanModal/Pricing/Account (device run); change-plan.ts +
   webhook.ts tsc-clean (isolated es2022, cloud container). deploy.bat = final gate as usual.
+
+- **2026-07-24 (round 3: billing self-heal — canceled state showed "will renew"):** the owner's test
+  sub was canceled BEFORE cancel_at_period_end existed, so the card still said "will renew". Instead
+  of asking him to re-cancel: NEW `functions/api/stripe/sync-subscription.ts` (POST, session) —
+  re-reads the customer's subscription straight from Stripe and upserts it into D1 (plan/interval
+  from metadata with DB fallback, status, period end via subPeriodEnd, cancel_at_period_end; Stripe
+  status "canceled" = fully ended -> plan free). Account.tsx: opening Plan & Billing fires it once
+  per mount (skipped for admins / signed-out) then refreshSession() — so a missed webhook or
+  pre-column cancel heals itself on view. Errors leave the DB row untouched (no guessing when the
+  sub id belongs to an older Stripe test env). tsc clean (isolated), eslint 0 on Account.tsx.
