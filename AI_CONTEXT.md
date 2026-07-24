@@ -4267,3 +4267,11 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   goes to the BUYER's inbox, not the owner's. Second stop: resend.com/emails shows every send +
   its error if any. If Resend shows nothing for those sends, dig into recordStripeInvoice next.
   tsc clean (isolated) on my-receipts/_email, eslint 0 on Account/adminNav.
+
+- **2026-07-24 (round 12: Licenses — buyer Plan column + subscription amounts):** (1) new "Plan"
+  column (StatusPill, same as Users) between Buyer and Track — admin/licenses.ts returns
+  `buyerPlan` (latest subscriptions row subselect) on BOTH kinds of rows. (2) Subscription
+  certificate rows now show an AMOUNT: the covering invoice's gross from the matched ledger event
+  + "per year"/"per month" derived from the invoice's paid-period length (>45 days = year); ledger
+  SELECT gained gross_cents; AdminLicenseRow gained pricePer. "Purchased track" certs keep "—"
+  (their money is on the one-time row). Grid now 8 cols. tsc clean (isolated), eslint 0.

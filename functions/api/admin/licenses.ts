@@ -23,9 +23,14 @@ export interface AdminLicenseRow {
   userId: string;
   userEmail: string;
   userName: string;
+  /** The buyer's CURRENT plan (latest subscriptions row) — shown like in Users. */
+  buyerPlan: string | null;
   trackTitle: string;
   /** Track slug — makes the title clickable in the admin (null if track gone). */
   trackSlug: string | null;
+  /** For subscription certificates: what the covering payment bills per —
+   *  "year" | "month" (derived from the invoice's paid period). */
+  pricePer: "year" | "month" | null;
   // Money + payment linkage (one-time only; null for subscriptions). Pulled from
   // the revenue ledger so the owner can see the processor fee / net and jump
   // straight to the exact payment in Stripe.
@@ -60,6 +65,7 @@ export const onRequestGet = async (ctx: Ctx) => {
     user_id: string;
     user_email: string | null;
     user_name: string | null;
+    buyer_plan: string | null;
     track_title: string | null;
     track_slug: string | null;
     gross_cents: number | null;
@@ -70,7 +76,9 @@ export const onRequestGet = async (ctx: Ctx) => {
   }
   const BASE_COLS = `o.id, o.tier, o.price, o.stripe_session_id, o.created_at, o.track_id, o.user_id,
               COALESCE(o.status, 'active') AS status,
-              u.email AS user_email, u.name AS user_name, t.title AS track_title, t.slug AS track_slug`;
+              u.email AS user_email, u.name AS user_name, t.title AS track_title, t.slug AS track_slug,
+              (SELECT s.plan FROM subscriptions s
+                WHERE s.user_id = o.user_id ORDER BY s.rowid DESC LIMIT 1) AS buyer_plan`;
   const BASE_JOINS = `FROM sync_orders o
          LEFT JOIN users u ON u.id = o.user_id
          LEFT JOIN tracks t ON t.id = o.track_id`;
@@ -135,8 +143,10 @@ export const onRequestGet = async (ctx: Ctx) => {
       userId: r.user_id ?? "",
       userEmail: r.user_email ?? "",
       userName: r.user_name ?? "",
+      buyerPlan: r.buyer_plan ?? null,
       trackTitle: r.track_title ?? prettify(r.track_id),
       trackSlug: r.track_slug ?? null,
+      pricePer: null,
       provider,
       feeCents: r.fee_cents,
       netCents: r.net_cents,
@@ -154,6 +164,7 @@ export const onRequestGet = async (ctx: Ctx) => {
     provider: string | null;
     provider_ref: string | null;
     track_id: string | null;
+    gross_cents: number | null;
     period_start: string | null;
     period_end: string | null;
     created_at: string;
@@ -163,7 +174,7 @@ export const onRequestGet = async (ctx: Ctx) => {
     ledger = (
       await db
         .prepare(
-          `SELECT user_id, source, provider, provider_ref, track_id, period_start, period_end, created_at
+          `SELECT user_id, source, provider, provider_ref, track_id, gross_cents, period_start, period_end, created_at
              FROM revenue_events WHERE status != 'refunded'
             ORDER BY created_at DESC LIMIT 2000`,
         )
@@ -180,7 +191,9 @@ export const onRequestGet = async (ctx: Ctx) => {
     const planRows = await db
       .prepare(
         `SELECT p.id, p.plan, p.plan_period_end, p.created_at, p.track_id, p.user_id,
-                u.email AS user_email, u.name AS user_name, t.title AS track_title, t.slug AS track_slug
+                u.email AS user_email, u.name AS user_name, t.title AS track_title, t.slug AS track_slug,
+                (SELECT s.plan FROM subscriptions s
+                  WHERE s.user_id = p.user_id ORDER BY s.rowid DESC LIMIT 1) AS buyer_plan
            FROM plan_licenses p
            LEFT JOIN users u ON u.id = p.user_id
            LEFT JOIN tracks t ON t.id = p.track_id
@@ -198,6 +211,7 @@ export const onRequestGet = async (ctx: Ctx) => {
         user_name: string | null;
         track_title: string | null;
         track_slug: string | null;
+        buyer_plan: string | null;
       }>();
     subscription = planRows.results.map((r) => {
       // The payment that covers this certificate:
@@ -227,19 +241,33 @@ export const onRequestGet = async (ctx: Ctx) => {
             ) ??
             ledger.find((e) => e.source === "subscription" && e.user_id === r.user_id));
       const refToken = (ev?.provider_ref ?? "").split(":")[0];
+      // What the covering subscription payment costs, billed per what — read
+      // from the real invoice (gross) + its paid period length (month vs year).
+      let price: number | null = null;
+      let pricePer: "year" | "month" | null = null;
+      if (r.plan !== "license" && ev?.gross_cents) {
+        price = ev.gross_cents / 100;
+        if (ev.period_start && ev.period_end) {
+          const days =
+            (Date.parse(ev.period_end) - Date.parse(ev.period_start)) / 86_400_000;
+          pricePer = Number.isFinite(days) ? (days > 45 ? "year" : "month") : null;
+        }
+      }
       return {
         id: r.id,
         kind: "subscription" as const,
         tier: `${r.plan.charAt(0).toUpperCase()}${r.plan.slice(1)} plan`,
-        price: null,
+        price,
         reference: refToken,
         createdAt: r.created_at,
         validUntil: r.plan_period_end,
         userId: r.user_id ?? "",
         userEmail: r.user_email ?? "",
         userName: r.user_name ?? "",
+        buyerPlan: r.buyer_plan ?? null,
         trackTitle: r.track_title ?? prettify(r.track_id),
         trackSlug: r.track_slug ?? null,
+        pricePer,
         provider: ev?.provider === "stripe" || ev?.provider === "paypal" ? ev.provider : null,
         feeCents: null,
         netCents: null,

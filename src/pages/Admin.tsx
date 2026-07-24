@@ -133,8 +133,12 @@ interface AdminLicense {
   userId: string;
   userEmail: string;
   userName: string;
+  /** Buyer's current plan (latest subscriptions row) — shown like in Users. */
+  buyerPlan?: string | null;
   trackTitle: string;
   trackSlug?: string | null;
+  /** Subscription rows: what the covering payment bills per ("year"/"month"). */
+  pricePer?: "year" | "month" | null;
   provider?: "stripe" | "paypal" | null;
   feeCents?: number | null;
   netCents?: number | null;
@@ -1268,7 +1272,7 @@ const Admin = () => {
                   // width (no horizontal scrollbar), long values truncate, and
                   // the columns collapse into a card on small screens.
                   const GRID =
-                    "lg:grid-cols-[minmax(0,1.15fr)_6.5rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.15fr)_minmax(0,0.7fr)_6.5rem]";
+                    "lg:grid-cols-[minmax(0,1.15fr)_6.5rem_minmax(0,0.9fr)_minmax(0,1fr)_4.5rem_minmax(0,1.15fr)_minmax(0,0.75fr)_6.5rem]";
                   return (
                     <div className="font-body text-sm">
                       <div
@@ -1278,6 +1282,7 @@ const Admin = () => {
                         <span>Type</span>
                         <span>Payment</span>
                         <span>Buyer</span>
+                        <span>Plan</span>
                         <span>Track</span>
                         <span>Amount</span>
                         <span className="text-right">Issued</span>
@@ -1399,6 +1404,13 @@ const Admin = () => {
                                 )}
                                 <span className="block truncate text-xs text-muted-foreground">{l.userEmail}</span>
                               </div>
+                              {/* Buyer's CURRENT plan — same pill as in Users. */}
+                              <div className="min-w-0">
+                                <StatusPill
+                                  text={l.buyerPlan ?? "free"}
+                                  active={!!l.buyerPlan && l.buyerPlan !== "free"}
+                                />
+                              </div>
                               {/* Track (clickable when we know its slug) + tier/plan */}
                               <div className="min-w-0">
                                 {l.trackSlug ? (
@@ -1418,11 +1430,17 @@ const Admin = () => {
                                   {tierLabel}
                                 </span>
                               </div>
-                              {/* Amount */}
+                              {/* Amount: solo = purchase price + fee/net; subscription
+                                  certificates = what the covering payment costs. */}
                               <div className="min-w-0">
                                 <span className="font-semibold" style={{ color: GOLD }}>
                                   {l.price === null ? "—" : `$${l.price}`}
                                 </span>
+                                {l.pricePer && (
+                                  <span className="block truncate text-[11px] text-muted-foreground">
+                                    per {l.pricePer}
+                                  </span>
+                                )}
                                 {(l.feeCents != null || l.netCents != null) && (
                                   <span className="block truncate text-[11px] text-muted-foreground">
                                     {l.feeCents != null && `fee $${(l.feeCents / 100).toFixed(2)}`}
