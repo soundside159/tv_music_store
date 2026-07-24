@@ -4407,3 +4407,18 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   auth/plan toasts). Section hidden when the composer has no sounds; the Tracks section now hides
   for an SFX-only composer (no lone "No published tracks yet." box on GarnaVutka's page).
   tsc clean on sfx.ts (isolated), eslint 0 on both pages.
+
+## 2026-07-25 — Admin Users: row menu no longer cut off at the screen bottom
+Owner: the per-user "…" popup in Admin → Users extended past the bottom of the
+window — the cue-sheet fields and buttons at its end were invisible and could
+not be filled in.
+- src/pages/Admin.tsx: the fixed-position menu now measures the free space
+  under the button. Plenty of room → opens downward as before, but clamped
+  (maxHeight = space below) with its own scrollbar. Little room (< 480px) →
+  the menu is pinned to the BOTTOM of the window instead ("pushed up") with
+  maxHeight = full window minus margins, also scrollable. Either way every
+  field — email, composer, bio, upload rights, sync/cue sheet info, Save,
+  Delete user — is reachable; overscroll-contain keeps the page from
+  scrolling underneath while scrolling the menu.
+- menuPos state widened to { top | bottom, right, maxH }.
+- eslint src/pages/Admin.tsx: clean. Committed 68144db.
