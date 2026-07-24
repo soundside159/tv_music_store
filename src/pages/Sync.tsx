@@ -1,6 +1,6 @@
-import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Check } from "lucide-react";
+import { Check, Copy } from "lucide-react";
+import { toast } from "sonner";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { useLicenseTiers } from "@/lib/licenses";
@@ -9,8 +9,9 @@ import { useLicenseTiers } from "@/lib/licenses";
 // Sync Broadcast $399" tiers that never existed in the checkout — it now shows
 // THE REAL one-time tiers (Personal / Commercial / Professional, live prices
 // from lib/licenses.ts — the same cards as every track page), so the site has
-// exactly ONE price list. The custom-quote form composes a real email to
-// contact@ (it used to be a dead placeholder).
+// exactly ONE price list. The custom-quote FORM is gone (owner: mailto depends
+// on the visitor having a mail app configured — half of them don't) — just the
+// email address with a Copy button.
 
 const GOLD = "#F4C430";
 
@@ -32,32 +33,18 @@ const steps = [
   },
 ];
 
-const inputCls =
-  "rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none";
+const CONTACT_EMAIL = "contact@tvmusicstore.com";
 
 const Sync = () => {
   const tiers = useLicenseTiers();
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [project, setProject] = useState("");
-  const [trackLink, setTrackLink] = useState("");
-  const [details, setDetails] = useState("");
 
-  // The quote form opens the visitor's mail app with everything pre-filled —
-  // no backend, and nothing silently vanishes.
-  const submitQuote = (e: React.FormEvent) => {
-    e.preventDefault();
-    const subject = `Custom license quote${project ? ` — ${project}` : ""}`;
-    const body = [
-      name && `Name: ${name}`,
-      email && `Email: ${email}`,
-      project && `Project: ${project}`,
-      trackLink && `Track: ${trackLink}`,
-      details && `Details: ${details}`,
-    ]
-      .filter(Boolean)
-      .join("\n");
-    window.location.href = `mailto:contact@tvmusicstore.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  const copyEmail = async () => {
+    try {
+      await navigator.clipboard.writeText(CONTACT_EMAIL);
+      toast.success("Email copied");
+    } catch {
+      toast.error(CONTACT_EMAIL); // clipboard blocked — at least show it
+    }
   };
 
   return (
@@ -127,52 +114,24 @@ const Sync = () => {
           <h2 className="text-xl text-foreground">Non-standard use case?</h2>
           <p className="mt-2 font-body text-sm text-muted-foreground">
             Multi-season series, theatrical release, unusual territories — tell us about the
-            project and we'll quote it.
+            project (which track, where and how long it will run) and we'll quote it.
           </p>
-          <form className="mt-5 flex flex-col gap-3" onSubmit={submitQuote}>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" className={inputCls} />
-              <input
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                type="email"
-                placeholder="Email"
-                className={inputCls}
-              />
-            </div>
-            <input
-              value={project}
-              onChange={(e) => setProject(e.target.value)}
-              placeholder="Project type (TV series, feature film, game...)"
-              className={inputCls}
-            />
-            <input
-              value={trackLink}
-              onChange={(e) => setTrackLink(e.target.value)}
-              placeholder="Track link (optional)"
-              className={inputCls}
-            />
-            <textarea
-              value={details}
-              onChange={(e) => setDetails(e.target.value)}
-              placeholder="Usage description: where, how long, which territories"
-              rows={4}
-              className={inputCls}
-            />
-            <button
-              type="submit"
-              className="self-start rounded-lg bg-[#F4C430] px-6 py-2.5 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <span className="font-body text-sm text-muted-foreground">Write us directly at</span>
+            <a
+              href={`mailto:${CONTACT_EMAIL}`}
+              className="font-body text-sm font-semibold text-[#F4C430] hover:underline"
             >
-              Request a quote
+              {CONTACT_EMAIL}
+            </a>
+            <button
+              type="button"
+              onClick={() => void copyEmail()}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 font-body text-xs text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
+            >
+              <Copy className="h-3.5 w-3.5" /> Copy email
             </button>
-            <p className="font-body text-[11px] text-muted-foreground">
-              Opens your email app with the request pre-filled — or write us directly at{" "}
-              <a href="mailto:contact@tvmusicstore.com" className="text-[#F4C430] hover:underline">
-                contact@tvmusicstore.com
-              </a>
-              .
-            </p>
-          </form>
+          </div>
         </section>
       </main>
       <Footer />

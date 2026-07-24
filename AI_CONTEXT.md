@@ -4319,3 +4319,16 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   AdminInbox calls refreshUnreadMail() after opening a thread and after archive/delete/mark
   actions so both badges drop immediately. mail.ts tsc note: pre-existing bare D1Database ambient
   noise at line 113 (documented, ignore). eslint 0 on all four frontend files.
+
+- **2026-07-24 (/sync quote form -> plain email; SFX landing polish):** (1) /sync "Non-standard use
+  case" card: the mailto QUOTE FORM removed entirely (owner: mailto depends on the visitor having
+  a mail app configured — for many it silently does nothing) — now one line "Write us directly at
+  contact@tvmusicstore.com" (mailto link) + a Copy email button (clipboard, toast; on clipboard
+  failure the toast shows the address itself). (2) SOUND EFFECTS landing: Browse-by-Category
+  panels lost their gold hover border (the panel isn't clickable — only the chips inside);
+  category circles get THEMED lucide icons via `iconForCategory()` — a ~26-entry keyword regex map
+  over the admin-typed title (bell->Bell, click/typing->Keyboard, whoosh->Wind, impact->Zap,
+  horror->Ghost, tech/sci-fi->Cpu …), AudioLines stays the fallback so new categories always get
+  something; (3) the Search / AI Search toggle moved INSIDE the search bar (replacing the
+  "Sound Effects |" prefix text) — the form is now a flex bar (same rectangle style,
+  focus-within gold border), pills left, input flex-1, search icon right. eslint 0 on both.

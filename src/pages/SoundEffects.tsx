@@ -1,14 +1,40 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
+  AlarmClock,
   AudioLines,
+  Bell,
+  Bomb,
+  Car,
   ChevronLeft,
   ChevronRight,
+  CloudRain,
+  Cpu,
+  DoorOpen,
   Download,
+  Droplets,
+  Flame,
+  Footprints,
+  Gamepad2,
+  Ghost,
+  Home,
+  Keyboard,
   Loader2,
+  Mic,
+  MousePointer,
   Pause,
+  PawPrint,
+  Phone,
   Play,
   Search,
+  Smile,
+  Sparkles,
+  Swords,
+  Trees,
+  Users,
+  Wind,
+  Wrench,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import Navigation from "@/components/Navigation";
@@ -108,6 +134,41 @@ const readLibSize = (): number => {
 
 /** The chip with the self-drawing coloured left rim — the homepage "Browse by"
  *  look, reused on the Browse by Category panels (owner request). */
+
+// Themed icon per category (owner: the same audio-wave circle everywhere read
+// as a placeholder). Keyword match over the ADMIN-typed title, so new
+// categories pick a fitting icon automatically; AudioLines stays the fallback.
+const CATEGORY_ICONS: [RegExp, typeof AudioLines][] = [
+  [/bell|chime|musical/i, Bell],
+  [/click|typing|keyboard|mouse/i, Keyboard],
+  [/whoosh|swoosh|transition|wind|swish/i, Wind],
+  [/impact|hit|punch|slam|crash/i, Zap],
+  [/footstep|steps|walk/i, Footprints],
+  [/rain|weather|storm|thunder/i, CloudRain],
+  [/nature|forest|ambien|outdoor/i, Trees],
+  [/water|ocean|liquid|splash|underwater/i, Droplets],
+  [/\bui\b|interface|button|notification|menu|app/i, MousePointer],
+  [/game|arcade|8.?bit|retro/i, Gamepad2],
+  [/voice|human|vocal|speech|shout/i, Mic],
+  [/animal|creature|monster/i, PawPrint],
+  [/car|vehicle|engine|traffic|motor/i, Car],
+  [/weapon|gun|sword|combat|war|battle/i, Swords],
+  [/door|knock/i, DoorOpen],
+  [/horror|scary|ghost|spooky|creepy/i, Ghost],
+  [/cartoon|comedy|funny|quirky/i, Smile],
+  [/explosion|boom|blast/i, Bomb],
+  [/tech|sci.?fi|robot|digital|computer|electronic|futur/i, Cpu],
+  [/alarm|siren|alert|bleep/i, AlarmClock],
+  [/magic|fantasy|spell/i, Sparkles],
+  [/tool|mechanic|industr|construction/i, Wrench],
+  [/house|household|home|kitchen|domestic/i, Home],
+  [/crowd|people|applause|audience/i, Users],
+  [/fire|burn/i, Flame],
+  [/phone|telephone|ringtone/i, Phone],
+];
+const iconForCategory = (title: string): typeof AudioLines =>
+  CATEGORY_ICONS.find(([re]) => re.test(title))?.[1] ?? AudioLines;
+
 const ArcChip = ({ to, label, index }: { to: string; label: string; index: number }) => (
   <Link
     to={to}
@@ -357,44 +418,39 @@ const SoundEffects = () => {
             : "Premium royalty-free sound effects for video, gaming, podcasts, and creative content. Every sound comes in studio-quality WAV format with commercial licensing included."}
         </p>
 
-        {/* Search / AI Search toggle (same idea as the music catalog). In AI
-            mode the query is described in words and routed by the model across
-            the whole library; sort/category filters reset. */}
-        <div className="mt-6 inline-flex rounded-lg border border-border bg-card/60 p-0.5">
-          {(
-            [
-              ["keyword", "Search"],
-              ["ai", "AI Search"],
-            ] as const
-          ).map(([mode, label]) => {
-            const on = aiMode === (mode === "ai");
-            return (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setAiMode(mode === "ai")}
-                className={`rounded-[7px] px-3.5 py-1.5 font-body text-xs font-medium transition-colors ${
-                  on ? "bg-[#F4C430] text-black" : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
-
+        {/* The Search / AI Search toggle lives INSIDE the search bar (owner:
+            like the catalog) — the two pills replace the old "Sound Effects |"
+            prefix text; the rectangle bar itself is unchanged. */}
         <form
           onSubmit={(e) => {
             e.preventDefault();
             submitSearch(search);
           }}
-          className="relative mt-3"
+          className="mt-6 flex h-12 items-center gap-2 rounded-xl border border-border bg-card px-2.5 transition-colors focus-within:border-[#F4C430]/70"
         >
-          <span className="pointer-events-none absolute left-4 top-1/2 flex -translate-y-1/2 items-center gap-2 text-muted-foreground">
-            <AudioLines className="h-4 w-4" />
-            <span className="hidden font-body text-sm sm:inline">{aiMode ? "AI Search" : "Sound Effects"}</span>
-            <span className="hidden h-4 w-px bg-border sm:inline-block" />
-          </span>
+          <div className="flex shrink-0 items-center rounded-lg bg-background/50 p-0.5">
+            {(
+              [
+                ["keyword", "Search"],
+                ["ai", "AI Search"],
+              ] as const
+            ).map(([mode, label]) => {
+              const on = aiMode === (mode === "ai");
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setAiMode(mode === "ai")}
+                  className={`rounded-[7px] px-3 py-1.5 font-body text-xs font-medium transition-colors ${
+                    on ? "bg-[#F4C430] text-black" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <span className="hidden h-4 w-px shrink-0 bg-border sm:inline-block" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -405,12 +461,12 @@ const SoundEffects = () => {
                   ? `Search ${libSize.toLocaleString("en-US")} sound effects…`
                   : "Search for sound effects"
             }
-            className="h-12 w-full rounded-xl border border-border bg-card pl-12 pr-11 font-body text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-[#F4C430]/70 focus:outline-none sm:pl-36"
+            className="h-full min-w-0 flex-1 border-0 bg-transparent font-body text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none"
           />
           <button
             type="submit"
             aria-label="Search"
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-[#F4C430]"
+            className="shrink-0 pr-1 text-muted-foreground transition-colors hover:text-[#F4C430]"
           >
             <Search className="h-4 w-4" />
           </button>
@@ -502,16 +558,20 @@ const SoundEffects = () => {
           <section className="mt-12 animate-fade-in">
             <h2 className="text-xl text-foreground md:text-2xl">Browse by Category</h2>
             <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {cats.map((c) => (
+              {cats.map((c) => {
+                const CatIcon = iconForCategory(c.title);
+                return (
                 <div
                   key={c.id}
-                  className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-[#F4C430]/50"
+                  // No hover highlight on the panel itself (owner: it is not
+                  // clickable — only the chips inside are).
+                  className="rounded-xl border border-border bg-card p-4"
                 >
                   {/* Header is a NON-clickable container (owner request) — only
                       the subcategory chips below are clickable links. */}
                   <div className="flex items-center gap-2.5">
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground">
-                      <AudioLines className="h-3.5 w-3.5" />
+                      <CatIcon className="h-3.5 w-3.5" />
                     </span>
                     <span className="truncate font-body text-sm font-semibold text-foreground">
                       {c.title}
@@ -537,7 +597,8 @@ const SoundEffects = () => {
                     )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
               {cats.length === 0 && !loading && (
                 <p className="font-body text-sm text-muted-foreground">
                   The library is being stocked — check back soon.
