@@ -4131,3 +4131,18 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   [ROUND 3b same day: the canceled-state bubble shows a bold "!" instead of the check (gold circle
   kept); green check stays for active plans. Owner also hit "Already up to date" confusion — that
   line is deploy.bat's git pull, not a failed deploy; git log confirmed all rounds committed+pushed.]
+
+- **2026-07-24 (round 4 — THE cancel bug: 2025+ Stripe cancels via cancel_at, not
+  cancel_at_period_end):** owner re-tested on the deployed code (subscribe -> portal cancel) and the
+  card STILL said "will renew" with a green check. Root cause found via Stripe changelog: on 2025+
+  API versions (his sandbox = 2026-06-24.dahlia) a portal/API cancel sets **`cancel_at` (timestamp)**
+  and does NOT set the deprecated `cancel_at_period_end` — the two are explicitly incompatible. Both
+  the webhook and the new self-heal read only the old flag -> always false. FIX: `subCancelScheduled()`
+  in _stripe.ts (true when EITHER cancel_at_period_end OR a non-empty cancel_at is present; interface
+  gained cancel_at), used by webhook applySubscription and sync-subscription's heal. ALSO:
+  sync-subscription gained an ADMIN GET diagnostic — `/api/stripe/sync-subscription?email=<user>`
+  (signed in as admin) prints the local subscriptions row BEFORE, what Stripe says (status/cancel_at/
+  cancel_at_period_end/cancel_scheduled/period_end), heals, and prints AFTER — first stop whenever a
+  plan state looks wrong on the site. tsc clean (isolated es2022). Lesson recorded next to the
+  invoice.subscription / items.current_period_end entries: on every new Stripe field read, check the
+  2025+ ("basil"+) changelog first — dahlia keeps moving fields off the objects.

@@ -5,6 +5,7 @@ import {
   mapStripeStatus,
   stripeCall,
   type StripeSubscription,
+  subCancelScheduled,
   subPeriodEnd,
   unixToIso,
   upsertSubscription,
@@ -59,9 +60,9 @@ const applySubscription = async (
     interval,
     status: mapStripeStatus(sub.status),
     currentPeriodEnd: unixToIso(subPeriodEnd(sub)),
-    // Portal cancel = cancel_at_period_end true, status still "active" —
-    // the account page shows "stays active until <date>" off this flag.
-    cancelAtPeriodEnd: !!sub.cancel_at_period_end,
+    // Portal cancel: status stays "active" while the flag says it won't renew.
+    // 2025+ API sets cancel_at instead of cancel_at_period_end — read both.
+    cancelAtPeriodEnd: subCancelScheduled(sub),
   });
 };
 

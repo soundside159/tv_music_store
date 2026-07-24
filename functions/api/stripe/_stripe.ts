@@ -178,6 +178,9 @@ export interface StripeSubscription {
   status: string;
   current_period_end?: number;
   cancel_at_period_end?: boolean;
+  // 2025+ API: portal/API cancels set cancel_at (a timestamp) INSTEAD of the
+  // deprecated cancel_at_period_end flag — the two are not set together.
+  cancel_at?: number | string | null;
   metadata?: Record<string, string>;
   items?: {
     data?: {
@@ -193,3 +196,9 @@ export interface StripeSubscription {
  *  the subscription items in the 2025+ schema). */
 export const subPeriodEnd = (sub: StripeSubscription): number | null =>
   sub.current_period_end ?? sub.items?.data?.find((i) => !!i.current_period_end)?.current_period_end ?? null;
+
+/** True when the subscription is scheduled to end instead of renewing —
+ *  covers BOTH generations: the legacy cancel_at_period_end boolean AND the
+ *  2025+ cancel_at timestamp the billing portal sets instead of it. */
+export const subCancelScheduled = (sub: StripeSubscription): boolean =>
+  !!sub.cancel_at_period_end || (sub.cancel_at != null && sub.cancel_at !== 0 && sub.cancel_at !== "");
