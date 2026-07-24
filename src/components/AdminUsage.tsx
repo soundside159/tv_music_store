@@ -142,23 +142,33 @@ const AdminUsage = () => {
   };
 
   // Test transactions: download history, licence codes, one-time orders, booked
-  // revenue and payout runs. Subscriptions are NOT touched (see the API note).
+  // revenue and payout runs. A SECOND question offers to also reset every
+  // account's plan to Free — OK only BEFORE going live: test subs frozen in the
+  // DB would otherwise keep test accounts on Pro/Max forever (live webhooks
+  // never hear about test-mode subscriptions).
   const wipeTransactions = async () => {
     const typed = window.prompt(
-      "Delete ALL test transaction records?\n\n• download history (and the Free-tier counters)\n• licence codes and one-time orders\n• booked revenue and composer payout runs\n\nSubscriptions, accounts, tracks and files are KEPT.\nThis cannot be undone.\n\nType DELETE to confirm:",
+      "Delete ALL test transaction records?\n\n• download history (and the Free-tier counters)\n• licence codes and one-time orders\n• booked revenue and composer payout runs\n\nAccounts, tracks and files are KEPT.\nThis cannot be undone.\n\nType DELETE to confirm:",
     );
     if (typed !== "DELETE") return;
+    const resetPlans = window.confirm(
+      "Also reset every account's plan to Free?\n\nOK = yes — do this ONLY BEFORE going live, so test-mode Pro/Max plans don't stay active forever.\nCancel = keep plans as they are.",
+    );
     setStorageBusy("tx");
     try {
       const res = await fetch("/api/admin/storage", {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ confirm: true, wipeTransactions: true }),
+        body: JSON.stringify({ confirm: true, wipeTransactions: true, resetPlans }),
       });
       const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!res.ok || !d.ok) throw new Error(d.error ?? "Cleanup failed");
-      toast.success("Test transaction records cleared");
+      toast.success(
+        resetPlans
+          ? "Test records cleared — every account is on Free now"
+          : "Test transaction records cleared",
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Cleanup failed");
     } finally {
@@ -371,8 +381,9 @@ const AdminUsage = () => {
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-400/30 bg-red-400/[0.04] p-3">
           <p className="max-w-lg font-body text-[11px] text-muted-foreground">
             <span className="font-semibold text-red-400">Clear test transactions:</span> download
-            history, licence codes, one-time orders, booked revenue and payout runs. Subscriptions,
-            accounts, tracks and files are kept.
+            history, licence codes, one-time orders, booked revenue and payout runs — and (it asks
+            separately) reset all plans to Free. Accounts, tracks and files are kept. Use once,
+            right before going live.
           </p>
           <button
             type="button"

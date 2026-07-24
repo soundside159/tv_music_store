@@ -185,18 +185,26 @@ export const onRequestPost = async (ctx: Ctx) => {
   if (!ctx.env.DB) return json({ error: "DB not bound" }, 503);
   if (!ctx.env.R2?.list || !ctx.env.R2?.delete) return json({ error: "R2 not bound" }, 503);
 
-  const body = await readJson<{ confirm?: boolean; wipeTransactions?: boolean }>(ctx.request);
+  const body = await readJson<{
+    confirm?: boolean;
+    wipeTransactions?: boolean;
+    /** PRE-LAUNCH ONLY: also empty `subscriptions`, dropping every account to
+     *  Free. Never after real sales — a live sub keeps billing at Stripe while
+     *  our DB would say Free. The UI asks about this with its own confirm. */
+    resetPlans?: boolean;
+  }>(ctx.request);
   if (!body?.confirm) return json({ error: "confirm required" }, 400);
 
   // TEST-DATA RESET (pre-launch only): the rows produced while playing with the
   // Stripe TEST keys have no accounting value — they only skew the revenue
   // engine, the composer payouts and the download counters. SUBSCRIPTIONS are
-  // deliberately NOT touched: dropping them would silently demote a live paying
-  // account to Free while its subscription keeps billing at the provider.
+  // only wiped with the explicit resetPlans flag (see above): test subs frozen
+  // in the DB would otherwise keep test accounts on Pro/Max forever once the
+  // site switches to live keys (live webhooks never hear about test subs).
   if (body.wipeTransactions) {
     const db = ctx.env.DB;
     const cleared: Record<string, boolean> = {};
-    for (const table of [
+    const tables = [
       "download_log", // download history + the Free-tier monthly counter
       "plan_licenses", // per-track licence codes minted for subscribers
       "subscription_licenses",
@@ -204,7 +212,9 @@ export const onRequestPost = async (ctx: Ctx) => {
       "revenue_events", // money booked into the payout engine
       "revenue_allocations", // its per-composer split
       "payout_runs",
-    ]) {
+    ];
+    if (body.resetPlans) tables.push("subscriptions");
+    for (const table of tables) {
       try {
         await db.prepare(`DELETE FROM ${table}`).run();
         cleared[table] = true;

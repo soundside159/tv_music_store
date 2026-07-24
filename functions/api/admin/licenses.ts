@@ -144,6 +144,35 @@ export const onRequestGet = async (ctx: Ctx) => {
     };
   });
 
+  // The ledger, once — used to attach the PAYING payment to subscription
+  // certificates below (a plan cert has no payment of its own; the covering
+  // payment is the subscription invoice whose period the cert was issued in,
+  // or — for "purchased track" download certs — the one-time purchase).
+  interface LedgerRef {
+    user_id: string | null;
+    source: string;
+    provider: string | null;
+    provider_ref: string | null;
+    track_id: string | null;
+    period_start: string | null;
+    period_end: string | null;
+    created_at: string;
+  }
+  let ledger: LedgerRef[] = [];
+  try {
+    ledger = (
+      await db
+        .prepare(
+          `SELECT user_id, source, provider, provider_ref, track_id, period_start, period_end, created_at
+             FROM revenue_events WHERE status != 'refunded'
+            ORDER BY created_at DESC LIMIT 2000`,
+        )
+        .all<LedgerRef>()
+    ).results;
+  } catch {
+    // ledger not created yet — certs just show no payment link
+  }
+
   // --- subscription (plan_licenses) ---------------------------------------
   await ensurePlanLicensesTable(db);
   let subscription: AdminLicenseRow[] = [];
@@ -170,24 +199,53 @@ export const onRequestGet = async (ctx: Ctx) => {
         track_title: string | null;
         track_slug: string | null;
       }>();
-    subscription = planRows.results.map((r) => ({
-      id: r.id,
-      kind: "subscription",
-      tier: `${r.plan.charAt(0).toUpperCase()}${r.plan.slice(1)} plan`,
-      price: null,
-      reference: "",
-      createdAt: r.created_at,
-      validUntil: r.plan_period_end,
-      userId: r.user_id ?? "",
-      userEmail: r.user_email ?? "",
-      userName: r.user_name ?? "",
-      trackTitle: r.track_title ?? prettify(r.track_id),
-      trackSlug: r.track_slug ?? null,
-      provider: null,
-      feeCents: null,
-      netCents: null,
-      paymentIntent: null,
-    }));
+    subscription = planRows.results.map((r) => {
+      // The payment that covers this certificate:
+      //  - "license"-plan certs (download certificate for a BOUGHT track) ->
+      //    the one-time purchase event for the same user + track;
+      //  - normal plan certs -> the subscription invoice whose paid period the
+      //    cert was issued in (fallback: the user's latest invoice before it).
+      const ev =
+        r.plan === "license"
+          ? ledger.find(
+              (e) => e.source === "license" && e.user_id === r.user_id && e.track_id === r.track_id,
+            )
+          : (ledger.find(
+              (e) =>
+                e.source === "subscription" &&
+                e.user_id === r.user_id &&
+                !!e.period_start &&
+                !!e.period_end &&
+                e.period_start <= r.created_at &&
+                r.created_at <= e.period_end,
+            ) ??
+            ledger.find(
+              (e) =>
+                e.source === "subscription" &&
+                e.user_id === r.user_id &&
+                e.created_at <= r.created_at,
+            ) ??
+            ledger.find((e) => e.source === "subscription" && e.user_id === r.user_id));
+      const refToken = (ev?.provider_ref ?? "").split(":")[0];
+      return {
+        id: r.id,
+        kind: "subscription" as const,
+        tier: `${r.plan.charAt(0).toUpperCase()}${r.plan.slice(1)} plan`,
+        price: null,
+        reference: refToken,
+        createdAt: r.created_at,
+        validUntil: r.plan_period_end,
+        userId: r.user_id ?? "",
+        userEmail: r.user_email ?? "",
+        userName: r.user_name ?? "",
+        trackTitle: r.track_title ?? prettify(r.track_id),
+        trackSlug: r.track_slug ?? null,
+        provider: ev?.provider === "stripe" || ev?.provider === "paypal" ? ev.provider : null,
+        feeCents: null,
+        netCents: null,
+        paymentIntent: refToken.startsWith("pi_") ? refToken : null,
+      };
+    });
   } catch {
     // table not present yet — no subscription codes issued
   }
@@ -204,5 +262,10 @@ export const onRequestGet = async (ctx: Ctx) => {
         l.trackTitle.toLowerCase().includes(q),
     );
 
-  return json({ licenses });
+  return json({
+    licenses,
+    // Lets the UI build dashboard.stripe.com/test/... links while on sandbox
+    // keys (invoice/pi ids don't reveal the mode by themselves).
+    stripeTestMode: (ctx.env.STRIPE_SECRET_KEY ?? "").startsWith("sk_test_"),
+  });
 };

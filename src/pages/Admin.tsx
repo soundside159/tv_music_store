@@ -207,6 +207,8 @@ const Admin = () => {
   const [licenses, setLicenses] = useState<AdminLicense[] | null>(null);
   const [licensesError, setLicensesError] = useState<string | null>(null);
   const [licenseQuery, setLicenseQuery] = useState("");
+  // true while the site runs on sandbox keys — Stripe links get /test/.
+  const [licensesTestMode, setLicensesTestMode] = useState(false);
 
   // Real dashboard numbers from the live users list (loaded below).
   const custUsers = liveUsers ?? [];
@@ -279,9 +281,14 @@ const Admin = () => {
     setLicensesError(null);
     fetch("/api/admin/licenses", { credentials: "include" })
       .then(async (res) => {
-        const data = (await res.json()) as { licenses?: AdminLicense[]; error?: string };
+        const data = (await res.json()) as {
+          licenses?: AdminLicense[];
+          stripeTestMode?: boolean;
+          error?: string;
+        };
         if (!res.ok || !data.licenses) throw new Error(data.error ?? "Failed to load licenses");
         setLicenses(data.licenses);
+        setLicensesTestMode(!!data.stripeTestMode);
       })
       .catch((e: Error) => setLicensesError(e.message));
   }, [isAdmin, section]);
@@ -1277,16 +1284,23 @@ const Admin = () => {
                       </div>
                       <ul className="divide-y divide-border/50">
                         {rows.map((l) => {
-                          const isStripe = l.provider === "stripe" || l.reference.startsWith("cs_");
-                          const isTest = l.reference.startsWith("cs_test_");
+                          const refToken = l.reference.split(":")[0];
+                          const isStripe =
+                            l.provider === "stripe" ||
+                            refToken.startsWith("cs_") ||
+                            refToken.startsWith("in_") ||
+                            refToken.startsWith("pi_");
+                          const isTest = licensesTestMode || l.reference.includes("_test_");
                           const payBase = `https://dashboard.stripe.com/${isTest ? "test/" : ""}`;
-                          // pi_… deep-links straight to the payment; otherwise a
-                          // dashboard search pre-filled with the session id.
+                          // pi_… -> the payment, in_… (subscription invoice) -> the
+                          // invoice; otherwise a dashboard search with the ref.
                           const payUrl =
                             l.reference && isStripe
                               ? l.paymentIntent
                                 ? `${payBase}payments/${l.paymentIntent}`
-                                : `${payBase}search?query=${encodeURIComponent(l.reference)}`
+                                : refToken.startsWith("in_")
+                                  ? `${payBase}invoices/${refToken}`
+                                  : `${payBase}search?query=${encodeURIComponent(refToken)}`
                               : null;
                           // plan_licenses rows minted for a track the customer
                           // BOUGHT carry plan "license" — spell that out instead

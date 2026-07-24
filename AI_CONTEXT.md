@@ -4234,3 +4234,21 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   under the code); Payment column now leads with a gold "Stripe ↗" link (payUrl) + the raw ref in
   small mono underneath; subscription rows keep "—" (their money = Finance -> Payments).
   eslint 0, finance.ts tsc-clean (isolated).
+
+- **2026-07-24 (round 10: payment links on subscription certs + pre-launch plan reset):**
+  (1) LICENSES: subscription certificate rows now carry the PAYING payment too —
+  admin/licenses.ts loads the ledger once (revenue_events, non-refunded, newest 2000) and per cert
+  attaches: plan='license' certs -> the one-time purchase event (user+track); normal plan certs ->
+  the subscription invoice whose paid period covers the cert's created_at (fallbacks: latest
+  invoice before it / latest invoice). reference = leading provider_ref token (in_… / pi_…);
+  response gained stripeTestMode. Admin.tsx builds the link: pi_ -> /payments/, in_ -> /invoices/,
+  else search; /test/ from stripeTestMode. So "Stripe ↗" now shows on subscription rows as well.
+  (2) PRE-LAUNCH RESET: "Clear test transactions" asks a SECOND confirm — "Also reset every
+  account's plan to Free?" -> POST resetPlans:true additionally empties `subscriptions`
+  (storage.ts). Rationale: after switching to LIVE keys the live webhook never hears about
+  test-mode subs, so test accounts (Иван etc.) would keep frozen Pro/Max until 2027. Only for the
+  one pre-launch wipe; the confirm text says so. GO-LIVE SEQUENCE told to the owner: (1) switch
+  STRIPE_SECRET_KEY to sk_live_, create the LIVE webhook endpoint (9 events) + its whsec_ in CF;
+  (2) deploy (env changes need a build — never "Retry deployment"); (3) /api/health check;
+  (4) Clear test transactions + OK on the plans question; (5) optional live smoke test: buy the
+  cheapest license with a real card, then refund it in Stripe. tsc clean (isolated), eslint 0.
