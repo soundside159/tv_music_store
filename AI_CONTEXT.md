@@ -4204,3 +4204,20 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   ref carries _test_) — THIS answers "how do I refund a subscription": open the row's invoice in
   Stripe, press Refund there. NOTE told to owner: refunding a multi-track cart payment voids ALL
   licences bought in that payment (one charge). eslint 0 on AdminFinance.tsx.
+
+- **2026-07-24 (round 8: Payments bucketed by payment date + test-mode Stripe links + Users nowrap):**
+  (1) FOUND why the owner's Finance -> Payments looked lopsided: the recent-payments list was
+  bucketed by `COALESCE(period_end, created_at)` — an ANNUAL subscription paid today filed under
+  NEXT YEAR's month (invisible for 12 months) while solo licenses filed under today. The list now
+  buckets by created_at (month the money arrived — same axis as the accountant report); the
+  composer-split tables keep their period_end logic on purpose (allocation at cycle close).
+  (2) Finance GET returns `stripeTestMode` (STRIPE_SECRET_KEY starts with sk_test_) and
+  stripeLinkFor() prefixes /test/ — the "Did you mean test mode?" bounce on invoice links is gone
+  while sandbox keys are in; on live keys links go straight to live data.
+  (3) Users table: "canceled · until" chip + Joined date got whitespace-nowrap (chip wrapped to two
+  lines). (4) DECISION REAFFIRMED after the owner's "merge Licenses & Payments?" question: keep
+  them separate — Licenses = certificates/rights (support tool; fee/net there is a courtesy),
+  Payments = the money ledger incl. subscription invoices (accounting tool; an idle subscriber has
+  payments but no certs, one invoice covers many certs — merged view would need weird code-less
+  rows). Subscription rows in Licenses keep the "—" in Payment BY DESIGN; their money + Stripe
+  links live in Finance -> Payments. eslint 0 on both files.

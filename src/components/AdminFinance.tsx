@@ -45,11 +45,14 @@ interface RevenueEvent {
 }
 
 /** Deep link to this payment in the Stripe dashboard — refunds are done THERE;
- *  the charge.refunded webhook books the reversal and voids the licence here. */
-const stripeLinkFor = (e: RevenueEvent): string | null => {
+ *  the charge.refunded webhook books the reversal and voids the licence here.
+ *  testMode comes from the server (invoice/pi ids don't reveal the mode), so
+ *  sandbox links land straight in test data without the "Did you mean test
+ *  mode?" bounce. */
+const stripeLinkFor = (e: RevenueEvent, testMode: boolean): string | null => {
   if (e.provider !== "stripe" || !e.provider_ref) return null;
   const token = e.provider_ref.split(":")[0];
-  const base = `https://dashboard.stripe.com/${e.provider_ref.includes("_test_") ? "test/" : ""}`;
+  const base = `https://dashboard.stripe.com/${testMode || e.provider_ref.includes("_test_") ? "test/" : ""}`;
   if (token.startsWith("in_")) return `${base}invoices/${token}`;
   if (token.startsWith("pi_")) return `${base}payments/${token}`;
   return `${base}search?query=${encodeURIComponent(token)}`;
@@ -71,6 +74,8 @@ interface Report {
   };
   composers: ComposerLine[];
   events: RevenueEvent[];
+  /** true while the site runs on sandbox (sk_test_) keys — links get /test/. */
+  stripeTestMode?: boolean;
 }
 
 const money = (cents: number) =>
@@ -469,7 +474,7 @@ const AdminFinance = () => {
                       (owner's call; the server actions still exist if ever needed). */}
                   <td className="py-2.5 text-right">
                     {(() => {
-                      const url = stripeLinkFor(e);
+                      const url = stripeLinkFor(e, !!report.stripeTestMode);
                       return url ? (
                         <a
                           href={url}

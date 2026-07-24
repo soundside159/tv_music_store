@@ -109,13 +109,18 @@ export const onRequestGet = async (ctx: Ctx) => {
     .all<{ composer_id: string; status: string; paid_at: string | null }>();
   const payoutBy = new Map(payouts.results.map((p) => [p.composer_id, p]));
 
+  // The Payments list is bucketed by the month the money ARRIVED (created_at) —
+  // what a human (and the accountant report) means by "July's payments". It used
+  // to bucket by period_end, which threw an ANNUAL subscription paid today into
+  // NEXT YEAR's view — invisible for 12 months. The composer-split tables keep
+  // their own period_end logic (allocation happens when a cycle closes).
   const recent = await db
     .prepare(
       `SELECT e.id, e.source, e.provider, e.provider_ref, e.gross_cents, e.tax_cents, e.fee_cents, e.net_cents,
               e.status, e.created_at, e.period_start, e.period_end, u.email AS user_email
          FROM revenue_events e
          LEFT JOIN users u ON u.id = e.user_id
-        WHERE substr(COALESCE(e.period_end, e.created_at), 1, 7) = ?1
+        WHERE substr(e.created_at, 1, 7) = ?1
         ORDER BY e.created_at DESC LIMIT 50`,
     )
     .bind(month)
@@ -203,6 +208,9 @@ export const onRequestGet = async (ctx: Ctx) => {
       paidAt: payoutBy.get(l.composer_id)?.paid_at ?? null,
     })),
     events: recent.results,
+    // Lets the UI build dashboard.stripe.com/test/... links while the site runs
+    // on sandbox keys — invoice/pi ids don't reveal the mode by themselves.
+    stripeTestMode: (ctx.env.STRIPE_SECRET_KEY ?? "").startsWith("sk_test_"),
   });
 };
 

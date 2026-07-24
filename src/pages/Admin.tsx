@@ -956,7 +956,7 @@ const Admin = () => {
                                     {!!u.plan && u.plan !== "free" && !!u.plan_cancels && (
                                       <span
                                         title={u.plan_until ? `Active until ${u.plan_until.slice(0, 10)}, then Free` : "Won't renew"}
-                                        className="rounded-full bg-[#F4C430]/15 px-2 py-0.5 text-[10px] font-semibold text-[#F4C430]"
+                                        className="whitespace-nowrap rounded-full bg-[#F4C430]/15 px-2 py-0.5 text-[10px] font-semibold text-[#F4C430]"
                                       >
                                         canceled{u.plan_until ? ` · until ${u.plan_until.slice(0, 10)}` : ""}
                                       </span>
@@ -964,7 +964,7 @@ const Admin = () => {
                                   </span>
                                 </td>
                                 <td className="py-2.5 pr-4 text-muted-foreground">{u.downloads}</td>
-                                <td className="py-2.5 pr-4 text-muted-foreground">
+                                <td className="whitespace-nowrap py-2.5 pr-4 text-muted-foreground">
                                   {u.created_at ? u.created_at.slice(0, 10) : "—"}
                                 </td>
                                 <td className="py-2.5 text-right">
