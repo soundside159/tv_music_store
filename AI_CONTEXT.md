@@ -4388,3 +4388,22 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   now cover up to 500 sounds per click (update_sfx already capped ids at 500) — assigning a 6k
   library to GarnaVutka = 12 page-passes on Show 500. (2) Mini-player body padding trimmed again
   4rem -> 3rem (owner). eslint 0 errors.
+
+- **2026-07-24 (SFX composer pickers filtered by the SFX upload permission):** the composer
+  filter / Assign select in Admin -> SFX listed EVERY composers row incl. legacy mock profiles
+  ("Composer One/Two/Three" — owner: "в Tracks Edit такого бардака нету"). /api/admin/sfx now
+  returns only composers with COALESCE(can_upload_sfx,0)=1 (the "Can upload — Sound Effects"
+  checkbox in Admin -> Users; ensureUploadPermColumns imported from upload-audio.ts and called
+  first so the lazy column always exists). To appear in the SFX pickers, tick that checkbox on
+  the composer in Users. tsc clean (isolated).
+
+- **2026-07-24 (SFX composer credit clickable + Sound effects on the artist page):**
+  (1) /api/sfx returns `artistSlug` (c.slug; the COUNT query gained the composers JOIN because the
+  WHERE can now reference c.slug) and accepts `?artist=<composer slug>`. (2) Sound Effects rows:
+  "by <artist>" is a Link to /artist/<slug> when the slug is known. (3) Artist.tsx: new
+  "Sound effects" section — fetches /api/sfx?artist=<slug> (paged, "Show more" appends), rows
+  reuse the SFX-page pattern (global player via a local soundToTrack adapter — same shape as
+  SoundEffects' sfxToTrack, isSfx-tagged; WaveformPreview with seek; WAV download with the same
+  auth/plan toasts). Section hidden when the composer has no sounds; the Tracks section now hides
+  for an SFX-only composer (no lone "No published tracks yet." box on GarnaVutka's page).
+  tsc clean on sfx.ts (isolated), eslint 0 on both pages.

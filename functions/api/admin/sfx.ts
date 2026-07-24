@@ -1,4 +1,5 @@
 import { adminTokenOk, getSessionUser, json, newId, OWNER_EMAIL, readJson, type Ctx, type D1Database, type SessionUser } from "../_utils";
+import { ensureUploadPermColumns } from "./upload-audio";
 
 // Admin API for the SOUND EFFECTS library (see docs/SFX_PLAN.md).
 //
@@ -206,8 +207,17 @@ export const onRequestGet = async (ctx: Ctx) => {
     .all<{ category_id: string | null; n: number }>();
   const countBy = new Map(counts.results.map((c) => [c.category_id ?? "", c.n]));
 
+  // Lazy ALTER: guarantees composers.can_upload_sfx exists before we filter on it.
+  await ensureUploadPermColumns(db);
   const composers = await db
-    .prepare(`SELECT id, display_name FROM composers ORDER BY display_name`)
+    .prepare(
+      // Only composers with the "Can upload — Sound Effects" flag from Admin ->
+      // Users (owner: the SFX pickers were showing every legacy/test composer
+      // profile; Tracks Edit has no such noise).
+      `SELECT id, display_name FROM composers
+        WHERE COALESCE(can_upload_sfx, 0) = 1
+        ORDER BY display_name`,
+    )
     .all<{ id: string; display_name: string }>();
 
   return json({

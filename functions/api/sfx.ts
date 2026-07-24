@@ -25,9 +25,15 @@ export const onRequestGet = async (ctx: Ctx) => {
   const q = (url.searchParams.get("q") ?? "").trim().slice(0, 60);
   const cat = url.searchParams.get("cat") ?? "";
   const sub = url.searchParams.get("sub") ?? "";
+  // ?artist=<composer slug> — the composer's sounds for their /artist page.
+  const artist = (url.searchParams.get("artist") ?? "").trim().slice(0, 80);
 
   const where: string[] = [`s.status = 'published'`];
   const binds: unknown[] = [];
+  if (artist) {
+    where.push(`c.slug = ?${binds.length + 1}`);
+    binds.push(artist);
+  }
   if (q) {
     // Search matches the name, the tags AND the description (owner's decision:
     // the pack description feeds SFX search, not just the tags).
@@ -87,7 +93,10 @@ export const onRequestGet = async (ctx: Ctx) => {
   const whereSql = `WHERE ${where.join(" AND ")}`;
 
   const totalRow = await db
-    .prepare(`SELECT COUNT(*) AS n FROM sfx s ${whereSql}`)
+    .prepare(
+      // The composers join is here too — the WHERE may reference c.slug (?artist=).
+      `SELECT COUNT(*) AS n FROM sfx s LEFT JOIN composers c ON c.id = s.composer_id ${whereSql}`,
+    )
     .bind(...binds)
     .first<{ n: number }>();
   const total = totalRow?.n ?? 0;
@@ -95,7 +104,7 @@ export const onRequestGet = async (ctx: Ctx) => {
   const rows = await db
     .prepare(
       `SELECT s.id, s.slug, s.code, s.name, s.category_id, s.subcategory_id, s.tags, s.duration,
-              s.preview_src, s.created_at, c.display_name AS artist
+              s.preview_src, s.created_at, c.display_name AS artist, c.slug AS artist_slug
          FROM sfx s
          LEFT JOIN composers c ON c.id = s.composer_id
          ${whereSql}
@@ -115,6 +124,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       preview_src: string | null;
       created_at: string;
       artist: string | null;
+      artist_slug: string | null;
     }>();
 
   // The shelves + their computed counts (the "1,248 SOUNDS" of the mockup).
@@ -157,6 +167,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       duration: r.duration ?? "",
       previewSrc: r.preview_src ?? "",
       artist: r.artist,
+      artistSlug: r.artist_slug,
     })),
     categories: cats.results.map((c) => ({
       id: c.id,

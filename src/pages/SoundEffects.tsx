@@ -72,6 +72,7 @@ interface Sound {
   duration: string;
   previewSrc: string;
   artist: string | null;
+  artistSlug: string | null;
 }
 /** Play a sound effect through the SHARED global player: adapt it to the
  *  track shape the engine understands, tagged isSfx so the bottom bar hides
@@ -730,9 +731,19 @@ const SoundEffects = () => {
                       >
                         {s.name}
                       </span>
-                      <span className="block truncate font-body text-xs text-muted-foreground">
-                        {s.artist ? `by ${s.artist}` : "TV Music Store"}
-                      </span>
+                      {/* Composer credit links to the artist page (bio + works). */}
+                      {s.artist && s.artistSlug ? (
+                        <Link
+                          to={`/artist/${s.artistSlug}`}
+                          className="block w-fit max-w-full truncate font-body text-xs text-muted-foreground transition-colors hover:text-[#F4C430]"
+                        >
+                          by {s.artist}
+                        </Link>
+                      ) : (
+                        <span className="block truncate font-body text-xs text-muted-foreground">
+                          {s.artist ? `by ${s.artist}` : "TV Music Store"}
+                        </span>
+                      )}
                     </span>
 
                     <WaveformPreview
