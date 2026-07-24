@@ -12,6 +12,7 @@ export const onRequestGet = async (ctx: Ctx) => {
   }
   return json({
     ok: true,
+    build: "stripe-fix-1", // bump to force + verify a fresh Cloudflare deploy
     db,
     resend: ctx.env.RESEND_API_KEY ? "configured" : "missing",
     stripe: ctx.env.STRIPE_SECRET_KEY ? "configured" : "missing",
