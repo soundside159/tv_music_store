@@ -4287,3 +4287,11 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   live webhook + key swap in CF -> deploy -> health check -> Clear test transactions with plan
   reset -> live smoke test + refund; also: disable odd payment methods like AmazonPay/Onelink in
   Stripe Settings -> Payment methods, verify Business details address is the London one).
+
+- **2026-07-24 (SITE IS LIVE 🎉 + Similar tracks freshness):** owner switched Stripe to LIVE keys
+  per the go-live checklist. Then: TrackDetail's Similar tab ranked purely by facet overlap with
+  ties in raw API order — the OLDEST rows always won ties, so the owner kept hearing his old
+  stock. Fix: the same recency signal as the catalog's Recommended sort
+  (composerRecencyPercentile by import_no, 0..1) is blended in as `fresh = recency * 2` — worth up
+  to one facet match, so a strong match still wins but among peers the newest track surfaces; the
+  no-overlap fallback now shows the NEWEST 4 instead of the first 4. eslint 0.

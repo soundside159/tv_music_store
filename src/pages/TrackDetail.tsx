@@ -29,6 +29,7 @@ import {
 } from "@/components/AdminTrackPanel";
 import { splitFilterValues } from "@/components/TrackRowPlayer";
 import { discoverPath, type TagFacet } from "@/lib/discovery";
+import { composerRecencyPercentile } from "@/lib/catalogSort";
 import { toggleFavourite, useFavourites } from "@/lib/favourites";
 import { usePlayer } from "@/components/playerContext";
 import { useLicenseTiers, type LicenseTierId } from "@/lib/licenses";
@@ -67,7 +68,11 @@ const TrackDetail = () => {
   const favIds = useFavourites();
   const liked = track ? favIds.has(track.id) : false;
 
-  // Similar = tracks sharing this one's genre / mood / use case, ranked by overlap.
+  // Similar = tracks sharing this one's genre / mood / use case, ranked by
+  // overlap — with a FRESHNESS boost (same recency signal the catalog's
+  // Recommended sort uses: import_no percentile within each composer), so
+  // among equally-matching tracks the NEWER ones surface first instead of the
+  // oldest rows in the table (the owner kept hearing his old stock here).
   const similarTracks = useMemo(() => {
     if (!track) return [];
     const set = (s: string) => new Set(splitFilterValues(s || "").map((x) => x.toLowerCase()));
@@ -76,18 +81,26 @@ const TrackDetail = () => {
     const u = set(track.useCase);
     const overlap = (a: Set<string>, s: string) =>
       splitFilterValues(s || "").reduce((n, x) => n + (a.has(x.toLowerCase()) ? 1 : 0), 0);
+    const recency = composerRecencyPercentile(catalogTracks); // 0 = oldest … 1 = newest
     const scored = catalogTracks
       .filter((item) => item.id !== track.id)
       .map((item) => ({
         item,
-        score: overlap(g, item.genre) * 2 + overlap(m, item.mood) * 2 + overlap(u, item.useCase),
+        match: overlap(g, item.genre) * 2 + overlap(m, item.mood) * 2 + overlap(u, item.useCase),
+        // Freshness is worth up to 2 points — one facet match. A strong match
+        // still beats a fresh weak one, but among peers the newest wins.
+        fresh: (recency.get(item.id) ?? 0) * 2,
       }))
-      .filter((x) => x.score > 0)
-      .sort((a, b) => b.score - a.score)
+      .filter((x) => x.match > 0)
+      .sort((a, b) => b.match + b.fresh - (a.match + a.fresh))
       .slice(0, 6)
       .map((x) => x.item);
     if (scored.length > 0) return scored;
-    return catalogTracks.filter((item) => item.id !== track.id).slice(0, 4);
+    // No tag overlap at all — show the newest tracks rather than the oldest.
+    return catalogTracks
+      .filter((item) => item.id !== track.id)
+      .sort((a, b) => (recency.get(b.id) ?? 0) - (recency.get(a.id) ?? 0))
+      .slice(0, 4);
   }, [track, catalogTracks]);
 
   useSeo(
