@@ -74,8 +74,18 @@ interface StripeInvoice {
   number?: string | null; // human invoice number, e.g. "A1B2-0001"
   hosted_invoice_url?: string | null; // the tax document (PDF + page)
   invoice_pdf?: string | null;
-  lines?: { data?: { period?: { start?: number; end?: number } }[] };
+  // 2025+ API versions moved the subscription ref off the top level.
+  parent?: { subscription_details?: { subscription?: string | null } | null } | null;
+  lines?: { data?: { subscription?: string | null; period?: { start?: number; end?: number } }[] };
 }
+
+/** The subscription id, wherever this API version keeps it (top-level was
+ *  removed in the 2025+ invoice schema in favour of parent / line items). */
+const invoiceSubscriptionId = (inv: StripeInvoice): string | null =>
+  inv.subscription ??
+  inv.parent?.subscription_details?.subscription ??
+  inv.lines?.data?.find((l) => !!l.subscription)?.subscription ??
+  null;
 
 interface StripeCharge {
   balance_transaction?: { fee?: number } | string | null;
@@ -88,14 +98,10 @@ interface StripeCharge {
  * we fall back to Stripe's standard 2.9% + 30c so the ledger is never wrong in
  * the composer's favour by accident.
  */
-const recordStripeInvoice = async (
-  ctx: Ctx,
-  key: string,
-  inv: StripeInvoice,
-  sendReceipt: boolean,
-): Promise<void> => {
+const recordStripeInvoice = async (ctx: Ctx, key: string, inv: StripeInvoice): Promise<void> => {
   const gross = inv.amount_paid ?? 0;
-  if (!inv.id || gross <= 0 || !inv.subscription) return;
+  const subscriptionId = invoiceSubscriptionId(inv);
+  if (!inv.id || gross <= 0 || !subscriptionId) return;
 
   // Stripe redelivers webhooks (and fires both invoice.paid AND
   // invoice.payment_succeeded); the ledger no-ops on a repeat, but we must not
@@ -108,7 +114,7 @@ const recordStripeInvoice = async (
   const isFirstDelivery = !already;
 
   // Which of our users is this? (subscriptions carry user_id in metadata)
-  const sub = await stripeCall<StripeSubscription>(key, "GET", `/subscriptions/${inv.subscription}`);
+  const sub = await stripeCall<StripeSubscription>(key, "GET", `/subscriptions/${subscriptionId}`);
   const userId = sub.metadata?.user_id ?? null;
   if (!userId) return;
 
@@ -147,9 +153,10 @@ const recordStripeInvoice = async (
     periodEnd,
   });
 
-  // Branded receipt with a link to the Stripe invoice PDF — once per invoice,
-  // and only from the canonical invoice.paid event (not its twin).
-  if (sendReceipt && isFirstDelivery) {
+  // Branded receipt with a link to the Stripe invoice PDF. Fired from whichever
+  // of invoice.paid / invoice.payment_succeeded arrives FIRST — isFirstDelivery
+  // (set before the ledger insert above) makes sure the twin doesn't re-send.
+  if (isFirstDelivery) {
     const contact = await getUserContact(ctx, userId);
     if (contact) {
       const currency = inv.currency ?? "usd";
@@ -400,14 +407,12 @@ export const onRequestPost = async (ctx: Ctx) => {
     // Every PAID subscription invoice is booked into the revenue ledger: gross,
     // the VAT Stripe collected, Stripe's own fee, and the cycle the payment
     // covers. The split runs when that cycle closes (see functions/api/_revenue.ts).
-    case "invoice.paid": {
-      await recordStripeInvoice(ctx, key, event.data.object as unknown as StripeInvoice, true);
-      break;
-    }
+    // Stripe fires BOTH of these for a paid subscription invoice, and an endpoint
+    // may be subscribed to only one — so handle either. recordStripeInvoice books
+    // the ledger once (idempotent) and emails the receipt once (isFirstDelivery).
+    case "invoice.paid":
     case "invoice.payment_succeeded": {
-      // Twin of invoice.paid — books the ledger if it arrives first, but never
-      // sends the receipt (invoice.paid owns that, so no double email).
-      await recordStripeInvoice(ctx, key, event.data.object as unknown as StripeInvoice, false);
+      await recordStripeInvoice(ctx, key, event.data.object as unknown as StripeInvoice);
       break;
     }
     // Money went back to the customer. The invoice drops out of the revenue

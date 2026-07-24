@@ -482,9 +482,14 @@ export const onRequestPost = async (ctx: Ctx) => {
   const suffix = isZip ? "" : cleanVersionSuffix(body?.label ?? versionId, rawTitle);
   const stemsTag = format === "stems" ? " STEMS" : "";
   const base = (suffix ? `${title} (${sanitizeFilename(suffix)})` : title) + stemsTag;
+  // Composer pseudonym goes into the filename too — the MP3 download used to drop
+  // it, so a WAV inside the zip read "..._DredStudio_Title.wav" but the MP3 read
+  // "..._Title.mp3". Same order as the zip entries (niceZipEntryName): code first,
+  // then composer, then title.
+  const composerPart = composerName ? `${sanitizeFilename(composerName)}_` : "";
   const filename = trackCode
-    ? `tvmusicstore.com_${trackCode}_${base}.${ext}`
-    : `tvmusicstore.com_${base}.${ext}`;
+    ? `tvmusicstore.com_${trackCode}_${composerPart}${base}.${ext}`
+    : `tvmusicstore.com_${composerPart}${base}.${ext}`;
 
   const headers: Record<string, string> = {
     "content-type": contentType,
