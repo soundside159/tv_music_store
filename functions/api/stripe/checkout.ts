@@ -24,7 +24,18 @@ export const ensurePrices = async (
   interval: "monthly" | "annual",
 ): Promise<string> => {
   const existing = interval === "annual" ? plan.stripe_price_annual : plan.stripe_price_monthly;
-  if (existing) return existing;
+  if (existing) {
+    // A stored id from a PREVIOUS Stripe environment (switching sandbox, or
+    // test↔live) does not resolve here — reusing it makes Checkout fail with
+    // "No such price". Verify it exists AND is active in THIS environment;
+    // otherwise fall through and (re)create the product + prices.
+    try {
+      const p = await stripeCall<{ id: string; active?: boolean }>(key, "GET", `/prices/${existing}`);
+      if (p?.id && p.active !== false) return p.id;
+    } catch {
+      // gone / foreign id — recreate below
+    }
+  }
 
   const product = await stripeCall<{ id: string }>(key, "POST", "/products", {
     name: `TV Music Store ${plan.name}`,
@@ -78,8 +89,6 @@ export const onRequestPost = async (ctx: Ctx) => {
     .first<PlanRow>();
   if (!plan) return json({ error: "Plan not found" }, 404);
 
-  const priceId = await ensurePrices(key, ctx, plan, interval);
-
   // Reuse the Stripe customer if this user already has one (upgrades/downgrades).
   await ensureStripeColumns(ctx.env.DB);
   const sub = await ctx.env.DB.prepare(
@@ -90,24 +99,31 @@ export const onRequestPost = async (ctx: Ctx) => {
     .first<{ stripe_customer_id: string | null }>();
 
   const origin = new URL(ctx.request.url).origin;
-  const session = await stripeCall<{ id: string; url: string }>(key, "POST", "/checkout/sessions", {
-    mode: "subscription",
-    "line_items[0][price]": priceId,
-    "line_items[0][quantity]": 1,
-    // Land on the Billing dashboard (plan + period + invoices), the subscription
-    // twin of the Licenses page a one-time purchase returns to. checkout=success
-    // still triggers the Welcome modal.
-    success_url: `${origin}/account?section=billing&checkout=success`,
-    cancel_url: `${origin}/pricing?checkout=canceled`,
-    client_reference_id: user.id,
-    allow_promotion_codes: true,
-    "subscription_data[metadata][user_id]": user.id,
-    "subscription_data[metadata][plan]": plan.id,
-    "subscription_data[metadata][interval]": interval,
-    ...(sub?.stripe_customer_id
-      ? { customer: sub.stripe_customer_id }
-      : { customer_email: user.email }),
-  });
-
-  return json({ ok: true, url: session.url });
+  try {
+    const priceId = await ensurePrices(key, ctx, plan, interval);
+    const session = await stripeCall<{ id: string; url: string }>(key, "POST", "/checkout/sessions", {
+      mode: "subscription",
+      "line_items[0][price]": priceId,
+      "line_items[0][quantity]": 1,
+      // Land on the Billing dashboard (plan + period + invoices), the subscription
+      // twin of the Licenses page a one-time purchase returns to. checkout=success
+      // still triggers the Welcome modal.
+      success_url: `${origin}/account?section=billing&checkout=success`,
+      cancel_url: `${origin}/pricing?checkout=canceled`,
+      client_reference_id: user.id,
+      allow_promotion_codes: true,
+      "subscription_data[metadata][user_id]": user.id,
+      "subscription_data[metadata][plan]": plan.id,
+      "subscription_data[metadata][interval]": interval,
+      ...(sub?.stripe_customer_id
+        ? { customer: sub.stripe_customer_id }
+        : { customer_email: user.email }),
+    });
+    return json({ ok: true, url: session.url });
+  } catch (e) {
+    // Surface the real Stripe reason (e.g. a stale price / bad key) instead of a
+    // black-box 500 that the UI shows as "Checkout is unavailable".
+    const msg = e instanceof Error ? e.message : "Stripe request failed";
+    return json({ error: `Stripe: ${msg}` }, 502);
+  }
 };
