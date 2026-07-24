@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { SectionHeading } from "@/components/SectionHeading";
 
 // Admin → Finance. Deliberately minimal (owner's call): four blocks, no essays.
 //
@@ -306,28 +307,37 @@ const AdminFinance = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <select
-          value={report.month}
-          onChange={(e) => void load(e.target.value)}
-          className="rounded-lg border border-border bg-background px-3 py-1.5 font-body text-sm text-foreground focus:border-[#F4C430] focus:outline-none"
-        >
-          {(report.months.length ? report.months : [report.month]).map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          onClick={exportCsv}
-          className="rounded-lg border border-border px-3 py-1.5 font-body text-xs text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
-        >
-          Export payouts (CSV)
-        </button>
-      </div>
-
+      {/* ---- Category 1: reports over ANY date range (accountant stuff). ---- */}
+      <SectionHeading title="Accounting & Reports" />
       <ReportExport />
+
+      {/* ---- Category 2: everything below is the SELECTED MONTH — payments
+              that arrived in it, their sources, and the composer split. ---- */}
+      <SectionHeading
+        title="Month overview"
+        right={
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={report.month}
+              onChange={(e) => void load(e.target.value)}
+              className="rounded-lg border border-border bg-background px-3 py-1.5 font-body text-sm text-foreground focus:border-[#F4C430] focus:outline-none"
+            >
+              {(report.months.length ? report.months : [report.month]).map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={exportCsv}
+              className="rounded-lg border border-border px-3 py-1.5 font-body text-xs text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
+            >
+              Export payouts (CSV)
+            </button>
+          </div>
+        }
+      />
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* 1 — the month's money */}

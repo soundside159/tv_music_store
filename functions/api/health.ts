@@ -12,10 +12,12 @@ export const onRequestGet = async (ctx: Ctx) => {
   }
   return json({
     ok: true,
-    build: "stripe-fix-2", // bump to force + verify a fresh Cloudflare deploy
+    build: "go-live-1", // bump to force + verify a fresh Cloudflare deploy
     db,
     resend: ctx.env.RESEND_API_KEY ? "configured" : "missing",
-    stripe: ctx.env.STRIPE_SECRET_KEY ? "configured" : "missing",
+    stripe: ctx.env.STRIPE_SECRET_KEY
+      ? `configured (${ctx.env.STRIPE_SECRET_KEY.startsWith("sk_live_") ? "LIVE" : "test"})`
+      : "missing",
     stripe_webhook: ctx.env.STRIPE_WEBHOOK_SECRET ? "configured" : "missing",
     google: ctx.env.GOOGLE_CLIENT_ID ? "configured" : "missing",
     paypal:

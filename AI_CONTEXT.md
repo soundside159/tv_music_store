@@ -4275,3 +4275,15 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   + "per year"/"per month" derived from the invoice's paid-period length (>45 days = year); ledger
   SELECT gained gross_cents; AdminLicenseRow gained pricePer. "Purchased track" certs keep "—"
   (their money is on the one-time row). Grid now 8 cols. tsc clean (isolated), eslint 0.
+
+- **2026-07-24 (round 13: Finance grouped into categories + GO-LIVE prep):** (1) AdminFinance now
+  uses SectionHeading group labels (the Notifications gold-bar style, owner's ask): "Accounting &
+  Reports" above the date-range ReportExport card, "Month overview" above the monthly blocks — the
+  month <select> + Export payouts button moved INTO that header's right slot. (2) health.ts build
+  marker bumped stripe-fix-2 -> "go-live-1" AND the stripe field now says configured (LIVE) vs
+  (test) — one glance tells which keys are in. (3) Confirmed to owner: composer payouts are MANUAL
+  (he transfers money himself, then Mark paid closes the cleared months); Payments/Money/Sources/
+  payouts are all the selected month, report card is any range. GO-LIVE checklist given (Stripe
+  live webhook + key swap in CF -> deploy -> health check -> Clear test transactions with plan
+  reset -> live smoke test + refund; also: disable odd payment methods like AmazonPay/Onelink in
+  Stripe Settings -> Payment methods, verify Business details address is the London one).
