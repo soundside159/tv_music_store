@@ -98,6 +98,11 @@ interface LiveUser {
   role: string;
   created_at: string;
   plan: string | null;
+  /** Latest subscription status (active | past_due | canceled) — null = never subscribed. */
+  plan_status: string | null;
+  /** 1 = canceled in the portal; the plan runs to plan_until, then Free. */
+  plan_cancels: number | null;
+  plan_until: string | null;
   downloads: number;
   /** Composer display pseudonym (composers.display_name), if a profile exists. */
   pseudonym: string | null;
@@ -129,6 +134,7 @@ interface AdminLicense {
   userEmail: string;
   userName: string;
   trackTitle: string;
+  trackSlug?: string | null;
   provider?: "stripe" | "paypal" | null;
   feeCents?: number | null;
   netCents?: number | null;
@@ -943,7 +949,19 @@ const Admin = () => {
                                   </span>
                                 </td>
                                 <td className="py-2.5 pr-4">
-                                  <StatusPill text={u.plan ?? "free"} active={!!u.plan && u.plan !== "free"} />
+                                  <span className="flex flex-wrap items-center gap-1.5">
+                                    <StatusPill text={u.plan ?? "free"} active={!!u.plan && u.plan !== "free"} />
+                                    {/* Portal-canceled but still running: same state the
+                                        customer sees on Plan & Billing. */}
+                                    {!!u.plan && u.plan !== "free" && !!u.plan_cancels && (
+                                      <span
+                                        title={u.plan_until ? `Active until ${u.plan_until.slice(0, 10)}, then Free` : "Won't renew"}
+                                        className="rounded-full bg-[#F4C430]/15 px-2 py-0.5 text-[10px] font-semibold text-[#F4C430]"
+                                      >
+                                        canceled{u.plan_until ? ` · until ${u.plan_until.slice(0, 10)}` : ""}
+                                      </span>
+                                    )}
+                                  </span>
                                 </td>
                                 <td className="py-2.5 pr-4 text-muted-foreground">{u.downloads}</td>
                                 <td className="py-2.5 pr-4 text-muted-foreground">
@@ -1243,13 +1261,14 @@ const Admin = () => {
                   // width (no horizontal scrollbar), long values truncate, and
                   // the columns collapse into a card on small screens.
                   const GRID =
-                    "lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1.1fr)_minmax(0,1.3fr)_minmax(0,0.8fr)_6.5rem]";
+                    "lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,1.2fr)_minmax(0,0.7fr)_6.5rem]";
                   return (
                     <div className="font-body text-sm">
                       <div
                         className={`hidden border-b border-border pb-2 text-xs uppercase tracking-wide text-muted-foreground lg:grid lg:gap-4 ${GRID}`}
                       >
-                        <span>License &amp; payment</span>
+                        <span>License</span>
+                        <span>Payment</span>
                         <span>Buyer</span>
                         <span>Track</span>
                         <span>Amount</span>
@@ -1282,7 +1301,7 @@ const Admin = () => {
                               key={`${l.kind}-${l.id}`}
                               className={`grid gap-2 py-3 lg:items-center lg:gap-4 ${GRID} grid-cols-1`}
                             >
-                              {/* License code + kind/provider badges + payment ref */}
+                              {/* License code + kind badge */}
                               <div className="min-w-0">
                                 <a
                                   href={`/api/license-pdf?${l.kind === "subscription" ? "code" : "order"}=${encodeURIComponent(l.id)}`}
@@ -1293,45 +1312,56 @@ const Admin = () => {
                                 >
                                   {l.id}
                                 </a>
-                                <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
-                                  <span
-                                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                                      l.kind === "subscription"
-                                        ? "bg-[#F4C430]/15 text-[#F4C430]"
-                                        : "bg-secondary text-muted-foreground"
-                                    }`}
-                                  >
-                                    {l.kind === "subscription" ? "Subscription" : "One-time"}
-                                  </span>
-                                  {l.reference && (
+                                <span
+                                  className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                    l.kind === "subscription"
+                                      ? "bg-[#F4C430]/15 text-[#F4C430]"
+                                      : "bg-secondary text-muted-foreground"
+                                  }`}
+                                >
+                                  {l.kind === "subscription" ? "Subscription" : "One-time"}
+                                </span>
+                              </div>
+                              {/* Payment: provider badge + ref. Subscription
+                                  certificates have no payment of their own — the
+                                  plan's payments live in Money -> Finance. */}
+                              <div className="min-w-0">
+                                {l.reference ? (
+                                  <>
                                     <span
-                                      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                                      className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${
                                         isStripe ? "bg-indigo-500/20 text-indigo-300" : "bg-sky-500/20 text-sky-300"
                                       }`}
                                     >
                                       {isStripe ? "Stripe" : "PayPal"}
                                     </span>
-                                  )}
-                                  {l.reference &&
-                                    (payUrl ? (
+                                    {payUrl ? (
                                       <a
                                         href={payUrl}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         title={`${l.reference} — open in Stripe`}
-                                        className="min-w-0 max-w-[11rem] truncate font-mono text-[10px] text-muted-foreground hover:text-[#F4C430] hover:underline"
+                                        className="mt-1 block truncate font-mono text-[10px] text-muted-foreground hover:text-[#F4C430] hover:underline"
                                       >
                                         {l.reference}
                                       </a>
                                     ) : (
                                       <span
                                         title={l.reference}
-                                        className="min-w-0 max-w-[11rem] select-all truncate font-mono text-[10px] text-muted-foreground"
+                                        className="mt-1 block select-all truncate font-mono text-[10px] text-muted-foreground"
                                       >
                                         {l.reference}
                                       </span>
-                                    ))}
-                                </div>
+                                    )}
+                                  </>
+                                ) : (
+                                  <span
+                                    className="text-xs text-muted-foreground"
+                                    title="Plan certificate — the subscription's payments are in Money → Finance"
+                                  >
+                                    —
+                                  </span>
+                                )}
                               </div>
                               {/* Buyer */}
                               <div className="min-w-0">
@@ -1351,9 +1381,21 @@ const Admin = () => {
                                 )}
                                 <span className="block truncate text-xs text-muted-foreground">{l.userEmail}</span>
                               </div>
-                              {/* Track + tier/plan */}
+                              {/* Track (clickable when we know its slug) + tier/plan */}
                               <div className="min-w-0">
-                                <span className="block truncate text-foreground">{l.trackTitle}</span>
+                                {l.trackSlug ? (
+                                  <a
+                                    href={`/track/${l.trackSlug}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title="Open the track page"
+                                    className="block truncate text-foreground hover:text-[#F4C430]"
+                                  >
+                                    {l.trackTitle}
+                                  </a>
+                                ) : (
+                                  <span className="block truncate text-foreground">{l.trackTitle}</span>
+                                )}
                                 <span className="block truncate text-xs capitalize text-muted-foreground">
                                   {tierLabel}
                                 </span>

@@ -1,4 +1,5 @@
 import { ensureUploadPermColumns } from "./upload-audio";
+import { ensureStripeColumns } from "../stripe/_stripe";
 import {
   deleteUserAccount,
   getSessionUser,
@@ -36,11 +37,20 @@ export const onRequestGet = async (ctx: Ctx) => {
 
   // Drops legacy random suffixes from artist-page slugs (idempotent).
   await normalizeComposerSlugs(ctx.env.DB);
+  // Makes subscriptions.cancel_at_period_end exist (lazy ALTER) so the plan
+  // subselects below never blow up on an older database.
+  await ensureStripeColumns(ctx.env.DB);
 
   const rows = await ctx.env.DB.prepare(
     `SELECT u.id, u.email, u.name, u.role, u.created_at,
             (SELECT s.plan FROM subscriptions s
               WHERE s.user_id = u.id ORDER BY s.rowid DESC LIMIT 1) AS plan,
+            (SELECT s.status FROM subscriptions s
+              WHERE s.user_id = u.id ORDER BY s.rowid DESC LIMIT 1) AS plan_status,
+            (SELECT s.cancel_at_period_end FROM subscriptions s
+              WHERE s.user_id = u.id ORDER BY s.rowid DESC LIMIT 1) AS plan_cancels,
+            (SELECT s.current_period_end FROM subscriptions s
+              WHERE s.user_id = u.id ORDER BY s.rowid DESC LIMIT 1) AS plan_until,
             (SELECT COUNT(*) FROM download_log d WHERE d.user_id = u.id) AS downloads,
             (SELECT c.display_name FROM composers c
               WHERE c.user_id = u.id LIMIT 1) AS pseudonym,
@@ -56,6 +66,11 @@ export const onRequestGet = async (ctx: Ctx) => {
     role: string;
     created_at: string;
     plan: string | null;
+    /** Latest subscription status (active | past_due | canceled) — null = never subscribed. */
+    plan_status: string | null;
+    /** 1 = canceled in the portal, runs to plan_until, then Free. */
+    plan_cancels: number | null;
+    plan_until: string | null;
     downloads: number;
     pseudonym: string | null;
     /** "About the composer" — shown on the public /artist/<slug> page. */

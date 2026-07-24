@@ -24,6 +24,8 @@ export interface AdminLicenseRow {
   userEmail: string;
   userName: string;
   trackTitle: string;
+  /** Track slug — makes the title clickable in the admin (null if track gone). */
+  trackSlug: string | null;
   // Money + payment linkage (one-time only; null for subscriptions). Pulled from
   // the revenue ledger so the owner can see the processor fee / net and jump
   // straight to the exact payment in Stripe.
@@ -59,6 +61,7 @@ export const onRequestGet = async (ctx: Ctx) => {
     user_email: string | null;
     user_name: string | null;
     track_title: string | null;
+    track_slug: string | null;
     gross_cents: number | null;
     fee_cents: number | null;
     net_cents: number | null;
@@ -67,7 +70,7 @@ export const onRequestGet = async (ctx: Ctx) => {
   }
   const BASE_COLS = `o.id, o.tier, o.price, o.stripe_session_id, o.created_at, o.track_id, o.user_id,
               COALESCE(o.status, 'active') AS status,
-              u.email AS user_email, u.name AS user_name, t.title AS track_title`;
+              u.email AS user_email, u.name AS user_name, t.title AS track_title, t.slug AS track_slug`;
   const BASE_JOINS = `FROM sync_orders o
          LEFT JOIN users u ON u.id = o.user_id
          LEFT JOIN tracks t ON t.id = o.track_id`;
@@ -133,6 +136,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       userEmail: r.user_email ?? "",
       userName: r.user_name ?? "",
       trackTitle: r.track_title ?? prettify(r.track_id),
+      trackSlug: r.track_slug ?? null,
       provider,
       feeCents: r.fee_cents,
       netCents: r.net_cents,
@@ -147,7 +151,7 @@ export const onRequestGet = async (ctx: Ctx) => {
     const planRows = await db
       .prepare(
         `SELECT p.id, p.plan, p.plan_period_end, p.created_at, p.track_id, p.user_id,
-                u.email AS user_email, u.name AS user_name, t.title AS track_title
+                u.email AS user_email, u.name AS user_name, t.title AS track_title, t.slug AS track_slug
            FROM plan_licenses p
            LEFT JOIN users u ON u.id = p.user_id
            LEFT JOIN tracks t ON t.id = p.track_id
@@ -164,6 +168,7 @@ export const onRequestGet = async (ctx: Ctx) => {
         user_email: string | null;
         user_name: string | null;
         track_title: string | null;
+        track_slug: string | null;
       }>();
     subscription = planRows.results.map((r) => ({
       id: r.id,
@@ -177,6 +182,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       userEmail: r.user_email ?? "",
       userName: r.user_name ?? "",
       trackTitle: r.track_title ?? prettify(r.track_id),
+      trackSlug: r.track_slug ?? null,
       provider: null,
       feeCents: null,
       netCents: null,

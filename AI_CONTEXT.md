@@ -4165,3 +4165,26 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   `[overflow-wrap:anywhere]` (break-words doesn't shrink min-content); message subject too.
   eslint 0 errors on all three files. Rule of thumb recorded: any chat/user-text column needs
   minmax(0,1fr)/min-w-0 + overflow-wrap:anywhere.
+
+- **2026-07-24 (round 6: Licenses columns split + clickable tracks; Users canceled chip; refund
+  accounting answered):** (1) Admin -> Licenses: "License & payment" split into separate License
+  (code + kind badge) and Payment (Stripe/PayPal badge + ref link; "—" with a tooltip for
+  subscription certificates — their money lives in Money -> Finance) columns; grid now 6 cols.
+  (2) admin/licenses.ts returns `trackSlug` (t.slug in both queries) and the Track column links to
+  /track/<slug> (new tab). (3) Admin -> Users: plan cell shows a gold "canceled · until <date>" chip
+  next to Pro/Max when the sub is portal-canceled — /api/admin/users now returns plan_status /
+  plan_cancels / plan_until subselects (ensureStripeColumns imported + called first so the lazy
+  column always exists). (4) OWNER QUESTION — refunds in the accountant export: VERIFIED
+  finance-report.ts handles them: every row carries Status (active/refunded) in the CSV, the
+  summary EXCLUDES refunds and prints "Refunds: N · $X returned" separately. Caveats told to the
+  owner: Stripe refunds book automatically via webhook; PayPal refunds only when done via Admin ->
+  Finance Refund / Mark-only; a refund flags the ORIGINAL sale row rather than adding a separate
+  negative line dated the refund day — if his accountant needs refund-dated lines, that's a small
+  future change. tsc clean (isolated) on licenses.ts/users.ts, eslint 0 on Admin.tsx.
+
+- **2026-07-24 (OWNER DECISION — PayPal stays OFF):** payments are Stripe-only for launch.
+  Cart.tsx already has `PAYPAL_ENABLED = false` (card button only, no placeholder note); the whole
+  PayPal backend (functions/api/paypal/*) stays in place, dormant — re-enabling is that one flag +
+  the env vars. Reports/Finance need NO change: provider labels are data-driven, so with PayPal off
+  no PayPal ever shows; the old PayPal TEST rows disappear with "Clear test transactions" before
+  launch. Do NOT resurrect PayPal UI unless the owner asks.
