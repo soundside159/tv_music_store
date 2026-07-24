@@ -117,7 +117,7 @@ export const sendReceiptEmail = async (env: Env, to: string, r: ReceiptEmail): P
   // bill-style PDF ("amount due" + Pay online) — offered as a small link for
   // customers whose accountant wants it; button fallback when no receipt.
   const buttonUrl = r.receiptUrl ?? r.invoiceUrl ?? null;
-  const buttonLabel = r.receiptUrl ? "Download receipt (PDF)" : "Download invoice (PDF)";
+  const buttonLabel = r.receiptUrl ? "Download receipt / invoice (PDF)" : "Download invoice (PDF)";
   const invoiceButton = buttonUrl
     ? `<p style="margin:0 0 14px;text-align:center">
         <a href="${buttonUrl}"

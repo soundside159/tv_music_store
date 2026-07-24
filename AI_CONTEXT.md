@@ -4252,3 +4252,18 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   (2) deploy (env changes need a build — never "Retry deployment"); (3) /api/health check;
   (4) Clear test transactions + OK on the plans question; (5) optional live smoke test: buy the
   cheapest license with a real card, then refund it in Stripe. tsc clean (isolated), eslint 0.
+
+- **2026-07-24 (round 11: Receipts & Invoices tab + email button label; sub-receipt email mystery):**
+  (1) NEW Account -> "Receipts & Invoices" (Plan group, Receipt icon): NEW GET /api/my-receipts —
+  the customer's own revenue_events (subscriptions + license carts, refunded rows marked), and
+  ?open=<eventId> resolves the FRESH Stripe document on demand (in_… -> invoice hosted page,
+  pi_/cs_ -> charge receipt_url) and 302s to it — URLs never stored. ReceiptsSection in Account.tsx
+  (list: label/date/amount/refunded chip + "Receipt / invoice (PDF)" button; PayPal rows get "—").
+  So customers never depend on the email arriving.
+  (2) Receipt email button label -> "Download receipt / invoice (PDF)" (owner's wording).
+  (3) SUB-RECEIPT EMAIL "not arriving": the ledger HAS today's sub payments (so the webhook ran and
+  sendReceiptEmail was called — it never throws). Prime suspect told to owner: the two July-24 sub
+  payments belong to TEST accounts tvmusicstore@gmail.com and audioimperia@gmail.com — the receipt
+  goes to the BUYER's inbox, not the owner's. Second stop: resend.com/emails shows every send +
+  its error if any. If Resend shows nothing for those sends, dig into recordStripeInvoice next.
+  tsc clean (isolated) on my-receipts/_email, eslint 0 on Account/adminNav.

@@ -16,6 +16,7 @@ import { BarChart3,
   Mail,
   Music2,
   Newspaper,
+  Receipt,
   Send,
   ShieldCheck,
   SlidersHorizontal,
@@ -49,7 +50,12 @@ export const accountNavGroups: { label: string; items: NavItem[] }[] = [
   },
   {
     label: "Plan",
-    items: [{ id: "billing", label: "Plan & Billing", icon: CreditCard }],
+    items: [
+      { id: "billing", label: "Plan & Billing", icon: CreditCard },
+      // Every payment's receipt/invoice PDF, straight from the ledger — so a
+      // customer never has to dig through email for a document.
+      { id: "receipts", label: "Receipts & Invoices", icon: Receipt },
+    ],
   },
   {
     label: "Music",

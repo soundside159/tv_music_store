@@ -41,6 +41,7 @@ type SectionId =
   | "license"
   | "claims"
   | "billing"
+  | "receipts"
   | "support"
   // Composer studio sections (sidebar "Composer" group; content = ComposerPanel).
   | "composer-tracks"
@@ -57,6 +58,7 @@ const SECTION_IDS: SectionId[] = [
   "license",
   "claims",
   "billing",
+  "receipts",
   "support",
   "composer-tracks",
   "composer-upload",
@@ -90,6 +92,97 @@ const fmtDateUS = (iso?: string | null) => {
 const SectionCard = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <SectionPanel title={title}>{children}</SectionPanel>
 );
+
+// ---------------------------------------------------------------------------
+// Receipts & Invoices — every payment with a button to its Stripe document, so
+// nobody has to dig through email. The list comes from the revenue ledger; the
+// PDF link resolves fresh via /api/my-receipts?open=<id> (302 to Stripe).
+// ---------------------------------------------------------------------------
+interface ReceiptRow {
+  id: string;
+  source: string;
+  provider: string | null;
+  gross_cents: number;
+  currency: string | null;
+  status: string | null;
+  created_at: string;
+  track_title: string | null;
+}
+
+const receiptMoney = (r: ReceiptRow) => {
+  const v = (r.gross_cents / 100).toFixed(2);
+  const cur = (r.currency ?? "usd").toUpperCase();
+  return cur === "USD" ? `$${v}` : `${v} ${cur}`;
+};
+
+const ReceiptsSection = () => {
+  const [rows, setRows] = useState<ReceiptRow[] | null>(null);
+  useEffect(() => {
+    fetch("/api/my-receipts", { credentials: "include" })
+      .then(async (res) => {
+        const data = (await res.json().catch(() => ({}))) as { receipts?: ReceiptRow[] };
+        setRows(data.receipts ?? []);
+      })
+      .catch(() => setRows([]));
+  }, []);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div>
+        <h1 className="text-2xl font-semibold text-foreground md:text-3xl">Receipts &amp; Invoices</h1>
+        <p className="mt-1 font-body text-sm text-muted-foreground">
+          Every payment you've made, with its receipt / invoice document.
+        </p>
+      </div>
+      <SectionCard title="Your payments">
+        {rows === null ? (
+          <p className="font-body text-sm text-muted-foreground">Loading…</p>
+        ) : rows.length === 0 ? (
+          <p className="font-body text-sm text-muted-foreground">
+            No payments yet — receipts appear here after your first purchase or subscription.
+          </p>
+        ) : (
+          <ul className="divide-y divide-border/50 font-body text-sm">
+            {rows.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-foreground">
+                    {r.source === "subscription"
+                      ? "Subscription payment"
+                      : `Track license${r.track_title ? ` — ${r.track_title}` : ""}`}
+                    {r.status === "refunded" && (
+                      <span className="ml-2 rounded-full border border-red-400/40 px-1.5 py-px text-[10px] font-semibold uppercase text-red-400">
+                        refunded
+                      </span>
+                    )}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{fmtDate(r.created_at)}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <span className="font-semibold text-foreground">{receiptMoney(r)}</span>
+                  {r.provider === "stripe" ? (
+                    <a
+                      href={`/api/my-receipts?open=${encodeURIComponent(r.id)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
+                    >
+                      Receipt / invoice (PDF)
+                    </a>
+                  ) : (
+                    <span className="text-xs text-muted-foreground" title="Paid outside Stripe">
+                      —
+                    </span>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </SectionCard>
+    </div>
+  );
+};
 
 const EmptyNote = ({ text }: { text: string }) => (
   <p className="font-body text-sm text-muted-foreground">{text}</p>
@@ -861,6 +954,8 @@ const Account = () => {
             {/* Licenses: subscription-covered tracks + purchased ones, each
                 with audio, its PDF certificate and the Edit-certificate form. */}
             {section === "license" && <LicensesSection />}
+
+            {section === "receipts" && <ReceiptsSection />}
 
             {/* Customer channel whitelisting is PAUSED (owner decision
                 2026-07-18) — the MyChannels section is unmounted, claims are
