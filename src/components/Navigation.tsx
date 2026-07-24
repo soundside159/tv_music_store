@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { LogOut, Menu, Search, ShoppingCart, User, X } from "lucide-react";
+import { LogOut, Mail, Menu, Search, ShoppingCart, User, X } from "lucide-react";
 import AuthModal from "@/components/AuthModal";
 import { useCurrentUser, useSubscription } from "@/hooks/useMockData";
 import { logout } from "@/hooks/useAuth";
 import { useCart } from "@/hooks/useCart";
+import { useUnreadMail } from "@/hooks/useUnreadMail";
 import { openPlanModal } from "@/lib/billing";
 import { resumePendingDownload } from "@/lib/downloadTrack";
 
@@ -27,6 +28,8 @@ const Navigation = () => {
   const user = useCurrentUser();
   const subscription = useSubscription();
   const { count: cartCount } = useCart();
+  // Admin-only: unread inbox threads for the header envelope (0 for everyone else).
+  const unreadMail = useUnreadMail(user?.role === "admin");
   const acctRef = useRef<HTMLDivElement>(null);
 
   // Account popup header: plan chip (+ "Upgrade" when the user is still free).
@@ -142,6 +145,22 @@ const Navigation = () => {
 
           {/* Right: search + account + cart */}
           <div className="hidden items-center gap-5 md:flex">
+            {/* Admin-only envelope: unread inbox count, click -> admin Inbox. */}
+            {user?.role === "admin" && (
+              <Link
+                to="/admin?section=mail"
+                aria-label={`Inbox — ${unreadMail} unread`}
+                title={unreadMail > 0 ? `${unreadMail} unread message${unreadMail === 1 ? "" : "s"}` : "Inbox"}
+                className="relative flex items-center justify-center text-muted-foreground transition-colors duration-300 hover:text-[#F4C430]"
+              >
+                <Mail className="h-5 w-5" />
+                {unreadMail > 0 && (
+                  <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#F4C430] px-1 font-body text-[10px] font-bold leading-none text-background">
+                    {unreadMail > 9 ? "9+" : unreadMail}
+                  </span>
+                )}
+              </Link>
+            )}
             {/* On /catalog the header search glides away — the catalog page
                 has its own (plus AI Search) right below, and two boxes on one
                 screen read as a bug. */}

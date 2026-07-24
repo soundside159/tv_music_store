@@ -7,6 +7,7 @@ import MenuGroupHeader from "@/components/MenuGroupHeader";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { useCurrentUser } from "@/hooks/useMockData";
+import { useUnreadMail } from "@/hooks/useUnreadMail";
 import { mockBriefs, mockComposers, mockComposerTracks } from "@/mocks";
 import AdminContent from "@/components/AdminContent";
 import AdminBulkUpload from "@/components/AdminBulkUpload";
@@ -223,6 +224,8 @@ const Admin = () => {
   const totalDownloads = custUsers.reduce((a, u) => a + (u.downloads ?? 0), 0);
 
   const isAdmin = !!user && user.role === "admin";
+  // Unread inbox count for the sidebar Inbox chip (shared with the header envelope).
+  const unreadMail = useUnreadMail(isAdmin);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -671,6 +674,12 @@ const Admin = () => {
                         >
                           <sec.icon className="h-4 w-4" />
                           {sec.label}
+                          {/* Unread count on Inbox — same number as the header envelope. */}
+                          {sec.id === "mail" && unreadMail > 0 && (
+                            <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-[#F4C430] px-1 font-body text-[10px] font-bold leading-none text-background">
+                              {unreadMail > 9 ? "9+" : unreadMail}
+                            </span>
+                          )}
                         </button>
                       ))}
                     </div>

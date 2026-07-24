@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Archive, Mail, PenSquare, RefreshCw, Search, Send, Star, Trash2, User } from "lucide-react";
 import { toast } from "sonner";
+import { refreshUnreadMail } from "@/hooks/useUnreadMail";
 
 // Admin -> Inbox. Reads contact@ conversations from D1 (filled by the separate
 // Email Worker) and replies via Resend (from contact@tvmusicstore.com).
@@ -116,6 +117,7 @@ const AdminInbox = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => v
       const d = (await api(`/api/admin/mail?id=${encodeURIComponent(id)}`)) as Detail;
       setDetail(d);
       setThreads((prev) => prev.map((t) => (t.id === id ? { ...t, unread: 0 } : t)));
+      refreshUnreadMail(); // header envelope + sidebar chip drop right away
       const lastInbound = [...d.messages].reverse().find((m) => m.direction === "in");
       const base = lastInbound?.subject ?? "your message";
       setSubject(base.toLowerCase().startsWith("re:") ? base : `Re: ${base}`);
@@ -158,6 +160,7 @@ const AdminInbox = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => v
         setDetail(null);
       }
       void loadThreads(query, tab);
+      refreshUnreadMail();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Action failed");
     }

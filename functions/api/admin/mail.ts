@@ -145,7 +145,19 @@ export const onRequestGet = async (ctx: Ctx) => {
   if (auth.error) return auth.error;
   await ensureMailTables(ctx.env.DB);
 
-  const id = new URL(ctx.request.url).searchParams.get("id");
+  const params = new URL(ctx.request.url).searchParams;
+
+  // ?unread=1 — the LIGHT branch for the header envelope badge + the sidebar
+  // count: just the number of unread inbox threads, polled from every page an
+  // admin has open, so it must stay one COUNT query.
+  if (params.get("unread")) {
+    const row = await ctx.env.DB.prepare(
+      `SELECT COUNT(*) AS n FROM mail_threads WHERE unread > 0 AND archived = 0`,
+    ).first<{ n: number }>();
+    return json({ unread: row?.n ?? 0 });
+  }
+
+  const id = params.get("id");
 
   if (id) {
     const thread = await ctx.env.DB.prepare(`SELECT * FROM mail_threads WHERE id = ?1`)

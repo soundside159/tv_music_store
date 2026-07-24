@@ -4308,3 +4308,14 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   to the real tiers (no hardcoded prices — they're admin-editable); button label "Sync licensing"
   -> "Single-track licensing". Middleware /sync prerender copy had no prices — untouched.
   eslint 0 on both.
+
+- **2026-07-24 (admin unread-mail badge — header envelope + sidebar chip):** owner's ask. NEW light
+  branch `GET /api/admin/mail?unread=1` -> { unread: N } (one COUNT of unread non-archived
+  threads). NEW `src/hooks/useUnreadMail.ts` — module store, ONE poll for however many components
+  mount (2 min interval + on window focus; starts only when enabled=admin), exports
+  refreshUnreadMail(). Navigation.tsx: admins get a Mail envelope LEFT of the header search with a
+  gold count bubble (9+ cap), click -> /admin?section=mail; guests/customers see nothing and no
+  poll runs. Admin.tsx sidebar: the Inbox item shows the same gold count chip (sec.id === "mail").
+  AdminInbox calls refreshUnreadMail() after opening a thread and after archive/delete/mark
+  actions so both badges drop immediately. mail.ts tsc note: pre-existing bare D1Database ambient
+  noise at line 113 (documented, ignore). eslint 0 on all four frontend files.
