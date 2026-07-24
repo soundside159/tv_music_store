@@ -48,7 +48,12 @@ interface MiddlewareCtx {
 }
 
 const SITE = "https://tvmusicstore.com";
-const OG_IMAGE = `${SITE}/images/icons/web-app-manifest-512x512.png`;
+// Default share image for every prerendered page (tracks/collections override
+// it with their own art): the minimal wide banner — dark graphite + gold logo.
+// It used to be the square 512 app ICON, which messengers showed as a white
+// logo card while excluded routes (/admin) showed the cinema og-cover — the
+// owner unified on the minimal banner 2026-07-24.
+const OG_IMAGE = `${SITE}/images/og-cover-2.jpg`;
 
 // The #root prerender is ONLY for agents that don't run JavaScript. Browsers
 // used to get it too, and every F5 flashed the SEO track list for a moment

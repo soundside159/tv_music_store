@@ -4332,3 +4332,16 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   something; (3) the Search / AI Search toggle moved INSIDE the search bar (replacing the
   "Sound Effects |" prefix text) — the form is now a flex bar (same rectangle style,
   focus-within gold border), pills left, input flex-1, search icon right. eslint 0 on both.
+
+- **2026-07-24 (link previews unified — minimal dark OG banner):** owner noticed /admin shares
+  showed the cinema og-cover.jpg (middleware SKIPS /admin -> raw index.html) while the homepage
+  showed a WHITE square logo card (middleware rewrote og:image to the square 512 APP ICON on every
+  prerendered route) — accidental mismatch from two different sessions. Owner picked the "best of
+  both" option: NEW `public/images/og-cover-2.jpg` (1200x630, ~28KB progressive JPEG) — minimal
+  dark graphite gradient + faint gold glow + the gold mark (cropped from the 512 icon's alpha
+  bbox) + letterspaced "TV MUSIC STORE" + gold hairline + tvmusicstore.com (built with PIL,
+  Inter woff2 -> ttf via fontTools; generator not committed). Wired: index.html og:image +
+  twitter:image -> og-cover-2.jpg; middleware OG_IMAGE default -> og-cover-2.jpg (tracks/
+  collections still override with their own art). The cinema og-cover.jpg STAYS on disk as an
+  alternative. RULE unchanged: any redesign = bump the filename (og-cover-3.jpg) — messengers
+  cache by URL; refresh Telegram via @WebpageBot after deploy.
