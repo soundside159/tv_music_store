@@ -117,8 +117,21 @@ export const onRequestGet = async (ctx: Ctx) => {
     // cue columns unavailable — fields just come back empty
   }
 
+  // Sound downloads live in their own table (a sound is not a track) — one
+  // total for the dashboard card. Guarded: the sfx tables may not exist yet.
+  let sfxDownloads = 0;
+  try {
+    const r = await ctx.env.DB.prepare(`SELECT COUNT(*) AS n FROM sfx_downloads`).first<{
+      n: number;
+    }>();
+    sfxDownloads = r?.n ?? 0;
+  } catch {
+    // no sfx tables yet
+  }
+
   return json({
     users: rows.results.map((u) => ({ ...u, cue: cueByUser.get(u.id) ?? null })),
+    sfxDownloads,
   });
 };
 

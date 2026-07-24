@@ -4374,3 +4374,10 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   nobody — assign composers BEFORE real traffic. Also fixed pre-existing type gaps in
   admin/sfx.ts readJson generic (top-level tags/status, fields.description). tsc clean (isolated),
   eslint 0 on AdminSfx.
+
+- **2026-07-24 (dashboard sound-downloads counter + footer lift toned down):** (1) Admin ->
+  Dashboard "Downloads (all-time)" card gained the sub-line "+ N sound downloads" —
+  /api/admin/users returns `sfxDownloads` (guarded COUNT(*) FROM sfx_downloads; 0 when the table
+  doesn't exist yet). (2) The body padding under the mini-player was too tall (pages already carry
+  their own bottom padding, so the bar's full height double-counted): 5.5rem -> 4rem per the
+  owner ("ниже процентов на 25"). eslint 0 errors.

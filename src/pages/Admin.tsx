@@ -189,6 +189,8 @@ const Admin = () => {
   const [menu, setMenu] = useState<"main" | "composer" | "admin">("admin");
   const [openPeriod, setOpenPeriod] = useState<string | null>(null);
   const [liveUsers, setLiveUsers] = useState<LiveUser[] | null>(null);
+  // Sound downloads total (their own table) — the Downloads dashboard card's sub-line.
+  const [sfxDownloadsTotal, setSfxDownloadsTotal] = useState(0);
   const [usersError, setUsersError] = useState<string | null>(null);
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
   // Users section: filter tab, the row whose ⋯ menu is open (+ its screen
@@ -276,9 +278,14 @@ const Admin = () => {
     if (!isAdmin) return;
     fetch("/api/admin/users", { credentials: "include" })
       .then(async (res) => {
-        const data = (await res.json()) as { users?: LiveUser[]; error?: string };
+        const data = (await res.json()) as {
+          users?: LiveUser[];
+          sfxDownloads?: number;
+          error?: string;
+        };
         if (!res.ok || !data.users) throw new Error(data.error ?? "Failed to load users");
         setLiveUsers(data.users);
+        setSfxDownloadsTotal(data.sfxDownloads ?? 0);
       })
       .catch((e: Error) => setUsersError(e.message));
   }, [isAdmin]);
@@ -716,6 +723,7 @@ const Admin = () => {
                   <Stat
                     label="Downloads (all-time)"
                     value={liveUsers ? String(totalDownloads) : "—"}
+                    sub={liveUsers ? `+ ${sfxDownloadsTotal} sound downloads` : undefined}
                   />
                   <Stat
                     label="Paid share"

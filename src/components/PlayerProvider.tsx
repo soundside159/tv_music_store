@@ -31,7 +31,10 @@ export const PlayerProvider = ({ children }: { children: ReactNode }) => {
   // <body> only while the bar exists, so silent pages keep their layout.
   const barVisible = !!(currentTrack && currentVersion);
   useEffect(() => {
-    document.body.style.paddingBottom = barVisible ? "5.5rem" : "";
+    // 4rem, not the bar's full ~5.5rem: pages already carry their own bottom
+    // padding, so the full height double-counted and lifted footers too high
+    // (owner asked for ~25% less).
+    document.body.style.paddingBottom = barVisible ? "4rem" : "";
     return () => {
       document.body.style.paddingBottom = "";
     };
