@@ -4128,3 +4128,6 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   per mount (skipped for admins / signed-out) then refreshSession() — so a missed webhook or
   pre-column cancel heals itself on view. Errors leave the DB row untouched (no guessing when the
   sub id belongs to an older Stripe test env). tsc clean (isolated), eslint 0 on Account.tsx.
+  [ROUND 3b same day: the canceled-state bubble shows a bold "!" instead of the check (gold circle
+  kept); green check stays for active plans. Owner also hit "Already up to date" confusion — that
+  line is deploy.bat's git pull, not a failed deploy; git log confirmed all rounds committed+pushed.]

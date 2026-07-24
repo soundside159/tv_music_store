@@ -1106,16 +1106,19 @@ const Account = () => {
                               : "bg-secondary"
                         }`}
                       >
-                        <Check
-                          strokeWidth={3}
-                          className={`h-5 w-5 ${
-                            endsAtPeriodEnd
-                              ? "text-background"
-                              : adminAccess || isPaidPlan
-                                ? "text-white"
-                                : "text-muted-foreground"
-                          }`}
-                        />
+                        {endsAtPeriodEnd ? (
+                          // Won't auto-renew — an exclamation mark, not a happy check.
+                          <span className="font-body text-lg font-extrabold leading-none text-background">
+                            !
+                          </span>
+                        ) : (
+                          <Check
+                            strokeWidth={3}
+                            className={`h-5 w-5 ${
+                              adminAccess || isPaidPlan ? "text-white" : "text-muted-foreground"
+                            }`}
+                          />
+                        )}
                       </div>
                       <div>
                         <p className="font-body text-[15px] font-semibold text-foreground">
