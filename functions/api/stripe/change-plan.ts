@@ -39,17 +39,39 @@ export const onRequestPost = async (ctx: Ctx) => {
 
   await ensureStripeColumns(ctx.env.DB);
   const current = await ctx.env.DB.prepare(
-    `SELECT stripe_sub_id, plan, status FROM subscriptions
+    `SELECT stripe_sub_id, plan, interval, status FROM subscriptions
       WHERE user_id = ?1 ORDER BY rowid DESC LIMIT 1`,
   )
     .bind(user.id)
-    .first<{ stripe_sub_id: string | null; plan: string | null; status: string | null }>();
+    .first<{
+      stripe_sub_id: string | null;
+      plan: string | null;
+      interval: string | null;
+      status: string | null;
+    }>();
 
   const liveStatus = current?.status ?? "";
   const hasLive =
     current?.stripe_sub_id && ["active", "trialing", "past_due"].includes(liveStatus);
   if (!hasLive) {
     return json({ error: "No active subscription to change", code: "nosub" }, 409);
+  }
+
+  // Same rules the plan cards enforce (lib/billing.ts planCardAction) — the
+  // server is the boundary, the UI is just polite:
+  //  - annual -> monthly is not offered (the paid year would strand a credit);
+  //  - Max -> Pro is not offered (cancel and resubscribe instead).
+  if (current?.interval === "annual" && interval === "monthly") {
+    return json(
+      { error: "Your plan is billed annually — switching to monthly isn't available while the paid year runs" },
+      400,
+    );
+  }
+  if (PLAN_RANK[planId] < PLAN_RANK[current?.plan ?? "free"]) {
+    return json(
+      { error: "Moving to a smaller plan isn't available — cancel your current plan and it stays active to the end of the paid period" },
+      400,
+    );
   }
 
   const planRow = await ctx.env.DB.prepare(
@@ -71,7 +93,12 @@ export const onRequestPost = async (ctx: Ctx) => {
     return json({ ok: true, plan: planId, interval, unchanged: true });
   }
 
-  const upgrade = PLAN_RANK[planId] > PLAN_RANK[current?.plan ?? "pro"];
+  // Bill the prorated difference right away for a bigger plan AND for a
+  // monthly -> annual switch (a commitment upgrade — the customer expects to
+  // pay for the year now, not on some future invoice).
+  const upgrade =
+    PLAN_RANK[planId] > PLAN_RANK[current?.plan ?? "pro"] ||
+    (current?.interval === "monthly" && interval === "annual");
   const updated = await stripeCall<StripeSub>(key, "POST", `/subscriptions/${current!.stripe_sub_id}`, {
     "items[0][id]": item.id,
     "items[0][price]": newPrice,

@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowUpRight, Download as DownloadIcon, Pause, Play, Plus, X } from "lucide-react";
+import { ArrowUpRight, Check, Download as DownloadIcon, Pause, Play, Plus, X } from "lucide-react";
 import { accountNavGroups, adminNavGroups, composerNavItems } from "@/lib/adminNav";
 import MenuGroupHeader from "@/components/MenuGroupHeader";
 import MenuTreeLines from "@/components/MenuTreeLines";
@@ -475,12 +475,13 @@ const Account = () => {
   const endsAtPeriodEnd =
     isPaidPlan && (!!subscription?.cancelAtPeriodEnd || subscription?.status === "canceled");
 
-  const planSubtitle =
-    plan?.id === "max"
-      ? "Full access — unlimited downloads, WAV, stems & commercial license"
-      : plan?.id === "pro"
-        ? "Unlimited downloads — upgrade to Max for WAV, stems & commercial license"
-        : "Upgrade to unlock unlimited downloads & WAV";
+  // Plan & Billing card copy (per the owner's mockup): a status row with a
+  // check bubble + the renewal line, and — below a divider — the upgrade hint
+  // sitting right next to the Upgrade button.
+  const upgradeHint =
+    plan?.id === "pro"
+      ? "Upgrade to Max for WAV, stems & commercial license."
+      : "Upgrade to unlock unlimited downloads & WAV.";
 
   if (!user) {
     return (
@@ -1077,54 +1078,79 @@ const Account = () => {
                   <p className="mt-1 font-body text-sm text-muted-foreground">Manage your subscription</p>
                 </div>
 
-                <SectionPanel title="Your plan">
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div>
-                      <p className="font-body text-xl font-semibold text-foreground">
-                        {adminAccess ? "Admin access" : `${plan?.name ?? "Free"} Plan`}
-                      </p>
-                      <p className="mt-1 font-body text-sm text-muted-foreground">
-                        {adminAccess
-                          ? "Full access by role — every format and unlimited downloads, no subscription."
-                          : planSubtitle}
-                      </p>
-                      {/* Billing status line: renewal date, or — after a portal
-                          cancel — how long the plan keeps running. */}
-                      {isPaidPlan && endsAtPeriodEnd && (
-                        <p className="mt-2 font-body text-sm text-[#F4C430]">
-                          Canceled — active until{" "}
-                          {benefitsUntil ?? "the end of your current billing period"}, then you
-                          switch to Free.
+                <SectionPanel
+                  title={adminAccess ? "Admin Access" : `${(plan?.name ?? "Free").toUpperCase()} Plan`}
+                >
+                  {/* Status row: check bubble + headline/renewal, Manage billing on the right. */}
+                  <div className="flex flex-wrap items-center justify-between gap-4 py-1">
+                    <div className="flex items-center gap-4">
+                      <div
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+                          endsAtPeriodEnd
+                            ? "bg-[#F4C430]"
+                            : adminAccess || isPaidPlan
+                              ? "bg-emerald-500"
+                              : "bg-secondary"
+                        }`}
+                      >
+                        <Check
+                          strokeWidth={3}
+                          className={`h-5 w-5 ${
+                            endsAtPeriodEnd
+                              ? "text-background"
+                              : adminAccess || isPaidPlan
+                                ? "text-white"
+                                : "text-muted-foreground"
+                          }`}
+                        />
+                      </div>
+                      <div>
+                        <p className="font-body text-[15px] font-semibold text-foreground">
+                          {adminAccess
+                            ? "Full access by role."
+                            : endsAtPeriodEnd
+                              ? `Your ${plan?.name} Plan is canceled.`
+                              : isPaidPlan
+                                ? `Great! You have access to the ${plan?.name} Plan.`
+                                : "You're on the Free plan."}
                         </p>
-                      )}
-                      {isPaidPlan && !endsAtPeriodEnd && benefitsUntil && (
-                        <p className="mt-2 font-body text-sm text-muted-foreground">
-                          Renews on {benefitsUntil}. Cancel anytime via Manage billing — your plan
-                          stays active to the end of the paid period.
+                        <p className="mt-0.5 font-body text-sm text-muted-foreground">
+                          {adminAccess
+                            ? "Every format and unlimited downloads — no subscription needed."
+                            : endsAtPeriodEnd
+                              ? `Active until ${benefitsUntil ?? "the end of the paid period"} — then you switch to Free.`
+                              : isPaidPlan
+                                ? benefitsUntil
+                                  ? `Your plan will renew on ${benefitsUntil}.`
+                                  : "Renews automatically."
+                                : "3 MP3 track downloads per month."}
                         </p>
-                      )}
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      {!adminAccess && BILLING_ENABLED && plan && plan.id !== "free" && (
-                        <button
-                          type="button"
-                          onClick={() => void openBillingPortal()}
-                          className="rounded-lg border border-border px-4 py-2 font-body text-sm font-semibold text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
-                        >
-                          Manage billing
-                        </button>
-                      )}
-                      {!adminAccess && plan?.id !== "max" && (
-                        <button
-                          type="button"
-                          onClick={() => openPlanModal()}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-[#F4C430] px-5 py-2.5 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
-                        >
-                          <ArrowUpRight className="h-4 w-4" /> Upgrade plan
-                        </button>
-                      )}
-                    </div>
+                    {!adminAccess && BILLING_ENABLED && isPaidPlan && (
+                      <button
+                        type="button"
+                        onClick={() => void openBillingPortal()}
+                        className="rounded-lg border border-border px-4 py-2 font-body text-sm font-semibold text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
+                      >
+                        Manage billing
+                      </button>
+                    )}
                   </div>
+
+                  {/* Upgrade row (hidden on Max and for admins). */}
+                  {!adminAccess && plan?.id !== "max" && (
+                    <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-border/60 pt-5">
+                      <p className="font-body text-sm text-muted-foreground">{upgradeHint}</p>
+                      <button
+                        type="button"
+                        onClick={() => openPlanModal()}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-[#F4C430] px-5 py-2.5 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
+                      >
+                        <ArrowUpRight className="h-4 w-4" /> Upgrade plan
+                      </button>
+                    </div>
+                  )}
                 </SectionPanel>
 
                 {/* The separate "Cancel Subscription" card is gone (owner's call):

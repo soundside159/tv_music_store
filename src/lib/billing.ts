@@ -10,6 +10,33 @@ import type { BillingInterval, PlanId } from "@/types/domain";
 // billing ever needs an emergency pause.
 export const BILLING_ENABLED: boolean = true;
 
+// ---------------------------------------------------------------------------
+// What a plan card can do for THIS visitor. One rule set shared by the
+// PlanModal popup and the /pricing page so they can never disagree:
+//   - "current"     same plan + same interval -> disabled "Current plan"
+//   - "included"    Pro card while the customer is on Max -> disabled
+//   - "annual_lock" monthly card while the customer is billed annually ->
+//                   disabled (the year is already paid; annual->monthly would
+//                   strand a Stripe credit — we don't offer it)
+//   - "switch"      in-place upgrade (Pro->Max and/or monthly->annual),
+//                   prorated by Stripe via /api/stripe/change-plan
+//   - "checkout"    no active subscription -> normal Stripe Checkout
+// ---------------------------------------------------------------------------
+export type PlanCardAction = "current" | "included" | "annual_lock" | "switch" | "checkout";
+
+export const planCardAction = (
+  activePlan: string | null,
+  activeInterval: string | null,
+  cardPlan: string,
+  cardInterval: BillingInterval,
+): PlanCardAction => {
+  if (!activePlan) return "checkout";
+  if (activePlan === "max" && cardPlan === "pro") return "included";
+  if (activeInterval === "annual" && cardInterval === "monthly") return "annual_lock";
+  if (activePlan === cardPlan && (activeInterval ?? "monthly") === cardInterval) return "current";
+  return "switch";
+};
+
 export interface PlanModalContext {
   /** Custom heading (default "Pick a plan"). */
   title?: string;

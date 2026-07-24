@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Check, X } from "lucide-react";
 import { usePlans, useSubscription } from "@/hooks/useMockData";
 import { useAuthSession } from "@/hooks/useAuth";
-import { BILLING_ENABLED, openBillingPortal, startCheckout, switchPlan } from "@/lib/billing";
+import { BILLING_ENABLED, planCardAction, startCheckout, switchPlan } from "@/lib/billing";
 import type { BillingInterval, PlanConfig } from "@/types/domain";
 
 // Global "Pick a plan" popup (tunetank-style). Opened via openPlanModal()
@@ -15,50 +15,52 @@ const GOLD = "#F4C430";
 const PlanCard = ({
   plan,
   interval,
-  isCurrent,
   activePlan,
+  activeInterval,
   onDone,
 }: {
   plan: PlanConfig;
   interval: BillingInterval;
-  isCurrent: boolean;
   /** The paid plan the customer is subscribed to right now (null if none). */
   activePlan: string | null;
+  /** How that plan is billed (monthly | annual | null when no subscription). */
+  activeInterval: string | null;
   onDone: () => void;
 }) => {
   const [busy, setBusy] = useState(false);
   const isMax = plan.id === "max";
   const price = interval === "annual" ? plan.priceAnnualPerMonth : plan.priceMonthly;
 
-  // A subscriber cannot simply buy a second subscription — Stripe would bill
-  // both. He has to cancel the current one first, so we say so instead of
-  // sending him to checkout. Max already includes everything in Pro, so the
-  // Pro card goes quiet for him.
-  const includedInCurrent = activePlan === "max" && plan.id === "pro";
-  const switchBlocked = !!activePlan && !isCurrent && !includedInCurrent;
+  // One shared rule set with /pricing — see planCardAction in lib/billing.ts.
+  const action = planCardAction(activePlan, activeInterval, plan.id, interval);
+  const isCurrent = action === "current";
+  const disabled =
+    !BILLING_ENABLED || busy || action === "current" || action === "included" || action === "annual_lock";
 
+  const switchLabel =
+    activePlan === plan.id ? "Switch to annual billing" : `Upgrade to ${plan.name}`;
   const cta = !BILLING_ENABLED
     ? "Coming soon"
-    : isCurrent
-      ? "Manage plan"
-      : includedInCurrent
+    : action === "current"
+      ? "Current plan"
+      : action === "included"
         ? "Included in your plan"
-        : switchBlocked
-          ? `Switch to ${plan.name}`
-          : busy
-            ? "Redirecting…"
-            : "Get plan";
+        : action === "annual_lock"
+          ? "You're on annual billing"
+          : action === "switch"
+            ? switchLabel
+            : busy
+              ? "Redirecting…"
+              : "Get plan";
 
   const onClick = async () => {
-    if (!BILLING_ENABLED || busy || includedInCurrent) return;
+    if (disabled) return;
     setBusy(true);
     try {
-      if (isCurrent) {
-        await openBillingPortal();
-      } else if (switchBlocked) {
-        // In-place upgrade/downgrade: no second subscription, Stripe prorates.
+      if (action === "switch") {
+        // In-place upgrade: no second subscription, Stripe prorates.
         const ok = window.confirm(
-          `Switch to ${plan.name} now? Your subscription changes immediately and Stripe charges only the prorated difference.`,
+          `${switchLabel} now? Your subscription changes immediately and Stripe charges only the prorated difference.`,
         );
         if (ok) {
           await switchPlan(plan.id, interval);
@@ -103,7 +105,7 @@ const PlanCard = ({
 
       <button
         type="button"
-        disabled={busy || !BILLING_ENABLED || includedInCurrent}
+        disabled={disabled}
         onClick={() => void onClick()}
         className={`mt-5 rounded-lg py-3 text-center font-body text-sm font-semibold transition-colors duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${
           isCurrent
@@ -173,6 +175,10 @@ const PlanModal = () => {
     subscription.status === "active"
       ? subscription.plan
       : null;
+  const activeInterval = activePlan ? (subscription?.interval ?? null) : null;
+  // Annual subscribers can't move back to monthly (the year is already paid) —
+  // when they flip the toggle to Monthly, both cards lock and this note says why.
+  const annualLocked = activeInterval === "annual" && interval === "monthly";
 
   return (
     <div
@@ -243,12 +249,19 @@ const PlanModal = () => {
               key={p.id}
               plan={p}
               interval={interval}
-              isCurrent={activePlan === p.id}
               activePlan={activePlan}
+              activeInterval={activeInterval}
               onDone={close}
             />
           ))}
         </div>
+
+        {annualLocked && (
+          <p className="mt-4 text-center font-body text-xs text-muted-foreground">
+            Your current plan is billed annually — switching back to monthly isn't available while
+            the paid year runs. Flip the toggle to Annual to upgrade.
+          </p>
+        )}
 
         <div className="mt-6 text-center">
           <Link

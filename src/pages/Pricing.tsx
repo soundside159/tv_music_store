@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/accordion";
 import { usePlans, useSubscription } from "@/hooks/useMockData";
 import { useAuthSession } from "@/hooks/useAuth";
-import { BILLING_ENABLED, openBillingPortal, startCheckout, switchPlan } from "@/lib/billing";
+import { BILLING_ENABLED, planCardAction, startCheckout, switchPlan } from "@/lib/billing";
 import { useSeo } from "@/hooks/useSeo";
 import type { BillingInterval, PlanConfig, PlanId } from "@/types/domain";
 
@@ -68,26 +68,33 @@ const CellValue = ({ v }: { v: string | boolean }) => {
 const PlanCard = ({
   plan,
   interval,
-  isCurrent,
   activePlan,
+  activeInterval,
   isAuthed,
 }: {
   plan: PlanConfig;
   interval: BillingInterval;
-  isCurrent: boolean;
   /** The paid plan the visitor is subscribed to right now (null if none). */
   activePlan: string | null;
+  /** How that plan is billed (monthly | annual | null when no subscription). */
+  activeInterval: string | null;
   isAuthed: boolean;
 }) => {
   const [busy, setBusy] = useState(false);
   const isPro = plan.id === "pro";
   const price = interval === "annual" ? plan.priceAnnualPerMonth : plan.priceMonthly;
 
-  // Everything in Pro is already in Max — and nobody can hold two subscriptions
-  // at once, so a switch has to start with cancelling the current one.
-  const includedInCurrent = activePlan === "max" && plan.id === "pro";
-  const switchBlocked = !!activePlan && !isCurrent && !includedInCurrent;
+  // One shared rule set with the PlanModal popup — see planCardAction in
+  // lib/billing.ts. The current plan is a dead button on purpose: managing /
+  // cancelling lives in Account -> Plan & Billing, not on the pricing page.
+  const action = plan.id === "free" ? "checkout" : planCardAction(activePlan, activeInterval, plan.id, interval);
+  const isCurrent = action === "current";
+  const disabled =
+    plan.id !== "free" &&
+    (!BILLING_ENABLED || busy || action === "current" || action === "included" || action === "annual_lock");
 
+  const switchLabel =
+    activePlan === plan.id ? "Switch to annual billing" : `Upgrade to ${plan.name}`;
   const cta =
     plan.id === "free"
       ? isAuthed
@@ -95,26 +102,26 @@ const PlanCard = ({
         : "Start free"
       : !BILLING_ENABLED
         ? "Coming soon"
-        : isCurrent
-          ? "Your plan"
-          : includedInCurrent
+        : action === "current"
+          ? "Current plan"
+          : action === "included"
             ? "Included in your plan"
-            : switchBlocked
-              ? `Switch to ${plan.name}`
-              : busy
-                ? "Redirecting..."
-                : "Select plan";
+            : action === "annual_lock"
+              ? "You're on annual billing"
+              : action === "switch"
+                ? switchLabel
+                : busy
+                  ? "Redirecting..."
+                  : "Select plan";
 
   const onSelect = async () => {
-    if (plan.id === "free" || busy || !BILLING_ENABLED || includedInCurrent) return;
+    if (plan.id === "free" || disabled) return;
     setBusy(true);
     try {
-      if (isCurrent) {
-        await openBillingPortal();
-      } else if (switchBlocked) {
-        // In-place upgrade/downgrade — Stripe prorates, no second subscription.
+      if (action === "switch") {
+        // In-place upgrade — Stripe prorates, no second subscription.
         const ok = window.confirm(
-          `Switch to ${plan.name} now? Your subscription changes immediately and Stripe charges only the prorated difference.`,
+          `${switchLabel} now? Your subscription changes immediately and Stripe charges only the prorated difference.`,
         );
         if (ok) await switchPlan(plan.id, interval);
       } else {
@@ -169,7 +176,7 @@ const PlanCard = ({
       ) : (
         <button
           type="button"
-          disabled={busy || !BILLING_ENABLED || includedInCurrent}
+          disabled={disabled}
           onClick={() => void onSelect()}
           className={`mt-8 rounded-lg py-2.5 text-center font-body text-sm font-semibold transition-colors duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${
             isCurrent
@@ -198,6 +205,8 @@ const Pricing = () => {
     subscription.status === "active"
       ? subscription.plan
       : null;
+  const activeInterval = activePlan ? (subscription?.interval ?? null) : null;
+  const annualLocked = activeInterval === "annual" && interval === "monthly";
 
   useSeo({
     title: "Plans & Pricing — Royalty-Free Music Subscription | TV Music Store",
@@ -251,16 +260,19 @@ const Pricing = () => {
               key={p.id}
               plan={p}
               interval={interval}
-              isCurrent={
-                status === "authed" &&
-                subscription?.plan === p.id &&
-                subscription?.status === "active"
-              }
               activePlan={activePlan}
+              activeInterval={activeInterval}
               isAuthed={status === "authed"}
             />
           ))}
         </section>
+
+        {annualLocked && (
+          <p className="mt-4 text-center font-body text-xs text-muted-foreground">
+            Your current plan is billed annually — switching back to monthly isn't available while
+            the paid year runs. Pick Annual above to upgrade.
+          </p>
+        )}
 
         <section className="mt-20">
           <h2 className="text-center text-2xl text-foreground">Compare plans</h2>

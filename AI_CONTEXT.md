@@ -4097,3 +4097,24 @@ says exactly that. (The list itself always refreshed correctly — `run()` reloa
   NO-CODE items handed to the owner: Stripe receipts/invoices print the HOME address — change it in
   Stripe Dashboard -> Settings -> Business details (to the London correspondence address); partner
   names belong on the site's Terms/Privacy (already there), not on invoices.
+
+- **2026-07-24 (round 2: Plan & Billing card per owner's mockup + plan-switch rules):**
+  (1) PLAN & BILLING CARD rebuilt to the owner's screenshot: SectionPanel title is now "PRO Plan" /
+  "MAX Plan" / "FREE Plan" / "Admin Access"; body row 1 = colored check bubble (green = active paid,
+  gold = canceled-at-period-end, grey = free) + bold headline ("Great! You have access to the Pro
+  Plan.") + subline ("Your plan will renew on Jul 24, 2027." / canceled: "Active until <date> — then
+  you switch to Free.") with "Manage billing" on the right; divider; row 2 = upgrade hint text
+  ("Upgrade to Max for WAV, stems & commercial license.") NEXT TO the gold "Upgrade plan" button
+  (hidden on Max/admin). The old planSubtitle ("Unlimited downloads — …") is gone.
+  (2) PLAN-SWITCH RULES (owner's spec) — ONE shared rule set `planCardAction()` in src/lib/billing.ts
+  used by BOTH PlanModal and /pricing: current plan+interval -> dead "Current plan" button (clicking
+  it NO LONGER opens the Stripe portal — /pricing used to send people there); Pro card while on Max ->
+  "Included in your plan"; ANNUAL subscriber + Monthly toggle -> BOTH cards locked "You're on annual
+  billing" + explainer note under the grid (annual->monthly would strand a Stripe credit — the
+  downgrade question the owner asked; decision: don't offer it, per his own option A); everything
+  else -> in-place prorated switch via /api/stripe/change-plan (Pro monthly -> Max monthly, Pro ->
+  Max annual, monthly -> annual same plan = "Switch to annual billing"). change-plan.ts now ENFORCES
+  the same server-side: 400 on annual->monthly and on Max->Pro; monthly->annual counts as an upgrade
+  (proration invoiced immediately, not credited to a future invoice).
+  VERIFIED: eslint 0 errors on billing.ts/PlanModal/Pricing/Account (device run); change-plan.ts +
+  webhook.ts tsc-clean (isolated es2022, cloud container). deploy.bat = final gate as usual.
