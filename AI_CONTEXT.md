@@ -4422,3 +4422,101 @@ not be filled in.
   scrolling underneath while scrolling the menu.
 - menuPos state widened to { top | bottom, right, maxH }.
 - eslint src/pages/Admin.tsx: clean. Committed 68144db.
+
+
+## 2026-08-02 — Google Ads audit & rebuild (account 329-504-9856) + two site copy fixes
+Owner had a Search campaign built by another AI. Full audit in the live account
+via browser automation. What was wrong and what was changed:
+
+**Killer bug:** the only ad pointed at `/discover/themes/movie-trailer`, a page
+that renders "No movie trailer tracks yet" (the slug does not match any track
+tag). Every paid click would have landed on an empty page. Campaign was still
+PAUSED, so nothing had been spent (0 impr, 0 clicks, GBP 0.00).
+Final URL moved to `/discover/themes/trailers` (full of tracks).
+
+**Honesty-rule violations in the ad copy (Rule 1 of this file):**
+- headline "Cleared for Commercial Use" — commercial rights are Max / one-time
+  Commercial+Professional only; Free and Pro are personal/creator.
+- description "Every download includes a PDF licence, cleared for commercial and
+  online use" — same problem, asserted for EVERY download.
+- headline "Content ID Claims Handled" — "handled" implies outcome.
+- description "Go Pro for unlimited MP3, WAV and stems" — WAV/stems are Max only.
+Owner reviewed and chose the final wording himself (he did NOT want plan names
+in the ad copy): "Commercial Licence" / "Content ID Quick Release" /
+"Every download comes with a PDF licence for the track you use." /
+"Start free with 3 downloads a month. Unlimited downloads from $7 a month."
+NOTE for the next AI: "Commercial Licence" as a bare headline is the owner's
+explicit decision, taken after the risk (Free/Pro buyer expecting commercial
+rights -> refund request) was spelled out. Do not silently "fix" it back.
+
+**Account changes made (all in campaign "Search - Signups - US/UK/CA/EU", id 24100809301):**
+- Conversion goals: was campaign-specific "YouTube follow-on views" (nonsense for
+  a music shop) -> Account default. No real conversion actions exist in the
+  account at all; bidding stays "Maximise clicks", which is the right choice
+  while nothing is tracked. GA4 / conversion tag deliberately NOT installed —
+  see the GA4 decision below.
+- Budget GBP 20/day -> GBP 10/day.
+- Locations: was CA/DK/FR/DE/NL/NO/UK/US -> US, UK, CA, AU (English-only ads).
+  Targeting was already "Presence", left as is.
+- 36 campaign-level negative keywords added (phrase match for multi-word):
+  "free download", "download free", "for free", "no copyright", "copyright free",
+  "non copyrighted", "sheet music", "how to make", "youtube to mp3",
+  "music generator", "ai music", "1 hour", "10 hours", "epidemic sound",
+  + broad: torrent midi karaoke lyrics remix reddit tutorial course jobs salary
+  suno udio artlist soundstripe audiojungle pond5 envato soundcloud spotify
+  converter crack apk.
+  CAREFUL: never add "free music" or "free" — they would block "royalty free music".
+- 4 sitelinks added (they apply to the whole campaign): Pricing & Plans
+  (/pricing), Browse the Library (/catalog), Sound Effects (/sound-effects),
+  How Licensing Works (/licensing).
+- Ad group "Ad group 1" renamed "Trailer & Cinematic".
+- FOUR new ad groups built, each with its own phrase-match keywords and its own
+  responsive search ad (12 headlines / 4 descriptions, same honest copy base):
+    * Vlog Music -> /playlist/daily-vlog (39 tracks)
+    * Shorts & Reels -> /playlist/shorts-reels (83 tracks)
+    * Family & Lifestyle -> /playlist/family-moments (143 tracks)
+    * Royalty-Free Music (general) -> homepage
+  Owner's own idea and a good one: trailer music is a once-a-year purchase in a
+  crowded niche, while vlog/Shorts/family creators need music weekly — that is
+  the subscription buyer.
+  WATCH OUT when building ad groups in the UI: Google prefills both the keyword
+  box and all 15 headlines with junk ("Great Value For Money", "free songs",
+  "free music mp3"). Click "Clear prefills" FIRST — it also wipes the keyword box,
+  so enter keywords AFTER clearing, not before.
+- Campaign ENABLED 2026-08-02 with the owner's explicit go-ahead. Card on file:
+  Mastercard ...9281. Ads go through Google review (~1 business day) before they
+  can show.
+
+**GA4 decision (do not re-litigate without asking the owner):** another chat sent
+a spec to install gtag.js + sign_up/purchase events. Audit result: (1) the site
+has NO third-party analytics — the country/visitor stats in Admin -> Analytics
+come from our own cookie-less beacon (`src/lib/analytics.tsx` -> `functions/api/hit.ts`,
+country from the Cloudflare edge, IP never stored, daily-rotating visitor hash);
+(2) `src/pages/Privacy.tsx` PROMISES IN WRITING that we set no analytics or
+advertising cookies and will show a consent banner first if that ever changes;
+(3) sign_up cannot be fired correctly today anyway — `/api/auth/register` implies
+a new account, but `/api/auth/verify` (email code) and the Google OAuth callback
+do not tell the frontend whether the user was created or just signed in, so the
+event would fire on every ordinary login and inflate conversions. A `created:true`
+flag on verify.ts + a `?new=1` on the OAuth redirect would be needed first.
+Owner chose NOT to install GA4. Consequence accepted: Google cannot optimise
+toward signups, so bidding stays "Maximise clicks" and results are judged from
+our own Admin -> Analytics.
+
+**Site code (this session, eslint clean on all three files):**
+- `src/pages/Discover.tsx`: the label fallback `slug.replace(/-/g, " ")` produced
+  lowercase headings ("movie trailer Music") on any /discover/<group>/<tag> page
+  whose slug is not in the admin vocabulary. Now title-cased.
+- `src/pages/PlaylistDetail.tsx` + `src/pages/CollectionDetail.tsx`: the meta line
+  "N tracks · Royalty-free · Claim-safe" -> "· Licence included". "Claim-safe" is
+  the same outcome promise Rule 1 forbids, and these are ad landing pages now.
+- NOT deployed by me — owner runs deploy.bat.
+
+**Still open / next:**
+- `/discover/themes/movie-trailer` (and any other Discover slug with no matching
+  tracks) still renders an empty page and is indexable. Either map the slug to
+  the "Trailers" tag or hide/noindex empty tag pages.
+- No conversion tracking of any kind. Judge the campaign from Admin -> Analytics
+  (traffic + new registrations) for the first week.
+- Ad strength is "Good"/"Average" per ad; business name + logo not set (needs
+  Google advertiser verification, "Get access" in the ad editor).

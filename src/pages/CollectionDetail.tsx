@@ -113,7 +113,7 @@ const CollectionDetail = () => {
               />
             </p>
             <p className="mt-2 font-body text-xs text-muted-foreground">
-              {tracks.length} tracks · Royalty-free · Claim-safe
+              {tracks.length} tracks · Royalty-free · Licence included
             </p>
             <AdminDeleteItemButton
               kind="collection"

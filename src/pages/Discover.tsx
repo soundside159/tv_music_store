@@ -126,7 +126,7 @@ const DiscoverTag = ({ group, slug }: { group: DiscoverGroup; slug: string }) =>
   const label =
     (vocab[facet] ?? []).find((value) => tagSlug(value) === slug) ??
     facetValuesInCatalog(tracks, facet).find((value) => tagSlug(value) === slug) ??
-    slug.replace(/-/g, " ");
+    slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
   // Newest-first by each composer's index (chess-board interleave), so a theme /
   // genre page leads with the freshest tracks across all authors.
