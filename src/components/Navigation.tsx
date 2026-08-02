@@ -366,7 +366,7 @@ const Navigation = () => {
         role="dialog"
         aria-modal="true"
         aria-label="Menu"
-        className={`absolute inset-y-0 right-0 flex w-[86%] max-w-sm flex-col overflow-y-auto overscroll-contain border-l border-border bg-card shadow-2xl transition-transform duration-300 ease-out ${
+        className={`absolute inset-y-0 right-0 flex w-full flex-col overflow-y-auto overscroll-contain border-l border-border bg-card shadow-2xl transition-transform duration-300 ease-out ${
           isOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >
@@ -418,19 +418,6 @@ const Navigation = () => {
             )}
           </div>
         )}
-
-        <div className="px-5 pb-1 pt-4">
-          <form onSubmit={submitSearch} className="relative">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search tracks"
-              tabIndex={isOpen ? 0 : -1}
-              className="h-11 w-full rounded-full border border-border bg-background/60 pl-10 pr-4 font-body text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-[#F4C430]/70 focus:outline-none"
-            />
-          </form>
-        </div>
 
         <div className="flex flex-col px-3 py-2">
           {[

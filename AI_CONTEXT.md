@@ -4557,3 +4557,11 @@ top of everything, and disappears the moment you pick anything.
 - eslint clean; `tsc -p tsconfig.app.json` reports only the two PRE-EXISTING
   errors in PlanModal.tsx and Composer.tsx (untouched here).
 - Not deployed by me — owner runs deploy.bat.
+
+  - Same day, after the owner tested it on his iPhone: the drawer is now
+    `w-full` (was `w-[86%] max-w-sm`) — he wants it covering the whole screen
+    like tunetank, the sliver of page showing on the left read as "the curtain
+    didn't finish sliding". The overlay stays mounted for the fade but is no
+    longer visible, so the ways out are the X, Escape, or picking anything.
+    The search box was removed from the drawer at his request (the header search
+    on desktop and the catalog's own search are untouched).
