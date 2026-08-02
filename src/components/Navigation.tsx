@@ -419,41 +419,6 @@ const Navigation = () => {
           </div>
         )}
 
-        <div className="flex flex-col px-3 py-2">
-          {[
-            { label: "Music Library", href: "/catalog" },
-            { label: "Sound Effects", href: "/sound-effects" },
-            ...navItems,
-          ].map((item) => (
-            <Link
-              key={item.href}
-              to={item.href}
-              tabIndex={isOpen ? 0 : -1}
-              className={`rounded-lg px-2 py-3 font-body text-base transition-colors hover:bg-foreground/[0.04] ${
-                location.pathname === item.href || location.pathname.startsWith(`${item.href}/`)
-                  ? "text-[#F4C430]"
-                  : "text-foreground"
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
-          <Link
-            to="/cart"
-            tabIndex={isOpen ? 0 : -1}
-            className="flex items-center justify-between rounded-lg px-2 py-3 font-body text-base text-foreground transition-colors hover:bg-foreground/[0.04]"
-          >
-            <span className="inline-flex items-center gap-2.5">
-              <ShoppingCart className="h-5 w-5 text-muted-foreground" />
-              Cart
-            </span>
-            {cartCount > 0 && (
-              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#F4C430] px-1.5 font-body text-[11px] font-bold text-background">
-                {cartCount}
-              </span>
-            )}
-          </Link>
-        </div>
 
         {user ? (
           <div className="mt-1 flex flex-col border-t border-border/60 px-3 py-2">

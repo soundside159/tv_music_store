@@ -4594,3 +4594,16 @@ ADMIN, ~25 items) before a single line of the page. Fair complaint.
   PRE-EXISTING errors (PlanModal.tsx, Composer.tsx). A full `npm run build` was
   started but the mounted filesystem makes it very slow — deploy.bat builds anyway.
 - Not deployed by me — owner runs deploy.bat.
+
+  - Later the same evening, owner's explicit call: the site links were REMOVED
+    from the header drawer — Music Library, Sound Effects, Pricing, Licensing,
+    Guides and Cart are gone; the drawer is now the account panel only (user
+    block + Upgrade + Inbox/account sections/dashboards/Log out, or "Sign in"
+    for guests), mirroring tunetank's account popup.
+    CONSEQUENCE HE WAS WARNED ABOUT AND ACCEPTED: on a phone there is now no way
+    to reach /catalog, /pricing, /licensing or /cart from any inner page — the
+    header right-hand cluster is `hidden md:flex` and Footer.tsx only links to
+    "/" and /license-terms. Paid Google Ads traffic lands on playlist and theme
+    pages. If bounce looks bad, the fix agreed as the alternative was a fixed
+    bottom tab bar on mobile (Catalog / Sound effects / Pricing / Cart).
+    Do not silently re-add the links to the drawer — ask him first.
