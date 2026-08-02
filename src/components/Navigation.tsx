@@ -81,6 +81,29 @@ const Navigation = () => {
     if (user) resumePendingDownload();
   }, [user]);
 
+  // ---- Mobile drawer plumbing -------------------------------------------
+  // The old mobile menu was simply the desktop link list dropped inside the
+  // header: the page kept scrolling behind it and it never read as a separate
+  // panel. It is a real right-hand drawer now, so it also has to lock the page
+  // underneath, answer Escape, and close itself on every navigation.
+  useEffect(() => {
+    setIsOpen(false);
+  }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [isOpen]);
+
   // Owner's order: Music Library · Sound Effects (placeholder, rendered below)
   // · Pricing · Licensing · Guides.
   const navItems = [
@@ -97,6 +120,7 @@ const Navigation = () => {
   };
 
   return (
+    <>
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/85 backdrop-blur-xl">
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6">
         <div className="flex items-center justify-between h-16 md:h-20">
@@ -316,108 +340,211 @@ const Navigation = () => {
           </button>
         </div>
 
-        {/* Mobile menu */}
-        {isOpen && (
-          <div className="md:hidden pb-6 animate-fade-in">
-            <div className="flex flex-col gap-4">
-              {location.pathname !== "/catalog" && (
-                <form onSubmit={submitSearch} className="relative">
-                  <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search tracks"
-                    className="h-10 w-full rounded-full border border-border bg-card/60 pl-10 pr-4 font-body text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-[#F4C430]/70 focus:outline-none"
-                  />
-                </form>
-              )}
-              <Link
-                to="/catalog"
-                onClick={() => setIsOpen(false)}
-                className={`py-2 font-body text-base transition-colors duration-300 hover:text-foreground ${
-                  location.pathname === "/catalog" ? "text-[#F4C430]" : "text-muted-foreground"
-                }`}
-              >
-                Music Library
-              </Link>
-              <Link
-                to="/sound-effects"
-                onClick={() => setIsOpen(false)}
-                className={`py-2 font-body text-base transition-colors duration-300 hover:text-foreground ${
-                  location.pathname.startsWith("/sound-effects")
-                    ? "text-[#F4C430]"
-                    : "text-muted-foreground"
-                }`}
-              >
-                Sound Effects
-              </Link>
-              {navItems.map((item) => (
-                <Link
-                  key={item.label}
-                  to={item.href}
-                  onClick={() => setIsOpen(false)}
-                  className={`py-2 font-body text-base transition-colors duration-300 hover:text-foreground ${
-                    location.pathname === item.href ? "text-[#F4C430]" : "text-muted-foreground"
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              ))}
-              {user ? (
-                <div className="mt-2 flex flex-col gap-1 border-t border-border/60 pt-3">
-                  {ACCOUNT_MENU.map((item) => (
-                    <Link
-                      key={item.section}
-                      to={`/account?section=${item.section}`}
-                      onClick={() => setIsOpen(false)}
-                      className="py-2 font-body text-base text-muted-foreground transition-colors duration-300 hover:text-[#F4C430]"
-                    >
-                      {item.label}
-                    </Link>
-                  ))}
-                  {(user.role === "composer" || user.role === "admin") && (
-                    <Link
-                      to="/account?section=composer-earnings"
-                      onClick={() => setIsOpen(false)}
-                      className="py-2 font-body text-base text-muted-foreground transition-colors duration-300 hover:text-[#F4C430]"
-                    >
-                      Composer Dashboard
-                    </Link>
-                  )}
-                  {user.role === "admin" && (
-                    <Link
-                      to="/admin"
-                      onClick={() => setIsOpen(false)}
-                      className="py-2 font-body text-base text-muted-foreground transition-colors duration-300 hover:text-[#F4C430]"
-                    >
-                      Admin Dashboard
-                    </Link>
-                  )}
-                  <button
-                    type="button"
-                    onClick={onLogout}
-                    className="mt-1 inline-flex items-center gap-2 py-2 text-left font-body text-base text-muted-foreground transition-colors duration-300 hover:text-[#F4C430]"
-                  >
-                    <LogOut className="h-5 w-5" />
-                    Log out
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={onAccountClick}
-                  className="mt-2 inline-flex items-center gap-2 py-2 font-body text-base text-muted-foreground transition-colors duration-300 hover:text-[#F4C430]"
-                >
-                  <User className="h-5 w-5" />
-                  Account
-                </button>
-              )}
+      </div>
+    </nav>
+
+    {/* ------------------------------------------------------------------
+        MOBILE MENU — a real slide-in drawer (right edge), not the desktop
+        list rendered inside the header.
+        It MUST live outside <nav>: the header uses backdrop-blur, and a
+        backdrop-filter turns an element into the containing block for its
+        fixed-position children — a drawer rendered inside would be clipped
+        to the 64px header. The panel is always mounted so it can animate in
+        and out; pointer-events are dropped while it is closed.
+    ------------------------------------------------------------------- */}
+    <div
+      className={`fixed inset-0 z-[100] md:hidden ${isOpen ? "" : "pointer-events-none"}`}
+      aria-hidden={!isOpen}
+    >
+      <div
+        onClick={() => setIsOpen(false)}
+        className={`absolute inset-0 bg-black/60 transition-opacity duration-300 ${
+          isOpen ? "opacity-100" : "opacity-0"
+        }`}
+      />
+      <aside
+        role="dialog"
+        aria-modal="true"
+        aria-label="Menu"
+        className={`absolute inset-y-0 right-0 flex w-[86%] max-w-sm flex-col overflow-y-auto overscroll-contain border-l border-border bg-card shadow-2xl transition-transform duration-300 ease-out ${
+          isOpen ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-border/60 px-5 py-4">
+          <Link
+            to="/"
+            className="flex min-w-0 items-center gap-2 font-body text-sm font-semibold uppercase tracking-[0.18em] text-foreground"
+          >
+            <img src="/images/icons/logo-header.png" alt="" className="h-7 w-auto" />
+            <span className="truncate">TV Music Store</span>
+          </Link>
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            aria-label="Close menu"
+            className="shrink-0 rounded-full p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <X size={22} />
+          </button>
+        </div>
+
+        {user && (
+          <div className="border-b border-border/60 px-5 py-4">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F4C430] font-body text-base font-bold uppercase text-background">
+                {(user.name || user.email).charAt(0)}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-body text-sm font-semibold text-foreground">
+                  {user.name || user.email}
+                </p>
+                <p className="truncate font-body text-xs text-muted-foreground">{user.email}</p>
+              </div>
+              <span className="shrink-0 rounded-full border border-[#F4C430]/40 px-2.5 py-1 font-body text-[11px] font-semibold uppercase tracking-wide text-[#F4C430]">
+                {planLabel}
+              </span>
             </div>
+            {!isPaidPlan && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false);
+                  openPlanModal();
+                }}
+                className="mt-3 w-full rounded-lg bg-[#F4C430] py-2.5 font-body text-sm font-bold text-background transition-colors hover:bg-[#F4C430]/85"
+              >
+                Upgrade plan
+              </button>
+            )}
           </div>
         )}
-      </div>
-      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
-    </nav>
+
+        <div className="px-5 pb-1 pt-4">
+          <form onSubmit={submitSearch} className="relative">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search tracks"
+              tabIndex={isOpen ? 0 : -1}
+              className="h-11 w-full rounded-full border border-border bg-background/60 pl-10 pr-4 font-body text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-[#F4C430]/70 focus:outline-none"
+            />
+          </form>
+        </div>
+
+        <div className="flex flex-col px-3 py-2">
+          {[
+            { label: "Music Library", href: "/catalog" },
+            { label: "Sound Effects", href: "/sound-effects" },
+            ...navItems,
+          ].map((item) => (
+            <Link
+              key={item.href}
+              to={item.href}
+              tabIndex={isOpen ? 0 : -1}
+              className={`rounded-lg px-2 py-3 font-body text-base transition-colors hover:bg-foreground/[0.04] ${
+                location.pathname === item.href || location.pathname.startsWith(`${item.href}/`)
+                  ? "text-[#F4C430]"
+                  : "text-foreground"
+              }`}
+            >
+              {item.label}
+            </Link>
+          ))}
+          <Link
+            to="/cart"
+            tabIndex={isOpen ? 0 : -1}
+            className="flex items-center justify-between rounded-lg px-2 py-3 font-body text-base text-foreground transition-colors hover:bg-foreground/[0.04]"
+          >
+            <span className="inline-flex items-center gap-2.5">
+              <ShoppingCart className="h-5 w-5 text-muted-foreground" />
+              Cart
+            </span>
+            {cartCount > 0 && (
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#F4C430] px-1.5 font-body text-[11px] font-bold text-background">
+                {cartCount}
+              </span>
+            )}
+          </Link>
+        </div>
+
+        {user ? (
+          <div className="mt-1 flex flex-col border-t border-border/60 px-3 py-2">
+            {user.role === "admin" && (
+              <Link
+                to="/admin?section=mail"
+                tabIndex={isOpen ? 0 : -1}
+                className="flex items-center justify-between rounded-lg px-2 py-3 font-body text-base text-foreground transition-colors hover:bg-foreground/[0.04]"
+              >
+                <span className="inline-flex items-center gap-2.5">
+                  <Mail className="h-5 w-5 text-muted-foreground" />
+                  Inbox
+                </span>
+                {unreadMail > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#F4C430] px-1.5 font-body text-[11px] font-bold text-background">
+                    {unreadMail > 9 ? "9+" : unreadMail}
+                  </span>
+                )}
+              </Link>
+            )}
+            {ACCOUNT_MENU.map((item) => (
+              <Link
+                key={item.section}
+                to={`/account?section=${item.section}`}
+                tabIndex={isOpen ? 0 : -1}
+                className="rounded-lg px-2 py-3 font-body text-base text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-[#F4C430]"
+              >
+                {item.label}
+              </Link>
+            ))}
+            {(user.role === "composer" || user.role === "admin") && (
+              <Link
+                to="/account?section=composer-earnings"
+                tabIndex={isOpen ? 0 : -1}
+                className="rounded-lg px-2 py-3 font-body text-base text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-[#F4C430]"
+              >
+                Composer Dashboard
+              </Link>
+            )}
+            {user.role === "admin" && (
+              <Link
+                to="/admin"
+                tabIndex={isOpen ? 0 : -1}
+                className="rounded-lg px-2 py-3 font-body text-base text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-[#F4C430]"
+              >
+                Admin Dashboard
+              </Link>
+            )}
+            <button
+              type="button"
+              onClick={onLogout}
+              tabIndex={isOpen ? 0 : -1}
+              className="mt-1 inline-flex items-center gap-2.5 rounded-lg px-2 py-3 text-left font-body text-base text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-[#F4C430]"
+            >
+              <LogOut className="h-5 w-5" />
+              Log out
+            </button>
+          </div>
+        ) : (
+          <div className="mt-1 border-t border-border/60 px-5 py-4">
+            <button
+              type="button"
+              onClick={onAccountClick}
+              tabIndex={isOpen ? 0 : -1}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#F4C430] py-2.5 font-body text-sm font-bold text-[#F4C430] transition-colors hover:bg-[#F4C430] hover:text-background"
+            >
+              <User className="h-5 w-5" />
+              Sign in
+            </button>
+          </div>
+        )}
+
+        <div className="h-6 shrink-0" />
+      </aside>
+    </div>
+
+    <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
+    </>
   );
 };
 

@@ -4520,3 +4520,40 @@ our own Admin -> Analytics.
   (traffic + new registrations) for the first week.
 - Ad strength is "Good"/"Average" per ad; business name + logo not set (needs
   Google advertiser verification, "Get access" in the ad editor).
+
+## 2026-08-02 — Mobile menu is a real slide-in drawer now
+Owner on iPhone: tapping the burger opened the menu but the page still scrolled
+behind it — "feels like the desktop menu was just moved into the phone menu".
+He wants the tunetank behaviour: a panel that slides in from the RIGHT, sits on
+top of everything, and disappears the moment you pick anything.
+
+`src/components/Navigation.tsx` rewritten around that:
+- The mobile menu used to be `{isOpen && <div className="md:hidden pb-6">…}`
+  rendered INSIDE the `<div className="mx-auto max-w-7xl">` of the header, i.e.
+  just more header content. Now it is a fixed drawer: full-screen overlay
+  (`bg-black/60`, click to close) + `<aside>` pinned to `inset-y-0 right-0`,
+  `w-[86%] max-w-sm`, own `overflow-y-auto overscroll-contain`, animated with
+  `translate-x-full -> translate-x-0` (300ms).
+- **GOTCHA, do not undo:** the drawer is rendered OUTSIDE `<nav>` (the component
+  now returns a fragment). The header carries `backdrop-blur-xl`, and a
+  backdrop-filter makes an element the containing block for its fixed-position
+  children — a drawer nested inside would be clipped to the 64px header.
+- The panel is always mounted so it can animate both ways;
+  `pointer-events-none` + `aria-hidden` + `tabIndex={isOpen ? 0 : -1}` on every
+  control keep it inert while closed.
+- Page scroll is locked while open (`document.body.style.overflow = "hidden"`,
+  restored on close — note PlayerProvider owns `body.paddingBottom`, different
+  property, no conflict).
+- New effect closes the drawer on any `location.pathname` / `location.search`
+  change, so it also closes on links that don't go through an onClick handler.
+  Escape closes it too.
+- Content, in tunetank order: logo + X · signed-in block (avatar letter, name,
+  email, plan chip, "Upgrade plan" button when the plan is free) · search ·
+  Music Library / Sound Effects / Pricing / Licensing / Guides · Cart with its
+  count · divider · Inbox (admin, with unread count) / account sections /
+  Composer Dashboard / Admin Dashboard / Log out — or a "Sign in" button for
+  guests. The whole header right-hand cluster is `hidden md:flex`, so before
+  this change there was NO way to reach cart or account from a phone.
+- eslint clean; `tsc -p tsconfig.app.json` reports only the two PRE-EXISTING
+  errors in PlanModal.tsx and Composer.tsx (untouched here).
+- Not deployed by me — owner runs deploy.bat.
