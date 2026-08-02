@@ -4565,3 +4565,32 @@ top of everything, and disappears the moment you pick anything.
     longer visible, so the ways out are the X, Escape, or picking anything.
     The search box was removed from the drawer at his request (the header search
     on desktop and the catalog's own search are untouched).
+
+## 2026-08-02 — /admin and /account section tree is a drawer on mobile too
+Owner, straight after the header drawer shipped: "I tap something in the menu,
+land on the page, and still see our OLD menu — what's the point of the pop-up
+menu then?" What he was actually looking at was NOT the header menu: it was the
+`<aside className="shrink-0 md:w-56">` section tree of `/admin` (and the same
+one on `/account`). The page is `flex-col md:flex-row`, so on a phone that
+sidebar stacks ABOVE the content — a second full-screen menu (MAIN / COMPOSER /
+ADMIN, ~25 items) before a single line of the page. Fair complaint.
+
+- NEW `src/components/SectionDrawer.tsx`. It renders its children twice: as the
+  plain sidebar from `md` up (`hidden md:block`), and below `md` inside a
+  right-hand slide-in panel (same look as the header drawer: full width,
+  `translate-x-full -> translate-x-0`, black/60 overlay, body scroll locked,
+  Escape closes, closes on any pathname/search change). On mobile the sidebar
+  itself is replaced by one compact "Admin menu" / "Account menu" button.
+  The drawer copy is mounted ONLY while open (`{open ? children : null}`) so the
+  same links never appear twice in the tab order.
+- `src/pages/Admin.tsx` and `src/pages/Account.tsx`: the existing `<nav>` tree is
+  now wrapped in `<SectionDrawer label="Admin menu" | "Account menu">` inside the
+  unchanged `<aside>`. Zero changes to the tree markup or to desktop layout.
+  The collapsible group state (`menu`) still lives in the page, so the two copies
+  stay in sync.
+- Rule going forward: on phones, navigation is right-hand slide-in panels only.
+  Do not add a second always-visible menu list to a page.
+- eslint clean on all three files; `tsc -p tsconfig.app.json` reports only the two
+  PRE-EXISTING errors (PlanModal.tsx, Composer.tsx). A full `npm run build` was
+  started but the mounted filesystem makes it very slow — deploy.bat builds anyway.
+- Not deployed by me — owner runs deploy.bat.

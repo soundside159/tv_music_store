@@ -23,6 +23,7 @@ import AdminFinance from "@/components/AdminFinance";
 import AdminUsage from "@/components/AdminUsage";
 import AdminAnalytics from "@/components/AdminAnalytics";
 import MenuTreeLines from "@/components/MenuTreeLines";
+import SectionDrawer from "@/components/SectionDrawer";
 
 const GOLD = "#F4C430";
 
@@ -609,6 +610,7 @@ const Admin = () => {
       <main className="mx-auto w-full max-w-6xl px-4 pb-24 pt-24 sm:px-6 md:pt-28">
         <div className="flex flex-col gap-8 md:flex-row">
           <aside className="shrink-0 md:w-56">
+            <SectionDrawer label="Admin menu">
             {/* Same spacing scale as the /account sidebar (groups mb-5, labels
                 pb-1.5, items space-y-1) so nothing shifts when navigating
                 between the two pages. Margin-based spacing only — no flex gap. */}
@@ -702,6 +704,7 @@ const Admin = () => {
 
               {/* Log out lives in the header account popup — no sidebar copy. */}
             </nav>
+            </SectionDrawer>
           </aside>
 
           <div
