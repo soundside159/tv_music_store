@@ -4709,3 +4709,14 @@ tokens on generation.
     `getBoundingClientRect()` and clamped to the viewport, with scroll/resize
     closing it so it can't drift off its row. Same trick as the Admin → Users
     row menu.
+
+  - FIX 2: Ctrl+V inside the "Paste image link" field slammed the menu shut and
+    nothing downloaded. Cause: the outside-click effect also listens to `scroll`
+    in the CAPTURE phase (so the fixed menu can't drift off its row), and
+    pasting a long URL scrolls the input's OWN content — that inner scroll event
+    reached the capture listener and closed the menu. The handler now ignores
+    any event whose target is inside the menu (`coverMenuRef.contains`).
+    While there: PASTE IS NOW THE COMMAND — `onPaste` fills the field and fires
+    the download immediately, in Tracks Edit and in the track-page popover
+    (there `loadCoverFromUrl(explicit?)` takes the value directly, because React
+    state has not committed yet at paste time). Load / Enter still work.

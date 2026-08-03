@@ -310,8 +310,9 @@ export const AdminTrackCoverOverlay = ({
     }
   };
 
-  const loadCoverFromUrl = async () => {
-    const url = coverUrl.trim();
+  const loadCoverFromUrl = async (explicit?: string) => {
+    // On paste the state has not committed yet, so the value comes in directly.
+    const url = (explicit ?? coverUrl).trim();
     if (!url || busy) return;
     setBusy(true);
     try {
@@ -522,6 +523,14 @@ export const AdminTrackCoverOverlay = ({
                 placeholder="https://…/cover.jpg"
                 autoFocus
                 spellCheck={false}
+                onPaste={(e) => {
+                  // Paste IS the command here too.
+                  const text = e.clipboardData.getData("text").trim();
+                  if (!text) return;
+                  e.preventDefault();
+                  setCoverUrl(text);
+                  void loadCoverFromUrl(text);
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") void loadCoverFromUrl();
                   if (e.key === "Escape") setUrlOpen(false);

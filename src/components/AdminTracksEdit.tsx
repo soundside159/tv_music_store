@@ -479,6 +479,7 @@ const AdminTracksEdit = ({
   const [coverUrlFor, setCoverUrlFor] = useState<string | null>(null);
   const [coverUrlText, setCoverUrlText] = useState("");
   const [coverMenuPos, setCoverMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const coverMenuRef = useRef<HTMLDivElement | null>(null);
   const closeCoverMenu = () => {
     setCoverMenuFor(null);
     setCoverUrlFor(null);
@@ -487,7 +488,14 @@ const AdminTracksEdit = ({
   };
   useEffect(() => {
     if (!coverMenuFor) return;
-    const onDown = () => closeCoverMenu();
+    const onDown = (e: Event) => {
+      // Ignore anything that happens INSIDE the menu. Pasting a long URL makes
+      // the input scroll its own content, and that scroll event was reaching
+      // this capture-phase listener and slamming the menu shut mid-paste.
+      const el = coverMenuRef.current;
+      if (el && e.target instanceof Node && el.contains(e.target)) return;
+      closeCoverMenu();
+    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") closeCoverMenu();
     };
@@ -2620,6 +2628,7 @@ const AdminTracksEdit = ({
                     </span>
                       {coverMenuFor === t.id && coverMenuPos && (
                         <div
+                          ref={coverMenuRef}
                           onMouseDown={(e) => e.stopPropagation()}
                           onClick={(e) => e.stopPropagation()}
                           style={{ top: coverMenuPos.top, left: coverMenuPos.left }}
@@ -2637,6 +2646,16 @@ const AdminTracksEdit = ({
                                   placeholder="https://…/cover.jpg"
                                   autoFocus
                                   spellCheck={false}
+                                  onPaste={(e) => {
+                                    // Paste IS the command — no need to also
+                                    // reach for Load.
+                                    const text = e.clipboardData.getData("text").trim();
+                                    if (!text) return;
+                                    e.preventDefault();
+                                    setCoverUrlText(text);
+                                    onCoverFromUrl?.(t.id, text);
+                                    closeCoverMenu();
+                                  }}
                                   onKeyDown={(e) => {
                                     if (e.key === "Enter" && coverUrlText.trim()) {
                                       onCoverFromUrl?.(t.id, coverUrlText.trim());
