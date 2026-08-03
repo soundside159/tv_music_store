@@ -20,7 +20,7 @@ import { useTracks } from "@/hooks/useTracks";
 import type { MusicCollection } from "@/data/musicCollections";
 import type { CatalogTrack } from "@/data/catalogTracks";
 import { useCollections, usePlaylists, useTrendingIds, useVocabularies } from "@/hooks/useContent";
-import { buildRecommendedRank, sortTracks } from "@/lib/catalogSort";
+import { buildRecommendedRank, composerRecencyPercentile, sortTracks } from "@/lib/catalogSort";
 import { relatedTracks, searchScore } from "@/lib/discovery";
 import { TrackRow } from "@/components/TrackRowPlayer";
 import { usePlayer } from "@/components/PlayerProvider";
@@ -44,6 +44,9 @@ interface AiRoute {
 }
 
 /** Compact result card for the Playlists / Collections tabs of an AI search. */
+/** How much freshness is blended into the AI relevance score (2 = one tag). */
+const AI_FRESHNESS = 2;
+
 const AiResultCard = ({ to, image, title, sub }: { to: string; image: string; title: string; sub: string }) => (
   <Link
     to={to}
@@ -215,6 +218,14 @@ const Catalog = () => {
     [tracks, trendingIds],
   );
 
+  // Composer-relative freshness, 0 = that author's oldest … 1 = their newest.
+  // Search USED to break ties with recommendedRank alone, which pins the
+  // admin-featured ids first and only leans 62% on newness — so a query that
+  // matched 300 tracks equally well kept surfacing the same old stock. Now a
+  // tie in relevance is always won by the newer track, and in AI Search a bit
+  // of freshness is blended into the score itself (see below).
+  const recency = useMemo(() => composerRecencyPercentile(tracks), [tracks]);
+
   // EXACT matches: everything the user actually asked for (collection, category,
   // facet checkboxes, search words). Search is now RANKED, not just filtered —
   // see src/lib/discovery.ts.
@@ -263,8 +274,15 @@ const Catalog = () => {
 
     // AI search on + default sort: most relevant first (score, then the mix).
     if (aiRes && sort === "Featured") {
+      // Freshness is worth up to 2 points — exactly one matched tag. A clearly
+      // better match still wins; among tracks the router likes equally, the
+      // newest one surfaces. Same rule as the Similar tab on a track page.
+      const aiRank = (t: CatalogTrack) => aiScore(t) + (recency.get(t.id) ?? 0) * AI_FRESHNESS;
       return [...result].sort(
-        (a, b) => aiScore(b) - aiScore(a) || (recommendedRank.get(a.id) ?? 0) - (recommendedRank.get(b.id) ?? 0),
+        (a, b) =>
+          aiRank(b) - aiRank(a) ||
+          (recency.get(b.id) ?? 0) - (recency.get(a.id) ?? 0) ||
+          (recommendedRank.get(a.id) ?? 0) - (recommendedRank.get(b.id) ?? 0),
       );
     }
 
@@ -272,14 +290,17 @@ const Catalog = () => {
     // whose TAG is the query outranks one that merely mentions the word in its
     // description. Picking New / Popular explicitly still wins.
     if (trimmedQuery && sort === "Featured") {
+      // Typed search keeps its score PURE (someone who types a word means it),
+      // but an equal score is now settled by freshness, not by the featured mix.
       return [...result].sort(
         (a, b) =>
           searchScore(b, trimmedQuery) - searchScore(a, trimmedQuery) ||
+          (recency.get(b.id) ?? 0) - (recency.get(a.id) ?? 0) ||
           (recommendedRank.get(a.id) ?? 0) - (recommendedRank.get(b.id) ?? 0),
       );
     }
     return sortTracks(result, sort, recommendedRank);
-  }, [tracks, activeCollection, categoryParam, filters, query, sort, recommendedRank, aiRes, searchMode]);
+  }, [tracks, activeCollection, categoryParam, filters, query, sort, recommendedRank, recency, aiRes, searchMode]);
 
   // RELATED tail: when the request was narrow and returned few tracks, keep the
   // funnel going with tracks that share what those few have in common (see

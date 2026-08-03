@@ -4625,3 +4625,30 @@ ADMIN, ~25 items) before a single line of the page. Fair complaint.
     its sidebar IS `flex flex-col`, and the header drawer only carries a single
     "Admin Dashboard" link — without it the ~25 admin sections are unreachable
     from a phone.
+
+## 2026-08-03 — Search results lean fresh now (AI Search + typed search)
+Owner: tag / use-case pages already lead with the newest tracks, but AI Search
+kept surfacing old stock. Correct diagnosis, and the cause was the tie-break.
+
+`src/pages/Catalog.tsx`:
+- AI Search ranked purely by `aiScore` (+2 per matched facet, +1 per keyword hit)
+  and broke ties with `recommendedRank`. That rank pins the admin-featured
+  (trending) ids first and only leans `RECENCY_WEIGHT = 0.62` on newness with a
+  daily jitter — so among the hundreds of tracks that score identically, old
+  ones kept winning.
+- Added `const recency = useMemo(() => composerRecencyPercentile(tracks), [tracks])`
+  (already exported from catalogSort.ts; 0 = that composer's oldest, 1 = newest,
+  scored per composer so a prolific author doesn't dominate).
+- AI Search now sorts by `aiScore + recency * AI_FRESHNESS` where
+  `AI_FRESHNESS = 2` — freshness is worth exactly ONE matched tag, so a clearly
+  better match still wins but equals resolve to the newest. Then a pure
+  newest-first tie-break, then recommendedRank. Same rule the Similar tab on a
+  track page got on 2026-07-24.
+- Typed search keeps its `searchScore` PURE (a typed word is an explicit intent
+  and its scale is 1..12 per token), but its tie-break is now newest-first
+  instead of recommendedRank.
+- Sound effects need no change: `/api/sfx` already sorts `created_at DESC`.
+- eslint + tsc clean on Catalog.tsx.
+- Not deployed by me — owner runs deploy.bat.
+- If it ever feels TOO fresh, the single knob is `AI_FRESHNESS` at the top of
+  Catalog.tsx (2 = one tag; 1 = half a tag; 0 = off).
