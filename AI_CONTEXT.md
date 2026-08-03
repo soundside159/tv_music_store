@@ -4700,3 +4700,12 @@ tokens on generation.
   the catalog. Plain text when the track has no slug.
 - eslint + tsc clean on all four files.
 - Not deployed by me — owner runs deploy.bat.
+
+  - FIX right after: the cover menu never appeared. Not z-index — the menu was
+    rendered INSIDE the thumbnail wrapper, which is
+    `relative … h-10 w-10 overflow-hidden`, so a 256px popup was clipped to the
+    40x40 square (and the table scrolls sideways on top of that). The menu now
+    lives next to that span and is `position: fixed`, placed from the button's
+    `getBoundingClientRect()` and clamped to the viewport, with scroll/resize
+    closing it so it can't drift off its row. Same trick as the Admin → Users
+    row menu.

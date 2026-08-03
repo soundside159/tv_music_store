@@ -478,10 +478,12 @@ const AdminTracksEdit = ({
   const [coverMenuFor, setCoverMenuFor] = useState<string | null>(null);
   const [coverUrlFor, setCoverUrlFor] = useState<string | null>(null);
   const [coverUrlText, setCoverUrlText] = useState("");
+  const [coverMenuPos, setCoverMenuPos] = useState<{ top: number; left: number } | null>(null);
   const closeCoverMenu = () => {
     setCoverMenuFor(null);
     setCoverUrlFor(null);
     setCoverUrlText("");
+    setCoverMenuPos(null);
   };
   useEffect(() => {
     if (!coverMenuFor) return;
@@ -493,9 +495,14 @@ const AdminTracksEdit = ({
     // propagation.
     window.addEventListener("mousedown", onDown);
     window.addEventListener("keydown", onKey);
+    // A fixed menu would drift away from its row on scroll.
+    window.addEventListener("scroll", onDown, true);
+    window.addEventListener("resize", onDown);
     return () => {
       window.removeEventListener("mousedown", onDown);
       window.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onDown, true);
+      window.removeEventListener("resize", onDown);
     };
   }, [coverMenuFor]);
 
@@ -2579,10 +2586,24 @@ const AdminTracksEdit = ({
                           <button
                             type="button"
                             onMouseDown={(e) => e.stopPropagation()}
-                            onClick={() => {
+                            onClick={(e) => {
+                              if (coverMenuFor === t.id) {
+                                closeCoverMenu();
+                                return;
+                              }
+                              // FIXED positioning measured from the button: the
+                              // thumbnail wrapper is `overflow-hidden` and the
+                              // table scrolls sideways, so an absolutely placed
+                              // menu was clipped to the 40x40 square.
+                              const r = e.currentTarget.getBoundingClientRect();
+                              const W = 256;
+                              setCoverMenuPos({
+                                top: Math.min(r.bottom + 6, window.innerHeight - 160),
+                                left: Math.max(8, Math.min(r.left, window.innerWidth - W - 8)),
+                              });
                               setCoverUrlFor(null);
                               setCoverUrlText("");
-                              setCoverMenuFor((v) => (v === t.id ? null : t.id));
+                              setCoverMenuFor(t.id);
                             }}
                             title="Set the cover: generate with AI or paste an image link"
                             aria-label={`Cover options for ${t.title}`}
@@ -2596,11 +2617,13 @@ const AdminTracksEdit = ({
                           </button>
                         )
                       )}
-                      {coverMenuFor === t.id && (
+                    </span>
+                      {coverMenuFor === t.id && coverMenuPos && (
                         <div
                           onMouseDown={(e) => e.stopPropagation()}
                           onClick={(e) => e.stopPropagation()}
-                          className="absolute left-0 top-11 z-30 w-64 rounded-lg border border-[#F4C430]/40 bg-card p-1.5 shadow-xl"
+                          style={{ top: coverMenuPos.top, left: coverMenuPos.left }}
+                          className="fixed z-[70] w-64 rounded-lg border border-[#F4C430]/40 bg-card p-1.5 shadow-2xl"
                         >
                           {coverUrlFor === t.id ? (
                             <div className="p-1">
@@ -2668,7 +2691,6 @@ const AdminTracksEdit = ({
                           )}
                         </div>
                       )}
-                    </span>
                     <div className="min-w-0 flex-1">
                       <Link
                         to={`/track/${t.slug}`}
