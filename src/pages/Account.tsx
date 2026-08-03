@@ -4,7 +4,6 @@ import { ArrowUpRight, Check, Download as DownloadIcon, Pause, Play, Plus, X } f
 import { accountNavGroups, adminNavGroups, composerNavItems } from "@/lib/adminNav";
 import MenuGroupHeader from "@/components/MenuGroupHeader";
 import MenuTreeLines from "@/components/MenuTreeLines";
-import SectionDrawer from "@/components/SectionDrawer";
 import ComposerPanel, { type ComposerSectionId } from "@/components/ComposerPanel";
 import { useComposerTracks } from "@/components/ComposerUpload";
 import Navigation from "@/components/Navigation";
@@ -619,8 +618,7 @@ const Account = () => {
       <main className="mx-auto w-full max-w-6xl px-4 pb-24 pt-24 sm:px-6 md:pt-28">
         <div className="flex flex-col gap-8 md:flex-row">
           {/* Sidebar */}
-          <aside className="shrink-0 md:w-56">
-            <SectionDrawer label="Account menu">
+          <aside className="hidden shrink-0 md:block md:w-56">
             {/* NO flex `gap` anywhere in this sidebar and ONE spacing scale
                 (groups md:mb-5, items md:space-y-1) — flex gaps hit Chromium's
                 "gap not recalculated until reflow" bug when blocks toggle, and
@@ -761,7 +759,6 @@ const Account = () => {
               )}
               {/* Log out lives in the header account popup — no sidebar copy. */}
             </nav>
-            </SectionDrawer>
           </aside>
 
           {/* Content */}

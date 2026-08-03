@@ -240,7 +240,7 @@ const Navigation = () => {
                   {/* Identity block: email on top, plan chip + Upgrade on one row,
                       separated from the menu items by a rule. */}
                   <div className="px-4 pb-2.5 pt-1.5">
-                    <p className="truncate font-body text-xs text-muted-foreground">{user.email}</p>
+                    <p className="pointer-events-none truncate font-body text-xs text-muted-foreground">{user.email}</p>
                     <div className="mt-1.5 flex items-center justify-between gap-2">
                       <span
                         className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 font-body text-[10px] font-semibold ${
@@ -398,7 +398,7 @@ const Navigation = () => {
                 <p className="truncate font-body text-sm font-semibold text-foreground">
                   {user.name || user.email}
                 </p>
-                <p className="truncate font-body text-xs text-muted-foreground">{user.email}</p>
+                <p className="pointer-events-none truncate font-body text-xs text-muted-foreground">{user.email}</p>
               </div>
               <span className="shrink-0 rounded-full border border-[#F4C430]/40 px-2.5 py-1 font-body text-[11px] font-semibold uppercase tracking-wide text-[#F4C430]">
                 {planLabel}

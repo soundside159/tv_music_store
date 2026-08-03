@@ -4607,3 +4607,21 @@ ADMIN, ~25 items) before a single line of the page. Fair complaint.
     pages. If bounce looks bad, the fix agreed as the alternative was a fixed
     bottom tab bar on mobile (Catalog / Sound effects / Pricing / Cart).
     Do not silently re-add the links to the drawer — ask him first.
+
+  - Immediately after, two fixes from the owner testing on his iPhone:
+    (1) Tapping his own email in the drawer offered to open the Mail app —
+    iOS Safari's data detectors turn a bare email in plain text into a mailto.
+    Fixed twice over: `pointer-events-none` on both email lines in
+    Navigation.tsx (drawer + desktop account dropdown) AND
+    `<meta name="format-detection" content="telephone=no, date=no, email=no,
+    address=no">` in index.html.
+    (2) SectionDrawer was REMOVED from `/account` — the aside is now
+    `hidden md:block`. Two reasons: the header drawer already lists every
+    account section (Profile / Plan & Billing / Downloads / Favourites /
+    Licenses / Support), so the button was a pointless second menu; and the
+    /account sidebar was already built as a HORIZONTAL scrolling chip row on
+    mobile (`flex space-x-4 overflow-x-auto md:flex-col`), so wrapping it in a
+    vertical drawer produced a broken half-cut row. /admin keeps SectionDrawer:
+    its sidebar IS `flex flex-col`, and the header drawer only carries a single
+    "Admin Dashboard" link — without it the ~25 admin sections are unreachable
+    from a phone.
