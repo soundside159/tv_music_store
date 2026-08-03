@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, ChevronLeft, ChevronRight, Download, ExternalLink, GripVertical, Loader2, Minus, Music, Pause, Play, Search, Sparkles, Star, UploadCloud, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Download, ExternalLink, GripVertical, Link2 as LinkIcon, Loader2, Minus, Music, Pause, Play, Search, Sparkles, Star, UploadCloud, X } from "lucide-react";
 import { toast } from "sonner";
 import WaveformPreview from "@/components/WaveformPreview";
 import { generateDescriptionApi } from "@/lib/coverArt";
@@ -298,6 +298,7 @@ const AdminTracksEdit = ({
   aiTextIds = [],
   fieldsPatch,
   onGenerateCover,
+  onCoverFromUrl,
   aiModel = "standard",
   onAiModelChange,
   allComposers = [],
@@ -329,6 +330,8 @@ const AdminTracksEdit = ({
   fieldsPatch?: { n: number; trackId: string; patch: { cover?: string; description?: string } } | null;
   /** Generate a cover for ONE track (hover button on the row thumbnail). */
   onGenerateCover?: (trackId: string) => void;
+  /** Set ONE track's cover from a pasted direct image link. */
+  onCoverFromUrl?: (trackId: string, url: string) => void;
   /** Image model for AI covers: standard (cheap) | premium (better). */
   aiModel?: "standard" | "premium";
   onAiModelChange?: (m: "standard" | "premium") => void;
@@ -468,6 +471,33 @@ const AdminTracksEdit = ({
   const [playlistSearch, setPlaylistSearch] = useState("");
   const aiSet = useMemo(() => new Set(aiTrackIds), [aiTrackIds]);
   const aiTextSet = useMemo(() => new Set(aiTextIds), [aiTextIds]);
+
+  // Row thumbnail menu: click the thumb -> pick AI or a pasted link.
+  // `coverMenuFor` holds the track id whose little menu is open; `coverUrlFor`
+  // switches that menu into its "paste a link" state.
+  const [coverMenuFor, setCoverMenuFor] = useState<string | null>(null);
+  const [coverUrlFor, setCoverUrlFor] = useState<string | null>(null);
+  const [coverUrlText, setCoverUrlText] = useState("");
+  const closeCoverMenu = () => {
+    setCoverMenuFor(null);
+    setCoverUrlFor(null);
+    setCoverUrlText("");
+  };
+  useEffect(() => {
+    if (!coverMenuFor) return;
+    const onDown = () => closeCoverMenu();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeCoverMenu();
+    };
+    // Capture-phase so a click anywhere else closes it; the menu itself stops
+    // propagation.
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [coverMenuFor]);
 
   // After AI writes cover/description into a track, merge ONLY those fields
   // into the panel — unsaved manual edits in the other fields stay untouched.
@@ -2545,17 +2575,98 @@ const AdminTracksEdit = ({
                           <Sparkles className="h-4 w-4 animate-pulse text-[#F4C430]" />
                         </span>
                       ) : (
-                        onGenerateCover && (
+                        (onGenerateCover || onCoverFromUrl) && (
                           <button
                             type="button"
-                            onClick={() => onGenerateCover(t.id)}
-                            title="Generate AI cover for this track (needs Usage, Genre & Mood)"
-                            aria-label={`Generate cover for ${t.title}`}
-                            className="absolute inset-0 flex items-center justify-center bg-background/70 opacity-0 transition-opacity hover:opacity-100 group-hover/aithumb:opacity-100"
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={() => {
+                              setCoverUrlFor(null);
+                              setCoverUrlText("");
+                              setCoverMenuFor((v) => (v === t.id ? null : t.id));
+                            }}
+                            title="Set the cover: generate with AI or paste an image link"
+                            aria-label={`Cover options for ${t.title}`}
+                            className={`absolute inset-0 flex items-center justify-center bg-background/70 transition-opacity ${
+                              coverMenuFor === t.id
+                                ? "opacity-100"
+                                : "opacity-0 hover:opacity-100 group-hover/aithumb:opacity-100"
+                            }`}
                           >
                             <Sparkles className="h-4 w-4 text-[#F4C430]" />
                           </button>
                         )
+                      )}
+                      {coverMenuFor === t.id && (
+                        <div
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute left-0 top-11 z-30 w-64 rounded-lg border border-[#F4C430]/40 bg-card p-1.5 shadow-xl"
+                        >
+                          {coverUrlFor === t.id ? (
+                            <div className="p-1">
+                              <p className="mb-1.5 font-body text-[11px] text-muted-foreground">
+                                Direct link to an image
+                              </p>
+                              <div className="flex gap-1.5">
+                                <input
+                                  value={coverUrlText}
+                                  onChange={(e) => setCoverUrlText(e.target.value)}
+                                  placeholder="https://…/cover.jpg"
+                                  autoFocus
+                                  spellCheck={false}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" && coverUrlText.trim()) {
+                                      onCoverFromUrl?.(t.id, coverUrlText.trim());
+                                      closeCoverMenu();
+                                    }
+                                    if (e.key === "Escape") closeCoverMenu();
+                                  }}
+                                  className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1.5 font-body text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
+                                />
+                                <button
+                                  type="button"
+                                  disabled={coverUrlText.trim() === ""}
+                                  onClick={() => {
+                                    onCoverFromUrl?.(t.id, coverUrlText.trim());
+                                    closeCoverMenu();
+                                  }}
+                                  className="rounded-md bg-[#F4C430] px-2.5 py-1.5 font-body text-xs font-bold text-background transition-colors hover:bg-[#F4C430]/85 disabled:opacity-50"
+                                >
+                                  Load
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              {onGenerateCover && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    closeCoverMenu();
+                                    onGenerateCover(t.id);
+                                  }}
+                                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left font-body text-xs text-foreground transition-colors hover:bg-foreground/[0.06]"
+                                >
+                                  <Sparkles className="h-3.5 w-3.5 text-[#F4C430]" />
+                                  Generate with AI
+                                </button>
+                              )}
+                              {onCoverFromUrl && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCoverUrlFor(t.id);
+                                    setCoverUrlText("");
+                                  }}
+                                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left font-body text-xs text-foreground transition-colors hover:bg-foreground/[0.06]"
+                                >
+                                  <LinkIcon className="h-3.5 w-3.5 text-[#F4C430]" />
+                                  Paste image link
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
                       )}
                     </span>
                     <div className="min-w-0 flex-1">

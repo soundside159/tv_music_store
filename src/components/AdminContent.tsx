@@ -382,6 +382,42 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
     }
   };
 
+  // Same tail end as the AI path, but the picture comes from a pasted link:
+  // the server downloads it into our R2 (remote hosts send no CORS headers, and
+  // hot-linking dies the day the source moves) — see admin/fetch-image.ts.
+  const coverFromUrlForTrack = async (trackId: string, url: string) => {
+    const t = mergedTracks.find((x) => x.id === trackId);
+    if (!t) return;
+    aiStart(trackId);
+    try {
+      const res = await fetch("/api/admin/fetch-image", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const d = (await res.json().catch(() => ({}))) as { path?: string; error?: string };
+      if (!res.ok || !d.path) throw new Error(d.error ?? "Could not load that link");
+      const cover = d.path;
+      let coverThumb = "";
+      try {
+        const blob = await (await fetch(cover)).blob();
+        const file = new File([blob], "url-cover.jpg", { type: blob.type || "image/jpeg" });
+        coverThumb = await uploadCoverImage(await makeThumbnail(file), "url-cover-thumb.jpg");
+      } catch {
+        // rows fall back to the full cover
+      }
+      await api({ action: "bulk_update_tracks", trackIds: [trackId], fields: { cover, coverThumb } });
+      setTrackOverrides((o) => ({ ...o, [trackId]: { ...o[trackId], cover, coverThumb } }));
+      setFieldsPatch({ n: Date.now(), trackId, patch: { cover } });
+      toast.success(`Cover loaded — ${t.title}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not load that link");
+    } finally {
+      aiStop(trackId);
+    }
+  };
+
   const aiFillSelectedTracks = async () => {
     const selected = selectedTrackIds
       .map((id) => mergedTracks.find((t) => t.id === id))
@@ -1974,6 +2010,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
           aiTextIds={aiTextIds}
           fieldsPatch={fieldsPatch}
           onGenerateCover={(id) => void generateCoverForTrack(id)}
+          onCoverFromUrl={(id, url) => void coverFromUrlForTrack(id, url)}
           aiModel={aiModel}
           onAiModelChange={setAiModel}
           allComposers={(data.composers ?? []).map((c) => c.displayName)}

@@ -4680,3 +4680,23 @@ tokens on generation.
   his composers own, but album art of other people's releases is someone else's
   copyright and this is a commercial shop.
 - Not deployed by me — owner runs deploy.bat.
+
+## 2026-08-03 — Tracks Edit: cover menu (AI | link) · track page: clickable composer
+- `src/components/AdminTracksEdit.tsx`: the row thumbnail used to fire AI cover
+  generation on a single click. It now opens a small 2-item menu instead —
+  "Generate with AI" and "Paste image link" (the link option swaps the menu for
+  a URL field + Load, Enter works, Escape closes). One menu at a time
+  (`coverMenuFor` holds the track id); a mousedown anywhere else or Escape
+  closes it, and the menu stops propagation so clicking inside doesn't.
+  New optional prop `onCoverFromUrl?: (trackId, url) => void` next to the
+  existing `onGenerateCover`; both are optional, so the menu only shows the
+  entries the parent actually wired.
+- `src/components/AdminContent.tsx`: new `coverFromUrlForTrack(trackId, url)` —
+  same tail end as `generateCoverForTrack` (POST /api/admin/fetch-image, build
+  the row thumbnail from the now same-origin copy, bulk_update_tracks, patch the
+  overrides and the fields panel), passed down as `onCoverFromUrl`.
+- `src/pages/TrackDetail.tsx`: the "by <composer>" line under the title is now a
+  Link to `/artist/<artistSlug>`, matching the track rows on the homepage and in
+  the catalog. Plain text when the track has no slug.
+- eslint + tsc clean on all four files.
+- Not deployed by me — owner runs deploy.bat.

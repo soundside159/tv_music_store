@@ -266,7 +266,22 @@ const TrackDetail = () => {
                 </span>
               )}
             </h1>
-            <p className="mt-1 font-body text-sm text-muted-foreground">by {track.artist}</p>
+            {/* The composer credit is a link to their page — same behaviour as
+                the track rows on the homepage and in the catalog. Falls back to
+                plain text when the track has no artist slug. */}
+            <p className="mt-1 font-body text-sm text-muted-foreground">
+              by{" "}
+              {track.artistSlug ? (
+                <Link
+                  to={`/artist/${track.artistSlug}`}
+                  className="text-muted-foreground transition-colors hover:text-[#F4C430]"
+                >
+                  {track.artist}
+                </Link>
+              ) : (
+                track.artist
+              )}
+            </p>
             <p className="mt-2 font-body text-xs text-muted-foreground">
               {mainVersion.duration} · {track.bpm} BPM
             </p>
