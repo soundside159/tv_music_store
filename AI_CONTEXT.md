@@ -4652,3 +4652,31 @@ kept surfacing old stock. Correct diagnosis, and the cause was the tie-break.
 - Not deployed by me — owner runs deploy.bat.
 - If it ever feels TOO fresh, the single knob is `AI_FRESHNESS` at the top of
   Catalog.tsx (2 = one tag; 1 = half a tag; 0 = off).
+
+## 2026-08-03 — Cover art: paste a direct image link (third option next to AI / upload)
+Owner wants to fill covers fast from existing artwork instead of spending image
+tokens on generation.
+
+- NEW `functions/api/admin/fetch-image.ts` — `POST { url }`. The SERVER downloads
+  the picture and stores it in our own R2 under `covers/`, returning
+  `{ ok, path }` just like `/api/admin/upload`. Server-side on purpose: remote
+  hosts send no CORS headers so the browser cannot read those bytes, and
+  hot-linking would break the day the source moves or blocks referrers.
+  Guards: same permission check as upload.ts (admin / owner / composer);
+  http(s) only; SSRF blocklist for localhost, *.local, *.internal, ::1 and the
+  127/10/192.168/169.254/172.16-31/0.x ranges; content-type must be
+  png/jpeg/webp/gif/avif; 8 MB cap checked on both content-length and the real
+  body; browser-ish Accept + User-Agent because some CDNs 403 a bare fetch.
+- `src/components/AdminTrackPanel.tsx` (the cover overlay on a track page): new
+  Link2 button next to Upload and the AI sparkles, opening a small popover with
+  a URL field + "Load". On success the stored path becomes `cover`, and the row
+  thumbnail is built in the browser from the NOW SAME-ORIGIN copy
+  (`makeThumbnail` -> `uploadImageApi`) — same tail end as a manual upload.
+  The overlay stays visible while the popover is open.
+- eslint: 0 errors (1 pre-existing react-refresh warning at line 67); tsc clean.
+- NOT added to the collections / playlists / SFX image pickers yet — same
+  endpoint would work there, just ask.
+- Told the owner plainly: pulling covers from Spotify is fine for artwork he or
+  his composers own, but album art of other people's releases is someone else's
+  copyright and this is a commercial shop.
+- Not deployed by me — owner runs deploy.bat.

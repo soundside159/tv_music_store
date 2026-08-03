@@ -8,6 +8,7 @@ import {
   ChevronDown,
   GripVertical,
   ImageUp,
+  Link2,
   Music2,
   Pause,
   Pencil,
@@ -252,6 +253,11 @@ export const AdminTrackCoverOverlay = ({
   const [genOpen, setGenOpen] = useState(false);
   const [genHint, setGenHint] = useState("");
   const [genBusy, setGenBusy] = useState(false);
+  // "Paste a direct image link": the server downloads it into our R2 (remote
+  // hosts send no CORS headers, so the browser cannot read those bytes itself,
+  // and hotlinking would break the day the source moves).
+  const [urlOpen, setUrlOpen] = useState(false);
+  const [coverUrl, setCoverUrl] = useState("");
 
   // Generates the key art server-side (prompt uses the track's SAVED Use Case
   // and Mood), then builds the row thumbnail in the browser and saves both —
@@ -304,6 +310,48 @@ export const AdminTrackCoverOverlay = ({
     }
   };
 
+  const loadCoverFromUrl = async () => {
+    const url = coverUrl.trim();
+    if (!url || busy) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/fetch-image", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const d = (await res.json().catch(() => ({}))) as { path?: string; error?: string };
+      if (!res.ok || !d.path) throw new Error(d.error ?? "Could not load that link");
+
+      // The picture now lives on our own domain, so the browser may read it and
+      // build the square row thumbnail — same tail end as a manual upload.
+      let coverThumb = "";
+      try {
+        const blob = await (await fetch(d.path)).blob();
+        const file = new File([blob], "url-cover.jpg", { type: blob.type || "image/jpeg" });
+        coverThumb = await uploadImageApi(await makeThumbnail(file), "url-cover-thumb.jpg");
+      } catch {
+        // keep coverThumb empty — rows fall back to the full cover
+      }
+      const ok = await run({
+        action: "bulk_update_tracks",
+        trackIds: [track.id],
+        fields: { cover: d.path, coverThumb },
+      });
+      if (ok) {
+        toast.success("Cover loaded from link");
+        setUrlOpen(false);
+        setCoverUrl("");
+        onTracksChanged();
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not load that link");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const onFile = async (file: File) => {
     setBusy(true);
     try {
@@ -350,7 +398,7 @@ export const AdminTrackCoverOverlay = ({
     <>
       <div
         className={`absolute inset-0 z-10 flex items-center justify-center gap-2 bg-background/70 transition-opacity ${
-          busy || genOpen ? "opacity-100" : "opacity-0 group-hover/cover:opacity-100"
+          busy || genOpen || urlOpen ? "opacity-100" : "opacity-0 group-hover/cover:opacity-100"
         }`}
       >
         {genBusy ? (
@@ -389,6 +437,22 @@ export const AdminTrackCoverOverlay = ({
               }`}
             >
               <Sparkles className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setUrlOpen((v) => !v);
+                setGenOpen(false);
+              }}
+              title="Paste a direct link to an image"
+              className={`flex h-10 w-10 items-center justify-center rounded-full border bg-card transition-colors disabled:opacity-50 ${
+                urlOpen
+                  ? "border-[#F4C430] bg-[#F4C430] text-background"
+                  : "border-[#F4C430]/60 text-[#F4C430] hover:bg-[#F4C430] hover:text-background"
+              }`}
+            >
+              <Link2 className="h-4 w-4" />
             </button>
             {track.cover && (
               <button
@@ -438,6 +502,43 @@ export const AdminTrackCoverOverlay = ({
             </div>
             <p className="mt-1.5 font-body text-[10px] text-muted-foreground">
               Prompt uses this track's saved Use Case &amp; Mood.
+            </p>
+          </div>
+        )}
+
+        {/* Paste-a-link popover. */}
+        {urlOpen && !genBusy && (
+          <div
+            className="absolute inset-x-3 bottom-3 z-20 rounded-lg border border-[#F4C430]/40 bg-card/95 p-2.5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="mb-1.5 font-body text-[11px] text-muted-foreground">
+              Direct link to an image (png, jpg, webp)
+            </p>
+            <div className="flex gap-1.5">
+              <input
+                value={coverUrl}
+                onChange={(e) => setCoverUrl(e.target.value)}
+                placeholder="https://…/cover.jpg"
+                autoFocus
+                spellCheck={false}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void loadCoverFromUrl();
+                  if (e.key === "Escape") setUrlOpen(false);
+                }}
+                className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1.5 font-body text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none"
+              />
+              <button
+                type="button"
+                disabled={busy || coverUrl.trim() === ""}
+                onClick={() => void loadCoverFromUrl()}
+                className="rounded-md bg-[#F4C430] px-3 py-1.5 font-body text-xs font-bold text-background transition-colors hover:bg-[#F4C430]/85 disabled:opacity-50"
+              >
+                Load
+              </button>
+            </div>
+            <p className="mt-1.5 font-body text-[10px] text-muted-foreground">
+              The file is copied to our own storage, not hot-linked.
             </p>
           </div>
         )}
