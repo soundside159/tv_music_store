@@ -398,14 +398,26 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
       });
       const d = (await res.json().catch(() => ({}))) as { path?: string; error?: string };
       if (!res.ok || !d.path) throw new Error(d.error ?? "Could not load that link");
-      const cover = d.path;
+      // The picture now lives on our domain, so canvas may read it: stamp the
+      // logo + wordmark exactly like an AI cover, and cut the row thumbnail
+      // from the CLEAN original.
+      let cover = d.path;
       let coverThumb = "";
       try {
-        const blob = await (await fetch(cover)).blob();
-        const file = new File([blob], "url-cover.jpg", { type: blob.type || "image/jpeg" });
-        coverThumb = await uploadCoverImage(await makeThumbnail(file), "url-cover-thumb.jpg");
+        const blob = await (await fetch(d.path)).blob();
+        const original = new File([blob], "url-cover.jpg", { type: blob.type || "image/jpeg" });
+        try {
+          cover = await uploadCoverImage(await brandCover(original), "url-cover-branded.jpg");
+        } catch {
+          // unbranded original stays
+        }
+        try {
+          coverThumb = await uploadCoverImage(await makeThumbnail(original), "url-cover-thumb.jpg");
+        } catch {
+          // rows fall back to the full cover
+        }
       } catch {
-        // rows fall back to the full cover
+        // could not re-read our own copy — save it as it came
       }
       await api({ action: "bulk_update_tracks", trackIds: [trackId], fields: { cover, coverThumb } });
       setTrackOverrides((o) => ({ ...o, [trackId]: { ...o[trackId], cover, coverThumb } }));
@@ -416,6 +428,48 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
     } finally {
       aiStop(trackId);
     }
+  };
+
+  // Retro-fit: stamp the logo onto covers that already exist (the ones pulled
+  // from a link before branding was wired in). Re-reads each cover from our own
+  // storage, brands it, uploads the branded copy and repoints the track.
+  // Running it twice on the same cover stamps two logos — hence the confirm.
+  const brandSelectedCovers = async () => {
+    const targets = selectedTrackIds
+      .map((id) => mergedTracks.find((t) => t.id === id))
+      .filter((t): t is CatalogTrack => !!t && !!t.cover);
+    if (targets.length === 0) {
+      toast.error("None of the selected tracks has a cover.");
+      return;
+    }
+    if (
+      !window.confirm(
+        `Add the logo to ${targets.length} cover${targets.length === 1 ? "" : "s"}?\n\n` +
+          "Run this ONCE per cover — a cover branded twice ends up with two logos.",
+      )
+    ) {
+      return;
+    }
+    let done = 0;
+    let failed = 0;
+    for (const t of targets) {
+      aiStart(t.id);
+      try {
+        const blob = await (await fetch(t.cover)).blob();
+        const original = new File([blob], "cover.jpg", { type: blob.type || "image/jpeg" });
+        const cover = await uploadCoverImage(await brandCover(original), "cover-branded.jpg");
+        await api({ action: "bulk_update_tracks", trackIds: [t.id], fields: { cover } });
+        setTrackOverrides((o) => ({ ...o, [t.id]: { ...o[t.id], cover } }));
+        setFieldsPatch({ n: Date.now(), trackId: t.id, patch: { cover } });
+        done += 1;
+      } catch {
+        failed += 1;
+      } finally {
+        aiStop(t.id);
+      }
+    }
+    if (done > 0) toast.success(`Logo added to ${done} cover${done === 1 ? "" : "s"}`);
+    if (failed > 0) toast.error(`${failed} cover${failed === 1 ? "" : "s"} could not be branded`);
   };
 
   const aiFillSelectedTracks = async () => {
@@ -1031,6 +1085,15 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                 >
                   <Sparkles className={`h-4 w-4 ${aiBusy ? "animate-pulse" : ""}`} />
                   {aiBusy ? `AI ${aiNote}…` : `AI Art & Text (${selectedTrackIds.length})`}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || aiBusy}
+                  onClick={() => void brandSelectedCovers()}
+                  title="Stamp the logo + wordmark onto the covers of the selected tracks (for covers pulled from a link). Run once per cover."
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[#F4C430]/60 px-4 py-2 font-body text-sm font-semibold text-[#F4C430] transition-colors hover:bg-[#F4C430]/10 disabled:opacity-50"
+                >
+                  Add logo ({selectedTrackIds.length})
                 </button>
                 {/* Publish shows when the selection contains drafts; Unpublish
                     when it contains published tracks (both, for a mixed pick). */}

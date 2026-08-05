@@ -4720,3 +4720,25 @@ tokens on generation.
     the download immediately, in Tracks Edit and in the track-page popover
     (there `loadCoverFromUrl(explicit?)` takes the value directly, because React
     state has not committed yet at paste time). Load / Enter still work.
+
+## 2026-08-03 — Link-loaded covers get the logo too + "Add logo" for the ones already in
+Owner noticed covers pulled from a link had no logo/wordmark, unlike AI covers.
+True: `brandCover()` was only in the AI path.
+
+- `src/components/AdminContent.tsx` (`coverFromUrlForTrack`) and
+  `src/components/AdminTrackPanel.tsx` (`loadCoverFromUrl`) now do the same tail
+  end as generation: re-read our own copy (same-origin, so canvas may touch it),
+  `brandCover()` -> upload -> that becomes `cover`; the row thumbnail is still
+  cut from the CLEAN original. Every step is individually try/caught, so a
+  branding failure just leaves the unbranded picture rather than losing it.
+- Retro-fit for the batch he already imported: NEW bulk action
+  `brandSelectedCovers()` in AdminContent, button "Add logo (N)" next to
+  "AI Art & Text" in the Tracks selection bar. Select tracks -> it refetches each
+  existing cover, brands it, uploads and repoints the track (thumbnail left
+  alone — it is meant to be clean). Sequential, per-row sparkle via
+  aiStart/aiStop, one success + one failure toast at the end.
+  IT IS NOT IDEMPOTENT — branding a cover twice stamps two logos, hence the
+  explicit confirm dialog. Say so in any UI that reuses it.
+- eslint 0 errors (1 pre-existing react-refresh warning in AdminTrackPanel);
+  tsc only the two PRE-EXISTING errors (PlanModal, Composer).
+- Not deployed by me — owner runs deploy.bat.

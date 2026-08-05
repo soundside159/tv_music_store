@@ -325,20 +325,31 @@ export const AdminTrackCoverOverlay = ({
       const d = (await res.json().catch(() => ({}))) as { path?: string; error?: string };
       if (!res.ok || !d.path) throw new Error(d.error ?? "Could not load that link");
 
-      // The picture now lives on our own domain, so the browser may read it and
-      // build the square row thumbnail — same tail end as a manual upload.
+      // The picture now lives on our own domain, so canvas may read it: brand it
+      // with the logo exactly like an AI cover, and cut the row thumbnail from
+      // the CLEAN original.
+      let cover = d.path;
       let coverThumb = "";
       try {
         const blob = await (await fetch(d.path)).blob();
-        const file = new File([blob], "url-cover.jpg", { type: blob.type || "image/jpeg" });
-        coverThumb = await uploadImageApi(await makeThumbnail(file), "url-cover-thumb.jpg");
+        const original = new File([blob], "url-cover.jpg", { type: blob.type || "image/jpeg" });
+        try {
+          cover = await uploadImageApi(await brandCover(original), "url-cover-branded.jpg");
+        } catch {
+          // unbranded original stays
+        }
+        try {
+          coverThumb = await uploadImageApi(await makeThumbnail(original), "url-cover-thumb.jpg");
+        } catch {
+          // keep coverThumb empty — rows fall back to the full cover
+        }
       } catch {
-        // keep coverThumb empty — rows fall back to the full cover
+        // could not re-read our own copy — save it as it came
       }
       const ok = await run({
         action: "bulk_update_tracks",
         trackIds: [track.id],
-        fields: { cover: d.path, coverThumb },
+        fields: { cover, coverThumb },
       });
       if (ok) {
         toast.success("Cover loaded from link");
