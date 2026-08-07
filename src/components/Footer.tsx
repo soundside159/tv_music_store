@@ -37,7 +37,7 @@ const COLUMNS: { title: string; links: FooterLink[] }[] = [
   {
     title: "Company",
     links: [
-      { label: "Contact Us", to: "mailto:contact@tvmusicstore.com", external: true },
+      { label: "Contact Us", to: "/contact" },
       { label: "License Terms", to: "/license-terms" },
       { label: "Privacy Policy", to: "/privacy" },
       { label: "Refund Policy", to: "/refunds" },

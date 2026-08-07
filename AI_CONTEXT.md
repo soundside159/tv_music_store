@@ -4742,3 +4742,17 @@ True: `brandCover()` was only in the AI path.
 - eslint 0 errors (1 pre-existing react-refresh warning in AdminTrackPanel);
   tsc only the two PRE-EXISTING errors (PlanModal, Composer).
 - Not deployed by me — owner runs deploy.bat.
+
+- **2026-08-07 (Contact page — footer "Contact Us" fixed):** footer "Contact Us" was a
+  `mailto:contact@tvmusicstore.com` link — for visitors without a configured mail app a click
+  did NOTHING (the owner's report). NEW `src/pages/Contact.tsx` — public /contact page in the
+  Legal-pages style (Navigation + Footer, max-w-3xl, gold eyebrow "Get in touch"): email card
+  showing contact@tvmusicstore.com with a Copy-address button (navigator.clipboard, "Copied"
+  check for 2s, try/caught for old browsers) + a gold "Open in mail app" mailto button, an
+  "usually reply within a few business days" note (promises the REQUEST/reply, not an outcome —
+  honesty rules kept), and a short "what to include" list (track title/use, order number,
+  video+channel link for Content ID). `App.tsx`: import + `<Route path="/contact">` above the
+  catch-all. `Footer.tsx`: "Contact Us" now routes to `/contact` (internal Link, external flag
+  removed). Other visible mailto links (SupportSection, Cart, Sync) left as-is — they display
+  the address as text, so nothing is hidden. Header intentionally still has no Contact link.
+  eslint: 0 errors (26 pre-existing warnings). Not deployed by me — owner runs deploy.bat.

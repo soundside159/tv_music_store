@@ -39,6 +39,7 @@ const ScrollToTop = () => {
   return null;
 };
 import Login from "./pages/Login";
+import Contact from "./pages/Contact";
 import LicenseTerms from "./pages/LicenseTerms";
 import Privacy from "./pages/Privacy";
 import Refunds from "./pages/Refunds";
@@ -101,6 +102,7 @@ const App = () => (
           <Route path="/composer" element={<Composer />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/contact" element={<Contact />} />
           <Route path="/license-terms" element={<LicenseTerms />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/refunds" element={<Refunds />} />
