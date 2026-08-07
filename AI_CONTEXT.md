@@ -4756,3 +4756,9 @@ True: `brandCover()` was only in the AI path.
   removed). Other visible mailto links (SupportSection, Cart, Sync) left as-is — they display
   the address as text, so nothing is hidden. Header intentionally still has no Contact link.
   eslint: 0 errors (26 pre-existing warnings). Not deployed by me — owner runs deploy.bat.
+- **2026-08-07 (Contact page simplified, owner request):** stripped `/contact` to the
+  essentials — no "Get in touch" eyebrow (duplicated the H1), no "Email" label, no
+  "Open in mail app" button, no reply-time note, no "What helps us help you faster" list.
+  Now just: "Contact Us" + "Have a question? Write to us." + one card with the gold mail
+  icon, contact@tvmusicstore.com (mailto on the address itself) and a Copy button.
+  eslint 0 errors. Not deployed by me — owner runs deploy.bat.
