@@ -4762,3 +4762,30 @@ True: `brandCover()` was only in the AI path.
   Now just: "Contact Us" + "Have a question? Write to us." + one card with the gold mail
   icon, contact@tvmusicstore.com (mailto on the address itself) and a Copy button.
   eslint 0 errors. Not deployed by me — owner runs deploy.bat.
+- **2026-08-07 (Gmail backup copies of contact@ mail — FIXED):** owner reported inbound
+  contact@tvmusicstore.com mail showed up in /admin Inbox but NO backup copy reached
+  tvmusicstore@gmail.com (destination address IS verified in Email Routing). Cause: the
+  DEPLOYED mail-worker was an old version without the FORWARD_TO forwarding (code in repo
+  already had it). Fix: owner ran `npx wrangler deploy` from `mail-worker/` (first run from
+  the home dir failed with an "Application Data" permission error — must run INSIDE
+  mail-worker/); deploy output confirmed `FORWARD_TO: "tvmusicstore@gmail.com"`; owner
+  re-authorized Wrangler OAuth on the way. Tested: inbound mail now lands in BOTH the admin
+  Inbox and Gmail. Reminder: mail-worker is a separate deploy, deploy.bat does NOT touch it —
+  after any mail-worker change, redeploy from that folder.
+- **2026-08-26 (D1 free-tier warning -> perf indexes, from the FruityNest chat):** Cloudflare
+  emailed that this account "regularly exceeds" the D1 free daily limits (5M rows read/day,
+  enforcement from 2026-09-01). Usage graphs: 22.18M rows read Aug 5-Sep 5, ~375 rows read per
+  query, night-time bot-crawl spikes. Root cause: functions/_middleware.ts (edge SEO prerender)
+  runs 1-2 track queries on EVERY HTML page view, and `WHERE status='published' AND
+  moderation_status='approved' ORDER BY created_at DESC LIMIT n` had NO matching index -> every
+  page view (mostly bots) scanned + sorted the whole tracks table. Also unindexed: the
+  /track/<slug> numeric-code fallback (tracks.code), /artist tracks (tracks.composer_id), and
+  the download-count GROUP BY in /api/tracks (download_log.track_id). NEW
+  `migrations/0002_perf_indexes.sql` adds the four indexes (IF NOT EXISTS, safe to re-run).
+  OWNER ACTION: run from the repo root:
+  `npx wrangler d1 execute tvmusicstore-db --remote --file=./migrations/0002_perf_indexes.sql`
+  then watch the D1 usage graph a few days — rows read per query should collapse.
+  Checked and fine as-is: sessions.token is a PRIMARY KEY (indexed), analytics_hits has
+  day/ts indexes, admin analytics is windowed, useUnreadMail polls a tiny table every 120s.
+  NOT done (next lever if still over the limit): cache the middleware's SEO queries (e.g.
+  Cache API / a small in-isolate TTL) so repeated bot hits stop re-querying D1 at all.
