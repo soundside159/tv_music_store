@@ -4789,3 +4789,27 @@ True: `brandCover()` was only in the AI path.
   day/ts indexes, admin analytics is windowed, useUnreadMail polls a tiny table every 120s.
   NOT done (next lever if still over the limit): cache the middleware's SEO queries (e.g.
   Cache API / a small in-isolate TTL) so repeated bot hits stop re-querying D1 at all.
+- **2026-10-17 (D1 free tier BLOCKED for a day -> edge cache for the public catalog, from the
+  FruityNest chat):** Cloudflare blocked D1 row reads on 2026-10-16 (5M rows/day exceeded;
+  reset 00:00 UTC). Dashboard -> tvmusicstore-db -> Queries showed it all came from the two
+  endpoints the SPA calls on EVERY page view: /api/tracks (all tracks + ALL track_versions +
+  ALL category_tracks + collection_tracks + download_log GROUP BY + ensureTrackCodes' full scan)
+  and /api/content (ALL playlist_tracks, collection_tracks, ...). ~14k rows per view, ~370
+  views/day (bots included); queries x2.3 and rows x12 vs the day before.
+  FIX: NEW `functions/api/_cache.ts` — `cachedJson(ctx, name, build)` keeps the built JSON in
+  the Cloudflare Cache API (caches.default, TTL 1 h) under the key
+  `/__edge_cache/<name>?v=<site_config.catalog_version>` (ONE row read per request); browsers
+  still get `cache-control: no-store` + `x-edge-cache: hit` on hits. NEW
+  `functions/api/admin/_middleware.ts` and `functions/api/composer/_middleware.ts` bump
+  `catalog_version` (upsert into site_config, Date.now()) after every successful non-GET
+  request, so admin/composer edits show on the next public request in EVERY data centre
+  (caches.default.delete would only purge one colo — that is why it is a version key).
+  `/api/tracks`: public path wrapped in cachedJson; `?drafts=1` (admin) bypasses the cache;
+  body moved into `buildTracks(ctx, includeDrafts)` (ensureTrackCodes now runs only on a cache
+  miss / admin view). `/api/content`: whole handler wrapped (`buildContent`). The TTL only
+  bounds the download counts (Popular sort) — up to 1 h old.
+  eslint 0 on the touched files; tsc on them clean (only the pre-existing D1Database name
+  errors in _codes.ts). Backups: _to_delete/backup_2026-10-17_edge_cache/.
+  Not deployed by me — owner runs deploy.bat. After deploy: the D1 Queries tab should show
+  the big SELECTs dropping to a handful per hour. If the 0002 perf indexes were never applied,
+  run `npx wrangler d1 execute tvmusicstore-db --remote --file=./migrations/0002_perf_indexes.sql`.

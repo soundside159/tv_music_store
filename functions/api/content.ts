@@ -1,9 +1,13 @@
 import { getLicensePrices, getVocabularies, json, type Ctx } from "./_utils";
+import { cachedJson } from "./_cache";
 
 // Public storefront content: collections, playlists and the homepage trending
 // list — everything the owner edits in Admin -> Content.
 
-export const onRequestGet = async (ctx: Ctx) => {
+// Served from the edge cache (see _cache.ts) — rebuilt after any admin write.
+export const onRequestGet = async (ctx: Ctx) => cachedJson(ctx, "content", () => buildContent(ctx));
+
+const buildContent = async (ctx: Ctx): Promise<Response> => {
   if (!ctx.env.DB) return json({ error: "DB not bound" }, 503);
   const db = ctx.env.DB;
 

@@ -1,5 +1,6 @@
 import { adminTokenOk, getSessionUser, json, OWNER_EMAIL, type Ctx } from "./_utils";
 import { ensureTrackCodes } from "./_codes";
+import { cachedJson } from "./_cache";
 
 interface TrackRow {
   id: string;
@@ -35,9 +36,6 @@ interface VersionRow {
 export const onRequestGet = async (ctx: Ctx) => {
   if (!ctx.env.DB) return json({ error: "DB not bound. See docs/SETUP_BACKEND.md" }, 503);
 
-  // Assign public codes to any track missing one (idempotent — no-op once set).
-  await ensureTrackCodes(ctx.env.DB);
-
   // Admins can request drafts too (?drafts=1) — the admin Tracks manager needs
   // to see bulk-uploaded tracks before they're published.
   let includeDrafts = false;
@@ -49,6 +47,18 @@ export const onRequestGet = async (ctx: Ctx) => {
       includeDrafts = !!user && (user.role === "admin" || user.email === OWNER_EMAIL);
     }
   }
+
+  // The public catalog comes from the edge cache (see _cache.ts); the admin
+  // view (?drafts=1) always reads the database.
+  if (!includeDrafts) return cachedJson(ctx, "tracks", () => buildTracks(ctx, false));
+  return buildTracks(ctx, true);
+};
+
+const buildTracks = async (ctx: Ctx, includeDrafts: boolean): Promise<Response> => {
+  if (!ctx.env.DB) return json({ error: "DB not bound. See docs/SETUP_BACKEND.md" }, 503);
+
+  // Assign public codes to any track missing one (idempotent — no-op once set).
+  await ensureTrackCodes(ctx.env.DB);
 
   // `cover` / `cover_thumb` are added lazily by the admin editor; older DBs may
   // not have them yet, so degrade gracefully in two steps.
