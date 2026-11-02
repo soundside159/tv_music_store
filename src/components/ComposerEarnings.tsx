@@ -53,12 +53,6 @@ const Stat = ({ label, value, hint }: { label: string; value: string; hint?: str
   </div>
 );
 
-const STATE_LABEL: Record<MonthRow["state"], string> = {
-  paid: "Paid",
-  payable: "Ready to pay",
-  held: "Pending",
-};
-
 const ComposerEarnings = () => {
   const [data, setData] = useState<Earnings | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -96,108 +90,70 @@ const ComposerEarnings = () => {
 
   const { totals, policy } = data;
   const threshold = money(policy.thresholdCents);
+  const tax = data.withholdingBps ?? 0;
 
+  // Three numbers only (owner: composers like it simple), then one row per
+  // closed month. The running month never shows a figure (see the API).
   return (
     <div className="space-y-5">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Earned all time" value={money(totals.lifetimeCents)} />
-        <Stat label="Paid out" value={money(totals.paidOutCents)} />
+      <div className="grid gap-3 sm:grid-cols-3">
         <Stat
           label="Ready to pay"
           value={money(totals.payableCents)}
           hint={
             totals.payableCents > 0 && !totals.payable
-              ? `Rolls over until it reaches ${threshold}`
-              : data.withholdingBps && totals.payableCents > 0
-                ? `${money(totals.payableNetCents ?? totals.payableCents)} after UK tax (${data.withholdingBps / 100}%)`
+              ? `Paid once it reaches ${threshold}`
+              : tax && totals.payableCents > 0
+                ? `You receive ${money(totals.payableNetCents ?? totals.payableCents)} after UK tax`
                 : undefined
           }
         />
         <Stat
-          label="Pending"
+          label="Waiting"
           value={money(totals.heldCents)}
-          hint={`Paid ${policy.holdbackDays} days after the month closes`}
+          hint={`Becomes ready ${policy.holdbackDays} days after the month closes`}
         />
+        <Stat label="Paid out" value={money(totals.paidOutCents)} hint="All time" />
       </div>
 
       <div className="rounded-xl border border-border bg-card p-5">
-        <h2 className="font-body text-sm font-semibold text-foreground">Earnings by month</h2>
-        {!!data.withholdingBps && (
-          <p className="mt-1 font-body text-xs text-muted-foreground">
-            TV Music Store keeps back {data.withholdingBps / 100}% UK withholding tax on royalties (the treaty rate for your
-            country) and pays it to HMRC. You can usually claim it as a credit against tax in your own country.
-          </p>
-        )}
-        {/* One final figure per month — never a live counter. */}
+        <h2 className="font-body text-sm font-semibold text-foreground">By month</h2>
         <p className="mt-1 font-body text-xs text-muted-foreground">
-          {data.openMonth.month} is still running — its total appears on {data.openMonth.publishOn}.
+          This month&apos;s total appears on {data.openMonth.publishOn}.
+          {tax
+            ? ` UK tax of ${tax / 100}% (the treaty rate for your country) is kept back for HMRC; you can usually claim it against tax at home.`
+            : ""}
         </p>
-        <div className="mt-3 overflow-x-auto">
-          <table className="w-full min-w-[28rem] border-collapse font-body text-sm">
-            <thead>
-              <tr className="border-b border-border/60 text-left">
-                <th className="py-2 pr-4 font-semibold text-muted-foreground">Month</th>
-                <th className="py-2 pr-4 text-right font-semibold text-muted-foreground">Earned</th>
-                {!!data.withholdingBps && (
-                  <th className="py-2 pr-4 text-right font-semibold text-muted-foreground">UK tax</th>
-                )}
-                {!!data.withholdingBps && (
-                  <th className="py-2 pr-4 text-right font-semibold text-muted-foreground">You receive</th>
-                )}
-                <th className="py-2 font-semibold text-muted-foreground">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.months.length === 0 && (
-                <tr>
-                  <td colSpan={data.withholdingBps ? 5 : 3} className="py-6 text-center text-muted-foreground">
-                    No closed month yet.
-                  </td>
-                </tr>
-              )}
-              {data.months.map((m) => (
-                <tr key={m.month} className="border-b border-border/40 last:border-b-0">
-                  <td className="py-2.5 pr-4 text-foreground">{m.month}</td>
-                  <td
-                    className="py-2.5 pr-4 text-right font-semibold tabular-nums"
-                    style={{ color: m.amountCents < 0 ? undefined : GOLD }}
-                  >
-                    {money(m.amountCents)}
-                  </td>
-                  {!!data.withholdingBps && (
-                    <td className="py-2.5 pr-4 text-right tabular-nums text-muted-foreground">
-                      {m.withheldCents ? `−${money(m.withheldCents)}` : "—"}
-                    </td>
-                  )}
-                  {!!data.withholdingBps && (
-                    <td className="py-2.5 pr-4 text-right tabular-nums text-foreground">
-                      {money(m.netCents ?? m.amountCents)}
-                    </td>
-                  )}
-                  <td className="py-2.5">
-                    <span
-                      className={`inline-flex items-center rounded-full border px-2 py-0.5 font-body text-[10px] font-semibold ${
-                        m.state === "paid"
-                          ? "border-[#F4C430]/50 bg-[#F4C430]/10 text-[#F4C430]"
-                          : "border-border text-muted-foreground"
-                      }`}
-                      title={m.state === "held" ? `Paid out on ${m.releaseDate}` : undefined}
-                    >
-                      {STATE_LABEL[m.state]}
-                    </span>
-                    {m.state === "held" && (
-                      <span className="ml-2 font-body text-[11px] text-muted-foreground/70">
-                        {m.releaseDate}
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="mt-3 divide-y divide-border/40">
+          {data.months.length === 0 && (
+            <p className="py-6 text-center font-body text-sm text-muted-foreground">No closed month yet.</p>
+          )}
+          {data.months.map((m) => (
+            <div key={m.month} className="flex items-center justify-between gap-3 py-3 font-body text-sm">
+              <div>
+                <p className="text-foreground">{m.month}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {m.state === "paid"
+                    ? `Paid${m.paidAt ? ` ${m.paidAt.slice(0, 10)}` : ""}`
+                    : m.state === "payable"
+                      ? "Ready to pay"
+                      : `Waiting until ${m.releaseDate}`}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="font-semibold tabular-nums" style={{ color: m.amountCents < 0 ? undefined : GOLD }}>
+                  {money(m.amountCents)}
+                </p>
+                {tax > 0 && m.withheldCents ? (
+                  <p className="text-[11px] tabular-nums text-muted-foreground">
+                    you receive {money(m.netCents ?? m.amountCents)}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
-
     </div>
   );
 };

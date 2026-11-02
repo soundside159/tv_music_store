@@ -1,0 +1,92 @@
+// Shared reporting periods for the admin Dashboard (Sales) and Finance pages.
+//
+//   ?period=this_month | last_month | this_year | all
+//
+// Every range is [from, to) on calendar days (YYYY-MM-DD, UTC), matched
+// against revenue_events.created_at = the day the money ARRIVED. `prev` is the
+// same-length range just before it (for the +/- % on the dashboard); "all"
+// has none. `bucket` tells the chart whether to group by day or by month.
+
+export type PeriodId = "this_month" | "last_month" | "this_year" | "all";
+
+export interface Period {
+  id: PeriodId;
+  label: string;
+  from: string;
+  /** Exclusive end; null = open (all time). */
+  to: string | null;
+  prev: { from: string; to: string } | null;
+  bucket: "day" | "month";
+}
+
+const day = (d: Date) => d.toISOString().slice(0, 10);
+const monthStart = (y: number, m: number) => day(new Date(Date.UTC(y, m, 1)));
+
+export const resolvePeriod = (raw: string | null): Period => {
+  const now = new Date();
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
+  switch (raw) {
+    case "last_month":
+      return {
+        id: "last_month",
+        label: "Last month",
+        from: monthStart(y, m - 1),
+        to: monthStart(y, m),
+        prev: { from: monthStart(y, m - 2), to: monthStart(y, m - 1) },
+        bucket: "day",
+      };
+    case "this_year":
+      return {
+        id: "this_year",
+        label: "This year",
+        from: monthStart(y, 0),
+        to: monthStart(y + 1, 0),
+        prev: { from: monthStart(y - 1, 0), to: monthStart(y, 0) },
+        bucket: "month",
+      };
+    case "all":
+      return { id: "all", label: "All time", from: "0000-01-01", to: null, prev: null, bucket: "month" };
+    default:
+      return {
+        id: "this_month",
+        label: "This month",
+        from: monthStart(y, m),
+        to: monthStart(y, m + 1),
+        prev: { from: monthStart(y, m - 1), to: monthStart(y, m) },
+        bucket: "day",
+      };
+  }
+};
+
+/** SQL fragment: `<col>` (an ISO timestamp) falls inside [?a, ?b) — b may be NULL. */
+export const inRange = (col: string, a: number, b: number) =>
+  `substr(${col},1,10) >= ?${a} AND (?${b} IS NULL OR substr(${col},1,10) < ?${b})`;
+
+/** Every chart key (YYYY-MM-DD or YYYY-MM) from `from` up to today / `to`, so
+ *  quiet days show as gaps. For "all" it starts at `firstData`. */
+export const axisKeys = (p: Period, firstData: string | null): string[] => {
+  const today = day(new Date());
+  const end = p.to && p.to <= today ? p.to : null; // exclusive end if in the past
+  const keys: string[] = [];
+  if (p.bucket === "day") {
+    const d = new Date(`${p.from}T00:00:00Z`);
+    while (true) {
+      const k = day(d);
+      if (end ? k >= end : k > today) break;
+      keys.push(k);
+      d.setUTCDate(d.getUTCDate() + 1);
+    }
+  } else {
+    const startStr = p.id === "all" ? (firstData ?? today).slice(0, 7) : p.from.slice(0, 7);
+    const d = new Date(`${startStr}-01T00:00:00Z`);
+    const lastMonth = (end ? day(new Date(new Date(`${end}T00:00:00Z`).getTime() - 86400000)) : today).slice(0, 7);
+    while (true) {
+      const k = day(d).slice(0, 7);
+      if (k > lastMonth) break;
+      keys.push(k);
+      d.setUTCMonth(d.getUTCMonth() + 1);
+    }
+  }
+  return keys;
+};

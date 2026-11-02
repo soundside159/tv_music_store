@@ -1,22 +1,16 @@
 import { getSessionUser, json, OWNER_EMAIL, type Ctx } from "../_utils";
 import { ensureRevenueTables } from "../_revenue";
+import { axisKeys, inRange, resolvePeriod } from "../_period";
 
 // Admin -> Dashboard "Sales" block. One read-only call:
-//   GET /api/admin/sales?days=30|90|365
-// -> totals for the window and the window before it (for the +/- %),
-//    a per-day (or per-month for 365) series split license / subscription,
+//   GET /api/admin/sales?period=this_month|last_month|this_year|all
+// -> totals for the period and the period before it (for the +/- %),
+//    how the net money split (composers / store / still splitting),
+//    a per-day (or per-month) series split license / subscription,
 //    license sales grouped by composer, active paid subscribers and the
 //    latest payments with track, licence tier, composer and buyer.
 // Money = gross cents straight from the revenue ledger; refunded rows are
 // left out of every total and only flagged in the "latest" list.
-
-const RANGES = [30, 90, 365];
-
-const isoDay = (offsetDays: number) => {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - offsetDays);
-  return d.toISOString().slice(0, 10);
-};
 
 export const onRequestGet = async (ctx: Ctx) => {
   try {
@@ -35,11 +29,10 @@ const handle = async (ctx: Ctx) => {
   const db = ctx.env.DB;
   await ensureRevenueTables(db);
 
-  const asked = Number(new URL(ctx.request.url).searchParams.get("days"));
-  const days = RANGES.includes(asked) ? asked : 30;
-  const since = isoDay(days - 1);
-  const prevSince = isoDay(days * 2 - 1);
-  const bucketLen = days > 90 ? 7 : 10; // month buckets for the 12-month view
+  const period = resolvePeriod(new URL(ctx.request.url).searchParams.get("period"));
+  const since = period.from;
+  const until = period.to;
+  const bucketLen = period.bucket === "month" ? 7 : 10;
 
   type TotRow = { source: string; n: number; gross: number; net: number };
   const totalsFor = async (from: string, to: string | null) => {
@@ -47,8 +40,7 @@ const handle = async (ctx: Ctx) => {
       .prepare(
         `SELECT source, COUNT(*) AS n, COALESCE(SUM(gross_cents),0) AS gross, COALESCE(SUM(net_cents),0) AS net
            FROM revenue_events
-          WHERE status != 'refunded' AND substr(created_at,1,10) >= ?1
-            AND (?2 IS NULL OR substr(created_at,1,10) < ?2)
+          WHERE status != 'refunded' AND ${inRange("created_at", 1, 2)}
           GROUP BY source`,
       )
       .bind(from, to)
@@ -68,17 +60,43 @@ const handle = async (ctx: Ctx) => {
     };
   };
 
-  const totals = await totalsFor(since, null);
-  const previous = await totalsFor(prevSince, since);
+  const totals = await totalsFor(since, until);
+  const previous = period.prev ? await totalsFor(period.prev.from, period.prev.to) : null;
+
+  // Where the net money went: composers, the store, or not split yet
+  // (subscriptions whose paid period has not closed).
+  const authorsRow = await db
+    .prepare(
+      `SELECT COALESCE(SUM(a.amount_cents),0) AS amount
+         FROM revenue_allocations a JOIN revenue_events e ON e.id = a.event_id
+        WHERE a.kind = 'author' AND e.status = 'allocated' AND ${inRange("e.created_at", 1, 2)}`,
+    )
+    .bind(since, until)
+    .first<{ amount: number }>();
+  const netByStatus = await db
+    .prepare(
+      `SELECT status, COALESCE(SUM(net_cents),0) AS net FROM revenue_events
+        WHERE status IN ('allocated','pending') AND ${inRange("created_at", 1, 2)}
+        GROUP BY status`,
+    )
+    .bind(since, until)
+    .all<{ status: string; net: number }>();
+  const allocatedNet = netByStatus.results.find((r) => r.status === "allocated")?.net ?? 0;
+  const composersTotal = authorsRow?.amount ?? 0;
+  const split = {
+    composers: composersTotal,
+    store: allocatedNet - composersTotal,
+    splitting: netByStatus.results.find((r) => r.status === "pending")?.net ?? 0,
+  };
 
   const seriesRes = await db
     .prepare(
       `SELECT substr(created_at,1,?2) AS k, source, COALESCE(SUM(gross_cents),0) AS gross, COUNT(*) AS n
          FROM revenue_events
-        WHERE status != 'refunded' AND substr(created_at,1,10) >= ?1
+        WHERE status != 'refunded' AND ${inRange("created_at", 1, 3)}
         GROUP BY k, source ORDER BY k`,
     )
-    .bind(since, bucketLen)
+    .bind(since, bucketLen, until)
     .all<{ k: string; source: string; gross: number; n: number }>();
   const seriesMap = new Map<string, { k: string; license: number; subscription: number; sales: number }>();
   for (const r of seriesRes.results ?? []) {
@@ -96,10 +114,10 @@ const handle = async (ctx: Ctx) => {
          FROM revenue_events e
          LEFT JOIN tracks t ON t.id = e.track_id OR t.slug = e.track_id
          LEFT JOIN composers c ON c.id = t.composer_id
-        WHERE e.source = 'license' AND e.status != 'refunded' AND substr(e.created_at,1,10) >= ?1
+        WHERE e.source = 'license' AND e.status != 'refunded' AND ${inRange("e.created_at", 1, 2)}
         GROUP BY c.display_name, c.slug ORDER BY gross DESC LIMIT 8`,
     )
-    .bind(since)
+    .bind(since, until)
     .all<{ name: string; slug: string | null; n: number; gross: number }>();
 
   let activeSubs = { total: 0, pro: 0, max: 0 };
@@ -153,14 +171,22 @@ const handle = async (ctx: Ctx) => {
     recent = (await db.prepare(recentSql(false)).all<RecentRow>()).results ?? [];
   }
 
+  const first = await db
+    .prepare(`SELECT MIN(substr(created_at,1,10)) AS d FROM revenue_events`)
+    .first<{ d: string | null }>();
+  const series = axisKeys(period, first?.d ?? null).map(
+    (k) => seriesMap.get(k) ?? { k, license: 0, subscription: 0, sales: 0 },
+  );
+
   return json({
-    days,
-    bucket: bucketLen === 7 ? "month" : "day",
+    period: { id: period.id, label: period.label },
+    bucket: period.bucket,
     currency: recent[0]?.currency ?? "usd",
     totals,
     previous,
+    split,
     activeSubs,
-    series: [...seriesMap.values()],
+    series,
     byComposer: byComposerRes.results ?? [],
     recent: recent.map((r) => ({
       id: r.id,

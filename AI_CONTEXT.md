@@ -4998,3 +4998,11 @@ True: `brandCover()` was only in the AI path.
 - Track pages: only published+approved tracks are prerendered (drafts -> 404).
 - sitemap.ts: lastmod (guides: updated, tracks: publish_at|created_at, sfx: newest sound), /sound-effects + categories with published sounds. sitemap-pages.xml: /contact.
 - New functions/llms.txt.ts: /llms.txt generated live (key facts, main pages, released guides).
+
+## 2026-11-02 Finance / Dashboard / composer earnings redesign
+- New functions/api/_period.ts: periods this_month | last_month | this_year | all (by created_at = money arrived), inRange() SQL helper, axisKeys() zero-filled chart keys.
+- sales.ts: ?period= (replaces ?days=); adds split {composers, store, splitting}; series zero-filled on the server; previous = null for all time.
+- finance.ts GET: ?period= (replaces ?month=). Returns income {store, composer (admin's own composer profiles via composers.user_id), total, splitting, composerNames}, flow {gross, tax, fee, net, composers, store, splitting, license, subscription}, composers (shares for events in period, mine flag), balances, events (LIMIT 100). Per-event math so net = composers + store + splitting (refunded excluded). POST unchanged.
+- New src/components/PeriodTabs.tsx (shared). AdminFinance.tsx rewritten: My income / Where the money went (bar + chain + composer shares, CSV) / Composer payouts (cards, period-independent) / Payments (compact rows) / Accountant report last. Store row removed from payouts.
+- AdminSales.tsx: PeriodTabs, net/store/composers strip. adminNav: Finance moved into Overview after Dashboard, "Money" group removed.
+- ComposerEarnings.tsx: three tiles (Ready to pay, Waiting, Paid out) + compact month rows; running month still never shown.

@@ -2,17 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { CreditCard, Receipt, Repeat, ShoppingBag } from "lucide-react";
+import PeriodTabs, { type PeriodId } from "@/components/PeriodTabs";
 
 // Admin -> Dashboard "Sales": what sold, when, and for which composer.
-// Data: /api/admin/sales?days=30|90|365 (functions/api/admin/sales.ts).
+// Data: /api/admin/sales?period=this_month|last_month|this_year|all
+// (functions/api/admin/sales.ts).
 
 const GOLD = "#F4C430";
 const GOLD_SOFT = "rgba(244,196,48,0.38)";
-const RANGES = [
-  { days: 30, label: "30d" },
-  { days: 90, label: "90d" },
-  { days: 365, label: "12m" },
-] as const;
 
 interface Totals {
   gross: number;
@@ -40,11 +37,12 @@ interface Sale {
   buyerEmail: string | null;
 }
 interface Data {
-  days: number;
+  period: { id: PeriodId; label: string };
   bucket: "day" | "month";
   currency: string;
   totals: Totals;
-  previous: Totals;
+  previous: Totals | null;
+  split: { composers: number; store: number; splitting: number };
   activeSubs: { total: number; pro: number; max: number };
   series: { k: string; license: number; subscription: number; sales: number }[];
   byComposer: { name: string; slug: string | null; n: number; gross: number }[];
@@ -94,14 +92,14 @@ const Tile = ({
 );
 
 const AdminSales = () => {
-  const [days, setDays] = useState<number>(30);
+  const [period, setPeriod] = useState<PeriodId>("this_month");
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setError(null);
-    fetch(`/api/admin/sales?days=${days}`, { credentials: "include" })
+    fetch(`/api/admin/sales?period=${period}`, { credentials: "include" })
       .then(async (res) => {
         const d = (await res.json()) as Data & { error?: string };
         if (!res.ok) throw new Error(d.error ?? "Failed to load sales");
@@ -113,7 +111,7 @@ const AdminSales = () => {
     return () => {
       cancelled = true;
     };
-  }, [days]);
+  }, [period]);
 
   const money = useMemo(() => {
     const cur = (data?.currency ?? "usd").toUpperCase();
@@ -126,29 +124,12 @@ const AdminSales = () => {
     return (cents: number) => f.format(cents / 100).replace(/\.00$/, "");
   }, [data?.currency]);
 
-  // Every day / month on the axis, zero-filled, so quiet days show as gaps.
-  const chart = useMemo(() => {
-    if (!data) return [];
-    const byKey = new Map(data.series.map((s) => [s.k, s]));
-    const out: { k: string; license: number; subscription: number; sales: number }[] = [];
-    if (data.bucket === "month") {
-      for (let i = 11; i >= 0; i--) {
-        const d = new Date();
-        d.setUTCDate(1);
-        d.setUTCMonth(d.getUTCMonth() - i);
-        const k = d.toISOString().slice(0, 7);
-        out.push(byKey.get(k) ?? { k, license: 0, subscription: 0, sales: 0 });
-      }
-    } else {
-      for (let i = data.days - 1; i >= 0; i--) {
-        const d = new Date();
-        d.setUTCDate(d.getUTCDate() - i);
-        const k = d.toISOString().slice(0, 10);
-        out.push(byKey.get(k) ?? { k, license: 0, subscription: 0, sales: 0 });
-      }
-    }
-    return out.map((r) => ({ ...r, license: r.license / 100, subscription: r.subscription / 100 }));
-  }, [data]);
+  // The server sends every day / month of the period, zero-filled.
+  const chart = useMemo(
+    () =>
+      (data?.series ?? []).map((r) => ({ ...r, license: r.license / 100, subscription: r.subscription / 100 })),
+    [data],
+  );
 
   const fmtKey = (k: string) =>
     k.length === 7
@@ -156,7 +137,8 @@ const AdminSales = () => {
       : new Date(`${k}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 
   const maxComposer = Math.max(1, ...(data?.byComposer.map((c) => c.gross) ?? [1]));
-  const periodLabel = days === 365 ? "12 months" : `${days} days`;
+  const periodLabel = data?.period.label ?? "";
+  const prev = data?.previous ?? null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -167,20 +149,7 @@ const AdminSales = () => {
             What sold, when, and for which composer. Refunds are left out.
           </p>
         </div>
-        <div className="flex gap-1 rounded-full border border-border/70 bg-card/60 p-1">
-          {RANGES.map((r) => (
-            <button
-              key={r.days}
-              type="button"
-              onClick={() => setDays(r.days)}
-              className={`rounded-full px-3 py-1 font-body text-xs font-semibold transition-colors ${
-                days === r.days ? "bg-[#F4C430] text-background" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {r.label}
-            </button>
-          ))}
-        </div>
+        <PeriodTabs value={period} onChange={setPeriod} />
       </div>
 
       {error && <p className="font-body text-sm text-red-400">{error}</p>}
@@ -199,21 +168,21 @@ const AdminSales = () => {
               icon={Receipt}
               label={`Revenue · ${periodLabel}`}
               value={money(data.totals.gross)}
-              sub={delta(data.totals.gross, data.previous.gross)}
+              sub={prev ? delta(data.totals.gross, prev.gross) : null}
               note={`${money(data.totals.net)} after tax and fees`}
             />
             <Tile
               icon={ShoppingBag}
               label="Track licenses"
               value={String(data.totals.licenseCount)}
-              sub={delta(data.totals.licenseCount, data.previous.licenseCount)}
+              sub={prev ? delta(data.totals.licenseCount, prev.licenseCount) : null}
               note={money(data.totals.licenseGross)}
             />
             <Tile
               icon={Repeat}
               label="Subscription payments"
               value={String(data.totals.subscriptionCount)}
-              sub={delta(data.totals.subscriptionCount, data.previous.subscriptionCount)}
+              sub={prev ? delta(data.totals.subscriptionCount, prev.subscriptionCount) : null}
               note={money(data.totals.subscriptionGross)}
             />
             <Tile
@@ -223,6 +192,31 @@ const AdminSales = () => {
               note={`Pro ${data.activeSubs.pro} · Max ${data.activeSubs.max}`}
             />
           </div>
+
+          {/* Where the net money went this period — the same numbers as Finance. */}
+          <Card>
+            <div className="grid grid-cols-3 gap-3 font-body">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Revenue (net)</p>
+                <p className="text-xl font-semibold tabular-nums text-foreground">{money(data.totals.net)}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">TV Music Store</p>
+                <p className="text-xl font-semibold tabular-nums" style={{ color: GOLD }}>
+                  {money(data.split.store)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Composers</p>
+                <p className="text-xl font-semibold tabular-nums text-foreground">{money(data.split.composers)}</p>
+              </div>
+            </div>
+            {data.split.splitting > 0 && (
+              <p className="mt-2 font-body text-[11px] text-muted-foreground">
+                + {money(data.split.splitting)} from subscriptions still splitting (period not closed yet)
+              </p>
+            )}
+          </Card>
 
           <div className="grid gap-4 lg:grid-cols-3">
             <Card className="lg:col-span-2">

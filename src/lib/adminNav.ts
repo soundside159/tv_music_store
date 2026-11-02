@@ -83,6 +83,7 @@ export const adminNavGroups: { label: string; items: NavItem[] }[] = [
     label: "Overview",
     items: [
       { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { id: "finance", label: "Finance", icon: DollarSign },
       { id: "analytics", label: "Analytics", icon: BarChart3 },
     ],
   },
@@ -103,10 +104,6 @@ export const adminNavGroups: { label: string; items: NavItem[] }[] = [
   {
     label: "Content",
     items: [{ id: "articles", label: "Articles", icon: Newspaper }],
-  },
-  {
-    label: "Money",
-    items: [{ id: "finance", label: "Finance", icon: DollarSign }],
   },
   {
     label: "Customers",

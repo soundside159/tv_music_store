@@ -10,15 +10,15 @@ import {
   withheldOf,
   withholdingBpsOf,
 } from "../_revenue";
+import { inRange, resolvePeriod } from "../_period";
 import { stripeCall } from "../stripe/_stripe";
 import { paypalCall, paypalConfigured, paypalToken } from "../paypal/_paypal";
 
 // Admin finance report — the real numbers, straight from the revenue ledger.
 //
-// GET  /api/admin/finance?month=YYYY-MM
-//   -> the months that have money in them, the P&L of the selected one
-//      (gross, tax, fees, net, author pool, platform), the per-composer payout
-//      lines and the latest payments.
+// GET  /api/admin/finance?period=this_month|last_month|this_year|all
+//   -> the owner's income (as the store and as a composer), where the money
+//      went, composer shares, payable balances and the payments list.
 // POST { action: "mark_paid" | "mark_due", month, composerId }
 //   -> flips a composer's payout line for that month.
 //
@@ -43,26 +43,16 @@ export const onRequestGet = async (ctx: Ctx) => {
   await ensureRevenueTables(db);
   await allocateDue(db);
 
-  // The page's month axis is WHEN THE MONEY ARRIVED (created_at) — same axis
-  // as the Payments list and the accountant report. It used to be the cycle's
-  // period_end, which filed an annual subscription paid today under NEXT YEAR
-  // (the month dropdown then even DEFAULTED to 2027-07 and everything looked
-  // empty/lopsided). Composer split tables below keep their own allocation
-  // month — payouts happen when a cycle closes, that part is correct.
-  const nowMonth = new Date().toISOString().slice(0, 7);
-  const months = await db
-    .prepare(
-      `SELECT DISTINCT substr(created_at, 1, 7) AS month
-         FROM revenue_events ORDER BY month DESC LIMIT 36`,
-    )
-    .all<{ month: string }>();
-  const monthList = months.results.map((m) => m.month);
-  if (!monthList.includes(nowMonth)) monthList.unshift(nowMonth);
-
+  // The period axis is WHEN THE MONEY ARRIVED (revenue_events.created_at) —
+  // same as the Payments list, the dashboard and the accountant report.
+  // Everything below is computed per payment, so it always adds up:
+  //   net = composers + store + still splitting.
   const url = new URL(ctx.request.url);
-  const month = url.searchParams.get("month") ?? nowMonth;
+  const period = resolvePeriod(url.searchParams.get("period"));
+  const since = period.from;
+  const until = period.to;
 
-  // P&L of the month, by where the money came from.
+  // Money in, by source.
   const totals = await db
     .prepare(
       `SELECT source,
@@ -72,11 +62,11 @@ export const onRequestGet = async (ctx: Ctx) => {
               SUM(fee_cents) AS fee,
               SUM(net_cents) AS net
          FROM revenue_events
-        WHERE substr(created_at, 1, 7) = ?1
+        WHERE ${inRange("created_at", 1, 2)}
           AND status != 'refunded'
         GROUP BY source`,
     )
-    .bind(month)
+    .bind(since, until)
     .all<{
       source: string;
       payments: number;
@@ -86,53 +76,49 @@ export const onRequestGet = async (ctx: Ctx) => {
       net: number;
     }>();
 
-  // What the split produced: author money per composer + the share that stayed
-  // with the platform because the payer downloaded nothing that cycle.
+  // Composer shares of the payments that are already split.
   const authorLines = await db
     .prepare(
       `SELECT a.composer_id AS composer_id,
               c.display_name AS name,
-              SUM(a.points) AS points,
+              c.user_id AS user_id,
               SUM(a.amount_cents) AS amount
          FROM revenue_allocations a
+         JOIN revenue_events e ON e.id = a.event_id
          LEFT JOIN composers c ON c.id = a.composer_id
-        WHERE a.month = ?1 AND a.kind = 'author'
+        WHERE a.kind = 'author' AND e.status = 'allocated' AND ${inRange("e.created_at", 1, 2)}
         GROUP BY a.composer_id
         ORDER BY amount DESC`,
     )
-    .bind(month)
-    .all<{ composer_id: string; name: string | null; points: number; amount: number }>();
+    .bind(since, until)
+    .all<{ composer_id: string; name: string | null; user_id: string | null; amount: number }>();
 
-  const unallocated = await db
+  const netByStatus = await db
     .prepare(
-      `SELECT COALESCE(SUM(amount_cents), 0) AS amount
-         FROM revenue_allocations
-        WHERE month = ?1 AND kind = 'platform_unallocated'`,
+      `SELECT status, COALESCE(SUM(net_cents),0) AS net FROM revenue_events
+        WHERE status IN ('allocated','pending') AND ${inRange("created_at", 1, 2)}
+        GROUP BY status`,
     )
-    .bind(month)
-    .first<{ amount: number }>();
+    .bind(since, until)
+    .all<{ status: string; net: number }>();
 
-  const payouts = await db
-    .prepare(`SELECT composer_id, status, paid_at FROM payout_runs WHERE month = ?1`)
-    .bind(month)
-    .all<{ composer_id: string; status: string; paid_at: string | null }>();
-  const payoutBy = new Map(payouts.results.map((p) => [p.composer_id, p]));
+  // The owner's own composer profile(s): what he earned as a composer.
+  const myComposers = await db
+    .prepare(`SELECT id, display_name FROM composers WHERE user_id = ?1`)
+    .bind(gate.user!.id)
+    .all<{ id: string; display_name: string }>();
+  const myIds = new Set(myComposers.results.map((c) => c.id));
 
-  // The Payments list is bucketed by the month the money ARRIVED (created_at) —
-  // what a human (and the accountant report) means by "July's payments". It used
-  // to bucket by period_end, which threw an ANNUAL subscription paid today into
-  // NEXT YEAR's view — invisible for 12 months. The composer-split tables keep
-  // their own period_end logic (allocation happens when a cycle closes).
   const recent = await db
     .prepare(
       `SELECT e.id, e.source, e.provider, e.provider_ref, e.gross_cents, e.tax_cents, e.fee_cents, e.net_cents,
               e.status, e.created_at, e.period_start, e.period_end, u.email AS user_email
          FROM revenue_events e
          LEFT JOIN users u ON u.id = e.user_id
-        WHERE substr(e.created_at, 1, 7) = ?1
-        ORDER BY e.created_at DESC LIMIT 50`,
+        WHERE ${inRange("e.created_at", 1, 2)}
+        ORDER BY e.created_at DESC LIMIT 100`,
     )
-    .bind(month)
+    .bind(since, until)
     .all();
 
   // ---- Balances: what is actually PAYABLE today ---------------------------
@@ -230,37 +216,50 @@ export const onRequestGet = async (ctx: Ctx) => {
 
   const sum = (key: "gross" | "tax" | "fee" | "net") =>
     totals.results.reduce((acc, r) => acc + (r[key] ?? 0), 0);
+  const bySource = (src: string) => {
+    const r = totals.results.find((x) => x.source === src);
+    return { count: r?.payments ?? 0, gross: r?.gross ?? 0, net: r?.net ?? 0 };
+  };
 
-  const authorTotal = authorLines.results.reduce((acc, l) => acc + (l.amount ?? 0), 0);
-  const unallocatedTotal = unallocated?.amount ?? 0;
-  const net = sum("net");
+  const composersTotal = authorLines.results.reduce((acc, l) => acc + (l.amount ?? 0), 0);
+  const allocatedNet = netByStatus.results.find((r) => r.status === "allocated")?.net ?? 0;
+  const splitting = netByStatus.results.find((r) => r.status === "pending")?.net ?? 0;
+  const store = allocatedNet - composersTotal;
+  const mine = authorLines.results
+    .filter((l) => myIds.has(l.composer_id))
+    .reduce((acc, l) => acc + (l.amount ?? 0), 0);
 
   return json({
-    month,
-    months: monthList,
+    period: { id: period.id, label: period.label, from: period.from, to: period.to },
     policy,
-    releaseDate: releaseDateOf(month, policy.holdbackDays),
-    balances,
-    storeBalance,
-    totals: {
+    // "My income" — the owner as the store and as a composer.
+    income: {
+      store,
+      composer: mine,
+      total: store + mine,
+      splitting,
+      composerNames: myComposers.results.map((c) => c.display_name),
+    },
+    // Where the money went (adds up: net = composers + store + splitting).
+    flow: {
       gross: sum("gross"),
       tax: sum("tax"),
       fee: sum("fee"),
-      net,
-      authorTotal,
-      // Platform = its half + the author share of payers who downloaded nothing.
-      platformTotal: net - authorTotal,
-      unallocatedTotal,
-      bySource: totals.results,
+      net: sum("net"),
+      composers: composersTotal,
+      store,
+      splitting,
+      license: bySource("license"),
+      subscription: bySource("subscription"),
     },
     composers: authorLines.results.map((l) => ({
       composerId: l.composer_id,
       name: l.name ?? "(deleted composer)",
-      points: l.points ?? 0,
       amount: l.amount ?? 0,
-      status: payoutBy.get(l.composer_id)?.status ?? "due",
-      paidAt: payoutBy.get(l.composer_id)?.paid_at ?? null,
+      mine: myIds.has(l.composer_id),
     })),
+    balances,
+    storeBalance,
     events: recent.results,
     // Lets the UI build dashboard.stripe.com/test/... links while the site runs
     // on sandbox keys — invoice/pi ids don't reveal the mode by themselves.

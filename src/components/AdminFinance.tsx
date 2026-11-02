@@ -1,26 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { SectionHeading } from "@/components/SectionHeading";
+import PeriodTabs, { type PeriodId } from "@/components/PeriodTabs";
 
-// Admin → Finance. Deliberately minimal (owner's call): four blocks, no essays.
-//
-//   1. Money this month   gross → −tax → −fees → net → composers / you
-//   2. Sources            subscriptions vs single licenses
-//   3. Composer payouts   to pay now + still clearing, one button
-//   4. Payments           the ledger, with Refund
-//
-// The hold-back (30 days) and minimum payout ($50) are NOT editable here on
-// purpose — the owner asks me to change them if he ever wants to.
+// Admin -> Finance, top to bottom, one question per block (owner's brief):
+//   1. My income        what I earned as the store, as a composer, in total
+//   2. Where it went    customers paid -> tax -> fees -> composers / store
+//   3. Composer payouts who to pay now (balances, not the period)
+//   4. Payments         the ledger for the period, with Stripe links
+//   5. Accountant report (rarely used, so last)
+// Period = when the money ARRIVED; data: /api/admin/finance?period=...
 
 const GOLD = "#F4C430";
-
-interface ComposerLine {
-  composerId: string;
-  name: string;
-  points: number;
-  amount: number;
-  status: string;
-}
 
 interface Balance {
   composerId: string;
@@ -65,22 +56,22 @@ const stripeLinkFor = (e: RevenueEvent, testMode: boolean): string | null => {
 };
 
 interface Report {
-  month: string;
-  months: string[];
+  period: { id: PeriodId; label: string; from: string; to: string | null };
   policy: { holdbackDays: number; thresholdCents: number };
-  balances: Balance[];
-  /** TV Music Store's own share, split into cleared / still clearing. */
-  storeBalance?: { released: number; held: number };
-  totals: {
+  income: { store: number; composer: number; total: number; splitting: number; composerNames: string[] };
+  flow: {
     gross: number;
     tax: number;
     fee: number;
     net: number;
-    authorTotal: number;
-    platformTotal: number;
-    bySource: { source: string; payments: number; gross: number; net: number }[];
+    composers: number;
+    store: number;
+    splitting: number;
+    license: { count: number; gross: number; net: number };
+    subscription: { count: number; gross: number; net: number };
   };
-  composers: ComposerLine[];
+  composers: { composerId: string; name: string; amount: number; mine: boolean }[];
+  balances: Balance[];
   events: RevenueEvent[];
   /** true while the site runs on sandbox (sk_test_) keys — links get /test/. */
   stripeTestMode?: boolean;
@@ -92,48 +83,65 @@ const money = (cents: number) =>
     maximumFractionDigits: 2,
   })}`;
 
-const Line = ({
-  label,
-  value,
-  minus,
-  strong,
-  gold,
+const Card = ({
+  title,
+  right,
+  children,
 }: {
-  label: string;
-  value: string;
-  minus?: boolean;
-  strong?: boolean;
-  gold?: boolean;
+  title: string;
+  right?: React.ReactNode;
+  children: React.ReactNode;
 }) => (
-  <div className="flex items-baseline justify-between gap-4 py-2">
-    <span
-      className={`font-body text-sm ${strong ? "font-semibold text-foreground" : "text-muted-foreground"}`}
-    >
-      {label}
-    </span>
-    <span
-      className="font-body tabular-nums"
-      style={{
-        color: gold ? GOLD : undefined,
-        fontWeight: strong ? 600 : 400,
-        fontSize: strong ? "1rem" : "0.875rem",
-      }}
-    >
-      {minus ? `− ${value}` : value}
-    </span>
-  </div>
-);
-
-const Card = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <div className="rounded-xl border border-border bg-card p-5">
-    <h2 className="font-body text-sm font-semibold text-foreground">{title}</h2>
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <h2 className="font-body text-sm font-semibold text-foreground">{title}</h2>
+      {right}
+    </div>
     <div className="mt-3">{children}</div>
   </div>
 );
 
-/** Book-keeping export: pick a date range → CSV (full transactions) or PDF
- *  (one-page summary). All figures come from the revenue ledger, so the owner
- *  never has to reconcile inside Stripe / PayPal. */
+/** One big number with a label (the "My income" tiles). */
+const Big = ({ label, value, note, gold }: { label: string; value: string; note?: string; gold?: boolean }) => (
+  <div
+    className={`rounded-xl border p-4 ${gold ? "border-[#F4C430]/50 bg-[#F4C430]/[0.06]" : "border-border/70 bg-background/40"}`}
+  >
+    <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+    <p className="mt-1 font-body text-3xl font-semibold tabular-nums" style={{ color: gold ? GOLD : undefined }}>
+      {value}
+    </p>
+    {note && <p className="mt-0.5 font-body text-[11px] text-muted-foreground">{note}</p>}
+  </div>
+);
+
+/** A row of the money chain: label left, amount right. */
+const Row = ({
+  label,
+  value,
+  sign,
+  strong,
+  color,
+  swatch,
+}: {
+  label: string;
+  value: string;
+  sign?: "−" | "→";
+  strong?: boolean;
+  color?: string;
+  swatch?: string;
+}) => (
+  <div className="flex items-baseline justify-between gap-4 py-1.5 font-body text-sm">
+    <span className={`inline-flex items-center gap-2 ${strong ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
+      {swatch && <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: swatch }} />}
+      {sign && <span className="w-3 text-muted-foreground/70">{sign}</span>}
+      {label}
+    </span>
+    <span className={`tabular-nums ${strong ? "font-semibold" : ""}`} style={{ color }}>
+      {value}
+    </span>
+  </div>
+);
+
 const ReportExport = () => {
   const today = new Date().toISOString().slice(0, 10);
   const [from, setFrom] = useState(`${today.slice(0, 8)}01`);
@@ -229,15 +237,14 @@ const ReportExport = () => {
 };
 
 const AdminFinance = () => {
+  const [period, setPeriod] = useState<PeriodId>("this_month");
   const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async (m?: string | null) => {
+  const load = useCallback(async (p: PeriodId) => {
     try {
-      const res = await fetch(`/api/admin/finance${m ? `?month=${m}` : ""}`, {
-        credentials: "include",
-      });
+      const res = await fetch(`/api/admin/finance?period=${p}`, { credentials: "include" });
       const data = (await res.json()) as Report & { error?: string };
       if (!res.ok || data.error) throw new Error(data.error ?? "Failed to load");
       setReport(data);
@@ -248,22 +255,21 @@ const AdminFinance = () => {
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void load(period);
+  }, [load, period]);
 
   const act = async (payload: Record<string, unknown>, okMessage: string) => {
-    if (!report) return;
     setBusy(true);
     try {
       const res = await fetch("/api/admin/finance", {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ month: report.month, ...payload }),
+        body: JSON.stringify(payload),
       });
       const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Failed");
-      await load(report.month);
+      await load(period);
       toast.success(okMessage);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed");
@@ -275,34 +281,35 @@ const AdminFinance = () => {
   const exportCsv = () => {
     if (!report) return;
     const rows = [
-      ["month", "composer", "amount_usd", "status"],
-      ...report.composers.map((c) => [
-        report.month,
-        c.name,
-        (c.amount / 100).toFixed(2),
-        c.status,
-      ]),
+      ["period", "composer", "amount_usd"],
+      ...report.composers.map((c) => [report.period.label, c.name, (c.amount / 100).toFixed(2)]),
     ];
     const csv = rows.map((r) => r.map((v) => `"${v.replace(/"/g, '""')}"`).join(",")).join("\r\n");
     const url = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a");
     a.href = url;
-    a.download = `payouts-${report.month}.csv`;
+    a.download = `composer-shares-${report.period.id}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
+  const header = (
+    <SectionHeading title="Finance" right={<PeriodTabs value={period} onChange={setPeriod} />} />
+  );
+
   if (error) {
     return (
-      <div className="rounded-xl border border-red-400/40 bg-card p-5 font-body text-sm text-red-400">
-        {error}
+      <div className="space-y-4">
+        {header}
+        <div className="rounded-xl border border-red-400/40 bg-card p-5 font-body text-sm text-red-400">{error}</div>
       </div>
     );
   }
 
   if (!report) {
     return (
-      <div className="space-y-3">
+      <div className="space-y-4">
+        {header}
         {Array.from({ length: 3 }).map((_, i) => (
           <div key={i} className="h-28 animate-pulse rounded-xl border border-border/40 bg-card/40" />
         ))}
@@ -310,299 +317,212 @@ const AdminFinance = () => {
     );
   }
 
-  const t = report.totals;
-  const store = report.storeBalance;
+  const { income, flow } = report;
+  const label = report.period.label.toLowerCase();
 
-  // Pay button / status for one composer (shared by table and phone cards).
+  // The money chain as one bar: every slice is a share of what customers paid.
+  const slices = [
+    { key: "tax", label: "Tax / VAT", value: flow.tax, color: "rgba(255,255,255,0.18)" },
+    { key: "fee", label: "Payment fees", value: flow.fee, color: "rgba(255,255,255,0.32)" },
+    { key: "composers", label: "Composers", value: flow.composers, color: "rgba(244,196,48,0.45)" },
+    { key: "store", label: "TV Music Store", value: flow.store, color: GOLD },
+    { key: "splitting", label: "Still splitting", value: flow.splitting, color: "rgba(255,255,255,0.08)" },
+  ].filter((s) => s.value > 0);
+  const barTotal = slices.reduce((a, s) => a + s.value, 0);
+
   const payAction = (b: Balance) =>
     b.payable ? (
       <button
         type="button"
         disabled={busy}
-        onClick={() =>
-          void act(
-            { action: "pay_balance", composerId: b.composerId },
-            `Paid out ${b.name}`,
-          )
-        }
+        onClick={() => void act({ action: "pay_balance", composerId: b.composerId }, `Paid out ${b.name}`)}
         className="rounded-md bg-[#F4C430] px-3 py-1 font-body text-xs font-bold text-background transition-colors hover:bg-[#F4C430]/85 disabled:opacity-50"
       >
         Mark paid
       </button>
     ) : (
       <span className="font-body text-[11px] text-muted-foreground/70">
-        {b.released > 0
-          ? `Under ${money(report.policy.thresholdCents)}`
-          : "Clearing"}
+        {b.released > 0 ? `Under ${money(report.policy.thresholdCents)}` : "Clearing"}
       </span>
     );
 
   return (
     <div className="space-y-4">
-      {/* ---- Category 1: reports over ANY date range (accountant stuff). ---- */}
-      <SectionHeading title="Accounting & Reports" />
-      <ReportExport />
+      {header}
 
-      {/* ---- Category 2: everything below is the SELECTED MONTH — payments
-              that arrived in it, their sources, and the composer split. ---- */}
-      <SectionHeading
-        title="Month overview"
-        right={
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={report.month}
-              onChange={(e) => void load(e.target.value)}
-              className="rounded-lg border border-border bg-background px-3 py-1.5 font-body text-sm text-foreground focus:border-[#F4C430] focus:outline-none"
-            >
-              {(report.months.length ? report.months : [report.month]).map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={exportCsv}
-              className="rounded-lg border border-border px-3 py-1.5 font-body text-xs text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
-            >
-              Export payouts (CSV)
-            </button>
-          </div>
-        }
-      />
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* 1 — the month's money */}
-        <Card title="Money this month">
-          <div className="divide-y divide-border/40">
-            <Line label="Customers paid" value={money(t.gross)} strong />
-            <Line label="Tax / VAT" value={money(t.tax)} minus />
-            <Line label="Payment fees" value={money(t.fee)} minus />
-            <Line label="Net" value={money(t.net)} strong />
-          </div>
-          <div className="mt-2 divide-y divide-border/40 border-t border-border/60 pt-1">
-            <Line label="Composers" value={money(t.authorTotal)} strong gold />
-            <Line label="You" value={money(t.platformTotal)} strong gold />
-          </div>
-        </Card>
-
-        {/* 2 — where it came from */}
-        <Card title="Sources">
-          <table className="w-full border-collapse font-body text-sm">
-            <tbody>
-              {t.bySource.length === 0 && (
-                <tr>
-                  <td className="py-6 text-center text-muted-foreground">No payments yet.</td>
-                </tr>
-              )}
-              {t.bySource.map((s) => (
-                <tr key={s.source} className="border-b border-border/40 last:border-b-0">
-                  <td className="py-2.5 text-foreground">
-                    {s.source === "license" ? "Single licenses" : "Subscriptions"}
-                    <span className="ml-2 text-xs text-muted-foreground">×{s.payments}</span>
-                  </td>
-                  <td className="py-2.5 text-right tabular-nums text-muted-foreground">
-                    {money(s.gross)}
-                  </td>
-                  <td className="py-2.5 text-right font-semibold tabular-nums text-foreground">
-                    {money(s.net)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
-      </div>
-
-      {/* 3 — who to pay */}
-      <Card title="Composer payouts">
-        {/* Phone: one card per composer, every number visible without scrolling. */}
-        <div className="divide-y divide-border/40 sm:hidden">
-          {report.balances.length === 0 && (
-            <p className="py-6 text-center font-body text-sm text-muted-foreground">Nothing to pay out.</p>
-          )}
-          {report.balances.map((b) => (
-            <div key={b.composerId} className="py-3 font-body text-sm">
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-medium text-foreground">{b.name}</span>
-                {payAction(b)}
-              </div>
-              <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                <span className="text-muted-foreground">Earned</span>
-                <span className="text-right tabular-nums text-foreground">{money(b.released)}</span>
-                <span className="text-muted-foreground">
-                  UK tax{b.withholdingBps ? ` ${b.withholdingBps / 100}%${b.taxCountry ? ` ${b.taxCountry}` : ""}` : ""}
-                </span>
-                <span className="text-right tabular-nums text-muted-foreground">
-                  {b.withheld ? `−${money(b.withheld)}` : "—"}
-                </span>
-                <span className="text-muted-foreground">Send to bank</span>
-                <span className="text-right font-semibold tabular-nums" style={{ color: GOLD }}>
-                  {money(b.toPay ?? b.released)}
-                </span>
-                <span className="text-muted-foreground">Still clearing</span>
-                <span className="text-right tabular-nums text-muted-foreground">{money(b.held)}</span>
-              </div>
-            </div>
-          ))}
-          {store && (store.released !== 0 || store.held !== 0) && (
-            <div className="py-3 font-body text-sm">
-              <span className="font-medium text-foreground">TV Music Store (you)</span>
-              <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                <span className="text-muted-foreground">Earned</span>
-                <span className="text-right font-semibold tabular-nums" style={{ color: GOLD }}>
-                  {money(store.released)}
-                </span>
-                <span className="text-muted-foreground">Still clearing</span>
-                <span className="text-right tabular-nums text-muted-foreground">{money(store.held)}</span>
-              </div>
-            </div>
-          )}
+      {/* 1 — what I earned */}
+      <Card title={`My income · ${label}`}>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Big label="As TV Music Store" value={money(income.store)} note="The store's share after composers" />
+          <Big
+            label="As composer"
+            value={money(income.composer)}
+            note={income.composerNames.length ? income.composerNames.join(", ") : "No composer profile linked"}
+          />
+          <Big label="Total to you" value={money(income.total)} gold />
         </div>
-        <div className="hidden overflow-x-auto sm:block">
-          <table className="w-full min-w-[40rem] border-collapse font-body text-sm">
-            <thead>
-              <tr className="border-b border-border/60 text-left">
-                <th className="py-2 pr-4 font-semibold text-muted-foreground">Composer</th>
-                <th className="py-2 pr-4 text-right font-semibold text-muted-foreground">Earned</th>
-                <th
-                  className="py-2 pr-4 text-right font-semibold text-muted-foreground"
-                  title="UK withholding tax kept back for HMRC (treaty rate of his tax country)"
-                >
-                  UK tax
-                </th>
-                <th className="py-2 pr-4 text-right font-semibold text-muted-foreground">Send to bank</th>
-                <th
-                  className="py-2 pr-4 text-right font-semibold text-muted-foreground"
-                  title={`Money still inside the ${report.policy.holdbackDays}-day window that lets refunds settle first.`}
-                >
-                  Still clearing
-                </th>
-                <th className="py-2 font-semibold text-muted-foreground" />
-              </tr>
-            </thead>
-            <tbody>
-              {report.balances.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="py-6 text-center text-muted-foreground">
-                    Nothing to pay out.
-                  </td>
-                </tr>
-              )}
-              {report.balances.map((b) => (
-                <tr key={b.composerId} className="border-b border-border/40 last:border-b-0">
-                  <td className="py-2.5 pr-4 font-medium text-foreground">{b.name}</td>
-                  <td className="py-2.5 pr-4 text-right tabular-nums text-foreground">{money(b.released)}</td>
-                  <td className="py-2.5 pr-4 text-right tabular-nums text-muted-foreground">
-                    {b.withheld ? `−${money(b.withheld)}` : "—"}
-                    {b.withholdingBps ? (
-                      <span className="ml-1 text-[10px] text-muted-foreground/70">
-                        {b.withholdingBps / 100}%{b.taxCountry ? ` ${b.taxCountry}` : ""}
-                      </span>
-                    ) : null}
-                  </td>
-                  <td
-                    className="py-2.5 pr-4 text-right font-semibold tabular-nums"
-                    style={{ color: GOLD }}
-                  >
-                    {money(b.toPay ?? b.released)}
-                  </td>
-                  <td className="py-2.5 pr-4 text-right tabular-nums text-muted-foreground">
-                    {money(b.held)}
-                  </td>
-                  <td className="py-2.5 text-right">{payAction(b)}</td>
-                </tr>
-              ))}
-              {store && (store.released !== 0 || store.held !== 0) && (
-                <tr className="border-t border-border/60">
-                  <td className="py-2.5 pr-4 font-medium text-foreground">TV Music Store (you)</td>
-                  <td className="py-2.5 pr-4 text-right tabular-nums text-foreground">{money(store.released)}</td>
-                  <td className="py-2.5 pr-4 text-right tabular-nums text-muted-foreground">—</td>
-                  <td className="py-2.5 pr-4 text-right font-semibold tabular-nums" style={{ color: GOLD }}>
-                    {money(store.released)}
-                  </td>
-                  <td className="py-2.5 pr-4 text-right tabular-nums text-muted-foreground">{money(store.held)}</td>
-                  <td className="py-2.5 text-right font-body text-[11px] text-muted-foreground/70">Yours</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        {income.splitting > 0 && (
+          <p className="mt-3 font-body text-xs text-muted-foreground">
+            Still splitting: {money(income.splitting)} from subscriptions whose paid period has not closed yet.
+            It is shared out between composers and the store when that period ends.
+          </p>
+        )}
       </Card>
 
-      {/* 4 — the ledger */}
-      <Card title="Payments">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[40rem] border-collapse font-body text-sm">
-            <thead>
-              <tr className="border-b border-border/60 text-left">
-                <th className="py-2 pr-4 font-semibold text-muted-foreground">Date</th>
-                <th className="py-2 pr-4 font-semibold text-muted-foreground">Customer</th>
-                <th className="py-2 pr-4 font-semibold text-muted-foreground">Type</th>
-                <th className="py-2 pr-4 text-right font-semibold text-muted-foreground">Paid</th>
-                <th className="py-2 pr-4 text-right font-semibold text-muted-foreground">Net</th>
-                <th className="py-2 font-semibold text-muted-foreground" />
-              </tr>
-            </thead>
-            <tbody>
-              {report.events.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="py-6 text-center text-muted-foreground">
-                    No payments yet.
-                  </td>
-                </tr>
+      {/* 2 — where the money went */}
+      <Card title="Where the money went">
+        {flow.gross === 0 ? (
+          <p className="py-4 text-center font-body text-sm text-muted-foreground">No payments {label}.</p>
+        ) : (
+          <>
+            <div className="flex h-3 w-full overflow-hidden rounded-full bg-background/60">
+              {slices.map((s) => (
+                <div
+                  key={s.key}
+                  title={`${s.label}: ${money(s.value)}`}
+                  style={{ width: `${(s.value / Math.max(1, barTotal)) * 100}%`, background: s.color }}
+                />
+              ))}
+            </div>
+            <div className="mt-3 divide-y divide-border/40">
+              <Row label="Customers paid" value={money(flow.gross)} strong />
+              <Row sign="−" label="Tax / VAT" value={money(flow.tax)} swatch="rgba(255,255,255,0.18)" />
+              <Row sign="−" label="Payment fees" value={money(flow.fee)} swatch="rgba(255,255,255,0.32)" />
+              <Row label="Net" value={money(flow.net)} strong />
+              <Row sign="→" label="Composers" value={money(flow.composers)} swatch="rgba(244,196,48,0.45)" />
+              <Row sign="→" label="TV Music Store" value={money(flow.store)} swatch={GOLD} color={GOLD} />
+              {flow.splitting > 0 && (
+                <Row
+                  sign="→"
+                  label="Still splitting"
+                  value={money(flow.splitting)}
+                  swatch="rgba(255,255,255,0.08)"
+                />
               )}
-              {report.events.map((e) => (
-                <tr
+            </div>
+            <p className="mt-3 font-body text-xs text-muted-foreground">
+              Single licenses: {flow.license.count} · {money(flow.license.gross)} &nbsp;|&nbsp; Subscriptions:{" "}
+              {flow.subscription.count} · {money(flow.subscription.gross)}
+            </p>
+
+            {report.composers.length > 0 && (
+              <div className="mt-4 border-t border-border/60 pt-3">
+                <div className="mb-1 flex items-center justify-between">
+                  <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">Composer shares</p>
+                  <button
+                    type="button"
+                    onClick={exportCsv}
+                    className="font-body text-[11px] text-muted-foreground hover:text-[#F4C430]"
+                  >
+                    Export CSV
+                  </button>
+                </div>
+                {report.composers.map((c) => (
+                  <Row
+                    key={c.composerId}
+                    label={c.mine ? `${c.name} (you)` : c.name}
+                    value={money(c.amount)}
+                  />
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </Card>
+
+      {/* 3 — who to pay now (not tied to the period) */}
+      <Card
+        title="Composer payouts"
+        right={
+          <span className="font-body text-[11px] text-muted-foreground">
+            Paid {report.policy.holdbackDays} days after the month closes, from {money(report.policy.thresholdCents)}
+          </span>
+        }
+      >
+        {report.balances.length === 0 ? (
+          <p className="py-4 text-center font-body text-sm text-muted-foreground">Nothing to pay out.</p>
+        ) : (
+          <div className="divide-y divide-border/40">
+            {report.balances.map((b) => (
+              <div key={b.composerId} className="py-3 font-body text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium text-foreground">{b.name}</span>
+                  {payAction(b)}
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
+                  <div>
+                    <p className="text-muted-foreground">Ready</p>
+                    <p className="tabular-nums text-foreground">{money(b.released)}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">
+                      UK tax{b.withholdingBps ? ` ${b.withholdingBps / 100}%${b.taxCountry ? ` ${b.taxCountry}` : ""}` : ""}
+                    </p>
+                    <p className="tabular-nums text-muted-foreground">{b.withheld ? `−${money(b.withheld)}` : "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Send to bank</p>
+                    <p className="font-semibold tabular-nums" style={{ color: GOLD }}>
+                      {money(b.toPay ?? b.released)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Still clearing</p>
+                    <p className="tabular-nums text-muted-foreground">{money(b.held)}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* 4 — the ledger for the period */}
+      <Card title={`Payments · ${label}`}>
+        {report.events.length === 0 ? (
+          <p className="py-4 text-center font-body text-sm text-muted-foreground">No payments {label}.</p>
+        ) : (
+          <div className="divide-y divide-border/40">
+            {report.events.map((e) => {
+              const url = stripeLinkFor(e, !!report.stripeTestMode);
+              return (
+                <div
                   key={e.id}
-                  className={`border-b border-border/40 last:border-b-0 ${
+                  className={`flex items-center justify-between gap-3 py-2.5 font-body text-sm ${
                     e.status === "refunded" ? "opacity-50" : ""
                   }`}
                 >
-                  <td className="py-2.5 pr-4 text-muted-foreground">{e.created_at.slice(0, 10)}</td>
-                  <td className="py-2.5 pr-4 text-foreground">{e.user_email ?? "—"}</td>
-                  <td className="py-2.5 pr-4 text-muted-foreground">
-                    {e.source === "license" ? "License" : "Subscription"}
-                    {e.status === "refunded" && (
-                      <span className="ml-2 rounded-full border border-red-400/40 px-1.5 py-px text-[10px] font-semibold uppercase text-red-400">
-                        refunded
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-2.5 pr-4 text-right tabular-nums text-foreground/90">
-                    {money(e.gross_cents)}
-                  </td>
-                  <td className="py-2.5 pr-4 text-right font-semibold tabular-nums text-foreground">
-                    {money(e.net_cents)}
-                  </td>
-                  {/* Refunds are done IN Stripe (open the payment, press Refund) —
-                      the webhook books the reversal and voids the licence here.
-                      The old in-admin Refund / Mark-only buttons are gone
-                      (owner's call; the server actions still exist if ever needed). */}
-                  <td className="py-2.5 text-right">
-                    {(() => {
-                      const url = stripeLinkFor(e, !!report.stripeTestMode);
-                      return url ? (
+                  <div className="min-w-0">
+                    <p className="truncate text-foreground">{e.user_email ?? "—"}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {e.created_at.slice(0, 10)} · {e.source === "license" ? "License" : "Subscription"}
+                      {e.status === "refunded" && <span className="ml-1 text-red-400">· refunded</span>}
+                      {url && (
                         <a
                           href={url}
                           target="_blank"
                           rel="noopener noreferrer"
                           title="Open this payment in Stripe — refund it there; the site records it automatically"
-                          className="font-body text-xs font-semibold text-[#F4C430] hover:underline"
+                          className="ml-2 font-semibold text-[#F4C430] hover:underline"
                         >
                           Stripe ↗
                         </a>
-                      ) : (
-                        <span className="font-body text-xs text-muted-foreground">—</span>
-                      );
-                    })()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                      )}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="font-semibold tabular-nums text-foreground">{money(e.gross_cents)}</p>
+                    <p className="text-xs tabular-nums text-muted-foreground">net {money(e.net_cents)}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </Card>
+
+      {/* 5 — for the accountant */}
+      <ReportExport />
     </div>
   );
 };
