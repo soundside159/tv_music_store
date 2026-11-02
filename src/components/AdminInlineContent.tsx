@@ -23,6 +23,8 @@ export type ContentKind = "collection" | "playlist";
 
 export interface ContentAdmin {
   enabled: boolean;
+  /** Admin or editor: may remove tracks from a collection/playlist. */
+  canRemoveTracks: boolean;
   data: AdminContentData | null;
   run: (payload: Record<string, unknown>) => Promise<boolean>;
   /** Like run, but returns the parsed response (e.g. the created id). */
@@ -35,8 +37,9 @@ export const useContentAdmin = (): ContentAdmin => {
   const user = useCurrentUser();
   const { source } = useTracks();
   const enabled = user?.role === "admin" && source === "api";
-  const { data, run, call, reload } = useAdminTrackContent(enabled);
-  return { enabled, data, run, call, reload };
+  const canRemoveTracks = (user?.role === "admin" || user?.role === "editor") && source === "api";
+  const { data, run, call, reload } = useAdminTrackContent(canRemoveTracks);
+  return { enabled, canRemoveTracks, data, run, call, reload };
 };
 
 const itemsOf = (data: AdminContentData | null, kind: ContentKind): AdminContentItem[] =>
@@ -694,7 +697,7 @@ export const makeRemoveTrackHandler = (
   onTracksChanged?: () => void,
 ): ((trackId: string) => void) | null => {
   const item = itemsOf(admin.data, kind).find((x) => x.id === id);
-  if (!admin.enabled || !item) return null;
+  if (!admin.canRemoveTracks || !item) return null;
   return (trackId: string) => {
     void (async () => {
       const ok = await admin.run({

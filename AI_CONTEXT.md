@@ -4982,3 +4982,6 @@ True: `brandCover()` was only in the AI path.
 
 ## 2026-11-02 Composer Agreement: points formula hidden
 - 4.3 rewritten in general terms (shared by the subscriber's downloads, may weight work types and exclude non-genuine downloads, current rules in dashboard). Points table, SFX cap paragraph and 4.4 example removed; 4.5-4.9 renumbered to 4.4-4.8. Same change in the Claude Doc. Version stays 1.0. Calculation in _revenue.ts unchanged.
+
+## 2026-11-02 Editor can remove tracks on collection/playlist pages
+- AdminInlineContent.tsx: ContentAdmin.canRemoveTracks (admin or editor); admin content data now loads for editors too; makeRemoveTrackHandler gated on canRemoveTracks, so the X on track rows of CollectionDetail/PlaylistDetail shows for editors. All other inline editing still needs admin.enabled. Playlists.tsx: persisted empty themes only for admin. Backend already allowed set_tracks for editors (logged in track_edit_log).

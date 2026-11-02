@@ -303,7 +303,7 @@ const Playlists = () => {
   }
   sections.sort((a, b) => (a.theme === "" ? -1 : b.theme === "" ? 1 : 0));
   // Persisted theme names (admin; survive F5 even while empty) + local drafts.
-  for (const t of [...(admin.data?.playlistThemes ?? []), ...draftThemes]) {
+  for (const t of [...((admin.enabled && admin.data?.playlistThemes) || []), ...draftThemes]) {
     if (!sections.some((s) => s.theme.toLowerCase() === t.toLowerCase())) {
       sections.push({ theme: t, items: [] });
     }
