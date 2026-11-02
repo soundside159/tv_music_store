@@ -1,5 +1,6 @@
-import { getSessionUser, getVocabularies, json, newId, readJson, type Ctx, type D1Database } from "../_utils";
+import { getSessionUser, getVocabularies, json, newId, OWNER_EMAIL, readJson, type Ctx, type D1Database } from "../_utils";
 import { ensureTrackCodes, generateTrackCode } from "../_codes";
+import { AGREEMENT_REQUIRED_MSG, hasSignedCurrent } from "../_agreement";
 
 // Composer panel API (stage 4 of the mass-import plan).
 // GET  -> the signed-in composer's own tracks (all statuses) + their profile.
@@ -124,6 +125,10 @@ export const onRequestPost = async (ctx: Ctx) => {
   const gate = await getComposer(ctx);
   if (gate.error) return gate.error;
   const db = ctx.env.DB;
+  const isAdminUser = gate.user.role === "admin" || gate.user.email === OWNER_EMAIL;
+  if (!isAdminUser && !(await hasSignedCurrent(db, gate.user.id))) {
+    return json({ error: AGREEMENT_REQUIRED_MSG, code: "agreement" }, 403);
+  }
 
   const body = await readJson<{
     title?: string;

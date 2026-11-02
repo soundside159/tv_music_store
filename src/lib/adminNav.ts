@@ -5,6 +5,7 @@ import { BarChart3,
   DollarSign,
   Download,
   FileSpreadsheet,
+  FileSignature,
   FileText,
   Heart,
   Inbox,
@@ -136,6 +137,7 @@ export const composerNavItems: NavItem[] = [
   { id: "earnings", label: "Earnings", icon: DollarSign },
   { id: "tracks", label: "My tracks", icon: Music2 },
   { id: "upload", label: "Upload", icon: UploadCloud },
+  { id: "agreement", label: "Agreement", icon: FileSignature },
   { id: "requests", label: "Requests", icon: Inbox },
   // No "Profile" here — the composer's account profile lives in the Account
   // menu; a second one would just be the same fields twice.

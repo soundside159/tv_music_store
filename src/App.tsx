@@ -40,6 +40,7 @@ const ScrollToTop = () => {
 };
 import Login from "./pages/Login";
 import Contact from "./pages/Contact";
+import AgreementView from "./pages/AgreementView";
 import LicenseTerms from "./pages/LicenseTerms";
 import Privacy from "./pages/Privacy";
 import Refunds from "./pages/Refunds";
@@ -103,6 +104,7 @@ const App = () => (
           <Route path="/admin" element={<Admin />} />
           <Route path="/login" element={<Login />} />
           <Route path="/contact" element={<Contact />} />
+          <Route path="/agreement/:id" element={<AgreementView />} />
           <Route path="/license-terms" element={<LicenseTerms />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/refunds" element={<Refunds />} />

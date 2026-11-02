@@ -4876,3 +4876,29 @@ True: `brandCover()` was only in the AI path.
   Mirror in the customer terms: src/pages/LicenseTerms.tsx section 6 got "If a track leaves the
   catalogue" (2 months of release requests, then best effort with no promise; licence stays
   valid; customer can dispute in YouTube Studio with the PDF certificate). EFFECTIVE -> 2 Nov 2026.
+- **2026-11-02 (Composer Agreement: click-to-sign on the site):** owner decisions in the agreement:
+  3-year term auto-renewing for 3-year periods unless 1 month written notice; a single Work can be
+  removed during the term only on a written request with a good reason (exclusive deal, rights
+  dispute/legal claim, mistake, or other reason TVMS reasonably accepts; legal claims removed at
+  once, others within 60 days); on non-renewal all Works leave within 60 days; claim-release duty
+  lasts 2 months after leaving. Text source of truth = Claude Doc
+  claude.ai/artifact/1cvYf6ewtzW3AvEf3yMux6; the site copy lives in
+  `src/content/composerAgreement.ts` (AGREEMENT_VERSION "1.0", AGREEMENT_MD = sections 1-7;
+  PURE DATA, also imported by functions). Change the text -> bump the version -> composers must
+  re-sign.
+  * Backend: NEW `functions/api/_agreement.ts` (lazy table composer_agreements, latestAgreement,
+    hasSignedCurrent) + `functions/api/composer/agreement.ts` (GET own status / ?id= record for
+    owner or admin / ?userId= admin; POST signs: legal name, address, country, payout required,
+    PRO/IPI/publisher optional, agree:true; stores version, timestamp, email, user agent; copies
+    legal name/PRO/IPI onto the composer profile if those are empty).
+  * Upload gate: `functions/api/admin/upload-audio.ts` and `functions/api/composer/tracks.ts` POST
+    return 403 code "agreement" for non-admin composers without a signature of the CURRENT version.
+  * Frontend: Account -> Composer -> **Agreement** (adminNav composerNavItems + Account SectionId
+    composer-agreement) = `src/components/ComposerAgreement.tsx` (read, fill Schedule, tick, sign;
+    after signing shows the record + "Open / save as PDF"); Upload tab shows "Read and sign" until
+    signed (`ComposerPanel.tsx`). Printable page `/agreement/:id` (`src/pages/AgreementView.tsx`,
+    renderer `src/components/AgreementText.tsx`; browser print = PDF). /agreement is noindex
+    (robots.txt) and skipped by the edge prerender.
+  * Admin -> Users -> row menu: "Agreement" block (signed vX on date + Open, or red "Not signed")
+    from users.ts `agreement` per user.
+  eslint clean (warnings only), tsc only the two pre-existing errors. Owner runs deploy.bat.

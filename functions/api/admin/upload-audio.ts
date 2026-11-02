@@ -1,4 +1,5 @@
 import { adminTokenOk, getSessionUser, json, OWNER_EMAIL, type Ctx } from "../_utils";
+import { AGREEMENT_REQUIRED_MSG, hasSignedCurrent } from "../_agreement";
 
 // POST /api/admin/upload-audio?kind=<kind>&filename=<base> — admin only.
 // Body = raw file bytes; content-type header decides the extension.
@@ -99,6 +100,10 @@ export const onRequestPost = async (ctx: Ctx) => {
     }
     if (kind !== "sfx" && perms && !perms.tracks) {
       return json({ error: "This account is not allowed to upload music" }, 403);
+    }
+    // Composers must have signed the current Composer Agreement before uploading.
+    if (!(await hasSignedCurrent(ctx.env.DB, user.id))) {
+      return json({ error: AGREEMENT_REQUIRED_MSG, code: "agreement" }, 403);
     }
   }
   const isPublic = PUBLIC_KINDS.includes(kind);

@@ -46,6 +46,7 @@ type SectionId =
   // Composer studio sections (sidebar "Composer" group; content = ComposerPanel).
   | "composer-tracks"
   | "composer-upload"
+  | "composer-agreement"
   | "composer-earnings"
   | "composer-requests"
   | "composer-profile";
@@ -62,6 +63,7 @@ const SECTION_IDS: SectionId[] = [
   "support",
   "composer-tracks",
   "composer-upload",
+  "composer-agreement",
   "composer-earnings",
   "composer-requests",
   "composer-profile",

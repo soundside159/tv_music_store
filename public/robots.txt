@@ -6,5 +6,6 @@ Disallow: /account
 Disallow: /admin
 Disallow: /cart
 Disallow: /login
+Disallow: /agreement
 
 Sitemap: https://tvmusicstore.com/sitemap.xml

@@ -1,3 +1,4 @@
+import { ensureAgreementTable } from "../_agreement";
 import { ensureUploadPermColumns } from "./upload-audio";
 import { ensureStripeColumns } from "../stripe/_stripe";
 import {
@@ -129,8 +130,27 @@ export const onRequestGet = async (ctx: Ctx) => {
     // no sfx tables yet
   }
 
+  // Composer Agreement: latest signature per user (click-to-sign on the site).
+  const agreementByUser = new Map<string, { id: string; version: string; signedAt: string }>();
+  try {
+    await ensureAgreementTable(ctx.env.DB);
+    const ag = await ctx.env.DB.prepare(
+      `SELECT a.user_id, a.id, a.version, a.signed_at FROM composer_agreements a
+        WHERE a.signed_at = (SELECT MAX(b.signed_at) FROM composer_agreements b WHERE b.user_id = a.user_id)`,
+    ).all<{ user_id: string; id: string; version: string; signed_at: string }>();
+    for (const r of ag.results ?? []) {
+      agreementByUser.set(r.user_id, { id: r.id, version: r.version, signedAt: r.signed_at });
+    }
+  } catch {
+    // table missing - nobody has signed yet
+  }
+
   return json({
-    users: rows.results.map((u) => ({ ...u, cue: cueByUser.get(u.id) ?? null })),
+    users: rows.results.map((u) => ({
+      ...u,
+      cue: cueByUser.get(u.id) ?? null,
+      agreement: agreementByUser.get(u.id) ?? null,
+    })),
     sfxDownloads,
   });
 };

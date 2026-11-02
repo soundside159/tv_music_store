@@ -591,7 +591,7 @@ export const onRequest = async (ctx: MiddlewareCtx): Promise<Response> => {
     ctx.request.method !== "GET" ||
     url.pathname.startsWith("/api/") ||
     /\.[a-z0-9]+$/i.test(url.pathname) ||
-    /^\/(account|admin|cart|login|composer)(\/|$)/.test(url.pathname)
+    /^\/(account|admin|cart|login|composer|agreement)(\/|$)/.test(url.pathname)
   ) {
     return ctx.next();
   }

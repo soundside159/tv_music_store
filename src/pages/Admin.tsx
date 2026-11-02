@@ -123,6 +123,8 @@ interface LiveUser {
     canUploadTracks?: string | null;
     canUploadSfx?: string | null;
   } | null;
+  /** Latest Composer Agreement signature (click-to-sign), if any. */
+  agreement?: { id: string; version: string; signedAt: string } | null;
 }
 
 interface AdminLicense {
@@ -1204,6 +1206,35 @@ const Admin = () => {
                           Turns the Upload tab in his panel on and off — and the server refuses the
                           upload either way.
                         </p>
+                      </div>
+                    )}
+                    {/* Composer Agreement status (signed on the site). */}
+                    {composerOn && (
+                      <div className="mt-4 border-t border-border/60 pt-3">
+                        <p className="mb-1.5 font-body text-[10px] font-bold uppercase tracking-[0.18em] text-[#F4C430]">
+                          Agreement
+                        </p>
+                        {u.agreement ? (
+                          <p className="font-body text-xs text-foreground">
+                            Signed v{u.agreement.version} on{" "}
+                            {new Date(u.agreement.signedAt).toLocaleDateString("en-GB", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            })}{" "}
+                            <Link
+                              to={`/agreement/${u.agreement.id}`}
+                              target="_blank"
+                              className="font-semibold text-[#F4C430] hover:underline"
+                            >
+                              Open
+                            </Link>
+                          </p>
+                        ) : (
+                          <p className="font-body text-xs text-red-400">
+                            Not signed yet. Uploads stay locked until he signs in Account, Composer, Agreement.
+                          </p>
+                        )}
                       </div>
                     )}
                     {/* Sync / cue-sheet info — printed on this composer's license PDFs. */}

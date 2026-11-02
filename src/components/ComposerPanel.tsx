@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import ComposerUpload, { useComposerTracks } from "@/components/ComposerUpload";
 import ComposerEarnings from "@/components/ComposerEarnings";
+import ComposerAgreement, { useComposerAgreement } from "@/components/ComposerAgreement";
 import { useComposer, useCurrentUser } from "@/hooks/useMockData";
 import { mockBriefs, mockClaimRequests, mockComposerTracks, mockDownloadLog } from "@/mocks";
 
@@ -18,6 +19,7 @@ const GOLD = "#F4C430";
 export type ComposerSectionId =
   | "tracks"
   | "upload"
+  | "agreement"
   | "earnings"
   | "requests"
   | "profile";
@@ -26,6 +28,7 @@ export const COMPOSER_SECTION_IDS: ComposerSectionId[] = [
   "earnings",
   "tracks",
   "upload",
+  "agreement",
   "requests",
   "profile",
 ];
@@ -47,6 +50,8 @@ const ComposerPanel = ({ section }: { section: ComposerSectionId }) => {
   // Composer = has a profile (pseudonym) — role no longer decides; the server
   // answers 403 for non-composers, which just leaves `composer` empty here.
   const live = useComposerTracks(!!user);
+  const isAdminUser = user?.role === "admin";
+  const agreement = useComposerAgreement(!!user);
   // Live profile first (real pseudonym), mock personas as a dev fallback.
   const composer = live.composer
     ? {
@@ -218,9 +223,23 @@ const ComposerPanel = ({ section }: { section: ComposerSectionId }) => {
           </Card>
         ))}
 
+      {section === "agreement" && <ComposerAgreement />}
+
       {section === "upload" && (
         <Card title="Add track">
-          {live.composer ? (
+          {live.composer && !isAdminUser && agreement.state && !agreement.state.current ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#F4C430]/40 bg-[#F4C430]/5 p-4">
+              <p className="font-body text-sm text-foreground">
+                Please sign the Composer Agreement before uploading your first track.
+              </p>
+              <Link
+                to="/account?section=composer-agreement"
+                className="rounded-lg bg-[#F4C430] px-4 py-2 font-body text-xs font-bold text-background"
+              >
+                Read and sign
+              </Link>
+            </div>
+          ) : live.composer ? (
             <ComposerUpload
               vocabularies={live.vocabularies}
               onCreated={() => {
