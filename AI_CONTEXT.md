@@ -5020,3 +5020,9 @@ True: `brandCover()` was only in the AI path.
 - New src/components/ComposerPhotoField.tsx (Admin -> Users, composer block): downscales to 1800px JPEG in browser, uploads via uploadCoverImage, saves path.
 - Artist.tsx: background layer only (absolute, z-0, no layout space): blurred full-width glow masked to fade down + sharp photo right (md: 46% wide, radial mask; mobile: full width, 70% opacity). main is z-10.
 - _middleware.ts: artist og:image = photo when set.
+
+## 2026-11-02 No demo-data flash on refresh
+- ComposerPanel.tsx: while useComposerTracks is loading and no live composer yet -> skeleton (the mock persona fallback flashed 342 downloads / 7 tracks / demo chart on every refresh).
+- Account.tsx and Admin.tsx: while useAuthSession().status === "loading" render only Navigation (no "Sign in" / "Owner access only" flash). Checks sit right before the existing !user returns (after all hooks).
+- Not done yet (offered to owner): put the admin/account section into the URL so refresh reopens the same section.
+- Done: Admin.tsx openSection() writes ?section=<id> (setSearchParams) and an effect follows the param (Back/Forward, header links; no param = dashboard). Account.tsx section buttons also write ?section=<id>; the existing param effect sets section + menu group.

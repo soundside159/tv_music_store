@@ -8,6 +8,7 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { useCurrentUser } from "@/hooks/useMockData";
 import { useUnreadMail } from "@/hooks/useUnreadMail";
+import { useAuthSession } from "@/hooks/useAuth";
 import { mockBriefs, mockComposers, mockComposerTracks } from "@/mocks";
 import AdminContent from "@/components/AdminContent";
 import AdminBulkUpload from "@/components/AdminBulkUpload";
@@ -195,12 +196,23 @@ const EDITOR_SECTIONS: SectionId[] = ["tracksedit", "collections", "playlists", 
 
 const Admin = () => {
   const user = useCurrentUser();
-  const [searchParams] = useSearchParams();
+  const authStatus = useAuthSession().status;
+  const [searchParams, setSearchParams] = useSearchParams();
   const sectionParam = searchParams.get("section");
   const [section, setSection] = useState<SectionId>(
     SECTION_IDS.includes(sectionParam as SectionId) ? (sectionParam as SectionId) : "dashboard",
   );
   const [menu, setMenu] = useState<"main" | "composer" | "admin">("admin");
+  // The open section lives in the URL (?section=finance): a refresh reopens
+  // the same section instead of the Dashboard, and Back/Forward walk sections.
+  const openSection = (id: SectionId) => {
+    setSection(id);
+    if (sectionParam !== id) setSearchParams({ section: id });
+  };
+  useEffect(() => {
+    if (sectionParam && SECTION_IDS.includes(sectionParam as SectionId)) setSection(sectionParam as SectionId);
+    else if (!sectionParam) setSection("dashboard");
+  }, [sectionParam]);
   const [openPeriod, setOpenPeriod] = useState<string | null>(null);
   const [liveUsers, setLiveUsers] = useState<LiveUser[] | null>(null);
   // Sound downloads total (their own table) — the Downloads dashboard card's sub-line.
@@ -608,6 +620,15 @@ const Admin = () => {
     }
   };
 
+  // Session still being checked: an empty page, not an "Owner access only" flash.
+  if (authStatus === "loading") {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navigation />
+      </div>
+    );
+  }
+
   if (!user || (user.role !== "admin" && user.role !== "editor")) {
     return (
       <div className="min-h-screen bg-background">
@@ -715,7 +736,7 @@ const Admin = () => {
                         <button
                           key={sec.id}
                           type="button"
-                          onClick={() => setSection(sec.id as SectionId)}
+                          onClick={() => openSection(sec.id as SectionId)}
                           className={`ml-8 flex h-9 items-center gap-2 rounded-lg pl-2 pr-3 font-body text-sm transition-colors ${
                             section === sec.id ? "bg-secondary text-[#F4C430]" : "text-muted-foreground hover:text-foreground"
                           }`}

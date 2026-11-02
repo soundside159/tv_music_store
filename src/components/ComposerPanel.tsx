@@ -98,6 +98,21 @@ const ComposerPanel = ({ section }: { section: ComposerSectionId }) => {
     ? mockBriefs.filter((b) => b.assignedComposerId === composer.id || b.assignedComposerId === null)
     : [];
 
+  // While the real profile is loading, show an empty placeholder: the mock
+  // persona fallback below used to flash demo numbers (342 downloads, a demo
+  // chart) for a moment on every refresh.
+  if (user && live.loading && !live.composer) {
+    return (
+      <div className="space-y-4">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="h-[116px] animate-pulse rounded-xl border border-border/40 bg-card/40" />
+          <div className="h-[116px] animate-pulse rounded-xl border border-border/40 bg-card/40" />
+        </div>
+        <div className="h-64 animate-pulse rounded-xl border border-border/40 bg-card/40" />
+      </div>
+    );
+  }
+
   if (!user || !composer) {
     return (
       <Card title="Composer studio">

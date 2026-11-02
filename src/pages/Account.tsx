@@ -25,7 +25,7 @@ import NotificationsSettings from "@/components/NotificationsSettings";
 import SupportSection from "@/components/SupportSection";
 import FavouritesSection from "@/components/FavouritesSection";
 import LicensesSection from "@/components/LicensesSection";
-import { logout, refreshSession, updateProfile } from "@/hooks/useAuth";
+import { logout, refreshSession, updateProfile, useAuthSession } from "@/hooks/useAuth";
 import { usePlayer } from "@/components/playerContext";
 import WaveformPreview from "@/components/WaveformPreview";
 import { BILLING_ENABLED, openBillingPortal, openPlanModal } from "@/lib/billing";
@@ -252,11 +252,12 @@ const ClaimPickRow = ({ track, onSelect }: { track: CatalogTrack; onSelect: () =
 const Account = () => {
   const navigate = useNavigate();
   const user = useCurrentUser();
+  const authStatus = useAuthSession().status;
   const subscription = useSubscription();
   const plans = usePlans();
   const downloads = useMyDownloads();
   const syncOrders = useMyLicenses();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const sectionParam = searchParams.get("section");
   const [section, setSection] = useState<SectionId>(
     SECTION_IDS.includes(sectionParam as SectionId) ? (sectionParam as SectionId) : "profile",
@@ -591,6 +592,15 @@ const Account = () => {
       ? "Upgrade to Max for WAV, stems & commercial license."
       : "Upgrade to unlock unlimited downloads & WAV.";
 
+  // Session still being checked: an empty page, not a "Sign in" flash.
+  if (authStatus === "loading") {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navigation />
+      </div>
+    );
+  }
+
   if (!user) {
     return (
       <div className="min-h-screen bg-background">
@@ -647,7 +657,10 @@ const Account = () => {
                         <button
                           key={s.id}
                           type="button"
-                          onClick={() => setSection(s.id as SectionId)}
+                          onClick={() => {
+                            setSection(s.id as SectionId);
+                            setSearchParams({ section: s.id });
+                          }}
                           className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors md:h-9 md:py-0 md:pl-2 md:pr-3 ${
                             section === s.id
                               ? "bg-secondary text-[#F4C430]"
@@ -706,7 +719,10 @@ const Account = () => {
                                 <button
                                   key={item.id}
                                   type="button"
-                                  onClick={() => setSection(id)}
+                                  onClick={() => {
+                                    setSection(id);
+                                    setSearchParams({ section: id });
+                                  }}
                                   className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 font-body text-sm transition-colors md:h-9 md:py-0 md:pl-2 md:pr-3 ${
                                     section === id
                                       ? "bg-secondary text-[#F4C430]"
