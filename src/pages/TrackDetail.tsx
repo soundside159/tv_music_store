@@ -47,12 +47,16 @@ const TrackDetail = () => {
   // Admins also load draft tracks (the server ignores ?drafts=1 for everyone
   // else), so bulk-uploaded drafts can be curated on their own track pages.
   const { tracks: catalogTracks, reload: reloadTracks, source, isLoading } = useTracks({
-    drafts: user?.role === "admin",
+    drafts: user?.role === "admin" || user?.role === "editor",
   });
   // Admin-only side panels (tags/trending left, collections/playlists right).
   // Only when the catalog is DB-backed — edits against mock ids would no-op.
   const isAdmin = user?.role === "admin" && source === "api";
-  const admin = useAdminTrackContent(isAdmin);
+  // Editors get the same side panels, minus admin-only tools (no versions,
+  // cover, publish or delete). The server enforces the same split.
+  const isEditor = user?.role === "editor" && source === "api";
+  const isStaff = isAdmin || isEditor;
+  const admin = useAdminTrackContent(isStaff);
   // Resolve by the leading code (/track/1042-anything) so the text part can
   // change without breaking the link; fall back to an exact slug match.
   const codeParam = slug?.match(/^(\d+)/)?.[1];
@@ -201,13 +205,18 @@ const TrackDetail = () => {
   return (
     <div className="min-h-screen bg-background pb-16">
       <Navigation />
-      <main className={`mx-auto w-full px-4 pt-24 sm:px-6 ${isAdmin ? "max-w-[110rem]" : "max-w-7xl"}`}>
+      <main className={`mx-auto w-full px-4 pt-24 sm:px-6 ${isStaff ? "max-w-[110rem]" : "max-w-7xl"}`}>
         <TrackBreadcrumb trackTitle={track.title} />
 
         {/* Admin top bar: publish status + Publish/Unpublish + Delete track. */}
-        {isAdmin && (
+        {isStaff && (
           <div className="mt-4">
-            <AdminTrackTopBar track={track} run={admin.run} onTracksChanged={() => void reloadTracks()} />
+            <AdminTrackTopBar
+              track={track}
+              run={admin.run}
+              onTracksChanged={() => void reloadTracks()}
+              editor={isEditor}
+            />
           </div>
         )}
 
@@ -215,13 +224,14 @@ const TrackDetail = () => {
             playlists right); customers see the normal centered page. */}
         <div
           className={
-            isAdmin
+            isStaff
               ? "mt-8 flex flex-col gap-8 xl:grid xl:grid-cols-[17rem_minmax(0,1fr)_19rem]"
               : "mt-8"
           }
         >
-          {isAdmin && (
+          {isStaff && (
             <AdminTrackTagsPanel
+              editor={isEditor}
               track={track}
               data={admin.data}
               setData={admin.setData}
@@ -260,7 +270,7 @@ const TrackDetail = () => {
 
             <h1 className="mt-5 font-body text-2xl font-semibold text-foreground">
               {track.title}
-              {isAdmin && track.status === "draft" && (
+              {isStaff && track.status === "draft" && (
                 <span className="ml-2 align-middle rounded border border-amber-400/50 bg-amber-400/10 px-1.5 py-0.5 font-body text-[10px] font-bold uppercase tracking-wide text-amber-400">
                   Draft
                 </span>
@@ -550,7 +560,7 @@ const TrackDetail = () => {
         </section>
           </div>
 
-          {isAdmin && (
+          {isStaff && (
             <AdminTrackCollectionsPanel
               track={track}
               data={admin.data}

@@ -4962,3 +4962,10 @@ True: `brandCover()` was only in the AI path.
   * Reminder for the owner: legally a reduced treaty rate normally needs HMRC authorisation
     (form DT-Individual); otherwise 20% applies. Withheld amounts must be paid to HMRC; ask the
     accountant how (quarterly return).
+- **2026-11-02 (Editor fixes):** (1) Admin -> Collections "Edit" opened its form at the BOTTOM
+  of the long list (looked like nothing happened). AdminContent now renders the edit form right
+  under the row being edited (Fragment per item; bottom form only for a NEW collection).
+  (2) Track page side panels for editors: TrackDetail `isStaff = admin || editor`; editors load
+  drafts and get the top bar (label "Editor", status + Copy link buttons, NO publish/delete),
+  the left tags/trending panel WITHOUT the Versions block (`editor` prop), and the right
+  collections/playlists panel. Cover overlay stays admin-only.

@@ -128,10 +128,13 @@ export const AdminTrackTopBar = ({
   track,
   run,
   onTracksChanged,
+  editor = false,
 }: {
   track: CatalogTrack;
   run: (payload: RunPayload) => Promise<boolean>;
   onTracksChanged: () => void;
+  /** Editor: status + copy links only, no publish / delete. */
+  editor?: boolean;
 }) => {
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
@@ -182,7 +185,7 @@ export const AdminTrackTopBar = ({
   return (
     <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-[#F4C430]/30 bg-card px-4 py-2.5">
       <span className="font-body text-[10px] font-bold uppercase tracking-[0.24em]" style={{ color: GOLD }}>
-        Admin
+        {editor ? "Editor" : "Admin"}
       </span>
       <span
         className={`rounded border px-1.5 py-0.5 font-body text-[10px] font-bold uppercase tracking-wide ${
@@ -219,7 +222,7 @@ export const AdminTrackTopBar = ({
           </button>
         ))}
       </span>
-      <span className="ml-auto flex items-center gap-2">
+      <span className={`ml-auto flex items-center gap-2 ${editor ? "hidden" : ""}`}>
         {isDraft ? (
           <button
             type="button"
@@ -1131,7 +1134,10 @@ export const AdminTrackTagsPanel = ({
   run,
   tracks,
   onTracksChanged,
+  editor = false,
 }: {
+  /** Editor: no versions block (uploads / deletes are admin-only). */
+  editor?: boolean;
   track: CatalogTrack;
   data: AdminContentData | null;
   setData: Dispatch<SetStateAction<AdminContentData | null>>;
@@ -1238,7 +1244,7 @@ export const AdminTrackTagsPanel = ({
       })}
 
       {/* Versions: star = Main, rename, delete, + add a WAV version. */}
-      <VersionsBlock track={track} run={run} onTracksChanged={onTracksChanged} />
+      {!editor && <VersionsBlock track={track} run={run} onTracksChanged={onTracksChanged} />}
 
       {/* Trending — same admin-picked list as the homepage block. */}
       <div className="pt-3">

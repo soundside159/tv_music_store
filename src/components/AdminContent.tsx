@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Check, ChevronDown, ChevronRight, ChevronUp, GripVertical, MoreHorizontal, Pause, Play, Plus, Sparkles, Star, X } from "lucide-react";
 import WaveformPreview from "@/components/WaveformPreview";
@@ -1500,7 +1500,8 @@ const AdminContent = ({ tab, editor = false }: { tab: Tab; editor?: boolean }) =
           ) : (
           <ul className="mt-5 divide-y divide-border/60">
             {items.map((item) => (
-              <li key={item.id} className="flex items-center justify-between gap-4 py-2.5">
+              <Fragment key={item.id}>
+              <li className="flex items-center justify-between gap-4 py-2.5">
                 <span className="min-w-0">
                   <span className="block truncate font-body text-sm font-semibold text-foreground">
                     {item.title}
@@ -1542,6 +1543,9 @@ const AdminContent = ({ tab, editor = false }: { tab: Tab; editor?: boolean }) =
                   </button>
                 </span>
               </li>
+              {/* The edit form opens right under the row being edited. */}
+              {draft?.id === item.id && <li className="pb-3">{draftForm}</li>}
+              </Fragment>
             ))}
             {items.length === 0 && (
               <li className="py-3 font-body text-sm text-muted-foreground">Nothing here yet.</li>
@@ -1611,7 +1615,7 @@ const AdminContent = ({ tab, editor = false }: { tab: Tab; editor?: boolean }) =
 
           {/* Collections keep the form at the bottom; playlist drafts render
               INLINE inside their theme section (no scrolling with 30 themes). */}
-          {tab !== "playlists" && draftForm}
+          {tab !== "playlists" && !draft?.id && draftForm}
         </>
       )}
 
