@@ -5006,3 +5006,17 @@ True: `brandCover()` was only in the AI path.
 - New src/components/PeriodTabs.tsx (shared). AdminFinance.tsx rewritten: My income / Where the money went (bar + chain + composer shares, CSV) / Composer payouts (cards, period-independent) / Payments (compact rows) / Accountant report last. Store row removed from payouts.
 - AdminSales.tsx: PeriodTabs, net/store/composers strip. adminNav: Finance moved into Overview after Dashboard, "Money" group removed.
 - ComposerEarnings.tsx: three tiles (Ready to pay, Waiting, Paid out) + compact month rows; running month still never shown.
+
+## 2026-11-02 Composer Earnings + Statement (AudioJungle-style)
+- New functions/api/composer/ledger.ts: view=chart (level all|year|month, zero-filled bars sales/subscriptions/refunds by revenue_allocations.created_at; thisMonth, lifetime, paidOut) and view=statement (from/to/type; sales one row each with tier + order, subscription shares grouped per day, refunds = negative carry-forward lines, payouts per paid day + UK tax line; summary earned/tax/paid/balance at end; format=pdf multi-page).
+- _pdf.ts: opsToContent() extracted (buildPdf unchanged in behaviour) + new buildPdfPages() for multi-page text PDFs.
+- ComposerEarnings.tsx rewritten: tabs Earnings (tiles This month / Ready to pay + next ready date / Earned all time; drill-down chart All time -> year -> month with dark tooltip, rows table) and Statement (presets last 30 days, 3 months, All, custom From/To + Show, type filter, summary, rows, PDF link). Current month IS shown now (owner asked).
+- Tested on node:sqlite with sample data: lifetime/balance/statement sums correct. .local-debug/ (gitignored) holds a PDF preview.
+- Artist page photo: 4 mockup variants shown to owner (A right fade, B full-width blurred atmosphere, C gold tone, D spotlight); photo is a background layer behind content, not a block. Waiting for his pick.
+
+## 2026-11-02 Composer photo behind the artist page (variant B)
+- composers.photo (lazy ALTER in admin/users.ts ensurePhotoColumn). users.ts GET returns photo, PATCH { userId, photo } ("" clears; must be /api/file/...).
+- content.ts returns composers[].photo (falls back to old SELECT if column missing). LiveComposer.photo.
+- New src/components/ComposerPhotoField.tsx (Admin -> Users, composer block): downscales to 1800px JPEG in browser, uploads via uploadCoverImage, saves path.
+- Artist.tsx: background layer only (absolute, z-0, no layout space): blurred full-width glow masked to fade down + sharp photo right (md: 46% wide, radial mask; mobile: full width, 70% opacity). main is z-10.
+- _middleware.ts: artist og:image = photo when set.

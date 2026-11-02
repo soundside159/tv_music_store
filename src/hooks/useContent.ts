@@ -26,6 +26,8 @@ export interface LiveComposer {
   displayName: string;
   /** "About the composer" — written by the owner in Admin -> Users. */
   bio: string;
+  /** Artist page background photo (Admin -> Users); "" = none. */
+  photo?: string;
 }
 
 interface ApiContent {

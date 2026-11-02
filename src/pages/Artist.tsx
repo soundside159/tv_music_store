@@ -193,10 +193,40 @@ const Artist = () => {
   // box — the Tracks section hides when there are sounds but no tracks.
   const showTracksSection = artistTracks.length > 0 || isLoading || soundTotal === 0;
 
+  const photo = composer.photo || "";
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="relative min-h-screen overflow-hidden bg-background">
       <Navigation />
-      <main className="mx-auto w-full max-w-7xl px-4 pb-32 pt-24 sm:px-6 md:pt-28">
+      {/* Composer photo as a BACKGROUND layer (owner's pick, variant B): a
+          blurred warm glow across the top of the page + the sharp photo on
+          the right, every edge faded out. It takes no space: name, bio and
+          tracks sit exactly where they would without it. */}
+      {photo && (
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[760px] md:h-[900px]">
+          <div
+            className="absolute -inset-10 bg-cover"
+            style={{
+              backgroundImage: `url("${photo}")`,
+              backgroundPosition: "center 30%",
+              filter: "blur(40px) brightness(0.35) saturate(0.9)",
+              WebkitMaskImage: "linear-gradient(#000 20%, transparent 85%)",
+              maskImage: "linear-gradient(#000 20%, transparent 85%)",
+            }}
+          />
+          <div
+            className="absolute right-0 top-0 h-[560px] w-full bg-cover opacity-70 md:right-[4%] md:h-[820px] md:w-[46%] md:opacity-100"
+            style={{
+              backgroundImage: `url("${photo}")`,
+              backgroundPosition: "center 20%",
+              filter: "brightness(0.8)",
+              WebkitMaskImage: "radial-gradient(ellipse 60% 62% at 55% 42%, #000 45%, transparent 75%)",
+              maskImage: "radial-gradient(ellipse 60% 62% at 55% 42%, #000 45%, transparent 75%)",
+            }}
+          />
+        </div>
+      )}
+      <main className="relative z-10 mx-auto w-full max-w-7xl px-4 pb-32 pt-24 sm:px-6 md:pt-28">
         {/* Nick + about text only — no avatar, no stats (owner request). */}
         <header className="min-w-0">
           <h1 className="font-display text-3xl font-bold tracking-tight text-foreground md:text-4xl">

@@ -25,6 +25,7 @@ import AdminAnalytics from "@/components/AdminAnalytics";
 import AdminSales from "@/components/AdminSales";
 import MenuTreeLines from "@/components/MenuTreeLines";
 import SectionDrawer from "@/components/SectionDrawer";
+import ComposerPhotoField from "@/components/ComposerPhotoField";
 
 const GOLD = "#F4C430";
 
@@ -111,6 +112,8 @@ interface LiveUser {
   pseudonym: string | null;
   /** "About the composer" — shown on the public /artist/<slug> page. */
   bio: string | null;
+  /** Artist page background photo. */
+  photo?: string | null;
   /** Sync / cue-sheet info printed on license PDFs (composer profiles only) +
    *  the two upload permissions ("1"/"0" — they ride in the same payload). */
   cue: {
@@ -1223,6 +1226,17 @@ const Admin = () => {
                           "by {u.pseudonym ?? "…"}" link under a track title opens.
                         </p>
                       </div>
+                    )}
+                    {/* Photo behind his public artist page. */}
+                    {composerOn && (
+                      <ComposerPhotoField
+                        userId={u.id}
+                        slugHint={(u.pseudonym ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-")}
+                        photo={u.photo ?? null}
+                        onSaved={(photo) =>
+                          setLiveUsers((us) => (us ?? []).map((x) => (x.id === u.id ? { ...x, photo } : x)))
+                        }
+                      />
                     )}
                     {/* What this composer is allowed to upload. */}
                     {composerOn && (

@@ -85,16 +85,27 @@ const buildContent = async (ctx: Ctx): Promise<Response> => {
 
   // Composers (public artist pages): nick + "about" text the owner writes in
   // Admin -> Users. `bio` exists in the base schema, so no lazy ALTER needed.
-  let composers: { id: string; slug: string; displayName: string; bio: string }[] = [];
+  // `photo` (artist page background) is a lazy column: until Admin -> Users
+  // saves the first photo it does not exist, so fall back to the old SELECT.
+  let composers: { id: string; slug: string; displayName: string; bio: string; photo: string }[] = [];
   try {
-    const rows = await db
-      .prepare(`SELECT id, slug, display_name, bio FROM composers ORDER BY display_name`)
-      .all<{ id: string; slug: string; display_name: string; bio: string | null }>();
+    type Row = { id: string; slug: string; display_name: string; bio: string | null; photo?: string | null };
+    let rows: { results: Row[] };
+    try {
+      rows = await db
+        .prepare(`SELECT id, slug, display_name, bio, photo FROM composers ORDER BY display_name`)
+        .all<Row>();
+    } catch {
+      rows = await db
+        .prepare(`SELECT id, slug, display_name, bio FROM composers ORDER BY display_name`)
+        .all<Row>();
+    }
     composers = rows.results.map((c) => ({
       id: c.id,
       slug: c.slug,
       displayName: c.display_name,
       bio: c.bio ?? "",
+      photo: c.photo ?? "",
     }));
   } catch {
     // composers table missing — artist pages fall back to "not found"

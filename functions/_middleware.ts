@@ -630,6 +630,17 @@ const buildSeo = async (env: Env, url: URL): Promise<Seo | typeof NOT_FOUND | nu
       .bind(slug)
       .first<{ id: string; slug: string; display_name: string; bio: string | null }>();
     if (!composer) return NOT_FOUND;
+    // Artist photo (lazy column) doubles as the link-preview image.
+    let photo: string | null = null;
+    try {
+      const p = await db
+        .prepare(`SELECT photo FROM composers WHERE id = ?1`)
+        .bind(composer.id)
+        .first<{ photo: string | null }>();
+      photo = p?.photo ?? null;
+    } catch {
+      // column not created yet
+    }
     const rows = await db
       .prepare(
         `${TRACK_SELECT} WHERE ${PUBLISHED} AND t.composer_id = ?1 ORDER BY t.created_at DESC LIMIT 100`,
@@ -643,6 +654,7 @@ const buildSeo = async (env: Env, url: URL): Promise<Seo | typeof NOT_FOUND | nu
       title: `${composer.display_name} — Royalty-Free Music | TV Music Store`,
       description,
       path,
+      image: photo ? SITE + photo : undefined,
       jsonLd: {
         "@context": "https://schema.org",
         "@type": "MusicGroup",

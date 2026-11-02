@@ -32,10 +32,20 @@ const requireAdmin = async (ctx: Ctx) => {
   return { user };
 };
 
+/** composers.photo — artist page background; added lazily on first use. */
+const ensurePhotoColumn = async (db: NonNullable<Ctx["env"]["DB"]>) => {
+  try {
+    await db.prepare(`ALTER TABLE composers ADD COLUMN photo TEXT`).run();
+  } catch {
+    // already there
+  }
+};
+
 export const onRequestGet = async (ctx: Ctx) => {
   if (!ctx.env.DB) return json({ error: "DB not bound" }, 503);
   const gate = await requireAdmin(ctx);
   if (gate.error) return gate.error;
+  if (ctx.env.DB) await ensurePhotoColumn(ctx.env.DB);
 
   // Drops legacy random suffixes from artist-page slugs (idempotent).
   await normalizeComposerSlugs(ctx.env.DB);
@@ -57,7 +67,9 @@ export const onRequestGet = async (ctx: Ctx) => {
             (SELECT c.display_name FROM composers c
               WHERE c.user_id = u.id LIMIT 1) AS pseudonym,
             (SELECT c.bio FROM composers c
-              WHERE c.user_id = u.id LIMIT 1) AS bio
+              WHERE c.user_id = u.id LIMIT 1) AS bio,
+            (SELECT c.photo FROM composers c
+              WHERE c.user_id = u.id LIMIT 1) AS photo
        FROM users u
       ORDER BY u.created_at DESC
       LIMIT 200`,
@@ -77,6 +89,8 @@ export const onRequestGet = async (ctx: Ctx) => {
     pseudonym: string | null;
     /** "About the composer" — shown on the public /artist/<slug> page. */
     bio: string | null;
+    /** Artist page background photo (/api/file/covers/...). */
+    photo: string | null;
   }>();
 
   // Sync / cue-sheet info per composer profile (printed on license PDFs).
@@ -304,6 +318,8 @@ export const onRequestPatch = async (ctx: Ctx) => {
     pseudonym?: string;
     /** "About the composer" text shown on the public /artist/<slug> page. */
     bio?: string;
+    /** Artist page background photo path ("" clears it). */
+    photo?: string;
     removeComposer?: boolean;
     /** Change the user's login email (unique; the owner account is protected). */
     email?: string;
@@ -329,12 +345,14 @@ export const onRequestPatch = async (ctx: Ctx) => {
   const uploads = body?.uploads;
   const pseudonym = typeof body?.pseudonym === "string" ? body.pseudonym.trim() : undefined;
   const bio = typeof body?.bio === "string" ? body.bio.trim().slice(0, 2000) : undefined;
+  const photo = typeof body?.photo === "string" ? body.photo.trim().slice(0, 500) : undefined;
   const newEmail = typeof body?.email === "string" ? body.email.trim().toLowerCase() : undefined;
   if (
     !userId ||
     (!role &&
       pseudonym === undefined &&
       bio === undefined &&
+      photo === undefined &&
       !removeComposer &&
       !cue &&
       !uploads &&
@@ -386,6 +404,17 @@ export const onRequestPatch = async (ctx: Ctx) => {
     if (!has) return json({ error: "Set a composer pseudonym first, then add the about text" }, 400);
     await ctx.env.DB.prepare(`UPDATE composers SET bio = ?2 WHERE user_id = ?1`)
       .bind(userId, bio)
+      .run();
+  }
+  if (photo !== undefined) {
+    if (photo && !photo.startsWith("/api/file/")) return json({ error: "Bad photo path" }, 400);
+    await ensurePhotoColumn(ctx.env.DB);
+    const has = await ctx.env.DB.prepare(`SELECT id FROM composers WHERE user_id = ?1 LIMIT 1`)
+      .bind(userId)
+      .first();
+    if (!has) return json({ error: "Set a composer pseudonym first, then add the photo" }, 400);
+    await ctx.env.DB.prepare(`UPDATE composers SET photo = ?2 WHERE user_id = ?1`)
+      .bind(userId, photo || null)
       .run();
   }
   if (uploads) {
