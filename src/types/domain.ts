@@ -5,7 +5,7 @@
 
 export type PlanId = "free" | "pro" | "max";
 export type BillingInterval = "monthly" | "annual";
-export type UserRole = "customer" | "composer" | "admin";
+export type UserRole = "customer" | "composer" | "admin" | "editor";
 export type SubscriptionStatus = "active" | "canceled" | "past_due";
 export type ModerationStatus = "pending" | "approved" | "rejected";
 export type TrackPublishStatus = "draft" | "scheduled" | "published";

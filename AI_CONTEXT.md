@@ -4902,3 +4902,19 @@ True: `brandCover()` was only in the AI path.
   * Admin -> Users -> row menu: "Agreement" block (signed vX on date + Open, or red "Not signed")
     from users.ts `agreement` per user.
   eslint clean (warnings only), tsc only the two pre-existing errors. Owner runs deploy.bat.
+- **2026-11-02 (Editor role):** new users.role value **"editor"** (Admin -> Users -> row menu ->
+  "Editor" checkbox; blue "Editor" pill; UserRole type extended). Purpose: a helper who sorts
+  tracks. SERVER (the real gate): `functions/api/admin/content.ts` requireAdmin(ctx, allowEditor)
+  lets editors GET and POST only EDITOR_ACTIONS = bulk_update_tracks (WITHOUT `fields`),
+  upsert_collection / upsert_playlist / upsert_category, set_tracks, reorder_content,
+  set_trending, set_playlist_themes; everything else 403 "Editors cannot do this". Editors may
+  also use /api/admin/upload (images) and /api/tracks?drafts=1. No deletes, publish, uploads,
+  AI, vocabulary, users, money, mail. FRONTEND: `src/pages/Admin.tsx` lets editors in, menu
+  header "Editor" with only Tracks / Collections / Playlists / Categories (EDITOR_SECTIONS,
+  forced to tracksedit), Composer group hidden; `AdminContent` (editor prop) hides the tracks
+  header buttons (AI, logo, publish, delete, add track), seed button and all Delete buttons;
+  `AdminTracksEdit` (editor prop) drops the whole Track details column (AI tagging, title, BPM,
+  description, extra tags, cover, Tags Base), AI model select, xlsx readers, versions expander,
+  ID double-click edit, row cover menu. Navigation: "Editor Dashboard" link
+  (/admin?section=tracksedit) in the account dropdown and mobile drawer.
+  eslint clean, tsc only the two pre-existing errors. Owner runs deploy.bat.

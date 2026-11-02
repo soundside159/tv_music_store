@@ -279,6 +279,19 @@ const Navigation = () => {
                       {item.label}
                     </Link>
                   ))}
+                  {user.role === "editor" && (
+                    <>
+                      <div className="my-1.5 h-px bg-border/60" />
+                      <Link
+                        to="/admin?section=tracksedit"
+                        role="menuitem"
+                        onClick={() => setAcctOpen(false)}
+                        className="block px-4 py-2 font-body text-sm text-foreground/90 transition-colors hover:bg-white/5 hover:text-[#F4C430]"
+                      >
+                        Editor Dashboard
+                      </Link>
+                    </>
+                  )}
                   {/* Role dashboards: quick jumps for composers and the admin. */}
                   {(user.role === "composer" || user.role === "admin") && (
                     <>
@@ -456,6 +469,15 @@ const Navigation = () => {
                 className="rounded-lg px-2 py-3 font-body text-base text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-[#F4C430]"
               >
                 Composer Dashboard
+              </Link>
+            )}
+            {user.role === "editor" && (
+              <Link
+                to="/admin?section=tracksedit"
+                tabIndex={isOpen ? 0 : -1}
+                className="rounded-lg px-2 py-3 font-body text-base text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-[#F4C430]"
+              >
+                Editor Dashboard
               </Link>
             )}
             {user.role === "admin" && (

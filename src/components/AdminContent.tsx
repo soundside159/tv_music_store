@@ -249,7 +249,7 @@ const tabLabels: Record<Tab, string> = {
   tracks: "Tracks Edit",
 };
 
-const AdminContent = ({ tab }: { tab: Tab }) => {
+const AdminContent = ({ tab, editor = false }: { tab: Tab; editor?: boolean }) => {
   // drafts:true — the admin manager must also see bulk-uploaded (unpublished) tracks.
   const { tracks, source: trackSource, reload: reloadTracks } = useTracks({ drafts: true });
   const [data, setData] = useState<ContentData | null>(null);
@@ -1062,7 +1062,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
     <div className="rounded-xl border border-border bg-card p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="font-body text-lg font-semibold text-foreground">{tabLabels[tab]}</h2>
-        {data.dbTrackCount === 0 && (
+        {data.dbTrackCount === 0 && !editor && (
           <button
             type="button"
             disabled={busy}
@@ -1072,7 +1072,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
             Load demo catalog into DB
           </button>
         )}
-        {tab === "tracks" && trackSource === "api" && (
+        {tab === "tracks" && trackSource === "api" && !editor && (
           <div className="flex flex-wrap items-center gap-2">
             {selectedTrackIds.length > 0 && (
               <>
@@ -1454,6 +1454,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                             <button
                               type="button"
                               disabled={busy}
+                              hidden={editor}
                               className="rounded-lg border border-border px-3 py-1.5 font-body text-xs text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
                               onClick={() => {
                                 if (window.confirm(`Delete "${item.title}"?`)) {
@@ -1529,6 +1530,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                   <button
                     type="button"
                     disabled={busy}
+                    hidden={editor}
                     className="rounded-lg border border-border px-3 py-1.5 font-body text-xs text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
                     onClick={() => {
                       if (window.confirm(`Delete "${item.title}"?`)) {
@@ -1686,6 +1688,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                     <button
                       type="button"
                       disabled={busy}
+                      hidden={editor}
                       className="rounded-lg border border-border px-3 py-1.5 font-body text-xs text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
                       onClick={() => {
                         if (window.confirm(`Delete category "${c.title}"? Tracks stay, only the chip and its list are removed.`)) {
@@ -1798,6 +1801,7 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
                   <button
                     type="button"
                     disabled={busy}
+                    hidden={editor}
                     className="rounded-lg border border-border px-3 py-1.5 font-body text-xs text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
                     onClick={() => {
                       if (
@@ -2072,8 +2076,9 @@ const AdminContent = ({ tab }: { tab: Tab }) => {
           aiTrackIds={aiTrackIds}
           aiTextIds={aiTextIds}
           fieldsPatch={fieldsPatch}
-          onGenerateCover={(id) => void generateCoverForTrack(id)}
-          onCoverFromUrl={(id, url) => void coverFromUrlForTrack(id, url)}
+          onGenerateCover={editor ? undefined : (id) => void generateCoverForTrack(id)}
+          onCoverFromUrl={editor ? undefined : (id, url) => void coverFromUrlForTrack(id, url)}
+          editor={editor}
           aiModel={aiModel}
           onAiModelChange={setAiModel}
           allComposers={(data.composers ?? []).map((c) => c.displayName)}

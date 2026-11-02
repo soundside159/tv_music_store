@@ -299,6 +299,7 @@ const AdminTracksEdit = ({
   fieldsPatch,
   onGenerateCover,
   onCoverFromUrl,
+  editor = false,
   aiModel = "standard",
   onAiModelChange,
   allComposers = [],
@@ -332,6 +333,9 @@ const AdminTracksEdit = ({
   onGenerateCover?: (trackId: string) => void;
   /** Set ONE track's cover from a pasted direct image link. */
   onCoverFromUrl?: (trackId: string, url: string) => void;
+  /** Editor role: only the tag / membership panels; no track fields, AI,
+   *  versions, ID edits or spreadsheet readers (the server enforces it too). */
+  editor?: boolean;
   /** Image model for AI covers: standard (cheap) | premium (better). */
   aiModel?: "standard" | "premium";
   onAiModelChange?: (m: "standard" | "premium") => void;
@@ -2228,7 +2232,7 @@ const AdminTracksEdit = ({
               </option>
             ))}
           </select>
-          {onAiModelChange && (
+          {onAiModelChange && !editor && (
             <select
               value={aiModel}
               onChange={(e) => onAiModelChange(e.target.value as "standard" | "premium")}
@@ -2344,7 +2348,7 @@ const AdminTracksEdit = ({
               </button>
               {/* The sheet readers only understand Dred Studio's layout — see
                   XLSX_SHEET_COMPOSERS. Filter by him and they appear. */}
-              {XLSX_SHEET_COMPOSERS.includes(composer) && (
+              {!editor && XLSX_SHEET_COMPOSERS.includes(composer) && (
                 <>
               <label
                 className={`${btnCls} cursor-pointer ${xlsxBusy || busy ? "pointer-events-none opacity-50" : ""}`}
@@ -2367,7 +2371,7 @@ const AdminTracksEdit = ({
               {/* Numbers only — the "#" column (A) into the ID column. Works
                   for Dred's sheet AND Vicate's mapped one (both carry a "#"
                   and a title column), so both composers get the button. */}
-              {(XLSX_SHEET_COMPOSERS.includes(composer) ||
+              {!editor && (XLSX_SHEET_COMPOSERS.includes(composer) ||
                 VICATE_SHEET_COMPOSERS.includes(composer)) && (
               <label
                 className={`${btnCls} cursor-pointer ${numBusy || busy ? "pointer-events-none opacity-50" : ""}`}
@@ -2437,7 +2441,11 @@ const AdminTracksEdit = ({
         </p>
       )}
 
-    <div className="mt-4 items-start gap-5 xl:grid xl:grid-cols-[minmax(0,1fr)_21rem_16rem_16rem]">
+    <div
+      className={`mt-4 items-start gap-5 xl:grid ${
+        editor ? "xl:grid-cols-[minmax(0,1fr)_16rem_16rem]" : "xl:grid-cols-[minmax(0,1fr)_21rem_16rem_16rem]"
+      }`}
+    >
       {/* ===== Left: table + pagination ===== */}
       <div className="min-w-0">
         {/* The Show filter banner — which tag the table is narrowed to + Clear. */}
@@ -2561,6 +2569,7 @@ const AdminTracksEdit = ({
                   ) : (
                     <span
                       onDoubleClick={() => {
+                        if (editor) return;
                         setEditIdVal((t.importNo ?? "").trim());
                         setEditIdFor(t.id);
                       }}
@@ -2749,6 +2758,7 @@ const AdminTracksEdit = ({
 
                   <button
                     type="button"
+                    disabled={editor}
                     onClick={() => setVersionsOpenId(versionsOpen ? null : t.id)}
                     title={t.hasStems ? "Versions + stems bundle" : "Show versions"}
                     aria-label={`${t.audioVersions.length} versions of ${t.title}`}
@@ -3103,6 +3113,7 @@ const AdminTracksEdit = ({
           The panel stays LIVE for a multi-selection — only the single-track
           fields below are hidden. Dimming the whole panel used to kill the AI
           box with it, so batch tagging was unreachable. */}
+      {!editor && (
       <aside
         className={`mt-6 flex flex-col rounded-xl border border-[#F4C430]/30 bg-card transition-opacity xl:sticky xl:top-24 xl:mt-0 xl:max-h-[calc(100vh-7rem)] ${dimIf(
           hasSelection,
@@ -3363,6 +3374,7 @@ const AdminTracksEdit = ({
 
             </div>
       </aside>
+      )}
 
       {/* ===== Tags: Use Case / Genre / Mood (any selection) =====
           The panel itself stays ALIVE with no selection (the SHOW buttons

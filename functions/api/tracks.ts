@@ -44,7 +44,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       includeDrafts = true;
     } else {
       const user = await getSessionUser(ctx);
-      includeDrafts = !!user && (user.role === "admin" || user.email === OWNER_EMAIL);
+      includeDrafts = !!user && (user.role === "admin" || user.role === "editor" || user.email === OWNER_EMAIL);
     }
   }
 

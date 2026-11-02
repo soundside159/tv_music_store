@@ -22,13 +22,28 @@ import { parseManifest } from "../_zipStream";
 //        upsert_playlist | delete_playlist | set_tracks | set_trending | update_track |
 //        bulk_update_tracks
 
-const requireAdmin = async (ctx: Ctx) => {
+/** Actions an EDITOR may run: sorting tracks into tags, collections, playlists,
+ *  categories and trending, and managing those shelves (create / rename / order /
+ *  cover). No deletes, no publishing, no uploads, no track fields, no vocabulary. */
+const EDITOR_ACTIONS = new Set([
+  "bulk_update_tracks",
+  "upsert_collection",
+  "upsert_playlist",
+  "upsert_category",
+  "set_tracks",
+  "reorder_content",
+  "set_trending",
+  "set_playlist_themes",
+]);
+
+const requireAdmin = async (ctx: Ctx, allowEditor = false) => {
   // Desktop tools (SFX uploader, track re-sort) authenticate with the
   // ADMIN_API_TOKEN header instead of a browser session — same bypass the
   // SFX admin + upload endpoints use.
   if (adminTokenOk(ctx)) return { user: { id: "token", email: OWNER_EMAIL, role: "admin" } };
   const user = await getSessionUser(ctx);
   if (!user) return { error: json({ error: "Not signed in" }, 401) };
+  if (allowEditor && user.role === "editor") return { user, editor: true };
   if (user.role !== "admin" && user.email !== OWNER_EMAIL) {
     return { error: json({ error: "Admin only" }, 403) };
   }
@@ -398,7 +413,7 @@ const upsertItem = async (db: D1Database, table: "collections" | "playlists", bo
 
 export const onRequestGet = async (ctx: Ctx) => {
   if (!ctx.env.DB) return json({ error: "DB not bound" }, 503);
-  const gate = await requireAdmin(ctx);
+  const gate = await requireAdmin(ctx, true);
   if (gate.error) return gate.error;
   const db = ctx.env.DB;
   await ensureSiteConfig(db);
@@ -548,7 +563,7 @@ export const onRequestGet = async (ctx: Ctx) => {
 
 export const onRequestPost = async (ctx: Ctx) => {
   if (!ctx.env.DB) return json({ error: "DB not bound" }, 503);
-  const gate = await requireAdmin(ctx);
+  const gate = await requireAdmin(ctx, true);
   if (gate.error) return gate.error;
   const db = ctx.env.DB;
   await ensureSiteConfig(db);
@@ -651,6 +666,15 @@ export const onRequestPost = async (ctx: Ctx) => {
     importNo?: string;
   }>(ctx.request);
   if (!body?.action) return json({ error: "action required" }, 400);
+
+  // Editors: sorting only. Track fields (title, description, cover, status,
+  // stems...) and every other action stay admin-only.
+  if ("editor" in gate && gate.editor) {
+    if (!EDITOR_ACTIONS.has(body.action)) return json({ error: "Editors cannot do this" }, 403);
+    if (body.action === "bulk_update_tracks" && body.fields) {
+      return json({ error: "Editors can only change tags and memberships" }, 403);
+    }
+  }
 
   switch (body.action) {
     case "seed_catalog": {

@@ -183,6 +183,9 @@ const StatusPill = ({ text, active }: { text: string; active: boolean }) => (
   </span>
 );
 
+/** Sections an Editor can open (everything else is admin-only). */
+const EDITOR_SECTIONS: SectionId[] = ["tracksedit", "collections", "playlists", "categories"];
+
 const Admin = () => {
   const user = useCurrentUser();
   const [searchParams] = useSearchParams();
@@ -236,6 +239,16 @@ const Admin = () => {
   const totalDownloads = custUsers.reduce((a, u) => a + (u.downloads ?? 0), 0);
 
   const isAdmin = !!user && user.role === "admin";
+  // Editor: sorts tracks into tags / collections / playlists / categories only.
+  const isEditor = !!user && user.role === "editor";
+  useEffect(() => {
+    if (isEditor && !EDITOR_SECTIONS.includes(section)) setSection("tracksedit");
+  }, [isEditor, section]);
+  const navGroups = isEditor
+    ? adminNavGroups
+        .map((g) => ({ ...g, items: g.items.filter((i) => EDITOR_SECTIONS.includes(i.id as SectionId)) }))
+        .filter((g) => g.items.length > 0)
+    : adminNavGroups;
   // Unread inbox count for the sidebar Inbox chip (shared with the header envelope).
   const unreadMail = useUnreadMail(isAdmin);
 
@@ -584,7 +597,7 @@ const Admin = () => {
     }
   };
 
-  if (!user || user.role !== "admin") {
+  if (!user || (user.role !== "admin" && user.role !== "editor")) {
     return (
       <div className="min-h-screen bg-background">
         <Navigation />
@@ -644,12 +657,14 @@ const Admin = () => {
 
               {/* Composer studio — the owner composes too; links open the
                   account page where the composer sections live. */}
+              {!isEditor && (
               <MenuGroupHeader
                 label="Composer"
                 open={menu === "composer"}
                 onClick={() => setMenu("composer")}
               />
-              <div className={`flex-col ${menu === "composer" ? "flex" : "hidden"}`}>
+              )}
+              <div className={`flex-col ${menu === "composer" && !isEditor ? "flex" : "hidden"}`}>
                 <div className="md:mb-5">
                   <div className="relative flex flex-col">
                     <MenuTreeLines />
@@ -667,9 +682,13 @@ const Admin = () => {
                 </div>
               </div>
 
-              <MenuGroupHeader label="Admin" open={menu === "admin"} onClick={() => setMenu("admin")} />
+              <MenuGroupHeader
+                label={isEditor ? "Editor" : "Admin"}
+                open={menu === "admin"}
+                onClick={() => setMenu("admin")}
+              />
               <div className={`flex-col ${menu === "admin" ? "flex" : "hidden"}`}>
-                {adminNavGroups.map((group) => (
+                {navGroups.map((group) => (
                   <div key={group.label} className="md:mb-5">
                     <p className="px-3 pb-1.5 font-body text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
                       {group.label}
@@ -870,7 +889,7 @@ const Admin = () => {
               </>
             )}
 
-            {CONTENT_TAB[section] && <AdminContent tab={CONTENT_TAB[section]!} />}
+            {CONTENT_TAB[section] && <AdminContent tab={CONTENT_TAB[section]!} editor={isEditor} />}
 
             {section === "bulkupload" && <AdminBulkUpload />}
 
@@ -972,12 +991,17 @@ const Admin = () => {
                                         Admin
                                       </span>
                                     )}
+                                    {u.role === "editor" && (
+                                      <span className="rounded-full bg-sky-400/15 px-2.5 py-0.5 text-xs font-semibold text-sky-300">
+                                        Editor
+                                      </span>
+                                    )}
                                     {isComposerUser(u) && (
                                       <span className="rounded-full border border-[#F4C430]/40 px-2.5 py-0.5 text-xs text-[#F4C430]/90">
                                         Composer{u.pseudonym ? ` · ${u.pseudonym}` : ""}
                                       </span>
                                     )}
-                                    {u.role !== "admin" && !isComposerUser(u) && (
+                                    {u.role !== "admin" && u.role !== "editor" && !isComposerUser(u) && (
                                       <span className="rounded-full bg-secondary px-2.5 py-0.5 text-xs text-muted-foreground">
                                         Customer
                                       </span>
@@ -1094,6 +1118,25 @@ const Admin = () => {
                       <p className="mt-1 pl-[26px] font-body text-[11px] text-muted-foreground">
                         The owner account always stays admin.
                       </p>
+                    )}
+                    {/* Editor: sorts tracks into tags / collections / playlists only. */}
+                    {!ownerLocked && u.role !== "admin" && (
+                      <>
+                        <label className="mt-2 flex cursor-pointer items-center gap-2.5 font-body text-sm text-foreground">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 accent-[#F4C430]"
+                            checked={u.role === "editor"}
+                            disabled={savingUserId === u.id}
+                            onChange={() => void changeRole(u.id, u.role === "editor" ? "customer" : "editor")}
+                          />
+                          Editor
+                        </label>
+                        <p className="mt-1 pl-[26px] font-body text-[11px] text-muted-foreground">
+                          Can tag tracks and sort them into collections, playlists and categories. No deletes, no
+                          publishing, no money.
+                        </p>
+                      </>
                     )}
                     {/* Login email (saves on Enter / click away; owner protected). */}
                     {!ownerLocked && (

@@ -20,7 +20,8 @@ export const onRequestPost = async (ctx: Ctx) => {
 
   const user = await getSessionUser(ctx);
   if (!user) return json({ error: "Not signed in" }, 401);
-  let allowed = user.role === "admin" || user.email === OWNER_EMAIL || user.role === "composer";
+  let allowed =
+    user.role === "admin" || user.role === "editor" || user.email === OWNER_EMAIL || user.role === "composer";
   if (!allowed) {
     const cmp = await ctx.env.DB.prepare(`SELECT id FROM composers WHERE user_id = ?1 LIMIT 1`)
       .bind(user.id)

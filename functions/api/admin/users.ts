@@ -321,7 +321,7 @@ export const onRequestPatch = async (ctx: Ctx) => {
   if (newEmail !== undefined && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
     return json({ error: "That doesn't look like a valid email" }, 400);
   }
-  if (role && !["customer", "composer", "admin"].includes(role)) {
+  if (role && !["customer", "composer", "admin", "editor"].includes(role)) {
     return json({ error: "Invalid role" }, 400);
   }
   if (pseudonym !== undefined && !pseudonym) {
