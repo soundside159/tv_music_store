@@ -34,7 +34,127 @@ interface Data {
   countries: TopRow[];
   devices: TopRow[];
   browsers: TopRow[];
+  funnel?: { key: string; label: string; n: number }[];
+  sources?: { k: string; visitors: number; actions: number; paid: number }[];
+  sourcePages?: { k: string; visitors: number }[];
 }
+
+/** Link tags used in posts ("?s=yt") -> readable platform names. */
+const SOURCE_NAMES: Record<string, string> = {
+  yt: "YouTube",
+  yts: "YouTube Shorts",
+  ig: "Instagram",
+  tt: "TikTok",
+  fb: "Facebook",
+  x: "X / Twitter",
+  rd: "Reddit",
+  pin: "Pinterest",
+  mail: "Email",
+};
+const sourceName = (tag: string) => {
+  const head = tag.split("-")[0];
+  const base = SOURCE_NAMES[tag] ?? SOURCE_NAMES[head];
+  if (!base) return tag;
+  return tag === head ? base : `${base} · ${tag.slice(head.length + 1)}`;
+};
+
+/** Step-by-step: how many visitors reached each step and where they dropped off. */
+const FunnelCard = ({ steps }: { steps: { key: string; label: string; n: number }[] }) => {
+  const top = Math.max(1, steps[0]?.n ?? 1);
+  return (
+    <Card>
+      <h3 className="font-body text-sm font-semibold text-foreground">Where visitors drop off</h3>
+      <p className="font-body text-[11px] text-muted-foreground">
+        Unique visitors who reached each step. The red number is how many left before the next one.
+      </p>
+      <ul className="mt-4 space-y-3">
+        {steps.map((st, i) => {
+          const prev = i > 0 ? steps[i - 1].n : 0;
+          const pct = i > 0 && prev > 0 ? Math.round((st.n / prev) * 100) : null;
+          const lost = i > 0 ? Math.max(0, prev - st.n) : 0;
+          return (
+            <li key={st.key}>
+              <div className="flex items-baseline justify-between gap-3 font-body text-xs">
+                <span className="text-foreground">{st.label}</span>
+                <span className="shrink-0 text-muted-foreground">
+                  {pct !== null && <span className="mr-2">{pct}% of previous</span>}
+                  {lost > 0 && <span className="mr-2 text-red-400">-{lost}</span>}
+                  <span className="font-semibold text-foreground">{st.n}</span>
+                </span>
+              </div>
+              <div className="mt-1 h-1.5 rounded-full bg-white/5">
+                <div
+                  className="h-1.5 rounded-full bg-[#F4C430]"
+                  style={{ width: `${st.n > 0 ? Math.max(2, (st.n / top) * 100) : 0}%` }}
+                />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
+  );
+};
+
+/** Visitors brought by tagged links (?s=yt etc.) and what they did next. */
+const SourcesCard = ({
+  rows,
+  pages,
+}: {
+  rows: { k: string; visitors: number; actions: number; paid: number }[];
+  pages: { k: string; visitors: number }[];
+}) => (
+  <Card>
+    <h3 className="font-body text-sm font-semibold text-foreground">Your links</h3>
+    <p className="font-body text-[11px] text-muted-foreground">
+      Visits from links with a tag, e.g. tvmusicstore.com/track/2575?s=yt
+    </p>
+    {rows.length === 0 ? (
+      <p className="mt-4 font-body text-xs text-muted-foreground">
+        No tagged visits yet. Add ?s=yt, ?s=yts, ?s=ig or ?s=tt to the links in your posts.
+      </p>
+    ) : (
+      <>
+        <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-x-4 gap-y-2 font-body text-xs">
+          <span className="text-muted-foreground">Source</span>
+          <span className="text-right text-muted-foreground">Visitors</span>
+          <span className="text-right text-muted-foreground">Acted</span>
+          <span className="text-right text-muted-foreground">Paid</span>
+          {rows.map((r) => (
+            <div key={r.k} className="contents">
+              <span className="truncate text-foreground">{sourceName(r.k)}</span>
+              <span className="text-right text-foreground">{r.visitors}</span>
+              <span className="text-right text-muted-foreground">{r.actions}</span>
+              <span className={`text-right ${r.paid > 0 ? "font-semibold text-[#F4C430]" : "text-muted-foreground"}`}>
+                {r.paid}
+              </span>
+            </div>
+          ))}
+        </div>
+        {pages.length > 0 && (
+          <>
+            <p className="mt-5 font-body text-[11px] uppercase tracking-wide text-muted-foreground">Landing pages</p>
+            <ul className="mt-2 space-y-1.5 font-body text-xs">
+              {pages.map((p) => {
+                const [tag, ...rest] = p.k.split(" ");
+                const path = rest.join(" ");
+                return (
+                  <li key={p.k} className="flex items-baseline justify-between gap-3">
+                    <span className="min-w-0 truncate">
+                      <span className="text-[#F4C430]">{sourceName(tag)}</span>
+                      <span className="text-muted-foreground"> → {path}</span>
+                    </span>
+                    <span className="shrink-0 text-foreground">{p.visitors}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
+      </>
+    )}
+  </Card>
+);
 
 const RANGES = [7, 30, 90] as const;
 
@@ -275,6 +395,11 @@ const AdminAnalytics = () => {
               </span>
             </div>
           </Card>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            {data.funnel && <FunnelCard steps={data.funnel} />}
+            <SourcesCard rows={data.sources ?? []} pages={data.sourcePages ?? []} />
+          </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
             <TopList title="Top pages" rows={data.pages} />

@@ -6,6 +6,7 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { licenseTierById, useLicenseTiers, type LicenseTierId } from "@/lib/licenses";
 import { clearCart, removeFromCart, setCartItemTier, useCart } from "@/hooks/useCart";
+import { trackEvent } from "@/lib/trackEvent";
 
 const GOLD = "#F4C430";
 
@@ -69,6 +70,7 @@ const CardCheckout = ({ disabled }: { disabled: boolean }) => {
         toast.error(res.error ?? "Card checkout is not available right now — try PayPal below.");
         return;
       }
+      trackEvent("checkout");
       window.location.href = res.url;
     } catch {
       toast.error("Could not start card checkout. Try again.");
@@ -199,6 +201,7 @@ const Cart = () => {
   useEffect(() => {
     const outcome = new URLSearchParams(window.location.search).get("checkout");
     if (outcome === "success") {
+      trackEvent("purchase");
       clearCart();
       toast.success("Payment complete! Your licenses are in your account.");
       navigate("/account?section=license&purchase=success", { replace: true });

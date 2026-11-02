@@ -3,7 +3,8 @@ import { getSessionUser, json, OWNER_EMAIL, readJson, type Ctx, type D1Database 
 // ---------------------------------------------------------------------------
 // PAGEVIEW BEACON (privacy-friendly analytics, no cookies, no third parties)
 //
-// The SPA POSTs { path, ref } on every route change (see src/lib/analytics.ts).
+// The SPA POSTs { path, ref, src } on every route change (see src/lib/analytics.tsx)
+// and { path, event } for funnel steps (see src/lib/trackEvent.ts).
 // Each hit is stored in D1 with: day, path, referrer DOMAIN (not the full URL),
 // country (from Cloudflare's edge), device class, browser family, and a DAILY
 // visitor hash — sha256(ip + user-agent + day + salt), truncated. The raw IP is
@@ -35,7 +36,30 @@ export const ensureHitsTable = async (db: D1Database) => {
     .run();
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_hits_day ON analytics_hits(day)`).run();
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_hits_ts ON analytics_hits(ts)`).run();
+  // Added 2026-11: link tag ("?s=yt") on the landing hit, and funnel events
+  // (download / add_to_cart / checkout / purchase) stored as hits with event != ''.
+  if (!hitColumnsReady) {
+    for (const col of ["src", "event"]) {
+      try {
+        await db.prepare(`ALTER TABLE analytics_hits ADD COLUMN ${col} TEXT NOT NULL DEFAULT ''`).run();
+      } catch {
+        // column already exists
+      }
+    }
+    hitColumnsReady = true;
+  }
 };
+
+let hitColumnsReady = false;
+
+const FUNNEL_EVENTS = new Set(["download", "add_to_cart", "checkout", "purchase"]);
+
+const cleanTag = (raw: string) =>
+  raw
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
 
 const sha256Hex = async (s: string) => {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
@@ -73,12 +97,15 @@ export const onRequestPost = async (ctx: Ctx) => {
   const ua = ctx.request.headers.get("user-agent") ?? "";
   if (!ua || BOT_RE.test(ua)) return json({ ok: true });
 
-  const body = await readJson<{ path?: string; ref?: string }>(ctx.request);
+  const body = await readJson<{ path?: string; ref?: string; src?: string; event?: string }>(ctx.request);
   let path = (body?.path ?? "").toString().slice(0, 200);
   if (!path.startsWith("/")) return json({ ok: true });
   path = path.split("?")[0].split("#")[0] || "/";
+  const event = FUNNEL_EVENTS.has(body?.event ?? "") ? (body?.event as string) : "";
+  if (body?.event && !event) return json({ ok: true }); // unknown event name
   // The owner working in the admin (or a signed-in admin anywhere) is not traffic.
-  if (/^\/(admin|account|login)(\/|$)/.test(path)) return json({ ok: true });
+  // Funnel events may happen on /account (a purchase lands there), so they pass.
+  if (!event && /^\/(admin|account|login)(\/|$)/.test(path)) return json({ ok: true });
   try {
     const user = await getSessionUser(ctx);
     if (user && (user.role === "admin" || user.email === OWNER_EMAIL)) return json({ ok: true });
@@ -99,10 +126,21 @@ export const onRequestPost = async (ctx: Ctx) => {
 
   await db
     .prepare(
-      `INSERT INTO analytics_hits (ts, day, path, ref, country, device, browser, visitor)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
+      `INSERT INTO analytics_hits (ts, day, path, ref, country, device, browser, visitor, src, event)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`,
     )
-    .bind(ts, day, path, refDomain(body?.ref ?? "", ownHost), country, deviceOf(ua), browserOf(ua), visitor)
+    .bind(
+      ts,
+      day,
+      path,
+      event ? "" : refDomain(body?.ref ?? "", ownHost),
+      country,
+      deviceOf(ua),
+      browserOf(ua),
+      visitor,
+      event ? "" : cleanTag((body?.src ?? "").toString()),
+      event,
+    )
     .run();
 
   // Opportunistic retention: ~1 hit in 100 also sweeps out rows older than 180 days.

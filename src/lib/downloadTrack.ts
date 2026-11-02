@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { trackEvent } from "@/lib/trackEvent";
 
 // Shared download action for every Download button on the site.
 // Talks to /api/download which enforces plan limits and logs the download.
@@ -170,6 +171,7 @@ export const downloadTrackVersion = async (args: DownloadArgs): Promise<boolean>
       a.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 5000);
       toast.success("Download started", { description: `${args.title} — ${args.label}` });
+      trackEvent("download");
       return true;
     }
 

@@ -1,12 +1,13 @@
 import { useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
+import { sendHit, takeSourceTag } from "@/lib/trackEvent";
 
 // Pageview beacon for the self-hosted analytics (Admin -> Analytics).
 // Mounted once inside <BrowserRouter>: fires a POST /api/hit on every route
 // change. No cookies, nothing stored in the browser — the server keeps only a
-// daily-rotating visitor hash (see functions/api/hit.ts). document.referrer is
-// sent with the FIRST hit only: on later in-app navigations it would just be
-// our own domain, which the server discards anyway.
+// daily-rotating visitor hash (see functions/api/hit.ts). document.referrer and
+// the link tag ("?s=yt", see takeSourceTag) are sent with the FIRST hit only:
+// that is the landing hit, so the tag tells which post/link brought the visit.
 const RouteBeacon = () => {
   const location = useLocation();
   const first = useRef(true);
@@ -18,21 +19,13 @@ const RouteBeacon = () => {
       first.current = false;
       return;
     }
-    const payload = JSON.stringify({ path, ref: first.current ? document.referrer : "" });
+    const isFirst = first.current;
     first.current = false;
-    try {
-      if (!navigator.sendBeacon?.("/api/hit", new Blob([payload], { type: "application/json" }))) {
-        void fetch("/api/hit", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: payload,
-          keepalive: true,
-          credentials: "include",
-        });
-      }
-    } catch {
-      // analytics must never break the page
-    }
+    sendHit({
+      path,
+      ref: isFirst ? document.referrer : "",
+      src: isFirst ? takeSourceTag() : "",
+    });
   }, [location.pathname]);
 
   return null;

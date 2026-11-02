@@ -4813,3 +4813,52 @@ True: `brandCover()` was only in the AI path.
   Not deployed by me — owner runs deploy.bat. After deploy: the D1 Queries tab should show
   the big SELECTs dropping to a handful per hour. If the 0002 perf indexes were never applied,
   run `npx wrangler d1 execute tvmusicstore-db --remote --file=./migrations/0002_perf_indexes.sql`.
+- **2026-11-02 (bigger favicon in Google + www -> apex redirect):** owner: the logo next to the
+  site in Google results was tiny. Cause: every icon PNG had huge transparent margins (the mark
+  was only ~35% of the square, e.g. 35x32px inside favicon-96). Regenerated ALL icons
+  (favicon.ico x2 [16/32/48], favicon-96x96, apple-touch-icon 180, web-app-manifest 192/512) as a
+  dark #121317 rounded square with the gold mark at ~70% width (fits inside Google's circle crop,
+  readable on its white chip). index.html icon links got `?v=2` to bust browser caches. Google's
+  own favicon cache updates on recrawl (days to weeks). Originals backed up in
+  _to_delete/backup_2026-11-02_icons/. ALSO: Google had indexed one page under
+  www.tvmusicstore.com (splits ranking between two hosts). functions/_middleware.ts onRequest now
+  301-redirects any www.* GET/HEAD to the bare domain before anything else. Brand query
+  "tvmusicstore" not ranking = normal for a young site (Google reads it as "tv music store");
+  fix is brand signals over time (Search Console, links from socials/YouTube).
+  tsc on _middleware.ts clean. Not deployed by me - owner runs deploy.bat.
+- **2026-11-02 (Admin Dashboard: "Sales" block):** owner wanted to see on login what sold, when,
+  and for which composer. NEW `functions/api/admin/sales.ts` (GET, admin only,
+  ?days=30|90|365): gross/net totals + the previous window (for +/- %), license vs subscription
+  counts, active Pro/Max subscribers, a per-day series (per-month for 365) split license /
+  subscription, license sales grouped by composer (tracks joined on id OR slug, because older
+  ledger rows may carry a slug), and the 10 latest payments with track, tier (sync_orders via
+  order_id), composer, buyer and plan. Refunded rows are excluded from totals and shown
+  struck-through in the list. NEW `src/components/AdminSales.tsx` (recharts stacked bars, gold =
+  track licenses, soft gold = subscriptions; 30d/90d/12m pills; composer bars link to /artist;
+  "All payments" -> Finance), mounted at the top of the dashboard section in
+  `src/pages/Admin.tsx`. Subscriptions are not tied to a track, so the composer bars count track
+  licenses only. eslint clean, tsc only the two pre-existing errors. Owner runs deploy.bat.
+- **2026-11-02 (Analytics: funnel + tagged links "?s=yt"):** owner's friend advised seeing where
+  visitors drop off and which exact post brought them. Built on the existing cookie-less beacon:
+  * NEW `src/lib/trackEvent.ts`: `sendHit`, `trackEvent(download|add_to_cart|checkout|purchase)`,
+    `takeSourceTag()` (reads ?s= / ?src= / ?ref= / utm_source+utm_campaign from the LANDING URL,
+    sanitises to [a-z0-9_-]{<=40}, strips them from the address bar). `src/lib/analytics.tsx`
+    sends the tag with the first hit only.
+  * `functions/api/hit.ts`: lazy columns `src` + `event` on analytics_hits (guarded ALTER, once per
+    isolate); event hits whitelist the 4 names and may come from /account (purchase lands there).
+  * Events fired: add_to_cart (useCart.addToCart), download (downloadTrack success), checkout
+    (Cart "Pay with card" + billing.startCheckout, right before the Stripe redirect), purchase
+    (Cart ?checkout=success and WelcomeModal on subscription success). Admins are not counted.
+  * `functions/api/admin/analytics.ts`: every existing query now filters `event = ''` (events are
+    not pageviews); new `funnel` (distinct daily visitors per step: visit -> track page ->
+    download -> add to cart -> checkout -> paid), `sources` (per tag: visitors, acted, paid via a
+    same-visitor self-join) and `sourcePages` (tag + landing path).
+  * `src/components/AdminAnalytics.tsx`: FunnelCard ("Where visitors drop off") + SourcesCard
+    ("Your links", tags mapped yt/yts/ig/tt/fb… to names) above Top pages.
+  * Track page admin bar (`AdminTrackTopBar` in AdminTrackPanel.tsx): "Copy link" buttons
+    YouTube/Shorts/Instagram/TikTok -> `https://tvmusicstore.com/track/<code>?s=yt|yts|ig|tt`
+    (code-only URLs already resolve client-side and in the edge prerender).
+  * The owner's social-upload project (Z:\Python Clode Projects\заливка треков) got the same rule
+    in its CLAUDE.md ("Ссылки с меткой") so that chat tags every link it posts.
+  Visitor id is a DAILY hash, so a funnel/source only joins steps made the same day.
+  eslint clean (one pre-existing warning), tsc only the two pre-existing errors. Owner runs deploy.bat.

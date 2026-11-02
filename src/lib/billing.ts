@@ -1,6 +1,7 @@
 import { toast } from "sonner";
 import { refreshSession } from "@/hooks/useAuth";
 import type { BillingInterval, PlanId } from "@/types/domain";
+import { trackEvent } from "@/lib/trackEvent";
 
 // Frontend helpers for Stripe subscription billing.
 // Both endpoints return { url } and we redirect the whole page to Stripe.
@@ -85,6 +86,7 @@ export const startCheckout = async (
     toast.error(res.error ?? "Checkout is unavailable right now");
     return;
   }
+  trackEvent("checkout");
   window.location.href = res.url;
 };
 

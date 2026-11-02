@@ -27,7 +27,7 @@ import { usePlayer } from "@/components/playerContext";
 import { refreshContent } from "@/hooks/useContent";
 import { decodeAudio, encodeMp3, formatDuration, makeThumbnail, wavToMp3Pair } from "@/lib/audioEncoding";
 import { crc32File } from "@/lib/crc32";
-import { cleanVersionLabel } from "@/lib/downloadTrack";
+import { cleanVersionLabel, codeFromSlug } from "@/lib/downloadTrack";
 import { brandCover } from "@/lib/coverArt";
 import type { Vocabularies } from "@/lib/tagOptions";
 
@@ -166,6 +166,19 @@ export const AdminTrackTopBar = ({
     }
   };
 
+  // Short tagged links for social posts: /track/<code>?s=<platform>. The tag
+  // shows up in Admin -> Analytics -> "Your links" (see src/lib/trackEvent.ts).
+  const copyLink = async (tag: string, label: string) => {
+    const code = codeFromSlug(track.slug);
+    const link = `https://tvmusicstore.com/track/${code || track.slug}?s=${tag}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      toast.success(`${label} link copied`, { description: link });
+    } catch {
+      toast(link);
+    }
+  };
+
   return (
     <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-[#F4C430]/30 bg-card px-4 py-2.5">
       <span className="font-body text-[10px] font-bold uppercase tracking-[0.24em]" style={{ color: GOLD }}>
@@ -185,6 +198,26 @@ export const AdminTrackTopBar = ({
           : isDraft
             ? "Draft — hidden from customers"
             : "Published"}
+      </span>
+      <span className="flex flex-wrap items-center gap-1.5">
+        <span className="inline-flex items-center gap-1 font-body text-[11px] text-muted-foreground">
+          <Link2 className="h-3.5 w-3.5" /> Copy link:
+        </span>
+        {[
+          { tag: "yt", label: "YouTube" },
+          { tag: "yts", label: "Shorts" },
+          { tag: "ig", label: "Instagram" },
+          { tag: "tt", label: "TikTok" },
+        ].map((l) => (
+          <button
+            key={l.tag}
+            type="button"
+            onClick={() => void copyLink(l.tag, l.label)}
+            className="rounded-md border border-border px-2 py-1 font-body text-[11px] font-semibold text-muted-foreground transition-colors hover:border-[#F4C430]/60 hover:text-[#F4C430]"
+          >
+            {l.label}
+          </button>
+        ))}
       </span>
       <span className="ml-auto flex items-center gap-2">
         {isDraft ? (

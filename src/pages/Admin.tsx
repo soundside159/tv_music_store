@@ -22,6 +22,7 @@ import AdminGuides from "@/components/AdminGuides";
 import AdminFinance from "@/components/AdminFinance";
 import AdminUsage from "@/components/AdminUsage";
 import AdminAnalytics from "@/components/AdminAnalytics";
+import AdminSales from "@/components/AdminSales";
 import MenuTreeLines from "@/components/MenuTreeLines";
 import SectionDrawer from "@/components/SectionDrawer";
 
@@ -718,7 +719,8 @@ const Admin = () => {
           >
             {section === "dashboard" && (
               <>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <AdminSales />
+                <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   <Stat
                     label="Customers"
                     value={liveUsers ? String(custUsers.length) : "—"}

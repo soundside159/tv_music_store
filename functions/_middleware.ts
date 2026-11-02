@@ -576,6 +576,16 @@ const buildSeo = async (env: Env, url: URL): Promise<Seo | null> => {
 export const onRequest = async (ctx: MiddlewareCtx): Promise<Response> => {
   const url = new URL(ctx.request.url);
 
+  // One canonical host: www.tvmusicstore.com -> tvmusicstore.com (301), so
+  // Google does not split the site between two addresses. GET/HEAD only.
+  if (
+    url.hostname.startsWith("www.") &&
+    (ctx.request.method === "GET" || ctx.request.method === "HEAD")
+  ) {
+    url.hostname = url.hostname.slice(4);
+    return Response.redirect(url.toString(), 301);
+  }
+
   // Never touch the API, static assets or private areas — straight through.
   if (
     ctx.request.method !== "GET" ||

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Check, Copy, Download, FileText, Music4, ShieldCheck, X } from "lucide-react";
 import { toast } from "sonner";
 import { refreshSession, useAuthSession } from "@/hooks/useAuth";
+import { trackEvent } from "@/lib/trackEvent";
 
 // "Welcome to Pro/Max" — shown once, right after Stripe sends the customer back
 // to /account?checkout=success. It is our own layout (gold rail + perk grid),
@@ -48,6 +49,7 @@ const WelcomeModal = () => {
     const qs = params.toString();
     window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : ""));
     setOpen(true);
+    trackEvent("purchase");
 
     // The Stripe webhook may land a second after the redirect — poll briefly.
     if (polling.current) return;

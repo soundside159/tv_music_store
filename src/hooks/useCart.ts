@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import type { LicenseTierId } from "@/lib/licenses";
 import { licenseTierById } from "@/lib/licenses";
+import { trackEvent } from "@/lib/trackEvent";
 
 // Client-side cart for one-time track licenses, persisted in localStorage.
 // One line per track: adding the same track again replaces its license tier.
@@ -68,6 +69,7 @@ export const addToCart = (item: CartItem): void => {
     return;
   }
   commit([...items.filter((i) => i.slug !== item.slug), item]);
+  trackEvent("add_to_cart");
   toast.success(
     existing ? `License updated to ${item.tier}` : `"${item.title}" added to cart`,
   );

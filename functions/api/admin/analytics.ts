@@ -21,7 +21,7 @@ export const onRequestGet = async (ctx: Ctx) => {
   const series = await db
     .prepare(
       `SELECT day, COUNT(*) AS views, COUNT(DISTINCT visitor) AS visitors
-         FROM analytics_hits WHERE day >= date('now', ?1) GROUP BY day ORDER BY day`,
+         FROM analytics_hits WHERE day >= date('now', ?1) AND event = '' GROUP BY day ORDER BY day`,
     )
     .bind(since)
     .all<{ day: string; views: number; visitors: number }>();
@@ -29,7 +29,7 @@ export const onRequestGet = async (ctx: Ctx) => {
   const totals = await db
     .prepare(
       `SELECT COUNT(*) AS views, COUNT(DISTINCT visitor) AS visitors
-         FROM analytics_hits WHERE day >= date('now', ?1)`,
+         FROM analytics_hits WHERE day >= date('now', ?1) AND event = ''`,
     )
     .bind(since)
     .first<{ views: number; visitors: number }>();
@@ -38,7 +38,7 @@ export const onRequestGet = async (ctx: Ctx) => {
   const prev = await db
     .prepare(
       `SELECT COUNT(*) AS views, COUNT(DISTINCT visitor) AS visitors
-         FROM analytics_hits WHERE day >= date('now', ?1) AND day < date('now', ?2)`,
+         FROM analytics_hits WHERE day >= date('now', ?1) AND day < date('now', ?2) AND event = ''`,
     )
     .bind(`-${days * 2} day`, since)
     .first<{ views: number; visitors: number }>();
@@ -46,7 +46,7 @@ export const onRequestGet = async (ctx: Ctx) => {
   const online = await db
     .prepare(
       `SELECT COUNT(DISTINCT visitor) AS n FROM analytics_hits
-        WHERE ts >= strftime('%Y-%m-%dT%H:%M:%S', datetime('now', '-30 minutes'))`,
+        WHERE event = '' AND ts >= strftime('%Y-%m-%dT%H:%M:%S', datetime('now', '-30 minutes'))`,
     )
     .first<{ n: number }>();
 
@@ -56,15 +56,63 @@ export const onRequestGet = async (ctx: Ctx) => {
         .prepare(
           `SELECT ${col} AS k, COUNT(*) AS views, COUNT(DISTINCT visitor) AS visitors
              FROM analytics_hits
-            WHERE day >= date('now', ?1)${skipEmpty ? ` AND ${col} != ''` : ""}
+            WHERE day >= date('now', ?1) AND event = ''${skipEmpty ? ` AND ${col} != ''` : ""}
             GROUP BY ${col} ORDER BY views DESC LIMIT ${limit}`,
         )
         .bind(since)
         .all<{ k: string; views: number; visitors: number }>()
     ).results;
 
+  // Funnel: distinct (daily) visitors who reached each step in the window.
+  const step = async (cond: string) =>
+    (
+      await db
+        .prepare(`SELECT COUNT(DISTINCT visitor) AS n FROM analytics_hits WHERE day >= date('now', ?1) AND ${cond}`)
+        .bind(since)
+        .first<{ n: number }>()
+    )?.n ?? 0;
+  const funnel = [
+    { key: "visit", label: "Visited the site", n: await step("event = ''") },
+    { key: "track", label: "Opened a track page", n: await step("event = '' AND path LIKE '/track/%'") },
+    { key: "download", label: "Downloaded a track", n: await step("event = 'download'") },
+    { key: "add_to_cart", label: "Added a license to cart", n: await step("event = 'add_to_cart'") },
+    { key: "checkout", label: "Started checkout", n: await step("event = 'checkout'") },
+    { key: "purchase", label: "Paid", n: await step("event = 'purchase'") },
+  ];
+
+  // Link tags ("?s=yt"): visitors per tag and how many of them then did
+  // something useful (download / add to cart / paid) the same day.
+  const sources = (
+    await db
+      .prepare(
+        `SELECT h.src AS k, COUNT(DISTINCT h.visitor) AS visitors,
+                COUNT(DISTINCT CASE WHEN e.event IN ('download','add_to_cart','purchase') THEN e.visitor END) AS actions,
+                COUNT(DISTINCT CASE WHEN e.event = 'purchase' THEN e.visitor END) AS paid
+           FROM analytics_hits h
+           LEFT JOIN analytics_hits e ON e.visitor = h.visitor AND e.event != ''
+          WHERE h.day >= date('now', ?1) AND h.src != '' AND h.event = ''
+          GROUP BY h.src ORDER BY visitors DESC LIMIT 15`,
+      )
+      .bind(since)
+      .all<{ k: string; visitors: number; actions: number; paid: number }>()
+  ).results;
+  const sourcePages = (
+    await db
+      .prepare(
+        `SELECT src || ' ' || path AS k, COUNT(DISTINCT visitor) AS visitors
+           FROM analytics_hits
+          WHERE day >= date('now', ?1) AND src != '' AND event = ''
+          GROUP BY src, path ORDER BY visitors DESC LIMIT 15`,
+      )
+      .bind(since)
+      .all<{ k: string; visitors: number }>()
+  ).results;
+
   return json({
     days,
+    funnel,
+    sources,
+    sourcePages,
     series: series.results,
     totals: { views: totals?.views ?? 0, visitors: totals?.visitors ?? 0 },
     previous: { views: prev?.views ?? 0, visitors: prev?.visitors ?? 0 },
