@@ -4867,3 +4867,12 @@ True: `brandCover()` was only in the AI path.
   500. Now GROUP BY c.display_name, c.slug; handler wrapped in try/catch so any future SQL error
   comes back as JSON. Removed the stale "Revenue & funnel analytics will appear here…" card from
   the dashboard. Tip: test new SQL against migrations/0001_init.sql in sqlite3 before deploying.
+- **2026-11-02 (composer agreement + claim release after a composer leaves):** owner decision:
+  a composer's duty to send claim releases lasts only **2 months** after a track is withdrawn,
+  the account is closed or the agreement ends (he rejected a perpetual duty). New send-ready
+  Composer Agreement is a Claude Doc (claude.ai/artifact/1cvYf6ewtzW3AvEf3yMux6), based on
+  docs/COMPOSER_AGREEMENT_DRAFT.md v2 + SFX points (track 1, sound 0.2, sounds max half when both,
+  sounds-only payer -> all to SFX authors), customer whitelisting removed (paused), 5.5 = 2 months.
+  Mirror in the customer terms: src/pages/LicenseTerms.tsx section 6 got "If a track leaves the
+  catalogue" (2 months of release requests, then best effort with no promise; licence stays
+  valid; customer can dispute in YouTube Studio with the PDF certificate). EFFECTIVE -> 2 Nov 2026.

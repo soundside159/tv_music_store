@@ -4,7 +4,7 @@ import Footer from "@/components/Footer";
 // Public License Terms page. Content mirrors docs/LICENSE_TERMS_DRAFT.md.
 // Owner: update EFFECTIVE + ADDRESS once finalised; keep this in sync with the
 // draft and the certificate wording.
-const EFFECTIVE = "8 July 2026";
+const EFFECTIVE = "2 November 2026";
 const ADDRESS =
   "Correspondence address: TV Music Store, 5 Brayford Square, London, E1 0SG, United Kingdom";
 
@@ -127,6 +127,13 @@ const LicenseTerms = () => (
         provider, and neither we nor anyone else can dictate YouTube's processing time — so we promise
         the part we control, and we do it fast. If a claim you reported is still open, write to us and
         we will chase it.
+      </P>
+      <P>
+        <strong>If a track leaves the catalogue.</strong> If a track is removed from TV Music Store, or
+        its composer leaves or can no longer be reached, we keep sending release requests for that
+        track for 2 months. After that we will still do everything we reasonably can to get a claim
+        released, but we cannot promise it. Your license stays valid in every case, and you can also
+        dispute the claim yourself in YouTube Studio, using your license certificate (PDF) as proof.
       </P>
       <P>
         Releasing a claim transfers no ownership; the music remains the property of TV Music Store
