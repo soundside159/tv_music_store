@@ -5,6 +5,7 @@ import {
   publishedGuides,
   type Guide,
 } from "../src/content/guides";
+import { buildSfxFaq, sfxFaqJsonLd } from "../src/content/sfxFaq";
 
 // ---------------------------------------------------------------------------
 // EDGE PRERENDER (SEO)
@@ -31,6 +32,7 @@ import {
 interface RwElement {
   setInnerContent(content: string, options?: { html?: boolean }): void;
   setAttribute(name: string, value: string): void;
+  remove(): void;
   append(content: string, options?: { html?: boolean }): void;
 }
 interface RwHandlers {
@@ -65,6 +67,11 @@ const OG_IMAGE = `${SITE}/images/og-cover-2.jpg`;
 // rendering", not cloaking: bots read the same content React renders.
 const BOT_UA =
   /bot|crawl|spider|slurp|preview|fetch|scrape|curl|wget|python|httpx|headless|lighthouse|bingpreview|yandex|baidu|duckduck|facebookexternalhit|meta-external|twitterbot|linkedin|whatsapp|telegram|discord|slack|skype|pinterest|embedly|vkshare|qwant|applebot|amazonbot|petalbot|gptbot|chatgpt|oai-search|claude|anthropic|perplexity|ccbot|bytespider|cohere|youbot|phindbot|semrush|ahrefs|mj12|dotbot|screaming|seznam/i;
+
+/** buildSeo verdict for a URL that is not a real page (deleted track, typo,
+ *  unknown tag): served with HTTP 404 + noindex instead of a "200 OK" copy of
+ *  the home page, which Google files as a soft 404. */
+const NOT_FOUND = "not-found" as const;
 
 interface Seo {
   title: string;
@@ -259,6 +266,28 @@ const STATIC_PAGES: Record<string, { title: string; description: string; heading
     description: "Commission original, exclusive music written for your project.",
     heading: "Custom Music",
   },
+  "/contact": {
+    title: "Contact | TV Music Store",
+    description:
+      "Questions about licensing, a YouTube claim or custom music? Get in touch with the TV Music Store team.",
+    heading: "Contact",
+  },
+  "/license-terms": {
+    title: "License Terms | TV Music Store",
+    description:
+      "The full TV Music Store license terms: what subscription and one-time licenses cover, where the music can be used, and Content ID claim releases.",
+    heading: "License Terms",
+  },
+  "/privacy": {
+    title: "Privacy Policy | TV Music Store",
+    description: "How TV Music Store collects, uses and protects your personal data.",
+    heading: "Privacy Policy",
+  },
+  "/refunds": {
+    title: "Refund Policy | TV Music Store",
+    description: "When and how TV Music Store refunds subscriptions and one-time licenses.",
+    heading: "Refund Policy",
+  },
 };
 
 /**
@@ -278,7 +307,7 @@ const loadGuideSchedule = async (db: D1Database | undefined): Promise<void> => {
   }
 };
 
-const buildSeo = async (env: Env, url: URL): Promise<Seo | null> => {
+const buildSeo = async (env: Env, url: URL): Promise<Seo | typeof NOT_FOUND | null> => {
   const path = url.pathname.replace(/\/+$/, "") || "/";
   const db = env.DB;
 
@@ -355,7 +384,7 @@ const buildSeo = async (env: Env, url: URL): Promise<Seo | null> => {
   const guideMatch = /^\/guides\/([^/]+)$/.exec(path);
   if (guideMatch) {
     const guide = guideBySlug(decodeURIComponent(guideMatch[1]));
-    if (!guide) return null;
+    if (!guide) return NOT_FOUND;
     return {
       title: `${guide.title} | TV Music Store`,
       description: guide.description,
@@ -390,6 +419,93 @@ const buildSeo = async (env: Env, url: URL): Promise<Seo | null> => {
 
   if (!db) return null;
 
+  // ---- /sound-effects and /sound-effects/<category> -----------------------
+  // The SFX pages were missing here: bots got the empty shell with the HOME
+  // canonical, so Google read every SFX page as a copy of the home page.
+  if (path === "/sound-effects") {
+    const cats = await db
+      .prepare(
+        `SELECT c.id, c.title, COUNT(s.id) AS n
+           FROM sfx_categories c
+           JOIN sfx s ON s.category_id = c.id AND s.status = 'published'
+          GROUP BY c.id ORDER BY c.sort, c.title`,
+      )
+      .all<{ id: string; title: string; n: number }>();
+    const description =
+      "Premium royalty-free sound effects for video, gaming, podcasts and creative content — studio-quality WAV with commercial licensing on TV Music Store.";
+    return {
+      title: "Sound Effects — Royalty-Free WAV SFX Library | TV Music Store",
+      description,
+      path,
+      jsonLd: {
+        "@context": "https://schema.org",
+        "@type": "CollectionPage",
+        name: "Royalty-free sound effects",
+        description,
+        url: SITE + path,
+      },
+      body: shell(
+        "Royalty-Free Sound Effects",
+        description,
+        linkList(
+          cats.results.map((c) => ({
+            href: `/sound-effects/${c.id}`,
+            label: `${c.title} sound effects (${c.n})`,
+          })),
+        ),
+      ),
+    };
+  }
+  const sfxMatch = /^\/sound-effects\/([^/]+)$/.exec(path);
+  if (sfxMatch) {
+    const id = decodeURIComponent(sfxMatch[1]);
+    const cat = await db
+      .prepare(`SELECT id, title, description FROM sfx_categories WHERE id = ?1 LIMIT 1`)
+      .bind(id)
+      .first<{ id: string; title: string; description: string | null }>();
+    if (!cat) return NOT_FOUND;
+    const subs = await db
+      .prepare(`SELECT title FROM sfx_subcategories WHERE category_id = ?1 ORDER BY sort, title`)
+      .bind(id)
+      .all<{ title: string }>();
+    const sounds = await db
+      .prepare(
+        `SELECT name FROM sfx WHERE category_id = ?1 AND status = 'published'
+          ORDER BY created_at DESC LIMIT 100`,
+      )
+      .bind(id)
+      .all<{ name: string }>();
+    const description =
+      cat.description?.trim() ||
+      `Download royalty-free ${cat.title.toLowerCase()} sound effects in studio-quality WAV. Cleared for commercial use and safe for YouTube — preview and download on TV Music Store.`;
+    const faq = buildSfxFaq(cat.title);
+    const parts = [
+      `<h1 style="${H1_STYLE}">${esc(cat.title)} Sound Effects</h1>`,
+      `<p style="${P_STYLE}">${esc(description)}</p>`,
+    ];
+    if (subs.results.length > 0) {
+      parts.push(`<h2>Categories</h2><p style="${P_STYLE}">${esc(subs.results.map((x) => x.title).join(", "))}</p>`);
+    }
+    if (sounds.results.length > 0) {
+      parts.push(
+        `<h2>Sounds</h2><ul style="${LIST_STYLE}">${sounds.results
+          .map((x) => `<li>${esc(x.name)}</li>`)
+          .join("")}</ul>`,
+      );
+    }
+    parts.push(
+      `<h2>Frequently Asked Questions</h2>` +
+        faq.map((f) => `<h3>${esc(f.q)}</h3><p style="${P_STYLE}">${esc(f.a)}</p>`).join(""),
+    );
+    return {
+      title: `${cat.title} Sound Effects — Royalty-Free WAV Downloads | TV Music Store`,
+      description,
+      path,
+      jsonLd: sfxFaqJsonLd(cat.title),
+      body: `<div style="${SHELL_STYLE}">${parts.join("")}</div>`,
+    };
+  }
+
   // ---- /discover hub ----------------------------------------------------
   if (path === "/discover") {
     const vocab = await getVocabularies(db);
@@ -423,12 +539,13 @@ const buildSeo = async (env: Env, url: URL): Promise<Seo | null> => {
   const tagMatch = /^\/discover\/([a-z]+)\/([^/]+)$/.exec(path);
   if (tagMatch) {
     const column = GROUP_COLUMN[tagMatch[1]];
-    if (!column) return null;
+    if (!column) return NOT_FOUND;
     const slug = decodeURIComponent(tagMatch[2]).toLowerCase();
     const vocab = await getVocabularies(db);
     const pool =
       column === "use_case" ? vocab.useCase : column === "genre" ? vocab.genre : vocab.mood;
     const rows = await tracksByFacet(db, column, slug);
+    if (rows.length === 0 && !pool.some((value) => slugify(value) === slug)) return NOT_FOUND;
     const label =
       pool.find((value) => slugify(value) === slug) ??
       splitValues(rows[0]?.[column] ?? "").find((value) => slugify(value) === slug) ??
@@ -457,16 +574,16 @@ const buildSeo = async (env: Env, url: URL): Promise<Seo | null> => {
     const slug = decodeURIComponent(trackMatch[1]);
     const code = Number(slug.split("-")[0]);
     let row = await db
-      .prepare(`${TRACK_SELECT} WHERE t.slug = ?1 LIMIT 1`)
+      .prepare(`${TRACK_SELECT} WHERE t.slug = ?1 AND ${PUBLISHED} LIMIT 1`)
       .bind(slug)
       .first<TrackRow>();
     if (!row && Number.isFinite(code) && code > 0) {
       row = await db
-        .prepare(`${TRACK_SELECT} WHERE t.code = ?1 LIMIT 1`)
+        .prepare(`${TRACK_SELECT} WHERE t.code = ?1 AND ${PUBLISHED} LIMIT 1`)
         .bind(code)
         .first<TrackRow>();
     }
-    if (!row) return null;
+    if (!row) return NOT_FOUND;
 
     const facets = [...splitValues(row.use_case), ...splitValues(row.genre), ...splitValues(row.mood)];
     const description =
@@ -512,7 +629,7 @@ const buildSeo = async (env: Env, url: URL): Promise<Seo | null> => {
       .prepare(`SELECT id, slug, display_name, bio FROM composers WHERE slug = ?1 LIMIT 1`)
       .bind(slug)
       .first<{ id: string; slug: string; display_name: string; bio: string | null }>();
-    if (!composer) return null;
+    if (!composer) return NOT_FOUND;
     const rows = await db
       .prepare(
         `${TRACK_SELECT} WHERE ${PUBLISHED} AND t.composer_id = ?1 ORDER BY t.created_at DESC LIMIT 100`,
@@ -549,7 +666,7 @@ const buildSeo = async (env: Env, url: URL): Promise<Seo | null> => {
       .prepare(`SELECT id, title, description FROM ${table} WHERE id = ?1 LIMIT 1`)
       .bind(id)
       .first<{ id: string; title: string; description: string | null }>();
-    if (!item) return null;
+    if (!item) return NOT_FOUND;
     const rows = await db
       .prepare(
         `${TRACK_SELECT}
@@ -570,7 +687,8 @@ const buildSeo = async (env: Env, url: URL): Promise<Seo | null> => {
     };
   }
 
-  return null;
+  // Every public route is handled above; anything else is not a page.
+  return NOT_FOUND;
 };
 
 export const onRequest = async (ctx: MiddlewareCtx): Promise<Response> => {
@@ -599,7 +717,7 @@ export const onRequest = async (ctx: MiddlewareCtx): Promise<Response> => {
   const response = await ctx.next();
   if (!(response.headers.get("content-type") ?? "").includes("text/html")) return response;
 
-  let seo: Seo | null = null;
+  let seo: Seo | typeof NOT_FOUND | null = null;
   try {
     seo = await buildSeo(ctx.env, url);
   } catch {
@@ -607,6 +725,30 @@ export const onRequest = async (ctx: MiddlewareCtx): Promise<Response> => {
     return response;
   }
   if (!seo) return response;
+  if (seo === NOT_FOUND) {
+    // Same app shell (React still shows its own "not found" screen), but a
+    // real 404 status and noindex so Google drops the URL.
+    const notFound = new HTMLRewriter()
+      .on("title", {
+        element(el) {
+          el.setInnerContent("Page not found | TV Music Store");
+        },
+      })
+      .on('meta[name="robots"]', {
+        element(el) {
+          el.setAttribute("content", "noindex, follow");
+        },
+      })
+      .on('link[rel="canonical"]', {
+        element(el) {
+          el.remove();
+        },
+      })
+      .transform(response);
+    const headers = new Headers(notFound.headers);
+    headers.set("x-robots-tag", "noindex");
+    return new Response(notFound.body, { status: 404, headers });
+  }
 
   const canonical = SITE + seo.path;
   const image = seo.image ?? OG_IMAGE;

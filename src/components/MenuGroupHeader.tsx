@@ -15,6 +15,7 @@ const MenuGroupHeader = ({
 }) => (
   <button
     type="button"
+    data-keep-open
     onClick={onClick}
     className={`flex w-full items-center justify-between rounded-lg px-3 py-2 font-body text-xs font-semibold uppercase tracking-[0.18em] transition-colors ${
       open ? "text-[#F4C430]" : "text-muted-foreground/70 hover:text-foreground"

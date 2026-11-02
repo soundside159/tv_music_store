@@ -4985,3 +4985,16 @@ True: `brandCover()` was only in the AI path.
 
 ## 2026-11-02 Editor can remove tracks on collection/playlist pages
 - AdminInlineContent.tsx: ContentAdmin.canRemoveTracks (admin or editor); admin content data now loads for editors too; makeRemoveTrackHandler gated on canRemoveTracks, so the X on track rows of CollectionDetail/PlaylistDetail shows for editors. All other inline editing still needs admin.enabled. Playlists.tsx: persisted empty themes only for admin. Backend already allowed set_tracks for editors (logged in track_edit_log).
+
+## 2026-11-02 Finance on phone, store share, mobile menus close
+- finance.ts GET returns storeBalance {released, held}: per allocated event net minus author allocations, cleared by the same hold-back as composers.
+- AdminFinance.tsx: Composer payouts shows phone cards below sm (all columns visible), table from sm up; extra row "TV Music Store (you)" in both; payAction() shared helper.
+- SectionDrawer.tsx: closes on any link/button tap inside (admin items change section without URL change); MenuGroupHeader has data-keep-open so group toggles keep it open.
+- Navigation.tsx: header drawer closes on any link tap (same-URL links did not close it).
+
+## 2026-11-02 SEO audit fixes
+- _middleware.ts: prerender + canonical for /sound-effects and /sound-effects/<category> (category list, subcategories, up to 100 sound names, FAQ + FAQPage JSON-LD); STATIC_PAGES now also /contact, /license-terms, /privacy, /refunds (they used to carry the HOME canonical).
+- Unknown pages (missing track/artist/collection/playlist/guide/sfx category, unknown tag with no tracks, any unhandled path) now return HTTP 404 + noindex (meta robots, X-Robots-Tag, canonical removed) instead of 200 with the home canonical. buildSeo returns NOT_FOUND for these; null still means "serve plain shell" (no DB / DB error).
+- Track pages: only published+approved tracks are prerendered (drafts -> 404).
+- sitemap.ts: lastmod (guides: updated, tracks: publish_at|created_at, sfx: newest sound), /sound-effects + categories with published sounds. sitemap-pages.xml: /contact.
+- New functions/llms.txt.ts: /llms.txt generated live (key facts, main pages, released guides).

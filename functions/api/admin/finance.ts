@@ -209,6 +209,25 @@ export const onRequestGet = async (ctx: Ctx) => {
     })
     .sort((a, b) => b.released - a.released);
 
+  // ---- The store's own share (TV Music Store), same clearing windows -------
+  // Per split payment: its net minus what went to composers. Month = the
+  // month the split was booked in, so it clears on the same date as theirs.
+  const storeLines = await db
+    .prepare(
+      `SELECT COALESCE(MIN(a.month), substr(e.created_at, 1, 7)) AS month,
+              e.net_cents - COALESCE(SUM(CASE WHEN a.kind = 'author' THEN a.amount_cents END), 0) AS amount
+         FROM revenue_events e
+         LEFT JOIN revenue_allocations a ON a.event_id = e.id
+        WHERE e.status = 'allocated'
+        GROUP BY e.id`,
+    )
+    .all<{ month: string; amount: number }>();
+  const storeBalance = { released: 0, held: 0 };
+  for (const line of storeLines.results) {
+    if (releaseDateOf(line.month, policy.holdbackDays) <= today) storeBalance.released += line.amount ?? 0;
+    else storeBalance.held += line.amount ?? 0;
+  }
+
   const sum = (key: "gross" | "tax" | "fee" | "net") =>
     totals.results.reduce((acc, r) => acc + (r[key] ?? 0), 0);
 
@@ -222,6 +241,7 @@ export const onRequestGet = async (ctx: Ctx) => {
     policy,
     releaseDate: releaseDateOf(month, policy.holdbackDays),
     balances,
+    storeBalance,
     totals: {
       gross: sum("gross"),
       tax: sum("tax"),

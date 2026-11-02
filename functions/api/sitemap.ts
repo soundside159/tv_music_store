@@ -21,8 +21,12 @@ const slugify = (value: string) =>
 const xmlEscape = (value: string) =>
   value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-const url = (path: string, changefreq: string, priority: string) =>
-  `  <url><loc>${xmlEscape(SITE + path)}</loc><changefreq>${changefreq}</changefreq><priority>${priority}</priority></url>`;
+// lastmod (YYYY-MM-DD) is the field Google actually uses to decide what to
+// re-crawl; changefreq/priority are ignored by it but harmless for others.
+const url = (path: string, changefreq: string, priority: string, lastmod?: string | null) =>
+  `  <url><loc>${xmlEscape(SITE + path)}</loc>${
+    lastmod && /^\d{4}-\d{2}-\d{2}/.test(lastmod) ? `<lastmod>${lastmod.slice(0, 10)}</lastmod>` : ""
+  }<changefreq>${changefreq}</changefreq><priority>${priority}</priority></url>`;
 
 export const onRequestGet = async (ctx: Ctx) => {
   // The owner's publication dates (Admin -> Articles) override the built-in ones.
@@ -37,12 +41,14 @@ export const onRequestGet = async (ctx: Ctx) => {
     }
   }
 
+  const live = publishedGuides();
+  const newestGuide = live.map((g) => g.updated).sort().pop();
   const lines: string[] = [
     url("/discover", "weekly", "0.8"),
-    url("/guides", "weekly", "0.8"),
+    url("/guides", "weekly", "0.8", newestGuide),
     // The answer library — these are the pages AI engines and Google quote.
     // Only RELEASED guides: a scheduled one must not be advertised before it exists.
-    ...publishedGuides().map((guide) => url(`/guides/${guide.slug}`, "monthly", "0.8")),
+    ...live.map((guide) => url(`/guides/${guide.slug}`, "monthly", "0.8", guide.updated)),
   ];
 
   if (ctx.env.DB) {
@@ -70,14 +76,35 @@ export const onRequestGet = async (ctx: Ctx) => {
     try {
       const rows = await db
         .prepare(
-          `SELECT slug FROM tracks
+          `SELECT slug, COALESCE(publish_at, created_at) AS since FROM tracks
             WHERE status = 'published' AND moderation_status = 'approved'
             ORDER BY created_at DESC LIMIT 5000`,
         )
-        .all<{ slug: string }>();
-      for (const t of rows.results) lines.push(url(`/track/${t.slug}`, "weekly", "0.7"));
+        .all<{ slug: string; since: string | null }>();
+      for (const t of rows.results) lines.push(url(`/track/${t.slug}`, "weekly", "0.7", t.since));
     } catch {
       // tracks table missing
+    }
+
+    // Sound effects: the landing page + every category that has published sounds.
+    try {
+      const rows = await db
+        .prepare(
+          `SELECT c.id, MAX(s.created_at) AS newest
+             FROM sfx_categories c
+             JOIN sfx s ON s.category_id = c.id AND s.status = 'published'
+            GROUP BY c.id ORDER BY c.sort, c.title`,
+        )
+        .all<{ id: string; newest: string | null }>();
+      if (rows.results.length > 0) {
+        const newest = rows.results.map((r) => r.newest ?? "").sort().pop();
+        lines.push(url("/sound-effects", "weekly", "0.8", newest));
+        for (const c of rows.results) {
+          lines.push(url(`/sound-effects/${encodeURIComponent(c.id)}`, "weekly", "0.7", c.newest));
+        }
+      }
+    } catch {
+      // sfx tables missing
     }
 
     // Composer pages.

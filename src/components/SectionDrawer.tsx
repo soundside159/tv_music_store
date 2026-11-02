@@ -86,7 +86,18 @@ const SectionDrawer = ({ children, label = "Menu" }: { children: ReactNode; labe
               <X size={22} />
             </button>
           </div>
-          <div className="px-3 py-4">{open ? children : null}</div>
+          {/* Admin items switch the section without changing the URL, so the
+              location effect above never fires for them: close on any tap on
+              a link or button inside, except group headers (data-keep-open). */}
+          <div
+            className="px-3 py-4"
+            onClick={(e) => {
+              const el = (e.target as HTMLElement).closest("a, button");
+              if (el && !el.hasAttribute("data-keep-open")) setOpen(false);
+            }}
+          >
+            {open ? children : null}
+          </div>
           <div className="h-6 shrink-0" />
         </div>
       </div>

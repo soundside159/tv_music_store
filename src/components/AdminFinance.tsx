@@ -69,6 +69,8 @@ interface Report {
   months: string[];
   policy: { holdbackDays: number; thresholdCents: number };
   balances: Balance[];
+  /** TV Music Store's own share, split into cleared / still clearing. */
+  storeBalance?: { released: number; held: number };
   totals: {
     gross: number;
     tax: number;
@@ -309,6 +311,31 @@ const AdminFinance = () => {
   }
 
   const t = report.totals;
+  const store = report.storeBalance;
+
+  // Pay button / status for one composer (shared by table and phone cards).
+  const payAction = (b: Balance) =>
+    b.payable ? (
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() =>
+          void act(
+            { action: "pay_balance", composerId: b.composerId },
+            `Paid out ${b.name}`,
+          )
+        }
+        className="rounded-md bg-[#F4C430] px-3 py-1 font-body text-xs font-bold text-background transition-colors hover:bg-[#F4C430]/85 disabled:opacity-50"
+      >
+        Mark paid
+      </button>
+    ) : (
+      <span className="font-body text-[11px] text-muted-foreground/70">
+        {b.released > 0
+          ? `Under ${money(report.policy.thresholdCents)}`
+          : "Clearing"}
+      </span>
+    );
 
   return (
     <div className="space-y-4">
@@ -389,7 +416,50 @@ const AdminFinance = () => {
 
       {/* 3 — who to pay */}
       <Card title="Composer payouts">
-        <div className="overflow-x-auto">
+        {/* Phone: one card per composer, every number visible without scrolling. */}
+        <div className="divide-y divide-border/40 sm:hidden">
+          {report.balances.length === 0 && (
+            <p className="py-6 text-center font-body text-sm text-muted-foreground">Nothing to pay out.</p>
+          )}
+          {report.balances.map((b) => (
+            <div key={b.composerId} className="py-3 font-body text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-medium text-foreground">{b.name}</span>
+                {payAction(b)}
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                <span className="text-muted-foreground">Earned</span>
+                <span className="text-right tabular-nums text-foreground">{money(b.released)}</span>
+                <span className="text-muted-foreground">
+                  UK tax{b.withholdingBps ? ` ${b.withholdingBps / 100}%${b.taxCountry ? ` ${b.taxCountry}` : ""}` : ""}
+                </span>
+                <span className="text-right tabular-nums text-muted-foreground">
+                  {b.withheld ? `−${money(b.withheld)}` : "—"}
+                </span>
+                <span className="text-muted-foreground">Send to bank</span>
+                <span className="text-right font-semibold tabular-nums" style={{ color: GOLD }}>
+                  {money(b.toPay ?? b.released)}
+                </span>
+                <span className="text-muted-foreground">Still clearing</span>
+                <span className="text-right tabular-nums text-muted-foreground">{money(b.held)}</span>
+              </div>
+            </div>
+          ))}
+          {store && (store.released !== 0 || store.held !== 0) && (
+            <div className="py-3 font-body text-sm">
+              <span className="font-medium text-foreground">TV Music Store (you)</span>
+              <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                <span className="text-muted-foreground">Earned</span>
+                <span className="text-right font-semibold tabular-nums" style={{ color: GOLD }}>
+                  {money(store.released)}
+                </span>
+                <span className="text-muted-foreground">Still clearing</span>
+                <span className="text-right tabular-nums text-muted-foreground">{money(store.held)}</span>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="hidden overflow-x-auto sm:block">
           <table className="w-full min-w-[40rem] border-collapse font-body text-sm">
             <thead>
               <tr className="border-b border-border/60 text-left">
@@ -440,31 +510,21 @@ const AdminFinance = () => {
                   <td className="py-2.5 pr-4 text-right tabular-nums text-muted-foreground">
                     {money(b.held)}
                   </td>
-                  <td className="py-2.5 text-right">
-                    {b.payable ? (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() =>
-                          void act(
-                            { action: "pay_balance", composerId: b.composerId },
-                            `Paid out ${b.name}`,
-                          )
-                        }
-                        className="rounded-md bg-[#F4C430] px-3 py-1 font-body text-xs font-bold text-background transition-colors hover:bg-[#F4C430]/85 disabled:opacity-50"
-                      >
-                        Mark paid
-                      </button>
-                    ) : (
-                      <span className="font-body text-[11px] text-muted-foreground/70">
-                        {b.released > 0
-                          ? `Under ${money(report.policy.thresholdCents)}`
-                          : "Clearing"}
-                      </span>
-                    )}
-                  </td>
+                  <td className="py-2.5 text-right">{payAction(b)}</td>
                 </tr>
               ))}
+              {store && (store.released !== 0 || store.held !== 0) && (
+                <tr className="border-t border-border/60">
+                  <td className="py-2.5 pr-4 font-medium text-foreground">TV Music Store (you)</td>
+                  <td className="py-2.5 pr-4 text-right tabular-nums text-foreground">{money(store.released)}</td>
+                  <td className="py-2.5 pr-4 text-right tabular-nums text-muted-foreground">—</td>
+                  <td className="py-2.5 pr-4 text-right font-semibold tabular-nums" style={{ color: GOLD }}>
+                    {money(store.released)}
+                  </td>
+                  <td className="py-2.5 pr-4 text-right tabular-nums text-muted-foreground">{money(store.held)}</td>
+                  <td className="py-2.5 text-right font-body text-[11px] text-muted-foreground/70">Yours</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

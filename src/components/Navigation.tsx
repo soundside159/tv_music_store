@@ -376,6 +376,11 @@ const Navigation = () => {
         }`}
       />
       <aside
+        onClick={(e) => {
+          // A link to the page you are already on changes no URL, so the
+          // location effect does not close the drawer: close on any link tap.
+          if ((e.target as HTMLElement).closest("a")) setIsOpen(false);
+        }}
         role="dialog"
         aria-modal="true"
         aria-label="Menu"
