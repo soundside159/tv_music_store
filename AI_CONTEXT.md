@@ -4862,3 +4862,8 @@ True: `brandCover()` was only in the AI path.
     in its CLAUDE.md ("Ссылки с меткой") so that chat tags every link it posts.
   Visitor id is a DAILY hash, so a funnel/source only joins steps made the same day.
   eslint clean (one pre-existing warning), tsc only the two pre-existing errors. Owner runs deploy.bat.
+- **2026-11-02 (fix: Sales block "<!DOCTYPE" error):** /api/admin/sales threw "ambiguous column
+  name: slug" (GROUP BY name, slug collided with tracks.slug/composers.slug) -> Cloudflare HTML
+  500. Now GROUP BY c.display_name, c.slug; handler wrapped in try/catch so any future SQL error
+  comes back as JSON. Removed the stale "Revenue & funnel analytics will appear here…" card from
+  the dashboard. Tip: test new SQL against migrations/0001_init.sql in sqlite3 before deploying.

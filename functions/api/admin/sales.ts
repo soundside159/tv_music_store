@@ -19,6 +19,15 @@ const isoDay = (offsetDays: number) => {
 };
 
 export const onRequestGet = async (ctx: Ctx) => {
+  try {
+    return await handle(ctx);
+  } catch (e) {
+    // Never let a query error turn into an HTML 500 page.
+    return json({ error: `Sales: ${(e as Error).message}` }, 500);
+  }
+};
+
+const handle = async (ctx: Ctx) => {
   if (!ctx.env.DB) return json({ error: "DB not bound" }, 503);
   const user = await getSessionUser(ctx);
   if (!user) return json({ error: "Not signed in" }, 401);
@@ -88,7 +97,7 @@ export const onRequestGet = async (ctx: Ctx) => {
          LEFT JOIN tracks t ON t.id = e.track_id OR t.slug = e.track_id
          LEFT JOIN composers c ON c.id = t.composer_id
         WHERE e.source = 'license' AND e.status != 'refunded' AND substr(e.created_at,1,10) >= ?1
-        GROUP BY name, slug ORDER BY gross DESC LIMIT 8`,
+        GROUP BY c.display_name, c.slug ORDER BY gross DESC LIMIT 8`,
     )
     .bind(since)
     .all<{ name: string; slug: string | null; n: number; gross: number }>();

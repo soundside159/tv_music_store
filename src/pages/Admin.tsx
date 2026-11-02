@@ -791,11 +791,6 @@ const Admin = () => {
                     </p>
                   </Card>
                 )}
-                <Card>
-                  <p className="font-body text-sm text-muted-foreground">
-                    Revenue &amp; funnel analytics will appear here once subscription billing goes live.
-                  </p>
-                </Card>
 
                 {/* Everything below the rule is "services & credits" — the
                     dashboard is becoming the owner's single landing screen. */}
