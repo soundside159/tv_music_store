@@ -1,4 +1,4 @@
-import { ensureAgreementTable } from "../_agreement";
+import { ensureAgreementTable, ensureAiOptinTable } from "../_agreement";
 import { ensureUploadPermColumns } from "./upload-audio";
 import { ensureStripeColumns } from "../stripe/_stripe";
 import {
@@ -145,11 +145,24 @@ export const onRequestGet = async (ctx: Ctx) => {
     // table missing - nobody has signed yet
   }
 
+  // Optional AI Training Addendum opt-ins.
+  const aiByUser = new Map<string, { optedIn: boolean; since: string | null }>();
+  try {
+    await ensureAiOptinTable(ctx.env.DB);
+    const ai = await ctx.env.DB.prepare(
+      `SELECT user_id, opted_in, signed_at FROM composer_ai_optin`,
+    ).all<{ user_id: string; opted_in: number; signed_at: string | null }>();
+    for (const r of ai.results ?? []) aiByUser.set(r.user_id, { optedIn: !!r.opted_in, since: r.signed_at });
+  } catch {
+    // table missing
+  }
+
   return json({
     users: rows.results.map((u) => ({
       ...u,
       cue: cueByUser.get(u.id) ?? null,
       agreement: agreementByUser.get(u.id) ?? null,
+      aiOptin: aiByUser.get(u.id) ?? null,
     })),
     sfxDownloads,
   });

@@ -135,7 +135,7 @@ const AgreementText = ({ signed }: { signed?: SignedAgreement | null }) => (
               ["PRO", signed.pro ?? "None"],
               ["IPI/CAE number", signed.ipi ?? "None"],
               ["Publisher", signed.publisher ?? "None"],
-              ["Payout method", signed.payout],
+              ["Bank details for payouts", signed.payout],
             ].map(([k, v]) => (
               <tr key={k}>
                 <td className="w-1/3 border-b border-border/50 py-1.5 pr-4 font-semibold print:border-gray-400">{k}</td>

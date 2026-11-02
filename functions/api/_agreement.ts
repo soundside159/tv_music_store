@@ -69,3 +69,30 @@ export const hasSignedCurrent = async (db: D1Database, userId: string): Promise<
 
 export const AGREEMENT_REQUIRED_MSG =
   "Please sign the Composer Agreement first (Account -> Composer -> Agreement), then upload.";
+
+// ---- Optional AI Training Addendum: one row per user, flipped in place. ----
+export const ensureAiOptinTable = async (db: D1Database) => {
+  await db
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS composer_ai_optin (
+         user_id TEXT PRIMARY KEY,
+         composer_id TEXT,
+         version TEXT NOT NULL,
+         opted_in INTEGER NOT NULL DEFAULT 0,
+         signed_at TEXT,
+         withdrawn_at TEXT,
+         updated_at TEXT NOT NULL
+       )`,
+    )
+    .run();
+};
+
+export interface AiOptinRow {
+  user_id: string;
+  composer_id: string | null;
+  version: string;
+  opted_in: number;
+  signed_at: string | null;
+  withdrawn_at: string | null;
+  updated_at: string;
+}

@@ -4918,3 +4918,25 @@ True: `brandCover()` was only in the AI path.
   ID double-click edit, row cover menu. Navigation: "Editor Dashboard" link
   (/admin?section=tracksedit) in the account dropdown and mobile drawer.
   eslint clean, tsc only the two pre-existing errors. Owner runs deploy.bat.
+- **2026-11-02 (agreement <-> cue-sheet sync):** the signing form now PRE-FILLS legal name, PRO,
+  IPI and publisher name / PRO / IPI from the composer's cue-sheet info (Admin -> Users), and
+  signing WRITES the signed values back to composers.cue_name / pro / ipi / publisher_name /
+  publisher_pro / publisher_ipi (empty answers keep the existing value). Publisher is three
+  fields in the form; the agreement record stores them joined in `publisher`.
+  Files: functions/api/composer/agreement.ts (GET `profile`, POST update),
+  src/components/ComposerAgreement.tsx.
+- **2026-11-02 (agreement 3.5 + bank payouts + optional AI Training Addendum):**
+  * Agreement text (still v1.0, nobody had signed yet): new **3.5 Your name and profile**
+    (artist name, legal name where cue sheets/certificates need it, approved photo/bio for
+    promotion, no extra payment); **4.7** payouts are by **bank transfer**, composer's own bank
+    fees are his. Schedule/form field = "Bank details for payouts" (textarea).
+  * **AI Training Addendum v1.0** (optional, opt-in/withdrawable): text in
+    `src/content/composerAgreement.ts` (AI_ADDENDUM_*) and as an appendix in the Claude Doc.
+    50% of net from AI dataset licences (split by partner usage report, else by number of Works),
+    only fully-owned Works, no voice/style-clone models, withdrawal = new deals only.
+    Storage: lazy table `composer_ai_optin` (one row per user, flipped in place) in
+    `functions/api/_agreement.ts`; POST /api/composer/agreement {action:"ai_optin", optIn, agree}
+    (requires the current main agreement signed); GET returns aiOptin + aiVersion.
+    UI: card under the signed agreement in Account -> Composer -> Agreement (Opt in / Withdraw);
+    Admin -> Users row menu shows "AI training: opted in / not opted in".
+  * Plan: submit opted-in composers' Works to SourceAudio (AI dataset marketplace) and Musical AI.

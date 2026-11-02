@@ -1,6 +1,12 @@
 import { getSessionUser, json, newId, OWNER_EMAIL, readJson, type Ctx } from "../_utils";
-import { AGREEMENT_VERSION } from "../../../src/content/composerAgreement";
-import { ensureAgreementTable, latestAgreement, type AgreementRow } from "../_agreement";
+import { AGREEMENT_VERSION, AI_ADDENDUM_VERSION } from "../../../src/content/composerAgreement";
+import {
+  ensureAgreementTable,
+  ensureAiOptinTable,
+  latestAgreement,
+  type AgreementRow,
+  type AiOptinRow,
+} from "../_agreement";
 
 // Composer Agreement (click-to-sign).
 // GET            -> { version, signed: row | null, current: bool } for the signed-in composer
@@ -8,6 +14,17 @@ import { ensureAgreementTable, latestAgreement, type AgreementRow } from "../_ag
 // GET ?userId=   -> latest record of that user (admin only)
 // POST {legalName, address, country, payout, pro?, ipi?, publisher?, categories?, agree:true}
 //                -> stores the signature for the current version.
+
+/** Cue-sheet columns on the composer profile (same lazy ALTERs as admin/users.ts). */
+const ensureCueColumns = async (db: Ctx["env"]["DB"]) => {
+  for (const col of ["cue_name", "pro", "ipi", "publisher_name", "publisher_pro", "publisher_ipi"]) {
+    try {
+      await db!.prepare(`ALTER TABLE composers ADD COLUMN ${col} TEXT`).run();
+    } catch {
+      // exists
+    }
+  }
+};
 
 const clean = (v: unknown, max = 300) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
@@ -51,11 +68,44 @@ export const onRequestGet = async (ctx: Ctx) => {
   }
 
   const row = await latestAgreement(db, user.id);
+  await ensureCueColumns(db);
   const composer = await db
-    .prepare(`SELECT id, display_name FROM composers WHERE user_id = ?1 LIMIT 1`)
+    .prepare(
+      `SELECT id, display_name, cue_name, pro, ipi, publisher_name, publisher_pro, publisher_ipi
+         FROM composers WHERE user_id = ?1 LIMIT 1`,
+    )
     .bind(user.id)
-    .first<{ id: string; display_name: string }>();
+    .first<{
+      id: string;
+      display_name: string;
+      cue_name: string | null;
+      pro: string | null;
+      ipi: string | null;
+      publisher_name: string | null;
+      publisher_pro: string | null;
+      publisher_ipi: string | null;
+    }>();
+  await ensureAiOptinTable(db);
+  const ai = await db
+    .prepare(`SELECT * FROM composer_ai_optin WHERE user_id = ?1`)
+    .bind(user.id)
+    .first<AiOptinRow>();
   return json({
+    aiOptin: ai
+      ? { optedIn: !!ai.opted_in, version: ai.version, signedAt: ai.signed_at, withdrawnAt: ai.withdrawn_at }
+      : null,
+    aiVersion: AI_ADDENDUM_VERSION,
+    // Cue-sheet data the admin already entered: pre-fills the signing form.
+    profile: composer
+      ? {
+          legalName: composer.cue_name,
+          pro: composer.pro,
+          ipi: composer.ipi,
+          publisherName: composer.publisher_name,
+          publisherPro: composer.publisher_pro,
+          publisherIpi: composer.publisher_ipi,
+        }
+      : null,
     version: AGREEMENT_VERSION,
     signed: row ? toPublic(row) : null,
     current: !!row && row.version === AGREEMENT_VERSION,
@@ -77,15 +127,43 @@ export const onRequestPost = async (ctx: Ctx) => {
     if (!composer) return json({ error: "Only composer accounts can sign the Composer Agreement" }, 403);
 
     const b = await readJson<Record<string, unknown>>(ctx.request);
+
+    // Optional AI Training Addendum: opt in / withdraw (main agreement first).
+    if (b?.action === "ai_optin") {
+      const signed = await latestAgreement(db, user.id);
+      if (!signed || signed.version !== AGREEMENT_VERSION) {
+        return json({ error: "Sign the Composer Agreement first" }, 400);
+      }
+      await ensureAiOptinTable(db);
+      const now = new Date().toISOString();
+      const optIn = b.optIn === true;
+      if (optIn && b.agree !== true) return json({ error: "Please tick the box to agree" }, 400);
+      await db
+        .prepare(
+          `INSERT INTO composer_ai_optin (user_id, composer_id, version, opted_in, signed_at, withdrawn_at, updated_at)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+           ON CONFLICT(user_id) DO UPDATE SET
+             composer_id = excluded.composer_id,
+             version = CASE WHEN excluded.opted_in = 1 THEN excluded.version ELSE composer_ai_optin.version END,
+             opted_in = excluded.opted_in,
+             signed_at = CASE WHEN excluded.opted_in = 1 THEN excluded.signed_at ELSE composer_ai_optin.signed_at END,
+             withdrawn_at = CASE WHEN excluded.opted_in = 1 THEN NULL ELSE excluded.withdrawn_at END,
+             updated_at = excluded.updated_at`,
+        )
+        .bind(user.id, composer.id, AI_ADDENDUM_VERSION, optIn ? 1 : 0, optIn ? now : null, optIn ? null : now, now)
+        .run();
+      return json({ ok: true, optedIn: optIn });
+    }
+
     if (b?.agree !== true) return json({ error: "Please tick the box to agree" }, 400);
     const legalName = clean(b.legalName, 120);
     const address = clean(b.address, 400);
     const country = clean(b.country, 80);
-    const payout = clean(b.payout, 200);
+    const payout = clean(b.payout, 400);
     if (legalName.length < 3) return json({ error: "Please enter your full legal name" }, 400);
     if (address.length < 5) return json({ error: "Please enter your address" }, 400);
     if (country.length < 2) return json({ error: "Please enter your country" }, 400);
-    if (payout.length < 3) return json({ error: "Please enter how you want to be paid" }, 400);
+    if (payout.length < 3) return json({ error: "Please enter your bank details for payouts" }, 400);
 
     await ensureAgreementTable(db);
     const id = newId("agr");
@@ -110,25 +188,40 @@ export const onRequestPost = async (ctx: Ctx) => {
         null, // categories: upload rights are set by the admin, not chosen here
         clean(b.pro, 40) || null,
         clean(b.ipi, 40) || null,
-        clean(b.publisher, 200) || null,
+        [clean(b.publisherName, 120), clean(b.publisherPro, 40), clean(b.publisherIpi, 40)]
+          .filter(Boolean)
+          .join(", ") || null,
         payout,
         signedAt,
         (ctx.request.headers.get("user-agent") ?? "").slice(0, 200),
       )
       .run();
 
-    // Copy cue-sheet data onto the composer profile (best effort: lazy columns).
+    // The signed details become the composer's cue-sheet info (Admin -> Users
+    // shows them, license PDFs print them). Empty answers keep what was there.
     try {
+      await ensureCueColumns(db);
       await db
         .prepare(
-          `UPDATE composers SET cue_name = COALESCE(NULLIF(cue_name,''), ?1),
-                  pro = COALESCE(NULLIF(pro,''), ?2), ipi = COALESCE(NULLIF(ipi,''), ?3)
-            WHERE id = ?4`,
+          `UPDATE composers SET cue_name = ?1,
+                  pro = COALESCE(NULLIF(?2,''), pro), ipi = COALESCE(NULLIF(?3,''), ipi),
+                  publisher_name = COALESCE(NULLIF(?4,''), publisher_name),
+                  publisher_pro = COALESCE(NULLIF(?5,''), publisher_pro),
+                  publisher_ipi = COALESCE(NULLIF(?6,''), publisher_ipi)
+            WHERE id = ?7`,
         )
-        .bind(legalName, clean(b.pro, 40) || null, clean(b.ipi, 40) || null, composer.id)
+        .bind(
+          legalName,
+          clean(b.pro, 40),
+          clean(b.ipi, 40),
+          clean(b.publisherName, 120),
+          clean(b.publisherPro, 40),
+          clean(b.publisherIpi, 40),
+          composer.id,
+        )
         .run();
     } catch {
-      // cue columns not created yet
+      // best effort
     }
     return json({ ok: true, id, version: AGREEMENT_VERSION, signedAt });
   } catch (e) {

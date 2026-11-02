@@ -125,6 +125,8 @@ interface LiveUser {
   } | null;
   /** Latest Composer Agreement signature (click-to-sign), if any. */
   agreement?: { id: string; version: string; signedAt: string } | null;
+  /** Optional AI Training Addendum opt-in. */
+  aiOptin?: { optedIn: boolean; since: string | null } | null;
 }
 
 interface AdminLicense {
@@ -1278,6 +1280,14 @@ const Admin = () => {
                             Not signed yet. Uploads stay locked until he signs in Account, Composer, Agreement.
                           </p>
                         )}
+                        <p className="mt-1 font-body text-xs text-muted-foreground">
+                          AI training:{" "}
+                          {u.aiOptin?.optedIn ? (
+                            <span className="font-semibold text-emerald-400">opted in</span>
+                          ) : (
+                            "not opted in"
+                          )}
+                        </p>
                       </div>
                     )}
                     {/* Sync / cue-sheet info — printed on this composer's license PDFs. */}
