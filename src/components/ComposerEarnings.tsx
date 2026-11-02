@@ -10,6 +10,8 @@ const GOLD = "#F4C430";
 interface MonthRow {
   month: string;
   amountCents: number;
+  withheldCents?: number;
+  netCents?: number;
   points: number;
   paid: boolean;
   paidAt: string | null;
@@ -25,11 +27,14 @@ interface Earnings {
     lifetimeCents: number;
     paidOutCents: number;
     payableCents: number;
+    payableNetCents?: number;
     heldCents: number;
     payable: boolean;
   };
   months: MonthRow[];
   tracks: { title: string; slug: string; points: number }[];
+  /** UK withholding tax on his royalties, basis points (500 = 5%). */
+  withholdingBps?: number;
 }
 
 const money = (cents: number) =>
@@ -103,7 +108,9 @@ const ComposerEarnings = () => {
           hint={
             totals.payableCents > 0 && !totals.payable
               ? `Rolls over until it reaches ${threshold}`
-              : undefined
+              : data.withholdingBps && totals.payableCents > 0
+                ? `${money(totals.payableNetCents ?? totals.payableCents)} after UK tax (${data.withholdingBps / 100}%)`
+                : undefined
           }
         />
         <Stat
@@ -115,6 +122,12 @@ const ComposerEarnings = () => {
 
       <div className="rounded-xl border border-border bg-card p-5">
         <h2 className="font-body text-sm font-semibold text-foreground">Earnings by month</h2>
+        {!!data.withholdingBps && (
+          <p className="mt-1 font-body text-xs text-muted-foreground">
+            TV Music Store keeps back {data.withholdingBps / 100}% UK withholding tax on royalties (the treaty rate for your
+            country) and pays it to HMRC. You can usually claim it as a credit against tax in your own country.
+          </p>
+        )}
         {/* One final figure per month — never a live counter. */}
         <p className="mt-1 font-body text-xs text-muted-foreground">
           {data.openMonth.month} is still running — its total appears on {data.openMonth.publishOn}.
@@ -125,13 +138,19 @@ const ComposerEarnings = () => {
               <tr className="border-b border-border/60 text-left">
                 <th className="py-2 pr-4 font-semibold text-muted-foreground">Month</th>
                 <th className="py-2 pr-4 text-right font-semibold text-muted-foreground">Earned</th>
+                {!!data.withholdingBps && (
+                  <th className="py-2 pr-4 text-right font-semibold text-muted-foreground">UK tax</th>
+                )}
+                {!!data.withholdingBps && (
+                  <th className="py-2 pr-4 text-right font-semibold text-muted-foreground">You receive</th>
+                )}
                 <th className="py-2 font-semibold text-muted-foreground">Status</th>
               </tr>
             </thead>
             <tbody>
               {data.months.length === 0 && (
                 <tr>
-                  <td colSpan={3} className="py-6 text-center text-muted-foreground">
+                  <td colSpan={data.withholdingBps ? 5 : 3} className="py-6 text-center text-muted-foreground">
                     No closed month yet.
                   </td>
                 </tr>
@@ -145,6 +164,16 @@ const ComposerEarnings = () => {
                   >
                     {money(m.amountCents)}
                   </td>
+                  {!!data.withholdingBps && (
+                    <td className="py-2.5 pr-4 text-right tabular-nums text-muted-foreground">
+                      {m.withheldCents ? `−${money(m.withheldCents)}` : "—"}
+                    </td>
+                  )}
+                  {!!data.withholdingBps && (
+                    <td className="py-2.5 pr-4 text-right tabular-nums text-foreground">
+                      {money(m.netCents ?? m.amountCents)}
+                    </td>
+                  )}
                   <td className="py-2.5">
                     <span
                       className={`inline-flex items-center rounded-full border px-2 py-0.5 font-body text-[10px] font-semibold ${

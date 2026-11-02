@@ -6,6 +6,9 @@ import {
   releaseDateOf,
   reverseEvent,
   savePayoutPolicy,
+  ensureWithholdingColumns,
+  withheldOf,
+  withholdingBpsOf,
 } from "../_revenue";
 import { stripeCall } from "../stripe/_stripe";
 import { paypalCall, paypalConfigured, paypalToken } from "../paypal/_paypal";
@@ -138,10 +141,12 @@ export const onRequestGet = async (ctx: Ctx) => {
   // threshold simply rolls forward instead of being wired for pennies.
   const policy = await getPayoutPolicy(db);
   const today = new Date().toISOString().slice(0, 10);
+  await ensureWithholdingColumns(db);
 
   const openLines = await db
     .prepare(
       `SELECT a.month AS month, a.composer_id AS composer_id, c.display_name AS name,
+              MAX(c.withholding_bps) AS bps, MAX(c.tax_country) AS country,
               SUM(a.amount_cents) AS amount
          FROM revenue_allocations a
          LEFT JOIN composers c ON c.id = a.composer_id
@@ -151,11 +156,26 @@ export const onRequestGet = async (ctx: Ctx) => {
           AND (p.status IS NULL OR p.status <> 'paid')
         GROUP BY a.month, a.composer_id`,
     )
-    .all<{ month: string; composer_id: string; name: string | null; amount: number }>();
+    .all<{
+      month: string;
+      composer_id: string;
+      name: string | null;
+      bps: number | null;
+      country: string | null;
+      amount: number;
+    }>();
 
   const balanceBy = new Map<
     string,
-    { composerId: string; name: string; released: number; held: number; months: string[] }
+    {
+      composerId: string;
+      name: string;
+      released: number;
+      held: number;
+      months: string[];
+      withholdingBps: number;
+      taxCountry: string | null;
+    }
   >();
   for (const line of openLines.results) {
     const entry = balanceBy.get(line.composer_id) ?? {
@@ -164,6 +184,8 @@ export const onRequestGet = async (ctx: Ctx) => {
       released: 0,
       held: 0,
       months: [],
+      withholdingBps: Math.max(0, Number(line.bps ?? 0) || 0),
+      taxCountry: line.country,
     };
     if (releaseDateOf(line.month, policy.holdbackDays) <= today) {
       entry.released += line.amount ?? 0;
@@ -175,10 +197,16 @@ export const onRequestGet = async (ctx: Ctx) => {
   }
 
   const balances = [...balanceBy.values()]
-    .map((b) => ({
-      ...b,
-      payable: b.released >= policy.thresholdCents && b.released > 0,
-    }))
+    .map((b) => {
+      const withheld = withheldOf(b.released, b.withholdingBps);
+      return {
+        ...b,
+        /** UK tax kept back for HMRC, and what actually goes to the composer's bank. */
+        withheld,
+        toPay: b.released - withheld,
+        payable: b.released >= policy.thresholdCents && b.released > 0,
+      };
+    })
     .sort((a, b) => b.released - a.released);
 
   const sum = (key: "gross" | "tax" | "fee" | "net") =>
@@ -335,20 +363,25 @@ export const onRequestPost = async (ctx: Ctx) => {
       .all<{ month: string; amount: number }>();
 
     let paidTotal = 0;
+    let withheldTotal = 0;
+    const bps = await withholdingBpsOf(db, composer);
     for (const line of open.results) {
       if (releaseDateOf(line.month, policy.holdbackDays) > today) continue; // still held
+      const gross = line.amount ?? 0;
+      const withheld = withheldOf(gross, bps);
       await db
         .prepare(
-          `INSERT INTO payout_runs (month, composer_id, amount_cents, status, paid_at)
-           VALUES (?1, ?2, ?3, 'paid', ?4)
+          `INSERT INTO payout_runs (month, composer_id, amount_cents, status, paid_at, withheld_cents)
+           VALUES (?1, ?2, ?3, 'paid', ?4, ?5)
            ON CONFLICT(month, composer_id) DO UPDATE SET
-             amount_cents = ?3, status = 'paid', paid_at = ?4`,
+             amount_cents = ?3, status = 'paid', paid_at = ?4, withheld_cents = ?5`,
         )
-        .bind(line.month, composer, line.amount ?? 0, new Date().toISOString())
+        .bind(line.month, composer, gross, new Date().toISOString(), withheld)
         .run();
-      paidTotal += line.amount ?? 0;
+      paidTotal += gross;
+      withheldTotal += withheld;
     }
-    return json({ ok: true, paidCents: paidTotal });
+    return json({ ok: true, paidCents: paidTotal, withheldCents: withheldTotal, sentCents: paidTotal - withheldTotal });
   }
 
   const month = body?.month;
@@ -371,12 +404,14 @@ export const onRequestPost = async (ctx: Ctx) => {
     .bind(month, composerId)
     .first<{ amount: number }>();
 
+  await ensureWithholdingColumns(db);
+  const bps = await withholdingBpsOf(db, composerId);
   await db
     .prepare(
-      `INSERT INTO payout_runs (month, composer_id, amount_cents, status, paid_at)
-       VALUES (?1, ?2, ?3, ?4, ?5)
+      `INSERT INTO payout_runs (month, composer_id, amount_cents, status, paid_at, withheld_cents)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6)
        ON CONFLICT(month, composer_id) DO UPDATE SET
-         amount_cents = ?3, status = ?4, paid_at = ?5`,
+         amount_cents = ?3, status = ?4, paid_at = ?5, withheld_cents = ?6`,
     )
     .bind(
       month,
@@ -384,6 +419,7 @@ export const onRequestPost = async (ctx: Ctx) => {
       owed?.amount ?? 0,
       paid ? "paid" : "due",
       paid ? new Date().toISOString() : null,
+      paid ? withheldOf(owed?.amount ?? 0, bps) : 0,
     )
     .run();
 

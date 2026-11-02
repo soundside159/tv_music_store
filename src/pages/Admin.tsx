@@ -122,6 +122,8 @@ interface LiveUser {
     publisherIpi: string | null;
     canUploadTracks?: string | null;
     canUploadSfx?: string | null;
+    taxCountry?: string | null;
+    withholdingPercent?: string | null;
   } | null;
   /** Latest Composer Agreement signature (click-to-sign), if any. */
   agreement?: { id: string; version: string; signedAt: string } | null;
@@ -549,6 +551,10 @@ const Admin = () => {
                   publisherName: cueDraft.publisherName ?? "",
                   publisherPro: cueDraft.publisherPro ?? "",
                   publisherIpi: cueDraft.publisherIpi ?? "",
+                  canUploadTracks: u.cue?.canUploadTracks,
+                  canUploadSfx: u.cue?.canUploadSfx,
+                  taxCountry: (cueDraft.taxCountry ?? "").toUpperCase() || u.cue?.taxCountry,
+                  withholdingPercent: cueDraft.withholdingPercent || u.cue?.withholdingPercent,
                 },
               }
             : u,
@@ -1060,6 +1066,8 @@ const Admin = () => {
                                         publisherName: u.cue?.publisherName ?? "",
                                         publisherPro: u.cue?.publisherPro ?? "",
                                         publisherIpi: u.cue?.publisherIpi ?? "",
+                                        taxCountry: u.cue?.taxCountry ?? "",
+                                        withholdingPercent: u.cue?.withholdingPercent ?? "",
                                       });
                                     }}
                                     className={`rounded-md border px-2 py-1 transition-colors ${
@@ -1305,6 +1313,8 @@ const Admin = () => {
                               ["publisherName", "Publisher"],
                               ["publisherPro", "Publisher PRO"],
                               ["publisherIpi", "Publisher IPI / CAE"],
+                              ["taxCountry", "Tax country code (PL, UA, GB...)"],
+                              ["withholdingPercent", "UK tax withheld on payouts, % (e.g. 5)"],
                             ] as const
                           ).map(([key, ph]) => (
                             <input

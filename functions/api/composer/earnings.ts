@@ -1,5 +1,12 @@
 import { getSessionUser, json, type Ctx } from "../_utils";
-import { allocateDue, ensureRevenueTables, getPayoutPolicy, releaseDateOf } from "../_revenue";
+import {
+  allocateDue,
+  ensureRevenueTables,
+  getPayoutPolicy,
+  releaseDateOf,
+  withheldOf,
+  withholdingBpsOf,
+} from "../_revenue";
 
 // GET /api/composer/earnings — the signed-in composer's real money.
 //
@@ -26,6 +33,7 @@ export const onRequestGet = async (ctx: Ctx) => {
 
   const policy = await getPayoutPolicy(db);
   const today = new Date().toISOString().slice(0, 10);
+  const bps = await withholdingBpsOf(db, composer.id); // also creates the columns
 
   // Per-month earnings + whether the owner has already paid that month.
   const months = await db
@@ -34,7 +42,8 @@ export const onRequestGet = async (ctx: Ctx) => {
               SUM(a.amount_cents) AS amount,
               SUM(a.points) AS points,
               MAX(COALESCE(p.status, 'due')) AS status,
-              MAX(p.paid_at) AS paid_at
+              MAX(p.paid_at) AS paid_at,
+              MAX(p.withheld_cents) AS withheld
          FROM revenue_allocations a
          LEFT JOIN payout_runs p ON p.month = a.month AND p.composer_id = a.composer_id
         WHERE a.kind = 'author' AND a.composer_id = ?1
@@ -49,6 +58,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       points: number;
       status: string;
       paid_at: string | null;
+      withheld: number | null;
     }>();
 
   // A composer only ever sees FINALISED months (owner's rule, and the standard
@@ -64,9 +74,13 @@ export const onRequestGet = async (ctx: Ctx) => {
     .map((m) => {
       const releaseDate = releaseDateOf(m.month, policy.holdbackDays);
       const paid = m.status === "paid";
+      // Paid months keep the tax actually withheld; open months use today's rate.
+      const withheldCents = paid ? (m.withheld ?? 0) : withheldOf(m.amount ?? 0, bps);
       return {
         month: m.month,
         amountCents: m.amount ?? 0,
+        withheldCents,
+        netCents: (m.amount ?? 0) - withheldCents,
         points: m.points ?? 0,
         paid,
         paidAt: m.paid_at,
@@ -81,6 +95,9 @@ export const onRequestGet = async (ctx: Ctx) => {
   const releasedUnpaid = rows
     .filter((r) => r.state === "payable")
     .reduce((sum, r) => sum + r.amountCents, 0);
+  const payableNet = rows
+    .filter((r) => r.state === "payable")
+    .reduce((sum, r) => sum + r.netCents, 0);
   const held = rows.filter((r) => r.state === "held").reduce((sum, r) => sum + r.amountCents, 0);
 
   // Which of his tracks earned, this month and overall — the "why is it this
@@ -107,12 +124,16 @@ export const onRequestGet = async (ctx: Ctx) => {
       holdbackDays: policy.holdbackDays,
       thresholdCents: policy.thresholdCents,
     },
+    /** UK withholding tax rate on his royalties, basis points (500 = 5%). */
+    withholdingBps: bps,
     /** The month still running — shown WITHOUT a figure, on purpose. */
     openMonth: { month: openMonth, publishOn },
     totals: {
       lifetimeCents: lifetime,
       paidOutCents: paidOut,
       payableCents: releasedUnpaid,
+      /** What will actually reach his bank after UK tax. */
+      payableNetCents: payableNet,
       heldCents: held,
       payable: releasedUnpaid >= policy.thresholdCents && releasedUnpaid > 0,
     },

@@ -4940,3 +4940,25 @@ True: `brandCover()` was only in the AI path.
     UI: card under the signed agreement in Account -> Composer -> Agreement (Opt in / Withdraw);
     Admin -> Users row menu shows "AI training: opted in / not opted in".
   * Plan: submit opted-in composers' Works to SourceAudio (AI dataset marketplace) and Musical AI.
+- **2026-11-02 (UK withholding tax on composer payouts):** owner decided to withhold UK tax on
+  royalties paid to composers living abroad at the treaty rate (2 Polish composers -> 5%,
+  GarnaVutka in Ukraine -> 5% since 2020 per the 2017 protocol, UK residents 0%).
+  * `src/content/withholding.ts` (pure data): TREATY_ROYALTY_PERCENT for ~60 countries, each
+    checked on gov.uk HMRC treaty summaries / treaty texts on 2026-11-02 (Russia, Belarus,
+    Brazil = no treaty -> 20%; Philippines -> 20%; Greece 0% only if taxed at home);
+    COUNTRIES (249, from pycountry); withholdingFor(code) -> unknown country = 20% (UK basic).
+  * Agreement 4.9 now says TVMS withholds UK tax at the treaty rate and pays HMRC (doc + site).
+    Signing form: country is a dropdown with a live note of the rate; signing stores
+    composers.tax_country + withholding_bps (lazy ALTERs, `ensureWithholdingColumns` in
+    _revenue.ts). Admin can override in Users -> Sync / Cue Sheet Info (tax country code +
+    "UK tax withheld %"); users.ts GET/PATCH carry them (and the cue save no longer drops the
+    upload-permission flags locally).
+  * Money: revenue_allocations stay GROSS. Withholding is applied at payout: finance.ts balances
+    return withheld + toPay; pay_balance / mark_paid store payout_runs.withheld_cents (snapshot).
+    Admin Finance "Composer payouts": Earned / UK tax / Send to bank. Composer Earnings: UK tax
+    and "You receive" columns + note, "Ready to pay" hint shows the after-tax figure.
+  * Fix: license allocation looked up tracks by id only; older ledger rows carry a slug ->
+    author share went to platform_unallocated. Now `WHERE id = ?1 OR slug = ?1`.
+  * Reminder for the owner: legally a reduced treaty rate normally needs HMRC authorisation
+    (form DT-Individual); otherwise 20% applies. Withheld amounts must be paid to HMRC; ask the
+    accountant how (quarterly return).

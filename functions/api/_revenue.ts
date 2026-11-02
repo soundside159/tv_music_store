@@ -386,7 +386,8 @@ export const allocateEvent = async (db: D1Database, eventId: string): Promise<vo
   if (event.source === "license" && event.track_id) {
     // A single-track license pays exactly one composer — no points needed.
     const track = await db
-      .prepare(`SELECT composer_id FROM tracks WHERE id = ?1`)
+      // Older ledger rows (PayPal fallback) may carry the track SLUG, not its id.
+      .prepare(`SELECT composer_id FROM tracks WHERE id = ?1 OR slug = ?1 LIMIT 1`)
       .bind(event.track_id)
       .first<{ composer_id: string | null }>();
     if (track?.composer_id) {
@@ -542,3 +543,43 @@ export const allocateDue = async (db: D1Database): Promise<number> => {
   for (const row of due.results) await allocateEvent(db, row.id);
   return due.results.length;
 };
+
+// ---------------------------------------------------------------------------
+// UK withholding tax on composer royalties (owner decision 2026-11-02).
+// Each composer profile carries his tax country and a withholding rate in
+// basis points (500 = 5%), set from the UK treaty table when he signs the
+// Composer Agreement (src/content/withholding.ts) and editable by the admin.
+// The rate is applied when a balance is PAID: payout_runs keeps the gross
+// amount plus withheld_cents, so history never changes if the rate does.
+// Allocations (revenue_allocations) always stay GROSS.
+// ---------------------------------------------------------------------------
+let withholdingReady = false;
+export const ensureWithholdingColumns = async (db: D1Database): Promise<void> => {
+  if (withholdingReady) return;
+  for (const sql of [
+    `ALTER TABLE composers ADD COLUMN tax_country TEXT`,
+    `ALTER TABLE composers ADD COLUMN withholding_bps INTEGER`,
+    `ALTER TABLE payout_runs ADD COLUMN withheld_cents INTEGER NOT NULL DEFAULT 0`,
+  ]) {
+    try {
+      await db.prepare(sql).run();
+    } catch {
+      // column exists
+    }
+  }
+  withholdingReady = true;
+};
+
+/** Withholding rate (basis points) for a composer profile; 0 when not set. */
+export const withholdingBpsOf = async (db: D1Database, composerId: string): Promise<number> => {
+  await ensureWithholdingColumns(db);
+  const row = await db
+    .prepare(`SELECT withholding_bps FROM composers WHERE id = ?1`)
+    .bind(composerId)
+    .first<{ withholding_bps: number | null }>();
+  return Math.max(0, Math.min(10000, Number(row?.withholding_bps ?? 0) || 0));
+};
+
+/** Tax withheld from a gross amount (never on a negative amount). */
+export const withheldOf = (grossCents: number, bps: number): number =>
+  grossCents > 0 ? Math.round((grossCents * bps) / 10000) : 0;

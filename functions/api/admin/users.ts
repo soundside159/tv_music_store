@@ -1,4 +1,5 @@
 import { ensureAgreementTable, ensureAiOptinTable } from "../_agreement";
+import { ensureWithholdingColumns } from "../_revenue";
 import { ensureUploadPermColumns } from "./upload-audio";
 import { ensureStripeColumns } from "../stripe/_stripe";
 import {
@@ -83,8 +84,10 @@ export const onRequestGet = async (ctx: Ctx) => {
   try {
     await ensureCueColumns(ctx.env.DB);
     await ensureUploadPermColumns(ctx.env.DB);
+    await ensureWithholdingColumns(ctx.env.DB);
     const cues = await ctx.env.DB.prepare(
       `SELECT user_id, cue_name, pro, ipi, publisher_name, publisher_pro, publisher_ipi,
+              tax_country, withholding_bps,
               COALESCE(can_upload_tracks, 1) AS can_upload_tracks,
               COALESCE(can_upload_sfx, 0) AS can_upload_sfx
          FROM composers WHERE user_id IS NOT NULL`,
@@ -96,6 +99,8 @@ export const onRequestGet = async (ctx: Ctx) => {
       publisher_name: string | null;
       publisher_pro: string | null;
       publisher_ipi: string | null;
+      tax_country: string | null;
+      withholding_bps: number | null;
       can_upload_tracks: number;
       can_upload_sfx: number;
     }>();
@@ -109,6 +114,9 @@ export const onRequestGet = async (ctx: Ctx) => {
           publisherName: c.publisher_name,
           publisherPro: c.publisher_pro,
           publisherIpi: c.publisher_ipi,
+          taxCountry: c.tax_country,
+          /** UK withholding on royalties, as a percent string ("5"). */
+          withholdingPercent: c.withholding_bps == null ? null : String(c.withholding_bps / 100),
           canUploadTracks: c.can_upload_tracks ? "1" : "0",
           canUploadSfx: c.can_upload_sfx ? "1" : "0",
         },
@@ -309,6 +317,9 @@ export const onRequestPatch = async (ctx: Ctx) => {
       publisherName?: string;
       publisherPro?: string;
       publisherIpi?: string;
+      /** UK withholding tax on his royalties, percent ("5", "0", "20"). */
+      withholdingPercent?: string;
+      taxCountry?: string;
     };
   }>(ctx.request);
   const userId = body?.userId;
@@ -410,6 +421,21 @@ export const onRequestPatch = async (ctx: Ctx) => {
     )
       .bind(userId, s(cue.cueName), s(cue.pro), s(cue.ipi), s(cue.publisherName), s(cue.publisherPro), s(cue.publisherIpi))
       .run();
+    // Withholding rate + tax country (only when sent; blank leaves them as they are).
+    if (cue.withholdingPercent !== undefined || cue.taxCountry !== undefined) {
+      await ensureWithholdingColumns(ctx.env.DB);
+      const pct = String(cue.withholdingPercent ?? "").trim();
+      const bps = pct === "" ? null : Math.round(Math.max(0, Math.min(100, Number(pct) || 0)) * 100);
+      const cc = String(cue.taxCountry ?? "").trim().toUpperCase().slice(0, 2);
+      await ctx.env.DB.prepare(
+        `UPDATE composers SET
+           withholding_bps = COALESCE(?2, withholding_bps),
+           tax_country = COALESCE(NULLIF(?3, ''), tax_country)
+         WHERE user_id = ?1`,
+      )
+        .bind(userId, bps, cc)
+        .run();
+    }
   }
   if (removeComposer) {
     const cmp = await ctx.env.DB.prepare(`SELECT id FROM composers WHERE user_id = ?1 LIMIT 1`)

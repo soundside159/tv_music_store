@@ -28,6 +28,11 @@ interface Balance {
   released: number;
   held: number;
   payable: boolean;
+  /** UK tax withheld from `released` (for HMRC) and what goes to his bank. */
+  withheld?: number;
+  toPay?: number;
+  withholdingBps?: number;
+  taxCountry?: string | null;
 }
 
 interface RevenueEvent {
@@ -385,11 +390,18 @@ const AdminFinance = () => {
       {/* 3 — who to pay */}
       <Card title="Composer payouts">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[32rem] border-collapse font-body text-sm">
+          <table className="w-full min-w-[40rem] border-collapse font-body text-sm">
             <thead>
               <tr className="border-b border-border/60 text-left">
                 <th className="py-2 pr-4 font-semibold text-muted-foreground">Composer</th>
-                <th className="py-2 pr-4 text-right font-semibold text-muted-foreground">To pay</th>
+                <th className="py-2 pr-4 text-right font-semibold text-muted-foreground">Earned</th>
+                <th
+                  className="py-2 pr-4 text-right font-semibold text-muted-foreground"
+                  title="UK withholding tax kept back for HMRC (treaty rate of his tax country)"
+                >
+                  UK tax
+                </th>
+                <th className="py-2 pr-4 text-right font-semibold text-muted-foreground">Send to bank</th>
                 <th
                   className="py-2 pr-4 text-right font-semibold text-muted-foreground"
                   title={`Money still inside the ${report.policy.holdbackDays}-day window that lets refunds settle first.`}
@@ -402,7 +414,7 @@ const AdminFinance = () => {
             <tbody>
               {report.balances.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="py-6 text-center text-muted-foreground">
+                  <td colSpan={6} className="py-6 text-center text-muted-foreground">
                     Nothing to pay out.
                   </td>
                 </tr>
@@ -410,11 +422,20 @@ const AdminFinance = () => {
               {report.balances.map((b) => (
                 <tr key={b.composerId} className="border-b border-border/40 last:border-b-0">
                   <td className="py-2.5 pr-4 font-medium text-foreground">{b.name}</td>
+                  <td className="py-2.5 pr-4 text-right tabular-nums text-foreground">{money(b.released)}</td>
+                  <td className="py-2.5 pr-4 text-right tabular-nums text-muted-foreground">
+                    {b.withheld ? `−${money(b.withheld)}` : "—"}
+                    {b.withholdingBps ? (
+                      <span className="ml-1 text-[10px] text-muted-foreground/70">
+                        {b.withholdingBps / 100}%{b.taxCountry ? ` ${b.taxCountry}` : ""}
+                      </span>
+                    ) : null}
+                  </td>
                   <td
                     className="py-2.5 pr-4 text-right font-semibold tabular-nums"
                     style={{ color: GOLD }}
                   >
-                    {money(b.released)}
+                    {money(b.toPay ?? b.released)}
                   </td>
                   <td className="py-2.5 pr-4 text-right tabular-nums text-muted-foreground">
                     {money(b.held)}

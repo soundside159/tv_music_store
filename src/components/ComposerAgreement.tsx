@@ -4,6 +4,16 @@ import { CheckCircle2, FileSignature, Printer } from "lucide-react";
 import { toast } from "sonner";
 import AgreementText, { type SignedAgreement } from "@/components/AgreementText";
 import { AGREEMENT_VERSION, AI_ADDENDUM_MD, AI_ADDENDUM_TITLE } from "@/content/composerAgreement";
+import { COUNTRIES, countryName, withholdingFor } from "@/content/withholding";
+
+/** "Poland (PL)" / "PL" / "Poland" -> "PL" (older records stored a name). */
+const toCode = (v: string | null | undefined): string => {
+  const s = (v ?? "").trim();
+  const m = s.match(/\(([A-Z]{2})\)$/);
+  if (m) return m[1];
+  if (/^[A-Za-z]{2}$/.test(s)) return s.toUpperCase();
+  return COUNTRIES.find(([, n]) => n.toLowerCase() === s.toLowerCase())?.[0] ?? "";
+};
 
 // Account -> Composer -> Agreement: read the Composer Agreement, fill the
 // Schedule, tick "I agree", sign. Uploads stay locked until the CURRENT
@@ -190,7 +200,7 @@ const ComposerAgreement = () => {
     setForm((f) => ({
       legalName: s?.legalName || p?.legalName || f.legalName,
       address: s?.address || f.address,
-      country: s?.country || f.country,
+      country: toCode(s?.country) || f.country,
       pro: p?.pro || s?.pro || f.pro,
       ipi: p?.ipi || s?.ipi || f.ipi,
       publisherName: p?.publisherName || f.publisherName,
@@ -284,8 +294,26 @@ const ComposerAgreement = () => {
           <Field label="Address">
             <textarea className={`${inputCls} min-h-[4.5rem]`} value={form.address} onChange={set("address")} />
           </Field>
-          <Field label="Country">
-            <input className={inputCls} value={form.country} onChange={set("country")} />
+          <Field label="Country you live in (tax residence)">
+            <select className={inputCls} value={form.country} onChange={set("country")}>
+              <option value="">Choose your country</option>
+              {COUNTRIES.map(([code, name]) => (
+                <option key={code} value={code}>
+                  {name}
+                </option>
+              ))}
+            </select>
+            {form.country && (
+              <span className="mt-1.5 block font-body text-[11px] leading-snug text-[#F4C430]">
+                {(() => {
+                  const w = withholdingFor(form.country);
+                  if (form.country === "GB") return "UK resident: no UK tax is withheld from your payouts.";
+                  return w.known
+                    ? `UK tax withheld from your payouts: ${w.percent}% (UK-${countryName(form.country)} tax treaty rate). Usually you can claim it as a credit at home.`
+                    : `UK tax withheld from your payouts: ${w.percent}% (UK basic rate) unless a tax treaty lowers it. We will check and confirm.`;
+                })()}
+              </span>
+            )}
           </Field>
           <Field label="PRO (optional)" hint="e.g. BMI, PRS, ASCAP">
             <input className={inputCls} value={form.pro} onChange={set("pro")} />

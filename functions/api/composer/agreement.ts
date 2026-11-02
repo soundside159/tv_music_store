@@ -1,5 +1,7 @@
 import { getSessionUser, json, newId, OWNER_EMAIL, readJson, type Ctx } from "../_utils";
 import { AGREEMENT_VERSION, AI_ADDENDUM_VERSION } from "../../../src/content/composerAgreement";
+import { COUNTRIES, withholdingFor } from "../../../src/content/withholding";
+import { ensureWithholdingColumns } from "../_revenue";
 import {
   ensureAgreementTable,
   ensureAiOptinTable,
@@ -158,11 +160,13 @@ export const onRequestPost = async (ctx: Ctx) => {
     if (b?.agree !== true) return json({ error: "Please tick the box to agree" }, 400);
     const legalName = clean(b.legalName, 120);
     const address = clean(b.address, 400);
-    const country = clean(b.country, 80);
+    const countryCode = clean(b.country, 2).toUpperCase();
+    const countryEntry = COUNTRIES.find(([c]) => c === countryCode);
+    const country = countryEntry ? `${countryEntry[1]} (${countryEntry[0]})` : "";
     const payout = clean(b.payout, 400);
     if (legalName.length < 3) return json({ error: "Please enter your full legal name" }, 400);
     if (address.length < 5) return json({ error: "Please enter your address" }, 400);
-    if (country.length < 2) return json({ error: "Please enter your country" }, 400);
+    if (!countryEntry) return json({ error: "Please choose your country" }, 400);
     if (payout.length < 3) return json({ error: "Please enter your bank details for payouts" }, 400);
 
     await ensureAgreementTable(db);
@@ -222,6 +226,16 @@ export const onRequestPost = async (ctx: Ctx) => {
         .run();
     } catch {
       // best effort
+    }
+    // Tax residence -> UK withholding rate on his royalties (treaty table).
+    try {
+      await ensureWithholdingColumns(db);
+      await db
+        .prepare(`UPDATE composers SET tax_country = ?1, withholding_bps = ?2 WHERE id = ?3`)
+        .bind(countryCode, Math.round(withholdingFor(countryCode).percent * 100), composer.id)
+        .run();
+    } catch {
+      // best effort; the admin can set it in Users
     }
     return json({ ok: true, id, version: AGREEMENT_VERSION, signedAt });
   } catch (e) {
