@@ -26,6 +26,47 @@ export interface PdfImage {
 
 const FONT_RES: Record<PdfFont, string> = { helv: "F1", helvB: "F2", cour: "F3", courB: "F4" };
 
+/** PDF content stream for one page of ops (shared by buildPdf / buildPdfPages). */
+const opsToContent = (ops: PdfOp[], imgIndex: Record<string, number>): string => {
+  let content = "";
+  for (const o of ops) {
+    if (o.op === "text") {
+      const font = o.font ?? "helv";
+      const color = o.color ?? ([0, 0, 0] as Rgb);
+      let x = o.x;
+      if (o.align === "center") x = o.x - textWidth(o.text, o.size, font) / 2;
+      else if (o.align === "right") x = o.x - textWidth(o.text, o.size, font);
+      content +=
+        `${rgb(color)} rg BT /${FONT_RES[font]} ${num(o.size)} Tf 1 0 0 1 ${num(x)} ${num(o.y)} Tm ` +
+        `(${escapePdf(o.text)}) Tj ET\n`;
+    } else if (o.op === "rect") {
+      content += `${rgb(o.color)} rg ${num(o.x)} ${num(o.y)} ${num(o.w)} ${num(o.h)} re f\n`;
+    } else if (o.op === "rrect") {
+      const path = rrectPath(o.x, o.y, o.w, o.h, o.r);
+      if (o.stroke) {
+        content += `${rgb(o.color)} RG ${num(o.lineWidth ?? 1)} w ${path} s\n`;
+      } else {
+        content += `${rgb(o.color)} rg ${path} f\n`;
+      }
+    } else if (o.op === "poly") {
+      const [first, ...rest] = o.pts;
+      content +=
+        `${rgb(o.color)} rg ${num(first[0])} ${num(first[1])} m ` +
+        rest.map((p) => `${num(p[0])} ${num(p[1])} l`).join(" ") +
+        ` f\n`;
+    } else if (o.op === "line") {
+      content +=
+        `${rgb(o.color)} RG ${num(o.width)} w ` +
+        `${num(o.x1)} ${num(o.y1)} m ${num(o.x2)} ${num(o.y2)} l S\n`;
+    } else if (o.op === "image" && imgIndex[o.key] !== undefined) {
+      const i = imgIndex[o.key];
+      content += `q ${num(o.w)} 0 0 ${num(o.h)} ${num(o.x)} ${num(o.y)} cm /Im${i} Do Q\n`;
+    }
+  }
+
+  return content;
+};
+
 // Keep to printable ASCII so 1 char === 1 byte (we emit Latin1) and every glyph
 // exists in the standard font encoding.
 // Map common Unicode punctuation to ASCII so it renders in the standard fonts;
@@ -95,41 +136,7 @@ export const buildPdf = (
   const imgIndex: Record<string, number> = {};
   imgKeys.forEach((k, i) => (imgIndex[k] = i));
 
-  let content = "";
-  for (const o of ops) {
-    if (o.op === "text") {
-      const font = o.font ?? "helv";
-      const color = o.color ?? ([0, 0, 0] as Rgb);
-      let x = o.x;
-      if (o.align === "center") x = o.x - textWidth(o.text, o.size, font) / 2;
-      else if (o.align === "right") x = o.x - textWidth(o.text, o.size, font);
-      content +=
-        `${rgb(color)} rg BT /${FONT_RES[font]} ${num(o.size)} Tf 1 0 0 1 ${num(x)} ${num(o.y)} Tm ` +
-        `(${escapePdf(o.text)}) Tj ET\n`;
-    } else if (o.op === "rect") {
-      content += `${rgb(o.color)} rg ${num(o.x)} ${num(o.y)} ${num(o.w)} ${num(o.h)} re f\n`;
-    } else if (o.op === "rrect") {
-      const path = rrectPath(o.x, o.y, o.w, o.h, o.r);
-      if (o.stroke) {
-        content += `${rgb(o.color)} RG ${num(o.lineWidth ?? 1)} w ${path} s\n`;
-      } else {
-        content += `${rgb(o.color)} rg ${path} f\n`;
-      }
-    } else if (o.op === "poly") {
-      const [first, ...rest] = o.pts;
-      content +=
-        `${rgb(o.color)} rg ${num(first[0])} ${num(first[1])} m ` +
-        rest.map((p) => `${num(p[0])} ${num(p[1])} l`).join(" ") +
-        ` f\n`;
-    } else if (o.op === "line") {
-      content +=
-        `${rgb(o.color)} RG ${num(o.width)} w ` +
-        `${num(o.x1)} ${num(o.y1)} m ${num(o.x2)} ${num(o.y2)} l S\n`;
-    } else if (o.op === "image" && imgIndex[o.key] !== undefined) {
-      const i = imgIndex[o.key];
-      content += `q ${num(o.w)} 0 0 ${num(o.h)} ${num(o.x)} ${num(o.y)} cm /Im${i} Do Q\n`;
-    }
-  }
+  const content = opsToContent(ops, imgIndex);
 
   // --- object table (dynamic numbering) ------------------------------------
   // 1 Catalog, 2 Pages, 3 Page, 4 Contents, 5-8 Fonts, then 2 objects/image.
@@ -181,6 +188,47 @@ export const buildPdf = (
   for (const off of offsets) pdf += `${String(off).padStart(10, "0")} 00000 n \n`;
   pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
 
+  const bytes = new Uint8Array(pdf.length);
+  for (let i = 0; i < pdf.length; i++) bytes[i] = pdf.charCodeAt(i) & 0xff;
+  return bytes;
+};
+
+/**
+ * Multi-page PDF (text and shapes only, no images): one PdfOp[] per page.
+ * Same drawing ops and fonts as buildPdf; used by long statements.
+ */
+export const buildPdfPages = (pages: PdfOp[][], opts: { width?: number; height?: number } = {}): Uint8Array => {
+  const width = opts.width ?? 595;
+  const height = opts.height ?? 842;
+  const n = Math.max(1, pages.length);
+  // 1 Catalog, 2 Pages, 3-6 Fonts, then per page: Page + Contents.
+  const pageObj = (i: number) => 7 + i * 2;
+  const objects: string[] = [
+    `<< /Type /Catalog /Pages 2 0 R >>`,
+    `<< /Type /Pages /Kids [${Array.from({ length: n }, (_, i) => `${pageObj(i)} 0 R`).join(" ")}] /Count ${n} >>`,
+    `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>`,
+    `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>`,
+    `<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>`,
+    `<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Bold >>`,
+  ];
+  for (let i = 0; i < n; i++) {
+    const content = opsToContent(pages[i] ?? [], {});
+    objects.push(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${width} ${height}] ` +
+        `/Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R /F4 6 0 R >> >> /Contents ${pageObj(i) + 1} 0 R >>`,
+      `<< /Length ${content.length} >>\nstream\n${content}endstream`,
+    );
+  }
+  let pdf = "%PDF-1.4\n";
+  const offsets: number[] = [];
+  objects.forEach((body, i) => {
+    offsets.push(pdf.length);
+    pdf += `${i + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xrefStart = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const off of offsets) pdf += `${String(off).padStart(10, "0")} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
   const bytes = new Uint8Array(pdf.length);
   for (let i = 0; i < pdf.length; i++) bytes[i] = pdf.charCodeAt(i) & 0xff;
   return bytes;
