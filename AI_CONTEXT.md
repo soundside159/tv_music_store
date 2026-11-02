@@ -4979,3 +4979,6 @@ True: `brandCover()` was only in the AI path.
   (blue dot + editor name + date, hover = change list, grey "reviewed" after review), toolbar
   toggle "Edited by editor (N)" (unreviewed only), and "Mark reviewed (N)" in the selection
   cluster (admin only).
+
+## 2026-11-02 Composer Agreement: points formula hidden
+- 4.3 rewritten in general terms (shared by the subscriber's downloads, may weight work types and exclude non-genuine downloads, current rules in dashboard). Points table, SFX cap paragraph and 4.4 example removed; 4.5-4.9 renumbered to 4.4-4.8. Same change in the Claude Doc. Version stays 1.0. Calculation in _revenue.ts unchanged.
