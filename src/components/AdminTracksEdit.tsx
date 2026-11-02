@@ -300,6 +300,7 @@ const AdminTracksEdit = ({
   onGenerateCover,
   onCoverFromUrl,
   editor = false,
+  editorEdits = {},
   aiModel = "standard",
   onAiModelChange,
   allComposers = [],
@@ -336,6 +337,11 @@ const AdminTracksEdit = ({
   /** Editor role: only the tag / membership panels; no track fields, AI,
    *  versions, ID edits or spreadsheet readers (the server enforces it too). */
   editor?: boolean;
+  /** Editor change log per track (from /api/admin/content): marker + history. */
+  editorEdits?: Record<
+    string,
+    { by: string; at: string; reviewed: boolean; history: { by: string; at: string; summary: string }[] }
+  >;
   /** Image model for AI covers: standard (cheap) | premium (better). */
   aiModel?: "standard" | "premium";
   onAiModelChange?: (m: "standard" | "premium") => void;
@@ -449,6 +455,8 @@ const AdminTracksEdit = ({
   };
   // Status tabs: Live / Drafts / Review (composer uploads awaiting moderation).
   const [statusTab, setStatusTab] = useState<"live" | "drafts" | "review">("live");
+  // "Edited by editor" filter: only tracks with editor changes not reviewed yet.
+  const [editedOnly, setEditedOnly] = useState(false);
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(20);
   const [selected, setSelected] = useState<string[]>([]);
@@ -1366,6 +1374,7 @@ const AdminTracksEdit = ({
         bucketOf(t) === statusTab &&
         (composer === "all" || t.artist === composer) &&
         (!q || t.title.toLowerCase().includes(q)) &&
+        (!editedOnly || (!!editorEdits[t.id] && !editorEdits[t.id].reviewed)) &&
         inTagFilter(t),
     );
     if (sort === "trending") {
@@ -1391,7 +1400,7 @@ const AdminTracksEdit = ({
       });
     }
     return list;
-  }, [tracks, search, composer, sort, trending, statusTab, tagFilter, playlists, collections, categories]);
+  }, [tracks, search, composer, sort, trending, statusTab, tagFilter, playlists, collections, categories, editedOnly, editorEdits]);
 
   // The X on a row while the Show filter is on: pull the track out of the
   // filtered tag / playlist — the row then drops out of the list by itself.
@@ -2204,6 +2213,27 @@ const AdminTracksEdit = ({
             </button>
           ))}
         </div>
+        {/* Editor changes still waiting for the owner's review. */}
+        {(() => {
+          const pending = Object.values(editorEdits).filter((e) => !e.reviewed).length;
+          if (pending === 0 && !editedOnly) return null;
+          return (
+            <button
+              type="button"
+              onClick={() => {
+                setEditedOnly((v) => !v);
+                setPage(1);
+              }}
+              className={`rounded-lg border px-3 py-1.5 font-body text-xs font-semibold transition-colors ${
+                editedOnly
+                  ? "border-sky-400/60 bg-sky-400/10 text-sky-300"
+                  : "border-border/60 text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Edited by editor <span className="opacity-70">({pending})</span>
+            </button>
+          );
+        })()}
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -2338,6 +2368,20 @@ const AdminTracksEdit = ({
           {/* Selection cluster: one Apply saves the side panels + the fields panel. */}
           {hasSelection && (
             <div className="ml-auto flex items-center gap-2">
+              {!editor && selected.some((id) => editorEdits[id] && !editorEdits[id].reviewed) && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={async () => {
+                    const ids = selected.filter((id) => editorEdits[id] && !editorEdits[id].reviewed);
+                    const ok = await run({ action: "review_track_edits", trackIds: ids }, "Marked as reviewed");
+                    if (ok) onContentReload?.();
+                  }}
+                  className="rounded-lg border border-sky-400/60 px-3 py-1.5 font-body text-xs font-semibold text-sky-300 transition-colors hover:bg-sky-400/10 disabled:opacity-50"
+                >
+                  Mark reviewed ({selected.filter((id) => editorEdits[id] && !editorEdits[id].reviewed).length})
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setSelected([])}
@@ -2468,7 +2512,7 @@ const AdminTracksEdit = ({
         )}
         <div className="overflow-x-auto rounded-lg border border-border/60">
           <div className="min-w-[44rem]">
-            <div className={`grid ${tagFilter ? "grid-cols-[2.5rem_2.5rem_3.25rem_minmax(0,1fr)_4.5rem_7rem_4.5rem_5rem_2.5rem]" : "grid-cols-[2.5rem_2.5rem_3.25rem_minmax(0,1fr)_4.5rem_7rem_4.5rem_5rem]"} items-center gap-2 border-b border-border/60 bg-secondary/40 px-3 py-2.5`}>
+            <div className={`grid ${tagFilter ? "grid-cols-[2.5rem_2.5rem_3.25rem_minmax(0,1fr)_4.5rem_7rem_4.5rem_5rem_6.5rem_2.5rem]" : "grid-cols-[2.5rem_2.5rem_3.25rem_minmax(0,1fr)_4.5rem_7rem_4.5rem_5rem_6.5rem]"} items-center gap-2 border-b border-border/60 bg-secondary/40 px-3 py-2.5`}>
               <span className="flex justify-center">
                 <RowCheckbox state={pageState} onToggle={togglePage} label="Select all visible" />
               </span>
@@ -2499,6 +2543,7 @@ const AdminTracksEdit = ({
                 Trending
               </button>
               <span className="font-body text-xs uppercase tracking-wide text-muted-foreground">Duration</span>
+              <span className="font-body text-xs uppercase tracking-wide text-muted-foreground">Edited</span>
               {tagFilter && <span aria-hidden />}
             </div>
 
@@ -2513,7 +2558,7 @@ const AdminTracksEdit = ({
               return (
                 <div key={t.id} className="border-b border-border/40 last:border-b-0">
                 <div
-                  className={`grid ${tagFilter ? "grid-cols-[2.5rem_2.5rem_3.25rem_minmax(0,1fr)_4.5rem_7rem_4.5rem_5rem_2.5rem]" : "grid-cols-[2.5rem_2.5rem_3.25rem_minmax(0,1fr)_4.5rem_7rem_4.5rem_5rem]"} items-center gap-2 px-3 py-2 transition-colors ${
+                  className={`grid ${tagFilter ? "grid-cols-[2.5rem_2.5rem_3.25rem_minmax(0,1fr)_4.5rem_7rem_4.5rem_5rem_6.5rem_2.5rem]" : "grid-cols-[2.5rem_2.5rem_3.25rem_minmax(0,1fr)_4.5rem_7rem_4.5rem_5rem_6.5rem]"} items-center gap-2 px-3 py-2 transition-colors ${
                     isSelected ? "bg-[#F4C430]/[0.06]" : "hover:bg-foreground/[0.03]"
                   }`}
                 >
@@ -2780,6 +2825,29 @@ const AdminTracksEdit = ({
                     />
                   </span>
                   <span className="font-body text-xs tabular-nums text-muted-foreground">{t.duration}</span>
+                  {/* Last editor change: name + date; hover = the change list. */}
+                  {editorEdits[t.id] ? (
+                    <span
+                      className={`truncate font-body text-[11px] leading-tight ${
+                        editorEdits[t.id].reviewed ? "text-muted-foreground/60" : "text-sky-300"
+                      }`}
+                      title={editorEdits[t.id].history
+                        .map(
+                          (h) =>
+                            `${new Date(h.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} ${h.by}: ${h.summary}`,
+                        )
+                        .join("\n")}
+                    >
+                      {!editorEdits[t.id].reviewed && "● "}
+                      {editorEdits[t.id].by}
+                      <span className="block text-[10px] opacity-70">
+                        {new Date(editorEdits[t.id].at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                        {editorEdits[t.id].reviewed ? " · reviewed" : ""}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="font-body text-[11px] text-muted-foreground/40">—</span>
+                  )}
                   {/* Show filter is on: ✕ pulls the track out of the filtered
                       tag / playlist and the row drops from the list. */}
                   {tagFilter && (

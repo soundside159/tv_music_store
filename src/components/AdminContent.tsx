@@ -48,6 +48,11 @@ interface ContentData {
   composers?: { id: string; userId: string | null; displayName: string }[];
   /** Owner-picked playlist ids for the homepage Editor Picks rail (ordered). */
   editorPicks?: string[];
+  /** Editor change log per track (marker + history in Tracks Edit). */
+  editorEdits?: Record<
+    string,
+    { by: string; at: string; reviewed: boolean; history: { by: string; at: string; summary: string }[] }
+  >;
 }
 
 type Tab = "collections" | "playlists" | "categories" | "vocabulary" | "trending" | "tracks";
@@ -2083,6 +2088,7 @@ const AdminContent = ({ tab, editor = false }: { tab: Tab; editor?: boolean }) =
           onGenerateCover={editor ? undefined : (id) => void generateCoverForTrack(id)}
           onCoverFromUrl={editor ? undefined : (id, url) => void coverFromUrlForTrack(id, url)}
           editor={editor}
+          editorEdits={data.editorEdits ?? {}}
           aiModel={aiModel}
           onAiModelChange={setAiModel}
           allComposers={(data.composers ?? []).map((c) => c.displayName)}

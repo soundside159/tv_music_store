@@ -4969,3 +4969,13 @@ True: `brandCover()` was only in the AI path.
   drafts and get the top bar (label "Editor", status + Copy link buttons, NO publish/delete),
   the left tags/trending panel WITHOUT the Versions block (`editor` prop), and the right
   collections/playlists panel. Cover overlay stays admin-only.
+- **2026-11-02 (Editor change log + review):** every change an EDITOR makes is logged per track
+  in lazy table `track_edit_log` (track_id, user_name, summary like "+Mood: Epic, -Playlist:
+  Daily Vlog", at) from functions/api/admin/content.ts: bulk_update_tracks (facets, playlist /
+  collection / category memberships, trending), set_trending (diff) and set_tracks (diff).
+  Admin GET returns `editorEdits` {trackId: {by, at, reviewed, history[12]}} (last 180 days).
+  New admin-only action `review_track_edits {trackIds}` -> table `track_edit_review`
+  (reviewed when reviewed_at >= last edit). Tracks Edit (AdminTracksEdit): new "Edited" column
+  (blue dot + editor name + date, hover = change list, grey "reviewed" after review), toolbar
+  toggle "Edited by editor (N)" (unreviewed only), and "Mark reviewed (N)" in the selection
+  cluster (admin only).

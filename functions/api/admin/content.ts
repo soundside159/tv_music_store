@@ -36,6 +36,63 @@ const EDITOR_ACTIONS = new Set([
   "set_playlist_themes",
 ]);
 
+// ---- Editor change log: what an EDITOR changed on which track ------------
+// One row per track per action; the admin reviews them in Tracks Edit
+// (column "Edited", filter, "Mark reviewed"). Review state per track.
+const ensureEditLog = async (db: D1Database) => {
+  await db
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS track_edit_log (
+         id INTEGER PRIMARY KEY AUTOINCREMENT,
+         track_id TEXT NOT NULL,
+         user_id TEXT,
+         user_name TEXT,
+         summary TEXT NOT NULL,
+         at TEXT NOT NULL
+       )`,
+    )
+    .run();
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_track_edit_log_track ON track_edit_log(track_id)`).run();
+  await db
+    .prepare(`CREATE TABLE IF NOT EXISTS track_edit_review (track_id TEXT PRIMARY KEY, reviewed_at TEXT NOT NULL)`)
+    .run();
+};
+
+const logEdits = async (
+  db: D1Database,
+  user: { id: string; name?: string | null; email?: string | null },
+  entries: { trackId: string; summary: string }[],
+) => {
+  if (entries.length === 0) return;
+  try {
+    await ensureEditLog(db);
+    const at = new Date().toISOString();
+    const who = user.name || user.email || "Editor";
+    for (const e of entries.slice(0, 500)) {
+      await db
+        .prepare(`INSERT INTO track_edit_log (track_id, user_id, user_name, summary, at) VALUES (?1, ?2, ?3, ?4, ?5)`)
+        .bind(e.trackId, user.id, who, e.summary.slice(0, 600), at)
+        .run();
+    }
+  } catch {
+    // logging must never break the edit itself
+  }
+};
+
+/** Titles for ids in one content table (collections / playlists / categories). */
+const titlesOf = async (db: D1Database, table: string, ids: string[]) => {
+  const out = new Map<string, string>();
+  for (const id of ids.slice(0, 50)) {
+    try {
+      const r = await db.prepare(`SELECT title FROM ${table} WHERE id = ?1`).bind(id).first<{ title: string }>();
+      out.set(id, r?.title ?? id);
+    } catch {
+      out.set(id, id);
+    }
+  }
+  return out;
+};
+
 const requireAdmin = async (ctx: Ctx, allowEditor = false) => {
   // Desktop tools (SFX uploader, track re-sort) authenticate with the
   // ADMIN_API_TOKEN header instead of a browser session — same bypass the
@@ -558,7 +615,42 @@ export const onRequestGet = async (ctx: Ctx) => {
       theme: p.theme ?? "",
       trackIds: plMap[p.id] ?? [],
     })),
+    editorEdits: await loadEditorEdits(db),
   });
+};
+
+/** trackId -> last editor change, review flag and the recent history. */
+const loadEditorEdits = async (db: D1Database) => {
+  const out: Record<
+    string,
+    { by: string; at: string; reviewed: boolean; history: { by: string; at: string; summary: string }[] }
+  > = {};
+  try {
+    await ensureEditLog(db);
+    const rows = await db
+      .prepare(
+        `SELECT track_id, user_name, summary, at FROM track_edit_log
+          WHERE at >= ?1 ORDER BY at DESC LIMIT 4000`,
+      )
+      .bind(new Date(Date.now() - 180 * 864e5).toISOString())
+      .all<{ track_id: string; user_name: string | null; summary: string; at: string }>();
+    const reviews = await db
+      .prepare(`SELECT track_id, reviewed_at FROM track_edit_review`)
+      .all<{ track_id: string; reviewed_at: string }>();
+    const reviewedAt = new Map((reviews.results ?? []).map((r) => [r.track_id, r.reviewed_at]));
+    for (const r of rows.results ?? []) {
+      const by = r.user_name ?? "Editor";
+      const cur = out[r.track_id];
+      if (!cur) {
+        const rv = reviewedAt.get(r.track_id);
+        out[r.track_id] = { by, at: r.at, reviewed: !!rv && rv >= r.at, history: [] };
+      }
+      if (out[r.track_id].history.length < 12) out[r.track_id].history.push({ by, at: r.at, summary: r.summary });
+    }
+  } catch {
+    // no log yet
+  }
+  return out;
 };
 
 export const onRequestPost = async (ctx: Ctx) => {
@@ -773,6 +865,17 @@ export const onRequestPost = async (ctx: Ctx) => {
       }
       const join = body.kind === "collection" ? "collection_tracks" : "playlist_tracks";
       const col = body.kind === "collection" ? "collection_id" : "playlist_id";
+      if ("editor" in gate && gate.editor) {
+        const before = await db.prepare(`SELECT track_id FROM ${join} WHERE ${col} = ?1`).bind(body.id).all<{ track_id: string }>();
+        const old = (before.results ?? []).map((r) => r.track_id);
+        const next = body.trackIds;
+        const label = body.kind === "collection" ? "Collection" : "Playlist";
+        const title = (await titlesOf(db, body.kind === "collection" ? "collections" : "playlists", [body.id])).get(body.id);
+        await logEdits(db, gate.user, [
+          ...next.filter((id) => !old.includes(id)).map((trackId) => ({ trackId, summary: `+${label}: ${title}` })),
+          ...old.filter((id) => !next.includes(id)).map((trackId) => ({ trackId, summary: `-${label}: ${title}` })),
+        ]);
+      }
       await db.prepare(`DELETE FROM ${join} WHERE ${col} = ?1`).bind(body.id).run();
       for (let i = 0; i < body.trackIds.length; i++) {
         await db
@@ -833,6 +936,22 @@ export const onRequestPost = async (ctx: Ctx) => {
 
     case "set_trending": {
       if (!Array.isArray(body.trackIds)) return json({ error: "trackIds required" }, 400);
+      if ("editor" in gate && gate.editor) {
+        const before = await db
+          .prepare(`SELECT value FROM site_config WHERE key = 'trending_track_ids'`)
+          .first<{ value: string }>();
+        let old: string[] = [];
+        try {
+          old = before ? (JSON.parse(before.value) as string[]) : [];
+        } catch {
+          old = [];
+        }
+        const next = body.trackIds.slice(0, 24);
+        await logEdits(db, gate.user, [
+          ...next.filter((id) => !old.includes(id)).map((trackId) => ({ trackId, summary: "+Trending" })),
+          ...old.filter((id) => !next.includes(id)).map((trackId) => ({ trackId, summary: "-Trending" })),
+        ]);
+      }
       await db
         .prepare(
           `INSERT INTO site_config (key, value) VALUES ('trending_track_ids', ?1)
@@ -1106,7 +1225,51 @@ export const onRequestPost = async (ctx: Ctx) => {
           .run();
       }
 
+      if ("editor" in gate && gate.editor) {
+        const parts: string[] = [];
+        for (const k of ["useCase", "genre", "mood"] as const) {
+          const label = k === "useCase" ? "Use Case" : k === "genre" ? "Genre" : "Mood";
+          for (const v of body.facets?.[k]?.add ?? []) parts.push(`+${label}: ${v}`);
+          for (const v of body.facets?.[k]?.remove ?? []) parts.push(`-${label}: ${v}`);
+        }
+        const mem = async (
+          table: string,
+          label: string,
+          ch: { add?: string[]; remove?: string[] } | undefined,
+        ) => {
+          if (!ch) return;
+          const names = await titlesOf(db, table, [...(ch.add ?? []), ...(ch.remove ?? [])]);
+          for (const id of ch.add ?? []) parts.push(`+${label}: ${names.get(id)}`);
+          for (const id of ch.remove ?? []) parts.push(`-${label}: ${names.get(id)}`);
+        };
+        await mem("playlists", "Playlist", body.playlistChanges);
+        await mem("collections", "Collection", body.collectionChanges);
+        await mem("categories", "Category", body.categoryChanges);
+        if (body.trendingChange === "add") parts.push("+Trending");
+        if (body.trendingChange === "remove") parts.push("-Trending");
+        if (parts.length > 0) {
+          await logEdits(db, gate.user, ids.map((trackId) => ({ trackId, summary: parts.join(", ") })));
+        }
+      }
       return json({ ok: true, count: ids.length });
+    }
+
+    case "review_track_edits": {
+      // Admin marks an editor's changes as checked (the marker goes away).
+      const ids = Array.isArray(body.trackIds) ? body.trackIds.filter((x) => typeof x === "string").slice(0, 500) : [];
+      if (ids.length === 0) return json({ error: "trackIds required" }, 400);
+      await ensureEditLog(db);
+      const now = new Date().toISOString();
+      for (const id of ids) {
+        await db
+          .prepare(
+            `INSERT INTO track_edit_review (track_id, reviewed_at) VALUES (?1, ?2)
+             ON CONFLICT(track_id) DO UPDATE SET reviewed_at = ?2`,
+          )
+          .bind(id, now)
+          .run();
+      }
+      return json({ ok: true });
     }
 
     case "create_track": {
