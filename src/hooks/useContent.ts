@@ -38,6 +38,8 @@ export interface LiveComposer {
   bio: string;
   /** Artist page background photo (Admin -> Users); "" = none. */
   photo?: string;
+  /** Admin-tuned photo placement (ArtistPhoto); null = defaults. */
+  photoSettings?: Record<string, number> | null;
 }
 
 interface ApiContent {

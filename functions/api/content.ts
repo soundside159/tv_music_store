@@ -87,15 +87,38 @@ const buildContent = async (ctx: Ctx): Promise<Response> => {
   // Admin -> Users. `bio` exists in the base schema, so no lazy ALTER needed.
   // `photo` (artist page background) is a lazy column: until Admin -> Users
   // saves the first photo it does not exist, so fall back to the old SELECT.
-  let composers: { id: string; slug: string; displayName: string; bio: string; photo: string }[] = [];
+  let composers: {
+    id: string;
+    slug: string;
+    displayName: string;
+    bio: string;
+    photo: string;
+    photoSettings: Record<string, number> | null;
+  }[] = [];
   try {
-    type Row = { id: string; slug: string; display_name: string; bio: string | null; photo?: string | null };
+    type Row = {
+      id: string;
+      slug: string;
+      display_name: string;
+      bio: string | null;
+      photo?: string | null;
+      photo_settings?: string | null;
+    };
     let rows: { results: Row[] };
     try {
       rows = await db
-        .prepare(`SELECT id, slug, display_name, bio, photo FROM composers ORDER BY display_name`)
+        .prepare(`SELECT id, slug, display_name, bio, photo, photo_settings FROM composers ORDER BY display_name`)
         .all<Row>();
     } catch {
+      try {
+        rows = await db
+          .prepare(`SELECT id, slug, display_name, bio, photo FROM composers ORDER BY display_name`)
+          .all<Row>();
+      } catch {
+        rows = { results: [] };
+      }
+    }
+    if (rows.results.length === 0) {
       rows = await db
         .prepare(`SELECT id, slug, display_name, bio FROM composers ORDER BY display_name`)
         .all<Row>();
@@ -106,6 +129,14 @@ const buildContent = async (ctx: Ctx): Promise<Response> => {
       displayName: c.display_name,
       bio: c.bio ?? "",
       photo: c.photo ?? "",
+      // Admin-tuned placement of the photo on the artist page (null = defaults).
+      photoSettings: (() => {
+        try {
+          return c.photo_settings ? (JSON.parse(c.photo_settings) as Record<string, number>) : null;
+        } catch {
+          return null;
+        }
+      })(),
     }));
   } catch {
     // composers table missing — artist pages fall back to "not found"

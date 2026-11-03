@@ -10,6 +10,8 @@ import { usePlayer } from "@/components/playerContext";
 import { useTracks } from "@/hooks/useTracks";
 import { interleaveByComposerRecency } from "@/lib/catalogSort";
 import { useComposers, useContentReady } from "@/hooks/useContent";
+import { useCurrentUser } from "@/hooks/useMockData";
+import ArtistPhoto from "@/components/ArtistPhoto";
 import type { CatalogTrack } from "@/data/catalogTracks";
 
 /**
@@ -56,6 +58,7 @@ const Artist = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
   const composers = useComposers();
+  const currentUser = useCurrentUser();
   const ready = useContentReady();
   const { tracks, isLoading } = useTracks();
   const player = usePlayer();
@@ -198,41 +201,15 @@ const Artist = () => {
   return (
     <div className="relative min-h-screen overflow-hidden bg-background">
       <Navigation />
-      {/* Composer photo as a BACKGROUND layer (owner's pick, variant B): a
-          blurred warm glow across the top of the page + the sharp photo on
-          the right, every edge faded out. It takes no space: name, bio and
-          tracks sit exactly where they would without it. */}
+      {/* Composer photo as a BACKGROUND layer (owner's pick, variant B),
+          tunable per composer by the admin right on this page. */}
       {photo && (
-        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[760px] md:h-[900px]">
-          <div
-            className="absolute -inset-10 bg-cover"
-            style={{
-              backgroundImage: `url("${photo}")`,
-              backgroundPosition: "center 30%",
-              filter: "blur(40px) brightness(0.35) saturate(0.9)",
-              WebkitMaskImage: "linear-gradient(#000 20%, transparent 85%)",
-              maskImage: "linear-gradient(#000 20%, transparent 85%)",
-            }}
-          />
-          {/* Sharp photo: tied to the CONTENT width (max-w-7xl), not the
-              window, so on a very wide screen it stays next to the text
-              instead of stretching into a wide, cropped strip. Soft mask with
-              a mid stop: no visible oval edge even on bright photos. */}
-          <div className="absolute inset-x-0 top-0 mx-auto h-full max-w-7xl">
-            <div
-              className="absolute right-0 top-0 h-[560px] w-full bg-cover opacity-70 md:h-[820px] md:w-[60%] md:max-w-[780px] md:opacity-100"
-              style={{
-                backgroundImage: `url("${photo}")`,
-                backgroundPosition: "center 20%",
-                filter: "brightness(0.72) saturate(0.9)",
-                WebkitMaskImage:
-                  "radial-gradient(ellipse 58% 62% at 55% 40%, #000 28%, rgba(0,0,0,0.55) 52%, transparent 78%)",
-                maskImage:
-                  "radial-gradient(ellipse 58% 62% at 55% 40%, #000 28%, rgba(0,0,0,0.55) 52%, transparent 78%)",
-              }}
-            />
-          </div>
-        </div>
+        <ArtistPhoto
+          photo={photo}
+          composerId={composer.id}
+          saved={composer.photoSettings}
+          editable={currentUser?.role === "admin"}
+        />
       )}
       <main className="relative z-10 mx-auto w-full max-w-7xl px-4 pb-32 pt-24 sm:px-6 md:pt-28">
         {/* Nick + about text only — no avatar, no stats (owner request). */}
