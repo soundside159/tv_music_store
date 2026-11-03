@@ -1,3 +1,4 @@
+import { cachedValue } from "./api/_cache";
 import { getVocabularies, type D1Database, type Env } from "./api/_utils";
 import {
   applyGuideSchedule,
@@ -47,6 +48,7 @@ interface MiddlewareCtx {
   request: Request;
   env: Env;
   next: () => Promise<Response>;
+  waitUntil?: (p: Promise<unknown>) => void;
 }
 
 const SITE = "https://tvmusicstore.com";
@@ -731,7 +733,10 @@ export const onRequest = async (ctx: MiddlewareCtx): Promise<Response> => {
 
   let seo: Seo | typeof NOT_FOUND | null = null;
   try {
-    seo = await buildSeo(ctx.env, url);
+    // Edge-cached per URL + catalog version: crawlers walking the sitemap
+    // (SFX shelves, tracks, artists) used to hit D1 on every page — part of
+    // the D1 daily-limit outage of 2026-11-03.
+    seo = await cachedValue(ctx, "seo" + url.pathname + url.search, () => buildSeo(ctx.env, url));
   } catch {
     // A database hiccup must never take the site down — serve the plain shell.
     return response;

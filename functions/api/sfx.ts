@@ -1,4 +1,5 @@
 import { json, type Ctx } from "./_utils";
+import { cachedJson, cachedValue } from "./_cache";
 import { ensureSfxTables } from "./admin/sfx";
 
 // PUBLIC sound-effects API (see docs/SFX_PLAN.md).
@@ -15,8 +16,20 @@ import { ensureSfxTables } from "./admin/sfx";
 
 const PAGE_SIZE = 50;
 
+// D1 READ BUDGET (2026-11-03 outage): every call used to COUNT the whole 13k
+// library twice and scan it for the page — ~30k rows per request, 3M+/day once
+// Google crawled the SFX pages. Now the whole answer is edge-cached per query
+// (keyed by catalog version, like /api/tracks) and the shelf counts are cached
+// on their own, so a cache miss on a new search doesn't recount the library.
 export const onRequestGet = async (ctx: Ctx) => {
   if (!ctx.env.DB) return json({ error: "DB not bound" }, 503);
+  const url = new URL(ctx.request.url);
+  const sp = [...url.searchParams.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  const name = "sfx-" + encodeURIComponent(new URLSearchParams(sp).toString());
+  return cachedJson(ctx, name, () => buildSfx(ctx));
+};
+
+const buildSfx = async (ctx: Ctx) => {
   const db = ctx.env.DB;
   await ensureSfxTables(db);
 
@@ -31,8 +44,14 @@ export const onRequestGet = async (ctx: Ctx) => {
   const where: string[] = [`s.status = 'published'`];
   const binds: unknown[] = [];
   if (artist) {
-    where.push(`c.slug = ?${binds.length + 1}`);
-    binds.push(artist);
+    // Resolve the slug first so the filter hits the sfx(composer_id) index
+    // instead of joining + scanning the whole library.
+    const comp = await db
+      .prepare(`SELECT id FROM composers WHERE slug = ?1 LIMIT 1`)
+      .bind(artist)
+      .first<{ id: string }>();
+    where.push(`s.composer_id = ?${binds.length + 1}`);
+    binds.push(comp?.id ?? "__none__");
   }
   if (q) {
     // Search matches the name, the tags AND the description (owner's decision:
@@ -94,8 +113,7 @@ export const onRequestGet = async (ctx: Ctx) => {
 
   const totalRow = await db
     .prepare(
-      // The composers join is here too — the WHERE may reference c.slug (?artist=).
-      `SELECT COUNT(*) AS n FROM sfx s LEFT JOIN composers c ON c.id = s.composer_id ${whereSql}`,
+      `SELECT COUNT(*) AS n FROM sfx s ${whereSql}`,
     )
     .bind(...binds)
     .first<{ n: number }>();
@@ -127,27 +145,29 @@ export const onRequestGet = async (ctx: Ctx) => {
       artist_slug: string | null;
     }>();
 
-  // The shelves + their computed counts (the "1,248 SOUNDS" of the mockup).
-  const cats = await db
-    .prepare(`SELECT id, title, description, image, popular, sort FROM sfx_categories ORDER BY sort, title`)
-    .all<{
-      id: string;
-      title: string;
-      description: string | null;
-      image: string | null;
-      popular: number;
-      sort: number;
-    }>();
-  const subs = await db
-    .prepare(`SELECT id, category_id, title FROM sfx_subcategories ORDER BY sort, title`)
-    .all<{ id: string; category_id: string; title: string }>();
-  const counts = await db
-    .prepare(`SELECT category_id, COUNT(*) AS n FROM sfx WHERE status = 'published' GROUP BY category_id`)
-    .all<{ category_id: string | null; n: number }>();
-  const countBy = new Map(counts.results.map((c) => [c.category_id ?? "", c.n]));
-  const libraryRow = await db
-    .prepare(`SELECT COUNT(*) AS n FROM sfx WHERE status = 'published'`)
-    .first<{ n: number }>();
+  // The shelves + their computed counts (the "1,248 SOUNDS" of the mockup) —
+  // identical for every query, so cached once per catalog version.
+  const meta = await cachedValue(ctx, "sfx-meta", async () => {
+    const cats = await db
+      .prepare(`SELECT id, title, description, image, popular, sort FROM sfx_categories ORDER BY sort, title`)
+      .all<{
+        id: string;
+        title: string;
+        description: string | null;
+        image: string | null;
+        popular: number;
+        sort: number;
+      }>();
+    const subs = await db
+      .prepare(`SELECT id, category_id, title FROM sfx_subcategories ORDER BY sort, title`)
+      .all<{ id: string; category_id: string; title: string }>();
+    const counts = await db
+      .prepare(`SELECT category_id, COUNT(*) AS n FROM sfx WHERE status = 'published' GROUP BY category_id`)
+      .all<{ category_id: string | null; n: number }>();
+    return { cats: cats.results, subs: subs.results, counts: counts.results };
+  });
+  const countBy = new Map(meta.counts.map((c) => [c.category_id ?? "", c.n]));
+  const library = meta.counts.reduce((a, c) => a + c.n, 0);
 
   return json({
     ok: true,
@@ -155,7 +175,7 @@ export const onRequestGet = async (ctx: Ctx) => {
     pageSize: PAGE_SIZE,
     total,
     pages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
-    librarySize: libraryRow?.n ?? 0,
+    librarySize: library,
     sounds: rows.results.map((r) => ({
       id: r.id,
       slug: r.slug,
@@ -169,14 +189,14 @@ export const onRequestGet = async (ctx: Ctx) => {
       artist: r.artist,
       artistSlug: r.artist_slug,
     })),
-    categories: cats.results.map((c) => ({
+    categories: meta.cats.map((c) => ({
       id: c.id,
       title: c.title,
       description: c.description,
       image: c.image,
       popular: c.popular === 1,
       count: countBy.get(c.id) ?? 0,
-      subs: subs.results.filter((x) => x.category_id === c.id).map((x) => ({ id: x.id, title: x.title })),
+      subs: meta.subs.filter((x) => x.category_id === c.id).map((x) => ({ id: x.id, title: x.title })),
     })),
   });
 };

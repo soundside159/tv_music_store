@@ -39,7 +39,7 @@ const EDITOR_ACTIONS = new Set([
 // ---- Editor change log: what an EDITOR changed on which track ------------
 // One row per track per action; the admin reviews them in Tracks Edit
 // (column "Edited", filter, "Mark reviewed"). Review state per track.
-const ensureEditLog = async (db: D1Database) => {
+const ensureEditLogRaw = async (db: D1Database) => {
   await db
     .prepare(
       `CREATE TABLE IF NOT EXISTS track_edit_log (
@@ -274,7 +274,7 @@ const r2KeyOf = (v: string | null | undefined): string | null => {
 };
 
 /** Adds newer track columns on first use — saves the owner wrangler migrations. */
-const ensureTrackCoverColumn = async (db: D1Database) => {
+const ensureTrackCoverColumnRaw = async (db: D1Database) => {
   const alters = [
     `ALTER TABLE tracks ADD COLUMN cover TEXT`,
     `ALTER TABLE tracks ADD COLUMN cover_thumb TEXT`,
@@ -310,7 +310,7 @@ const DEFAULT_CATEGORIES: Array<[string, string]> = [
   ["production", "Production"],
 ];
 
-const ensureCategoryTables = async (db: D1Database) => {
+const ensureCategoryTablesRaw = async (db: D1Database) => {
   await db
     .prepare(
       `CREATE TABLE IF NOT EXISTS categories (
@@ -330,8 +330,9 @@ const ensureCategoryTables = async (db: D1Database) => {
        )`,
     )
     .run();
-  const count = await db.prepare(`SELECT COUNT(*) AS n FROM categories`).first<{ n: number }>();
-  if ((count?.n ?? 0) === 0) {
+  // Existence checks, not COUNT(*) — a COUNT reads every row (D1 bills rows read).
+  const count = await db.prepare(`SELECT 1 AS n FROM categories LIMIT 1`).first<{ n: number }>();
+  if (!count) {
     for (let i = 0; i < DEFAULT_CATEGORIES.length; i++) {
       const [id, title] = DEFAULT_CATEGORIES[i];
       await db
@@ -340,8 +341,8 @@ const ensureCategoryTables = async (db: D1Database) => {
         .run();
     }
   }
-  const links = await db.prepare(`SELECT COUNT(*) AS n FROM category_tracks`).first<{ n: number }>();
-  if ((links?.n ?? 0) === 0) {
+  const links = await db.prepare(`SELECT 1 AS n FROM category_tracks LIMIT 1`).first<{ n: number }>();
+  if (!links) {
     await db
       .prepare(
         `INSERT OR IGNORE INTO category_tracks (category_id, track_id, sort)
@@ -351,7 +352,7 @@ const ensureCategoryTables = async (db: D1Database) => {
   }
 };
 
-const ensureSiteConfig = async (db: D1Database) => {
+const ensureSiteConfigRaw = async (db: D1Database) => {
   await db
     .prepare(`CREATE TABLE IF NOT EXISTS site_config (key TEXT PRIMARY KEY, value TEXT NOT NULL)`)
     .run();
@@ -393,7 +394,7 @@ const registerPlaylistTheme = async (db: D1Database, theme: string) => {
 
 // Playlists get an optional THEME ("Featured", "Podcast", ...) used to group
 // the /playlists page into sections. Added lazily for existing DBs.
-const ensurePlaylistThemeColumn = async (db: D1Database) => {
+const ensurePlaylistThemeColumnRaw = async (db: D1Database) => {
   try {
     await db.prepare(`ALTER TABLE playlists ADD COLUMN theme TEXT`).run();
   } catch {
@@ -2134,3 +2135,23 @@ export const onRequestPost = async (ctx: Ctx) => {
       return json({ error: `Unknown action: ${body.action}` }, 400);
   }
 };
+
+// ---- Schema self-heal ONCE per worker isolate ----------------------------
+// These ran (CREATE/ALTER/COUNT) on every admin request — hundreds of times a
+// day each; D1 bills every statement, and the COUNTs read whole tables
+// (D1 daily-limit outage 2026-11-03). A failed run is retried next request.
+// A plain flag, not a shared promise: Workers must not await I/O started by
+// another request. Two concurrent first requests may both run it — harmless.
+function once(fn: (db: D1Database) => Promise<void>): (db: D1Database) => Promise<void> {
+  let done = false;
+  return async (db) => {
+    if (done) return;
+    await fn(db);
+    done = true;
+  };
+}
+const ensureEditLog = once(ensureEditLogRaw);
+const ensureTrackCoverColumn = once(ensureTrackCoverColumnRaw);
+const ensureCategoryTables = once(ensureCategoryTablesRaw);
+const ensureSiteConfig = once(ensureSiteConfigRaw);
+const ensurePlaylistThemeColumn = once(ensurePlaylistThemeColumnRaw);

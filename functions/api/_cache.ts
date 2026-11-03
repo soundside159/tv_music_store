@@ -90,3 +90,42 @@ export const cachedJson = async (
   }
   return res;
 };
+
+/**
+ * Same edge cache for an arbitrary JSON-able VALUE (not a whole Response):
+ * SFX shelf counts, prerendered SEO pages, ... Keyed by catalog version like
+ * cachedJson, so admin edits show up on the next request. `ttl` bounds how
+ * stale a value can get when nothing is edited (e.g. new sales/downloads).
+ */
+export const cachedValue = async <T>(
+  ctx: { request: Request; env: { DB?: D1Database }; waitUntil?: (p: Promise<unknown>) => void },
+  name: string,
+  build: () => Promise<T>,
+  ttl = TTL_SECONDS,
+): Promise<T> => {
+  const cache = (globalThis as unknown as { caches?: { default?: Cache } }).caches?.default;
+  if (!cache || !ctx.env.DB) return build();
+  const v = await catalogVersion(ctx.env.DB);
+  const origin = new URL(ctx.request.url).origin;
+  const key = new Request(`${origin}/__edge_cache/v/${encodeURIComponent(name)}?v=${encodeURIComponent(v)}`);
+  try {
+    const hit = await cache.match(key);
+    if (hit) return ((await hit.json()) as { value: T }).value;
+  } catch {
+    // cache unavailable / bad entry — rebuild
+  }
+  const value = await build();
+  try {
+    const put = cache.put(
+      key,
+      new Response(JSON.stringify({ value }), {
+        headers: { "content-type": "application/json", "cache-control": `public, max-age=${ttl}` },
+      }),
+    );
+    if (ctx.waitUntil) ctx.waitUntil(put);
+    else await put;
+  } catch {
+    // never fail the request because of the cache
+  }
+  return value;
+};

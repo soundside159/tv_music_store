@@ -30,7 +30,11 @@ const requireAdmin = async (ctx: Ctx) => {
   return { user };
 };
 
+// Schema self-heal runs ONCE per worker isolate, not on every request — it is
+// ~10 DDL statements and ran thousands of times a day (D1 outage 2026-11-03).
+let sfxTablesReady = false;
 export const ensureSfxTables = async (db: D1Database) => {
+  if (sfxTablesReady) return;
   await db
     .prepare(
       `CREATE TABLE IF NOT EXISTS sfx_categories (
@@ -95,6 +99,8 @@ export const ensureSfxTables = async (db: D1Database) => {
     `CREATE INDEX IF NOT EXISTS idx_sfx_sub ON sfx (subcategory_id)`,
     `CREATE INDEX IF NOT EXISTS idx_sfx_status ON sfx (status)`,
     `CREATE INDEX IF NOT EXISTS idx_sfx_name ON sfx (name)`,
+    `CREATE INDEX IF NOT EXISTS idx_sfx_composer ON sfx (composer_id, status)`,
+    `CREATE INDEX IF NOT EXISTS idx_sfx_cat_pub ON sfx (category_id, status, created_at)`,
   ]) {
     try {
       await db.prepare(sql).run();
@@ -102,6 +108,7 @@ export const ensureSfxTables = async (db: D1Database) => {
       // index exists — fine
     }
   }
+  sfxTablesReady = true;
 };
 
 const slugify = (s: string) =>

@@ -6,7 +6,11 @@ import { newId } from "./_utils";
 // the recorder used when we send a reply. Tables are created lazily so the
 // feature self-heals on first use.
 
+// Once per worker isolate — the unread-mail poll used to run these ~7 DDL
+// statements on every call (2.9k ALTERs/day, D1 outage 2026-11-03).
+let mailTablesReady = false;
 export const ensureMailTables = async (db: D1Database): Promise<void> => {
+  if (mailTablesReady) return;
   await db
     .prepare(
       `CREATE TABLE IF NOT EXISTS mail_threads (
@@ -54,6 +58,7 @@ export const ensureMailTables = async (db: D1Database): Promise<void> => {
   await db
     .prepare(`CREATE INDEX IF NOT EXISTS idx_mail_messages_thread ON mail_messages(thread_id, created_at)`)
     .run();
+  mailTablesReady = true;
 };
 
 export interface RecordMessageInput {
