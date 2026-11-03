@@ -4,7 +4,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -288,7 +287,6 @@ const EarningsTab = () => {
                   label={{ value: level === "month" ? "Today" : "Now", position: "top", fill: GOLD, fontSize: 10 }}
                 />
               )}
-              {showToday && <ReferenceDot x={todayKey} y={0} r={4} fill={GOLD} stroke="#111216" strokeWidth={2} />}
               <Bar
                 dataKey="subsD"
                 stackId="a"

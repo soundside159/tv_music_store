@@ -4,7 +4,6 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -301,7 +300,6 @@ const AdminSales = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => v
                         label={{ value: data.bucket === "month" ? "Now" : "Today", position: "top", fill: GOLD, fontSize: 10 }}
                       />
                     )}
-                    {showToday && <ReferenceDot x={todayKey} y={0} r={4} fill={GOLD} stroke="#111216" strokeWidth={2} />}
                     <Bar dataKey="license" name="Track licenses" stackId="a" fill={GOLD} radius={[4, 4, 0, 0]} animationDuration={900} animationEasing="ease-out" />
                     <Bar dataKey="subscription" name="Subscriptions" stackId="a" fill={GOLD_SOFT} radius={[4, 4, 0, 0]} animationDuration={900} animationEasing="ease-out" />
                   </BarChart>
