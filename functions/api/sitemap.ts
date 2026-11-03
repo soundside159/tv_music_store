@@ -117,13 +117,24 @@ export const onRequestGet = async (ctx: Ctx) => {
 
     // Collections + playlists.
     try {
-      const rows = await db.prepare(`SELECT id FROM collections`).all<{ id: string }>();
+      // Only collections customers can see (5+ tracks, same rule as the site).
+      const rows = await db
+        .prepare(
+          `SELECT c.id FROM collections c
+            WHERE (SELECT COUNT(*) FROM collection_tracks j WHERE j.collection_id = c.id) >= 5`,
+        )
+        .all<{ id: string }>();
       for (const c of rows.results) lines.push(url(`/collection/${c.id}`, "weekly", "0.6"));
     } catch {
       // collections table missing
     }
     try {
-      const rows = await db.prepare(`SELECT id FROM playlists`).all<{ id: string }>();
+      const rows = await db
+        .prepare(
+          `SELECT p.id FROM playlists p
+            WHERE (SELECT COUNT(*) FROM playlist_tracks j WHERE j.playlist_id = p.id) >= 5`,
+        )
+        .all<{ id: string }>();
       for (const p of rows.results) lines.push(url(`/playlist/${p.id}`, "weekly", "0.6"));
     } catch {
       // playlists table missing

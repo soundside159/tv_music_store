@@ -5,6 +5,16 @@ import { useTracks } from "@/hooks/useTracks";
 import { defaultVocabularies, type Vocabularies } from "@/lib/tagOptions";
 import { hydrateLicensePrices, type LicenseTierId } from "@/lib/licenses";
 import { applyGuideSchedule } from "@/content/guides";
+import { useCurrentUser } from "@/hooks/useMockData";
+
+// Customers only see collections / playlists with at least this many tracks:
+// empty or half-filled ones looked abandoned ("0 tracks"). Admin and Editor
+// still see everything (they are the ones filling them).
+export const MIN_PUBLIC_TRACKS = 5;
+const useIsStaff = () => {
+  const user = useCurrentUser();
+  return user?.role === "admin" || user?.role === "editor";
+};
 
 // Live storefront content from /api/content (what the owner edits in
 // Admin -> Content). NO demo fallback (owner request): an empty DB renders
@@ -225,6 +235,7 @@ const mapCollections = (data: ApiContent): MusicCollection[] =>
 
 /** Collections for the catalog strip / collections pages (live only, no mocks). */
 export const useCollections = (): MusicCollection[] => {
+  const staff = useIsStaff();
   // Start from the module cache when it's already there (SPA navigation) so
   // live data renders on the very first frame.
   const [list, setList] = useState<MusicCollection[]>(() =>
@@ -245,7 +256,7 @@ export const useCollections = (): MusicCollection[] => {
       contentListeners.delete(apply);
     };
   }, []);
-  return list;
+  return staff ? list : list.filter((c) => (c.trackCount ?? 0) >= MIN_PUBLIC_TRACKS);
 };
 
 export interface LivePlaylist {
@@ -273,6 +284,7 @@ const mapPlaylists = (data: ApiContent): LivePlaylist[] =>
 
 /** Playlists for /playlists pages (live only, no mocks). */
 export const usePlaylists = (): LivePlaylist[] => {
+  const staff = useIsStaff();
   // Start from the module cache when present — instant render on navigation.
   const [list, setList] = useState<LivePlaylist[] | null>(() =>
     cache ? mapPlaylists(cache) : null,
@@ -292,7 +304,8 @@ export const usePlaylists = (): LivePlaylist[] => {
       contentListeners.delete(apply);
     };
   }, []);
-  return list ?? [];
+  const all = list ?? [];
+  return staff ? all : all.filter((p) => p.trackIds.length >= MIN_PUBLIC_TRACKS);
 };
 
 /** Raw admin-picked trending/featured track ids (empty until content loads). */
