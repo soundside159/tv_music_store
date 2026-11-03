@@ -25,6 +25,7 @@ import { splitFilterValues } from "@/components/TrackRowPlayer";
 import WaveformPreview from "@/components/WaveformPreview";
 import { usePlayer } from "@/components/playerContext";
 import { refreshContent } from "@/hooks/useContent";
+import { patchCachedTrackFacet } from "@/hooks/useTracks";
 import { decodeAudio, encodeMp3, formatDuration, makeThumbnail, wavToMp3Pair } from "@/lib/audioEncoding";
 import { crc32File } from "@/lib/crc32";
 import { cleanVersionLabel, codeFromSlug } from "@/lib/downloadTrack";
@@ -63,12 +64,31 @@ export interface AdminContentData {
 
 type RunPayload = Record<string, unknown>;
 
-/** Loads /api/admin/content once (admins only) + a small POST helper. */
-export const useAdminTrackContent = (enabled: boolean) => {
-  const [data, setData] = useState<AdminContentData | null>(null);
+// One copy for the whole browser session: walking from track page to track
+// page used to refetch /api/admin/content (every playlist/collection link —
+// thousands of D1 rows) on EVERY page. Local edits patch this copy (setData);
+// only an explicit reload() goes back to the server.
+let sharedAdminContent: AdminContentData | null = null;
 
-  const load = useCallback(async () => {
+/** Loads /api/admin/content once per session (staff only) + a small POST helper. */
+export const useAdminTrackContent = (enabled: boolean) => {
+  const [data, setDataState] = useState<AdminContentData | null>(enabled ? sharedAdminContent : null);
+  const setData = useCallback(
+    (u: AdminContentData | null | ((prev: AdminContentData | null) => AdminContentData | null)) =>
+      setDataState((prev) => {
+        const next = typeof u === "function" ? u(prev) : u;
+        sharedAdminContent = next;
+        return next;
+      }),
+    [],
+  );
+
+  const load = useCallback(async (force = false) => {
     if (!enabled) return;
+    if (!force && sharedAdminContent) {
+      setDataState(sharedAdminContent);
+      return;
+    }
     try {
       const res = await fetch("/api/admin/content", { credentials: "include" });
       if (!res.ok) return;
@@ -117,7 +137,8 @@ export const useAdminTrackContent = (enabled: boolean) => {
     [call],
   );
 
-  return { data, setData, run, call, reload: load };
+  const reload = useCallback(() => load(true), [load]);
+  return { data, setData, run, call, reload };
 };
 
 // ---------------------------------------------------------------------------
@@ -1198,10 +1219,11 @@ export const AdminTrackTagsPanel = ({
         facets: { [key]: next ? { add: [value] } : { remove: [value] } },
       });
       if (!ok) setOverrides((o) => ({ ...o, [id]: !next }));
+      else patchCachedTrackFacet(track.id, key, value, next);
       inFlight.current -= 1;
-      if (inFlight.current === 0) {
-        reloadTimer.current = setTimeout(() => onTracksChanged(), 1200);
-      }
+      // No catalogue refetch after ticks (it re-read every track + version
+      // from D1 each time). The ticked state stays in `overrides`, which IS
+      // what the server now holds; fresh data arrives on the next page load.
     });
   };
 

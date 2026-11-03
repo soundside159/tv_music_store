@@ -293,6 +293,7 @@ const AdminTracksEdit = ({
   onTracksReload,
   onContentReload,
   onApplyOverrides,
+  onMembershipPatch,
   onSelectionChange,
   selectionResetKey,
   aiTrackIds = [],
@@ -325,6 +326,13 @@ const AdminTracksEdit = ({
    *  needed after a batch AI run, which writes membership straight to the DB. */
   onContentReload?: () => void;
   onApplyOverrides: (overrides: Record<string, Partial<CatalogTrack>>) => void;
+  /** Mirror a saved membership tick into the parent's loaded content (no refetch). */
+  onMembershipPatch?: (
+    kind: "collection" | "playlist" | "category",
+    itemId: string,
+    trackIds: string[],
+    add: boolean,
+  ) => void;
   onSelectionChange?: (ids: string[]) => void;
   selectionResetKey?: number;
   /** Track ids with AI COVER generation in flight (sparkle on row thumbs). */
@@ -1560,9 +1568,10 @@ const AdminTracksEdit = ({
     setDelta((prev) => ({ ...prev, [item.id]: to }));
 
     const change = to === "all" ? { add: [item.id] } : { remove: [item.id] };
+    const tickIds = [...selected];
     const ok = await queueSave({
       action: "bulk_update_tracks",
-      trackIds: [...selected],
+      trackIds: tickIds,
       ...(kind === "collection"
         ? { collectionChanges: change }
         : kind === "playlist"
@@ -1577,10 +1586,17 @@ const AdminTracksEdit = ({
       });
       return;
     }
-    // Membership lives in the CONTENT data (item.trackIds) — refresh it so the
-    // box keeps reading right when the selection changes. With runQuiet the
-    // parent already reloads once after the burst, so no reload per tick.
-    if (!runQuiet) onContentReload?.();
+    // Membership lives in the CONTENT data (item.trackIds): the parent patches
+    // its loaded copy so the box keeps reading right when the selection
+    // changes — no refetch of all links from the server.
+    if (onMembershipPatch) {
+      onMembershipPatch(kind, item.id, tickIds, to === "all");
+      setDelta((prev) => {
+        const m = { ...prev };
+        delete m[item.id];
+        return m;
+      });
+    } else if (!runQuiet) onContentReload?.();
   };
 
   // "Deselect all" for the TAGS panel: unticks every Usage / Genre / Mood value

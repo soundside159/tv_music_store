@@ -42,6 +42,25 @@ export const bumpCatalogVersion = async (db: D1Database): Promise<void> => {
   }
 };
 
+// EDITING BURSTS: an editor ticking boxes bumps the version every few
+// seconds; keyed on it directly, every tick made the next visitor in every
+// data centre rebuild the whole catalogue from D1. So while edits are fresh
+// (last bump < EDIT_WINDOW ago) the key is a 3-minute TIME bucket instead:
+// at most one rebuild per bucket, edits visible within ~3 minutes. Once the
+// editing stops, the key becomes the final version -> one rebuild with
+// everything, then served from cache for the full TTL.
+const EDIT_WINDOW_MS = 3 * 60_000;
+
+const cacheVersion = async (db: D1Database): Promise<{ v: string; ttl: number }> => {
+  const raw = await catalogVersion(db);
+  const t = Number(raw);
+  const now = Date.now();
+  if (Number.isFinite(t) && now - t < EDIT_WINDOW_MS) {
+    return { v: `w${Math.floor(now / EDIT_WINDOW_MS)}`, ttl: EDIT_WINDOW_MS / 1000 };
+  }
+  return { v: raw, ttl: TTL_SECONDS };
+};
+
 /** Serve `name` from the edge cache, building it with `build()` on a miss. */
 export const cachedJson = async (
   ctx: CtxWait,
@@ -51,7 +70,7 @@ export const cachedJson = async (
   const cache = (globalThis as unknown as { caches?: { default?: Cache } }).caches?.default;
   if (!cache || !ctx.env.DB) return build();
 
-  const v = await catalogVersion(ctx.env.DB);
+  const { v, ttl } = await cacheVersion(ctx.env.DB);
   const origin = new URL(ctx.request.url).origin;
   const key = new Request(`${origin}/__edge_cache/${name}?v=${encodeURIComponent(v)}`);
 
@@ -78,7 +97,7 @@ export const cachedJson = async (
       const stored = new Response(body, {
         headers: {
           "content-type": "application/json; charset=utf-8",
-          "cache-control": `public, max-age=${TTL_SECONDS}`,
+          "cache-control": `public, max-age=${ttl}`,
         },
       });
       const put = cache.put(key, stored);
@@ -105,7 +124,9 @@ export const cachedValue = async <T>(
 ): Promise<T> => {
   const cache = (globalThis as unknown as { caches?: { default?: Cache } }).caches?.default;
   if (!cache || !ctx.env.DB) return build();
-  const v = await catalogVersion(ctx.env.DB);
+  const cv = await cacheVersion(ctx.env.DB);
+  const v = cv.v;
+  if (cv.ttl < ttl) ttl = cv.ttl;
   const origin = new URL(ctx.request.url).origin;
   const key = new Request(`${origin}/__edge_cache/v/${encodeURIComponent(name)}?v=${encodeURIComponent(v)}`);
   try {

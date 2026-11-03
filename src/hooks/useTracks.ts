@@ -80,6 +80,45 @@ const mapTrack = (t: ApiTrack): CatalogTrack => ({
 const trackCache: Record<string, { list: CatalogTrack[]; at: number }> = {};
 const trackInflight: Record<string, Promise<CatalogTrack[] | null> | undefined> = {};
 const TRACKS_STALE_MS = 30_000;
+// The staff list (?drafts=1) is NOT edge-cached and reads every track + every
+// version from D1, so it is refetched far less often. Staff edits patch the
+// cached list in place (patchCachedTracks) instead of refetching it.
+const DRAFTS_STALE_MS = 15 * 60_000;
+const trackListeners = new Set<() => void>();
+
+/**
+ * Patch tracks in every cached list (public + drafts) and repaint all mounted
+ * useTracks() users — what a refetch used to do, without touching D1.
+ */
+export const patchCachedTracks = (overrides: Record<string, Partial<CatalogTrack>>) => {
+  const ids = Object.keys(overrides);
+  if (ids.length === 0) return;
+  for (const k of Object.keys(trackCache)) {
+    const c = trackCache[k];
+    trackCache[k] = {
+      at: c.at,
+      list: c.list.map((t) => (overrides[t.id] ? { ...t, ...overrides[t.id] } : t)),
+    };
+  }
+  trackListeners.forEach((f) => f());
+};
+
+/** Add/remove one Use Case / Genre / Mood value on a cached track. */
+export const patchCachedTrackFacet = (
+  id: string,
+  key: "useCase" | "genre" | "mood",
+  value: string,
+  on: boolean,
+) => {
+  const t = (trackCache.drafts ?? trackCache.public)?.list.find((x) => x.id === id);
+  if (!t) return;
+  const lc = value.toLowerCase();
+  const rest = (t[key] ?? "")
+    .split("/")
+    .map((v) => v.trim())
+    .filter((v) => v && v.toLowerCase() !== lc);
+  patchCachedTracks({ [id]: { [key]: (on ? [...rest, value] : rest).join(" / ") } });
+};
 
 export const useTracks = (opts?: { drafts?: boolean }) => {
   const wantDrafts = !!opts?.drafts;
@@ -94,7 +133,7 @@ export const useTracks = (opts?: { drafts?: boolean }) => {
   const load = useCallback(
     (force = false) => {
       const hit = trackCache[key];
-      if (!force && hit && Date.now() - hit.at < TRACKS_STALE_MS) {
+      if (!force && hit && Date.now() - hit.at < (wantDrafts ? DRAFTS_STALE_MS : TRACKS_STALE_MS)) {
         setTracks(hit.list);
         setSource("api");
         setIsLoading(false);
@@ -131,6 +170,18 @@ export const useTracks = (opts?: { drafts?: boolean }) => {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Repaint when staff edits patch the cached list.
+  useEffect(() => {
+    const f = () => {
+      const h = trackCache[key];
+      if (h) setTracks(h.list);
+    };
+    trackListeners.add(f);
+    return () => {
+      trackListeners.delete(f);
+    };
+  }, [key]);
 
   // reload() (admin edits) always bypasses the cache.
   return { tracks, source, isLoading, reload: () => load(true) };

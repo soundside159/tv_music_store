@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { makeThumbnail } from "@/lib/audioEncoding";
 import { brandCover, generateCoverApi, generateDescriptionApi, uploadCoverImage } from "@/lib/coverArt";
 import { usePlayer } from "@/components/playerContext";
-import { useTracks } from "@/hooks/useTracks";
+import { patchCachedTracks, useTracks } from "@/hooks/useTracks";
 import { refreshContent } from "@/hooks/useContent";
 import AdminTracksEdit from "@/components/AdminTracksEdit";
 import AddTrackModal from "@/components/AddTrackModal";
@@ -677,19 +677,49 @@ const AdminContent = ({ tab, editor = false }: { tab: Tab; editor?: boolean }) =
   };
 
   // Checkbox saves (Tracks panel ticks): no global "busy" lock, no toast per
-  // tick, and the content is reloaded ONCE after the last tick of a burst.
-  // The owner ticked several boxes in a row and the panel ignored the clicks
-  // while each save was running.
-  const quietReloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // tick, and NO reload at all. The server writes only the ticked rows; the
+  // screen patches its own copy (patchMembership / onApplyOverrides). A reload
+  // re-read every playlist/collection/category link from D1 — with an editor
+  // ticking all day that blew the D1 daily read limit (2026-11-03).
   const runQuiet = async (payload: Record<string, unknown>) => {
     try {
       await api(payload);
-      if (quietReloadTimer.current) clearTimeout(quietReloadTimer.current);
-      quietReloadTimer.current = setTimeout(() => reload(), 1200);
       return true;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Save failed");
       return false;
+    }
+  };
+
+  /** Mirror a saved membership tick into the loaded content (no refetch). */
+  const patchMembership = (
+    kind: "collection" | "playlist" | "category",
+    itemId: string,
+    trackIds: string[],
+    add: boolean,
+  ) => {
+    setData((d) => {
+      if (!d) return d;
+      const fix = <T extends { id: string; trackIds: string[] }>(list: T[] | undefined) =>
+        list?.map((it) => {
+          if (it.id !== itemId) return it;
+          const rest = it.trackIds.filter((id) => !trackIds.includes(id));
+          return { ...it, trackIds: add ? [...rest, ...trackIds] : rest };
+        });
+      if (kind === "collection") return { ...d, collections: fix(d.collections) ?? d.collections };
+      if (kind === "playlist") return { ...d, playlists: fix(d.playlists) ?? d.playlists };
+      return { ...d, categories: fix(d.categories) };
+    });
+    // Tracks carry their collection/category ids too (public filters).
+    if (kind !== "playlist") {
+      const field = kind === "collection" ? "collectionIds" : "categoryIds";
+      const over: Record<string, Partial<CatalogTrack>> = {};
+      for (const t of tracks) {
+        if (!trackIds.includes(t.id)) continue;
+        const cur = (t[field] ?? []).filter((x) => x !== itemId);
+        over[t.id] = { [field]: add ? [...cur, itemId] : cur };
+      }
+      patchCachedTracks(over);
     }
   };
 
@@ -2091,13 +2121,17 @@ const AdminContent = ({ tab, editor = false }: { tab: Tab; editor?: boolean }) =
           uploadCover={uploadCover}
           onTracksReload={() => void reloadTracks()}
           onContentReload={() => reload()}
-          onApplyOverrides={(overrides) =>
+          onApplyOverrides={(overrides) => {
             setTrackOverrides((prev) => {
               const next = { ...prev };
               for (const [id, o] of Object.entries(overrides)) next[id] = { ...next[id], ...o };
               return next;
-            })
-          }
+            });
+            // Same values into the shared track cache, so track pages opened
+            // later show them without refetching the catalogue.
+            patchCachedTracks(overrides);
+          }}
+          onMembershipPatch={patchMembership}
           onSelectionChange={setSelectedTrackIds}
           selectionResetKey={selResetKey}
           aiTrackIds={aiTrackIds}
