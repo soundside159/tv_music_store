@@ -214,16 +214,24 @@ const Artist = () => {
               maskImage: "linear-gradient(#000 20%, transparent 85%)",
             }}
           />
-          <div
-            className="absolute right-0 top-0 h-[560px] w-full bg-cover opacity-70 md:right-[4%] md:h-[820px] md:w-[46%] md:opacity-100"
-            style={{
-              backgroundImage: `url("${photo}")`,
-              backgroundPosition: "center 20%",
-              filter: "brightness(0.8)",
-              WebkitMaskImage: "radial-gradient(ellipse 60% 62% at 55% 42%, #000 45%, transparent 75%)",
-              maskImage: "radial-gradient(ellipse 60% 62% at 55% 42%, #000 45%, transparent 75%)",
-            }}
-          />
+          {/* Sharp photo: tied to the CONTENT width (max-w-7xl), not the
+              window, so on a very wide screen it stays next to the text
+              instead of stretching into a wide, cropped strip. Soft mask with
+              a mid stop: no visible oval edge even on bright photos. */}
+          <div className="absolute inset-x-0 top-0 mx-auto h-full max-w-7xl">
+            <div
+              className="absolute right-0 top-0 h-[560px] w-full bg-cover opacity-70 md:h-[820px] md:w-[60%] md:max-w-[780px] md:opacity-100"
+              style={{
+                backgroundImage: `url("${photo}")`,
+                backgroundPosition: "center 20%",
+                filter: "brightness(0.72) saturate(0.9)",
+                WebkitMaskImage:
+                  "radial-gradient(ellipse 58% 62% at 55% 40%, #000 28%, rgba(0,0,0,0.55) 52%, transparent 78%)",
+                maskImage:
+                  "radial-gradient(ellipse 58% 62% at 55% 40%, #000 28%, rgba(0,0,0,0.55) 52%, transparent 78%)",
+              }}
+            />
+          </div>
         </div>
       )}
       <main className="relative z-10 mx-auto w-full max-w-7xl px-4 pb-32 pt-24 sm:px-6 md:pt-28">

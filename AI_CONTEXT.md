@@ -5053,3 +5053,4 @@ True: `brandCover()` was only in the AI path.
 
 ## 2026-11-03 Track page facet ticks no longer freeze
 - AdminTrackPanel.tsx AdminTrackTagsPanel: Use Case / Genre / Mood ticks are optimistic (overrides map), never disabled; saves run one after another on a promise chain; the catalogue reload (onTracksChanged) runs ONCE 1.2 s after the last save instead of after every tick; a failed save flips the box back. Overrides reset when the track changes or fresh data arrives with no save in flight.
+- 2026-11-03: Artist photo fix (Vicate looked like a hard oval on a 3000px-wide screen): sharp photo now sits inside a max-w-7xl wrapper (md: 60% wide, max 780px, 820 tall), softer radial mask with a mid stop, brightness 0.72. Checked live in owner's Chrome on /artist/vicate by applying the same styles.
