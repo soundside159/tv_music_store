@@ -15,7 +15,7 @@ interface MwCtx {
 // AI helpers, ...) must not bump the version: every bump makes the next
 // visitor in every data centre rebuild tracks/content/SFX/SEO from D1.
 const NON_CATALOG =
-  /^\/api\/admin\/(mail|campaign|customer|finance|finance-report|sales|analytics|usage|whitelist-handled|whitelist-videos|whitelist-videos-all|suggest-tags|generate-description|generate-cover|fetch-image)(\/|$)/;
+  /^\/api\/admin\/(mail|campaign|customer|finance|finance-report|sales|analytics|usage|whitelist-handled|whitelist-videos|whitelist-videos-all|suggest-tags|generate-description|generate-cover|fetch-image|waveform)(\/|$)/;
 
 export const onRequest = async (ctx: MwCtx): Promise<Response> => {
   const res = await ctx.next();

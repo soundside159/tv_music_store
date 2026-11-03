@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { currentSessionRole } from "@/hooks/useAuth";
 
 interface WaveformPreviewProps {
   active?: boolean;
@@ -178,31 +179,120 @@ const writeStored = (src: string, pr: Profile) => {
   }
 };
 
+/** "/api/file/previews/x.mp3" -> "/api/file/waveforms/previews/x.mp3.txt" (else null). */
+const waveformUrl = (src: string): string | null => {
+  const m = src.match(/^\/api\/file\/(previews\/.+)$/);
+  return m ? `/api/file/waveforms/${m[1]}.txt` : null;
+};
+
+const isStaff = () => {
+  const r = currentSessionRole();
+  return r === "admin" || r === "editor";
+};
+
+/** Staff browsers publish what they computed, so visitors never decode it. */
+const uploadProfile = (src: string, pr: Profile) => {
+  if (!waveformUrl(src)) return Promise.resolve(false);
+  return fetch("/api/admin/waveform", {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ src, profile: encodeProfile(pr) }),
+  })
+    .then((r) => r.ok)
+    .catch(() => false);
+};
+
+/** Fetch + decode the mp3 itself and take the profile (the slow, heavy path). */
+const computeProfile = (src: string): Promise<Profile> =>
+  enqueueLoad(() =>
+    fetch(src)
+      .then((response) => {
+        if (!response.ok) throw new Error(`Could not load waveform audio: ${src}`);
+        return response.arrayBuffer();
+      })
+      .then(decodeSmall)
+      // The decoded buffer goes out of scope here — only the profile survives.
+      .then(buildProfile),
+  );
+
+/** The precomputed waveform (~1 KB) if it exists, else null. */
+const fetchStoredProfile = async (src: string): Promise<Profile | null> => {
+  const url = waveformUrl(src);
+  if (!url) return null;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    return decodeProfile((await res.text()).trim());
+  } catch {
+    return null;
+  }
+};
+
 const getProfile = (src: string): Promise<Profile> => {
   const cached = profileCache.get(src);
   if (cached) return cached;
 
-  const stored = readStored(src);
-  const promise = stored
-    ? Promise.resolve(stored)
-    : enqueueLoad(() =>
-        fetch(src)
-          .then((response) => {
-            if (!response.ok) throw new Error(`Could not load waveform audio: ${src}`);
-            return response.arrayBuffer();
-          })
-          .then(decodeSmall)
-          .then((buffer) => {
-            // The buffer goes out of scope here — only the profile survives.
-            const pr = buildProfile(buffer);
-            writeStored(src, pr);
-            return pr;
-          }),
-      );
+  const local = readStored(src);
+  const promise = local
+    ? Promise.resolve(local)
+    : fetchStoredProfile(src).then(async (remote) => {
+        if (remote) {
+          writeStored(src, remote);
+          return remote;
+        }
+        const pr = await computeProfile(src);
+        writeStored(src, pr);
+        if (isStaff()) void uploadProfile(src, pr);
+        return pr;
+      });
   // A failed load must not stick forever (network blip) — retry next time.
   promise.catch(() => profileCache.delete(src));
   profileCache.set(src, promise);
   return promise;
+};
+
+/**
+ * Admin "Generate waveforms": for every preview without a stored waveform,
+ * decode it here and upload the profile. Resumable (skips existing ones),
+ * 3 at a time. Returns counts.
+ */
+export const backfillWaveforms = async (
+  srcs: string[],
+  onProgress: (done: number, total: number, made: number) => void,
+  shouldStop: () => boolean = () => false,
+): Promise<{ made: number; skipped: number; failed: number }> => {
+  const list = [...new Set(srcs.filter((s) => waveformUrl(s)))];
+  let next = 0;
+  let done = 0;
+  let made = 0;
+  let skipped = 0;
+  let failed = 0;
+  const worker = async () => {
+    while (next < list.length && !shouldStop()) {
+      const src = list[next++];
+      try {
+        const head = await fetch(waveformUrl(src)!, { cache: "no-store" }); // ~1 KB
+        if (head.ok) {
+          skipped += 1;
+        } else {
+          const pr = await buildProfile(
+            await decodeSmall(await (await fetch(src)).arrayBuffer()),
+          );
+          if (await uploadProfile(src, pr)) {
+            made += 1;
+            writeStored(src, pr);
+          } else failed += 1;
+        }
+      } catch {
+        failed += 1;
+      }
+      done += 1;
+      onProgress(done, list.length, made);
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+  return { made, skipped, failed };
 };
 
 const getPeaks = (src: string, bars: number) =>

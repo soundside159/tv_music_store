@@ -6,7 +6,8 @@ import { json, type Ctx } from "../_utils";
 // (masters/, r2_key_wav) are served exclusively by /api/download with plan
 // checks — never add masters/ to this allowlist.
 
-const PUBLIC_PREFIXES = ["covers/", "images/", "previews/"];
+// waveforms/ = precomputed waveform profiles of previews (see admin/waveform.ts).
+const PUBLIC_PREFIXES = ["covers/", "images/", "previews/", "waveforms/"];
 
 interface CtxWithParams extends Ctx {
   params: { path?: string | string[] };
@@ -22,7 +23,14 @@ export const onRequestGet = async (ctx: CtxWithParams) => {
   }
 
   const obj = await ctx.env.R2.get(key);
-  if (!obj) return json({ error: "Not found" }, 404);
+  if (!obj) {
+    // A missing waveform is normal (not generated yet) — let the browser and
+    // the edge remember the miss briefly instead of asking again per view.
+    if (key.startsWith("waveforms/")) {
+      return new Response("", { status: 404, headers: { "cache-control": "public, max-age=600" } });
+    }
+    return json({ error: "Not found" }, 404);
+  }
 
   return new Response(obj.body, {
     status: 200,

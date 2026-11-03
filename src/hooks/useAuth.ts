@@ -258,6 +258,9 @@ export const logout = async (): Promise<void> => {
   emit();
 };
 
+/** Role of the signed-in user right now (non-React code, e.g. waveform uploads). */
+export const currentSessionRole = (): string | null => session.user?.role ?? null;
+
 let bootStarted = false;
 
 /** Shared live session. Kicks off the initial /api/me fetch on first use. */

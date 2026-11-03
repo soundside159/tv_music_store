@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
-import { ExternalLink, HardDrive, Loader2, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AudioLines, ExternalLink, HardDrive, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { backfillWaveforms } from "@/components/WaveformPreview";
 
 // Services & credits — rendered at the bottom of Admin → Dashboard.
 //
@@ -17,6 +18,78 @@ import { toast } from "sonner";
 // A number that pretends to be a bill is worse than an honest link.
 
 const GOLD = "#F4C430";
+
+// Precomputed waveforms (like Epidemic Sound): visitors draw a track's
+// waveform from a ~1 KB file instead of downloading + decoding its mp3.
+// This walks every preview that has no stored waveform yet, decodes it in
+// THIS browser and uploads it. Resumable: already-made ones are skipped.
+// New tracks get theirs automatically the first time staff see them.
+const WaveformBackfill = () => {
+  const [state, setState] = useState<{ done: number; total: number; made: number } | null>(null);
+  const [running, setRunning] = useState(false);
+  const stop = useRef(false);
+
+  const start = async () => {
+    setRunning(true);
+    stop.current = false;
+    try {
+      const res = await fetch("/api/tracks?drafts=1", { credentials: "include" });
+      const d = (await res.json()) as { tracks?: { versions?: { preview_src?: string }[] }[] };
+      const tracks = d.tracks ?? [];
+      // Main version of every track first (what lists show), then the rest.
+      const main = tracks.map((t) => t.versions?.[0]?.preview_src ?? "");
+      const rest = tracks.flatMap((t) => (t.versions ?? []).slice(1).map((v) => v.preview_src ?? ""));
+      const r = await backfillWaveforms(
+        [...main, ...rest].filter(Boolean),
+        (done, total, made) => setState({ done, total, made }),
+        () => stop.current,
+      );
+      toast.success(`Waveforms: ${r.made} made, ${r.skipped} already there${r.failed ? `, ${r.failed} failed` : ""}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Waveform generation failed");
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="flex items-center gap-2 font-body text-sm font-semibold text-foreground">
+            <AudioLines className="h-4 w-4" style={{ color: GOLD }} />
+            Waveforms
+          </h3>
+          <p className="mt-1 max-w-xl font-body text-xs text-muted-foreground">
+            Makes a small waveform file for every track version, so visitors no longer download each
+            mp3 just to draw it. Keep this tab open while it runs; you can stop and continue later.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => (running ? (stop.current = true) : void start())}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 font-body text-xs font-semibold text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
+        >
+          {running && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          {running ? "Stop" : "Generate waveforms"}
+        </button>
+      </div>
+      {state && (
+        <div className="mt-4">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-border/60">
+            <div
+              className="h-full rounded-full"
+              style={{ width: `${(state.done / Math.max(1, state.total)) * 100}%`, background: GOLD }}
+            />
+          </div>
+          <p className="mt-2 font-body text-xs text-muted-foreground">
+            {state.done} / {state.total} checked · {state.made} new
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const YOUTUBE_DAILY_QUOTA = 10000;
 
@@ -293,6 +366,8 @@ const AdminUsage = () => {
           />
         )}
       </div>
+
+      <WaveformBackfill />
 
       {/* ===== Storage: files in R2 that nothing in the database points at ===== */}
       <div className="rounded-xl border border-border bg-card p-5">
