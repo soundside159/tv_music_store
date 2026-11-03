@@ -288,6 +288,7 @@ const AdminTracksEdit = ({
   busy,
   uploading,
   run,
+  runQuiet,
   uploadCover,
   onTracksReload,
   onContentReload,
@@ -315,6 +316,8 @@ const AdminTracksEdit = ({
   busy: boolean;
   uploading: boolean;
   run: (payload: Record<string, unknown>, okMsg: string) => Promise<boolean>;
+  /** Checkbox saves: no busy lock, no toast, one debounced reload (AdminContent). */
+  runQuiet?: (payload: Record<string, unknown>) => Promise<boolean>;
   uploadCover: (file: File, apply: (path: string) => void) => Promise<void> | void;
   /** Refetch /api/tracks (after version set-main/delete in the table). */
   onTracksReload?: () => void;
@@ -1487,23 +1490,33 @@ const AdminTracksEdit = ({
   const facetDisplay = (key: FacetKey, option: string): TriState =>
     facetChanges[key][option] ?? facetBase(key, option);
 
+  // Checkbox saves run one after another in the background (a promise chain),
+  // quietly (no busy lock, no toast per tick); the parent reloads once after
+  // the burst. Falls back to the normal run() if the parent gave no runQuiet.
+  const saveChain = useRef<Promise<unknown>>(Promise.resolve());
+  const queueSave = (payload: Record<string, unknown>): Promise<boolean> => {
+    const job = saveChain.current.then(() => (runQuiet ? runQuiet(payload) : run(payload, "Saved")));
+    saveChain.current = job.catch(() => undefined);
+    return job;
+  };
+
   // TICKING A BOX SAVES IT (owner: no Apply for checkboxes). The click is applied
   // optimistically, the request follows, and a failure puts the box back where it
   // was. Apply is now ONLY for the text fields (description, tags, title, BPM…),
   // where you want to finish typing before anything is written.
   const toggleFacet = async (key: FacetKey, option: string) => {
-    if (disabled || busy || selected.length === 0) return;
+    // No `busy` check: ticks must stay clickable while earlier ticks save
+    // (owner: several in a row froze). Saves queue up one after another.
+    if (disabled || selected.length === 0) return;
     const to = nextState(facetDisplay(key, option));
     setFacetChanges((prev) => ({ ...prev, [key]: { ...prev[key], [option]: to } }));
 
-    const ok = await run(
-      {
-        action: "bulk_update_tracks",
-        trackIds: selected,
-        facets: { [key]: to === "all" ? { add: [option] } : { remove: [option] } },
-      },
-      to === "all" ? `"${option}" added` : `"${option}" removed`,
-    );
+    const ids = [...selected];
+    const ok = await queueSave({
+      action: "bulk_update_tracks",
+      trackIds: ids,
+      facets: { [key]: to === "all" ? { add: [option] } : { remove: [option] } },
+    });
     if (!ok) {
       // Put the box back — the server said no.
       setFacetChanges((prev) => {
@@ -1542,23 +1555,20 @@ const AdminTracksEdit = ({
     delta: Record<string, "all" | "none">,
     setDelta: (fn: (prev: Record<string, "all" | "none">) => Record<string, "all" | "none">) => void,
   ) => {
-    if (disabled || busy || selected.length === 0) return;
+    if (disabled || selected.length === 0) return;
     const to = nextState(delta[item.id] ?? memberBase(item));
     setDelta((prev) => ({ ...prev, [item.id]: to }));
 
     const change = to === "all" ? { add: [item.id] } : { remove: [item.id] };
-    const ok = await run(
-      {
-        action: "bulk_update_tracks",
-        trackIds: selected,
-        ...(kind === "collection"
-          ? { collectionChanges: change }
-          : kind === "playlist"
-            ? { playlistChanges: change }
-            : { categoryChanges: change }),
-      },
-      to === "all" ? `Added to "${item.title}"` : `Removed from "${item.title}"`,
-    );
+    const ok = await queueSave({
+      action: "bulk_update_tracks",
+      trackIds: [...selected],
+      ...(kind === "collection"
+        ? { collectionChanges: change }
+        : kind === "playlist"
+          ? { playlistChanges: change }
+          : { categoryChanges: change }),
+    });
     if (!ok) {
       setDelta((prev) => {
         const m = { ...prev };
@@ -1568,8 +1578,9 @@ const AdminTracksEdit = ({
       return;
     }
     // Membership lives in the CONTENT data (item.trackIds) — refresh it so the
-    // box keeps reading right when the selection changes.
-    onContentReload?.();
+    // box keeps reading right when the selection changes. With runQuiet the
+    // parent already reloads once after the burst, so no reload per tick.
+    if (!runQuiet) onContentReload?.();
   };
 
   // "Deselect all" for the TAGS panel: unticks every Usage / Genre / Mood value

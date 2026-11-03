@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Check, ChevronDown, ChevronRight, ChevronUp, GripVertical, MoreHorizontal, Pause, Play, Plus, Sparkles, Star, X } from "lucide-react";
 import WaveformPreview from "@/components/WaveformPreview";
@@ -673,6 +673,23 @@ const AdminContent = ({ tab, editor = false }: { tab: Tab; editor?: boolean }) =
       return false;
     } finally {
       setBusy(false);
+    }
+  };
+
+  // Checkbox saves (Tracks panel ticks): no global "busy" lock, no toast per
+  // tick, and the content is reloaded ONCE after the last tick of a burst.
+  // The owner ticked several boxes in a row and the panel ignored the clicks
+  // while each save was running.
+  const quietReloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const runQuiet = async (payload: Record<string, unknown>) => {
+    try {
+      await api(payload);
+      if (quietReloadTimer.current) clearTimeout(quietReloadTimer.current);
+      quietReloadTimer.current = setTimeout(() => reload(), 1200);
+      return true;
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Save failed");
+      return false;
     }
   };
 
@@ -2068,6 +2085,7 @@ const AdminContent = ({ tab, editor = false }: { tab: Tab; editor?: boolean }) =
           trending={data.trending}
           disabled={trackSource !== "api"}
           busy={busy}
+          runQuiet={runQuiet}
           uploading={uploading}
           run={run}
           uploadCover={uploadCover}
