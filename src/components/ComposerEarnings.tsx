@@ -1,5 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ReferenceDot,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import CountUp from "@/components/CountUp";
 
 // Composer -> Earnings, AudioJungle-style (owner's brief), two tabs:
@@ -137,6 +148,9 @@ const EarningsTab = () => {
     [data],
   );
   const tableRows = (data?.bars ?? []).filter((b) => b.sales || b.subscriptions || b.refunds);
+  // "You are here": today in a month view, this month in a year view, this year in all time.
+  const todayKey = level === "month" ? now.slice(0, 10) : level === "year" ? now.slice(0, 7) : now.slice(0, 4);
+  const showToday = chart.length > 1 && chart.some((b) => b.k === todayKey);
   const threshold = money(sum?.policy.thresholdCents ?? 5000);
 
   return (
@@ -204,7 +218,7 @@ const EarningsTab = () => {
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={chart}
-              margin={{ top: 4, right: 4, bottom: 0, left: -14 }}
+              margin={{ top: 16, right: 4, bottom: 0, left: -14 }}
               barCategoryGap={level === "month" ? "22%" : "30%"}
               onMouseMove={(s: { activeTooltipIndex?: number }) =>
                 setHover(typeof s?.activeTooltipIndex === "number" ? s.activeTooltipIndex : null)
@@ -266,6 +280,15 @@ const EarningsTab = () => {
                   );
                 }}
               />
+              {showToday && (
+                <ReferenceLine
+                  x={todayKey}
+                  stroke="rgba(244,196,48,0.45)"
+                  strokeDasharray="3 3"
+                  label={{ value: level === "month" ? "Today" : "Now", position: "top", fill: GOLD, fontSize: 10 }}
+                />
+              )}
+              {showToday && <ReferenceDot x={todayKey} y={0} r={4} fill={GOLD} stroke="#111216" strokeWidth={2} />}
               <Bar
                 dataKey="subsD"
                 stackId="a"

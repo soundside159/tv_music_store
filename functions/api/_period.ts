@@ -66,28 +66,26 @@ export const resolvePeriod = (raw: string | null): Period => {
 export const inRange = (col: string, a: number, b: number) =>
   `substr(${col},1,10) >= ?${a} AND (?${b} IS NULL OR substr(${col},1,10) < ?${b})`;
 
-/** Every chart key (YYYY-MM-DD or YYYY-MM) from `from` up to today / `to`, so
- *  quiet days show as gaps. For "all" it starts at `firstData`. */
+/** Every chart key (YYYY-MM-DD or YYYY-MM) of the WHOLE period — all days of
+ *  the month, all months of the year (owner: show the full month with a
+ *  "today" marker, like the composer Earnings chart). "All time" runs from
+ *  the first data month to now. */
 export const axisKeys = (p: Period, firstData: string | null): string[] => {
   const today = day(new Date());
-  const end = p.to && p.to <= today ? p.to : null; // exclusive end if in the past
   const keys: string[] = [];
   if (p.bucket === "day") {
     const d = new Date(`${p.from}T00:00:00Z`);
-    while (true) {
-      const k = day(d);
-      if (end ? k >= end : k > today) break;
-      keys.push(k);
+    const end = p.to ?? today;
+    while (day(d) < end) {
+      keys.push(day(d));
       d.setUTCDate(d.getUTCDate() + 1);
     }
   } else {
     const startStr = p.id === "all" ? (firstData ?? today).slice(0, 7) : p.from.slice(0, 7);
+    const lastMonth = p.to ? day(new Date(new Date(`${p.to}T00:00:00Z`).getTime() - 86400000)).slice(0, 7) : today.slice(0, 7);
     const d = new Date(`${startStr}-01T00:00:00Z`);
-    const lastMonth = (end ? day(new Date(new Date(`${end}T00:00:00Z`).getTime() - 86400000)) : today).slice(0, 7);
-    while (true) {
-      const k = day(d).slice(0, 7);
-      if (k > lastMonth) break;
-      keys.push(k);
+    while (day(d).slice(0, 7) <= lastMonth) {
+      keys.push(day(d).slice(0, 7));
       d.setUTCMonth(d.getUTCMonth() + 1);
     }
   }

@@ -5034,3 +5034,7 @@ True: `brandCover()` was only in the AI path.
 ## 2026-11-02 Sales/Finance polish
 - AdminSales: +/- % deltas hidden (owner: early days, distracting). "All payments" link replaced by "All sales · <period>" toggle: sales.ts ?all=1 returns every sale of the period (LIMIT 1000); recent rows now carry buyerId, and the buyer email opens AdminCustomerProfile (Admin passes onOpenCustomer={setProfileUserId}).
 - AdminFinance payouts: "Send to bank" shows an amount only when payable (>= threshold); otherwise "— from $50".
+
+## 2026-11-03 Full-period charts with a "today" marker
+- _period.ts axisKeys(): whole period (all days of the month incl. future days, all 12 months of the year); all time = first data month..now.
+- AdminSales: day numbers on the axis (full date in tooltip), dashed gold ReferenceLine + ReferenceDot at today/this month ("Today"/"Now"), rounded bars. ComposerEarnings chart gets the same marker (today / this month / this year).

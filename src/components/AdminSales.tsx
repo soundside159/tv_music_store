@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ReferenceDot,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { CreditCard, Receipt, Repeat, ShoppingBag } from "lucide-react";
 import PeriodTabs, { type PeriodId } from "@/components/PeriodTabs";
 import CountUp from "@/components/CountUp";
@@ -153,10 +163,20 @@ const AdminSales = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => v
     [data],
   );
 
+  // Axis: day numbers inside a month (the month is in the tab), month names
+  // inside a year. Tooltip keeps the full date.
   const fmtKey = (k: string) =>
     k.length === 7
       ? new Date(`${k}-01T00:00:00`).toLocaleDateString("en-GB", { month: "short" })
-      : new Date(`${k}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+      : String(Number(k.slice(8, 10)));
+  const fmtFull = (k: string) =>
+    k.length === 7
+      ? new Date(`${k}-01T00:00:00`).toLocaleDateString("en-GB", { month: "long", year: "numeric" })
+      : new Date(`${k}T00:00:00`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+  // "You are here" marker on the axis: today (day view) or this month (year view).
+  const nowIso = new Date().toISOString();
+  const todayKey = data?.bucket === "month" ? nowIso.slice(0, 7) : nowIso.slice(0, 10);
+  const showToday = chart.some((r) => r.k === todayKey) && chart.length > 1;
 
   const maxComposer = Math.max(1, ...(data?.byComposer.map((c) => c.gross) ?? [1]));
   const periodLabel = data?.period.label ?? "";
@@ -244,15 +264,16 @@ const AdminSales = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => v
               <h3 className="font-body text-sm font-semibold text-foreground">Revenue</h3>
               <div className="mt-3 h-56">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chart} margin={{ top: 4, right: 8, bottom: 0, left: -12 }} barCategoryGap="18%">
+                  <BarChart data={chart} margin={{ top: 16, right: 8, bottom: 0, left: -12 }} barCategoryGap="22%">
                     <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
                     <XAxis
                       dataKey="k"
                       tickFormatter={fmtKey}
                       tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 11 }}
                       tickLine={false}
-                      axisLine={false}
-                      minTickGap={24}
+                      axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
+                      interval="preserveStartEnd"
+                      minTickGap={6}
                     />
                     <YAxis
                       allowDecimals={false}
@@ -263,7 +284,7 @@ const AdminSales = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => v
                     />
                     <Tooltip
                       cursor={{ fill: "rgba(255,255,255,0.04)" }}
-                      labelFormatter={(v) => fmtKey(String(v))}
+                      labelFormatter={(v) => fmtFull(String(v))}
                       formatter={(v: number, name: string) => [money(Math.round(v * 100)), name]}
                       contentStyle={{
                         background: "#17181c",
@@ -272,8 +293,17 @@ const AdminSales = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => v
                         fontSize: 12,
                       }}
                     />
-                    <Bar dataKey="license" name="Track licenses" stackId="a" fill={GOLD} animationDuration={900} animationEasing="ease-out" />
-                    <Bar dataKey="subscription" name="Subscriptions" stackId="a" fill={GOLD_SOFT} radius={[3, 3, 0, 0]} animationDuration={900} animationEasing="ease-out" />
+                    {showToday && (
+                      <ReferenceLine
+                        x={todayKey}
+                        stroke="rgba(244,196,48,0.45)"
+                        strokeDasharray="3 3"
+                        label={{ value: data.bucket === "month" ? "Now" : "Today", position: "top", fill: GOLD, fontSize: 10 }}
+                      />
+                    )}
+                    {showToday && <ReferenceDot x={todayKey} y={0} r={4} fill={GOLD} stroke="#111216" strokeWidth={2} />}
+                    <Bar dataKey="license" name="Track licenses" stackId="a" fill={GOLD} radius={[4, 4, 0, 0]} animationDuration={900} animationEasing="ease-out" />
+                    <Bar dataKey="subscription" name="Subscriptions" stackId="a" fill={GOLD_SOFT} radius={[4, 4, 0, 0]} animationDuration={900} animationEasing="ease-out" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
