@@ -5066,3 +5066,8 @@ True: `brandCover()` was only in the AI path.
   - useTracks.ts: patchCachedTracks / patchCachedTrackFacet patch every cached list in place + repaint all users; staff list (?drafts=1, uncached on the server) is refetched at most every 15 min instead of 30 s.
   - AdminTrackPanel.tsx: /api/admin/content is loaded once per browser session (sharedAdminContent) instead of on every track page; facet ticks patch the track cache instead of refetching the catalogue 1.2 s later.
   - _cache.ts cacheVersion(): while the last catalogue edit is < 3 min old the edge-cache key is a 3-minute time bucket (max-age 180), so public catalogue/SFX/SEO rebuild at most once per 3 min per data centre during editing; after that the key is the final version (TTL 1 h).
+
+## 2026-11-03 Browser RAM: waveforms kept every decoded track in memory
+- A friend saw the site use ~5 GB RAM. WaveformPreview.tsx cached the decoded AudioBuffer of every preview forever (~65 MB per 3-min track). Test (Playwright, 40 three-minute tracks): old 2.75 GB renderer RAM, new ~0.4 GB on first load / 0.15 GB on a return visit with 0 mp3 downloads; waveform shapes identical.
+- Now: decode at 8 kHz via OfflineAudioContext (fallback: normal context), take a 512-point peak/rms profile, drop the audio. Profile kept in memory + localStorage (`wf1:<src>`, ~1 KB/track, cleared on quota error). Bars are derived from the profile for any width.
+- Next step (proper, like AudioJungle): compute the profile at upload time and store it with the track so the browser never downloads mp3s for waveforms.

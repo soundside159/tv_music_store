@@ -29,8 +29,18 @@ type WebkitAudioWindow = Window & {
 };
 
 let sharedAudioContext: AudioContext | null = null;
-const audioBufferCache = new Map<string, Promise<AudioBuffer>>();
-const peaksCache = new Map<string, Promise<number[]>>();
+// MEMORY: the decoded AudioBuffer used to be cached per track forever — a
+// 3-minute preview decodes to ~65 MB of float samples, so scrolling the
+// catalogue grew the tab to several GB. Now only a tiny PROFILE (PROFILE_POINTS
+// peak/rms pairs) is kept: in memory and in localStorage, so a returning
+// visitor doesn't even re-download the mp3. The audio is decoded at a low
+// sample rate and dropped right after the profile is taken.
+type Profile = { peak: Float32Array; rms: Float32Array };
+const profileCache = new Map<string, Promise<Profile>>();
+const PROFILE_POINTS = 512;
+const DECODE_RATE = 8000; // plenty for a 100-400 bar picture
+const STORE_PREFIX = "wf1:";
+const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
 // Bars have a FIXED on-screen width; the bar COUNT adapts to the container,
 // so resizing the window re-buckets the waveform instead of stretching bars.
@@ -76,64 +86,141 @@ const getAudioContext = () => {
   return sharedAudioContext;
 };
 
-const getAudioBuffer = (src: string) => {
-  const cached = audioBufferCache.get(src);
-  if (cached) return cached;
-
-  const promise = enqueueLoad(() =>
-    fetch(src)
-      .then((response) => {
-        if (!response.ok) throw new Error(`Could not load waveform audio: ${src}`);
-        return response.arrayBuffer();
-      })
-      .then((buffer) => {
-        const context = getAudioContext();
-        if (!context) throw new Error("Web Audio API is not available");
-        return context.decodeAudioData(buffer.slice(0));
-      }),
-  );
-
-  audioBufferCache.set(src, promise);
-  return promise;
+/** Decode at a low sample rate (smaller + faster); full-rate context as fallback. */
+const decodeSmall = async (data: ArrayBuffer): Promise<AudioBuffer> => {
+  try {
+    const Offline = window.OfflineAudioContext;
+    if (Offline) return await new Offline(1, 1, DECODE_RATE).decodeAudioData(data.slice(0));
+  } catch {
+    // old Safari etc. — use the normal context below
+  }
+  const context = getAudioContext();
+  if (!context) throw new Error("Web Audio API is not available");
+  return context.decodeAudioData(data.slice(0));
 };
 
-const getPeaks = (src: string, bars: number) => {
-  const cacheKey = `${src}:${bars}`;
-  const cached = peaksCache.get(cacheKey);
-  if (cached) return cached;
-
-  const promise = getAudioBuffer(src).then((buffer) => {
-    const length = buffer.length;
-    const channelCount = Math.min(buffer.numberOfChannels, 2);
-    const peaks = Array.from({ length: bars }, (_, index) => {
-      const start = Math.floor((index / bars) * length);
-      const end = Math.max(start + 1, Math.floor(((index + 1) / bars) * length));
-      const sampleStep = Math.max(1, Math.floor((end - start) / 120));
-      let peak = 0;
-      let squaredSum = 0;
-      let sampleCount = 0;
-
-      for (let channel = 0; channel < channelCount; channel += 1) {
-        const data = buffer.getChannelData(channel);
-        for (let sample = start; sample < end; sample += sampleStep) {
-          const value = Math.abs(data[sample] ?? 0);
-          peak = Math.max(peak, value);
-          squaredSum += value * value;
-          sampleCount += 1;
-        }
+const buildProfile = (buffer: AudioBuffer): Profile => {
+  const length = buffer.length;
+  const channelCount = Math.min(buffer.numberOfChannels, 2);
+  const channels = Array.from({ length: channelCount }, (_, c) => buffer.getChannelData(c));
+  const peak = new Float32Array(PROFILE_POINTS);
+  const rms = new Float32Array(PROFILE_POINTS);
+  for (let i = 0; i < PROFILE_POINTS; i += 1) {
+    const start = Math.floor((i / PROFILE_POINTS) * length);
+    const end = Math.max(start + 1, Math.floor(((i + 1) / PROFILE_POINTS) * length));
+    const step = Math.max(1, Math.floor((end - start) / 120));
+    let p = 0;
+    let sq = 0;
+    let n = 0;
+    for (const data of channels) {
+      for (let k = start; k < end; k += step) {
+        const v = Math.abs(data[k] ?? 0);
+        if (v > p) p = v;
+        sq += v * v;
+        n += 1;
       }
+    }
+    peak[i] = p;
+    rms[i] = Math.sqrt(sq / Math.max(1, n));
+  }
+  return { peak, rms };
+};
 
-      const rms = Math.sqrt(squaredSum / Math.max(1, sampleCount));
-      return peak * 0.72 + rms * 0.28;
-    });
+// localStorage form: one char (6 bits) per value, values normalised to the
+// track's loudest peak. ~1 KB per track.
+const encodeProfile = (pr: Profile): string => {
+  let max = 0.0001;
+  for (const v of pr.peak) if (v > max) max = v;
+  let out = "";
+  for (const arr of [pr.peak, pr.rms]) {
+    for (const v of arr) out += ALPHABET[Math.max(0, Math.min(63, Math.round((v / max) * 63)))];
+  }
+  return out;
+};
 
-    const maxPeak = Math.max(...peaks, 0.001);
-    return peaks.map((peak) => Math.max(0.05, peak / maxPeak));
-  });
+const decodeProfile = (text: string): Profile | null => {
+  if (text.length !== PROFILE_POINTS * 2) return null;
+  const peak = new Float32Array(PROFILE_POINTS);
+  const rms = new Float32Array(PROFILE_POINTS);
+  for (let i = 0; i < PROFILE_POINTS * 2; i += 1) {
+    const v = ALPHABET.indexOf(text[i]);
+    if (v < 0) return null;
+    if (i < PROFILE_POINTS) peak[i] = v / 63;
+    else rms[i - PROFILE_POINTS] = v / 63;
+  }
+  return { peak, rms };
+};
 
-  peaksCache.set(cacheKey, promise);
+const readStored = (src: string): Profile | null => {
+  try {
+    const t = window.localStorage.getItem(STORE_PREFIX + src);
+    return t ? decodeProfile(t) : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeStored = (src: string, pr: Profile) => {
+  const text = encodeProfile(pr);
+  try {
+    window.localStorage.setItem(STORE_PREFIX + src, text);
+  } catch {
+    // Storage full: drop our old waveforms and try once more.
+    try {
+      for (let i = window.localStorage.length - 1; i >= 0; i -= 1) {
+        const k = window.localStorage.key(i);
+        if (k && k.startsWith(STORE_PREFIX)) window.localStorage.removeItem(k);
+      }
+      window.localStorage.setItem(STORE_PREFIX + src, text);
+    } catch {
+      // storage unavailable — memory cache only
+    }
+  }
+};
+
+const getProfile = (src: string): Promise<Profile> => {
+  const cached = profileCache.get(src);
+  if (cached) return cached;
+
+  const stored = readStored(src);
+  const promise = stored
+    ? Promise.resolve(stored)
+    : enqueueLoad(() =>
+        fetch(src)
+          .then((response) => {
+            if (!response.ok) throw new Error(`Could not load waveform audio: ${src}`);
+            return response.arrayBuffer();
+          })
+          .then(decodeSmall)
+          .then((buffer) => {
+            // The buffer goes out of scope here — only the profile survives.
+            const pr = buildProfile(buffer);
+            writeStored(src, pr);
+            return pr;
+          }),
+      );
+  // A failed load must not stick forever (network blip) — retry next time.
+  promise.catch(() => profileCache.delete(src));
+  profileCache.set(src, promise);
   return promise;
 };
+
+const getPeaks = (src: string, bars: number) =>
+  getProfile(src).then(({ peak, rms }) => {
+    const peaks = Array.from({ length: bars }, (_, index) => {
+      const start = Math.floor((index / bars) * PROFILE_POINTS);
+      const end = Math.max(start + 1, Math.floor(((index + 1) / bars) * PROFILE_POINTS));
+      let p = 0;
+      let sq = 0;
+      for (let i = start; i < end; i += 1) {
+        if (peak[i] > p) p = peak[i];
+        sq += rms[i] * rms[i];
+      }
+      return p * 0.72 + Math.sqrt(sq / (end - start)) * 0.28;
+    });
+    const maxPeak = Math.max(...peaks, 0.001);
+    return peaks.map((value) => Math.max(0.05, value / maxPeak));
+  });
 
 const WaveformPreview = ({
   active = false,
