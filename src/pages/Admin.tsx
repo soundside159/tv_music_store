@@ -772,7 +772,7 @@ const Admin = () => {
           >
             {section === "dashboard" && (
               <>
-                <AdminSales />
+                <AdminSales onOpenCustomer={setProfileUserId} />
                 <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   <Stat
                     label="Customers"

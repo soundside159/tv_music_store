@@ -5026,3 +5026,11 @@ True: `brandCover()` was only in the AI path.
 - Account.tsx and Admin.tsx: while useAuthSession().status === "loading" render only Navigation (no "Sign in" / "Owner access only" flash). Checks sit right before the existing !user returns (after all hooks).
 - Not done yet (offered to owner): put the admin/account section into the URL so refresh reopens the same section.
 - Done: Admin.tsx openSection() writes ?section=<id> (setSearchParams) and an effect follows the param (Back/Forward, header links; no param = dashboard). Account.tsx section buttons also write ?section=<id>; the existing param effect sets section + menu group.
+
+## 2026-11-02 Period names + count-up numbers
+- Period labels are real names: "November" / "October" / "2026" / "All time" (PeriodTabs periodLabel(), _period.ts monthName). "Last month" read like "last 30 days" to the owner; it is the previous calendar month. AdminFinance texts use the label as is ("My income · November", "No payments in November.").
+- New src/components/CountUp.tsx (useCountUp, ease-out cubic 900 ms, reduced-motion aware). Used in ComposerEarnings tiles/total/statement summary (tiles show a pulse placeholder until loaded instead of $0.00), AdminFinance "My income", AdminSales revenue + split strip. Bars: animationDuration 900, ease-out, chart data memoised so hover does not restart the animation.
+
+## 2026-11-02 Sales/Finance polish
+- AdminSales: +/- % deltas hidden (owner: early days, distracting). "All payments" link replaced by "All sales · <period>" toggle: sales.ts ?all=1 returns every sale of the period (LIMIT 1000); recent rows now carry buyerId, and the buyer email opens AdminCustomerProfile (Admin passes onOpenCustomer={setProfileUserId}).
+- AdminFinance payouts: "Send to bank" shows an amount only when payable (>= threshold); otherwise "— from $50".

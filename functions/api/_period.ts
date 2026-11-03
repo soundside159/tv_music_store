@@ -20,6 +20,9 @@ export interface Period {
 }
 
 const day = (d: Date) => d.toISOString().slice(0, 10);
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+/** Month name for a month offset from y/m (handles year wrap), e.g. "October". */
+const monthName = (y: number, m: number) => MONTHS[new Date(Date.UTC(y, m, 1)).getUTCMonth()];
 const monthStart = (y: number, m: number) => day(new Date(Date.UTC(y, m, 1)));
 
 export const resolvePeriod = (raw: string | null): Period => {
@@ -30,7 +33,7 @@ export const resolvePeriod = (raw: string | null): Period => {
     case "last_month":
       return {
         id: "last_month",
-        label: "Last month",
+        label: monthName(y, m - 1),
         from: monthStart(y, m - 1),
         to: monthStart(y, m),
         prev: { from: monthStart(y, m - 2), to: monthStart(y, m - 1) },
@@ -39,7 +42,7 @@ export const resolvePeriod = (raw: string | null): Period => {
     case "this_year":
       return {
         id: "this_year",
-        label: "This year",
+        label: String(y),
         from: monthStart(y, 0),
         to: monthStart(y + 1, 0),
         prev: { from: monthStart(y - 1, 0), to: monthStart(y, 0) },
@@ -50,7 +53,7 @@ export const resolvePeriod = (raw: string | null): Period => {
     default:
       return {
         id: "this_month",
-        label: "This month",
+        label: monthName(y, m),
         from: monthStart(y, m),
         to: monthStart(y, m + 1),
         prev: { from: monthStart(y, m - 1), to: monthStart(y, m) },

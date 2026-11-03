@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import CountUp from "@/components/CountUp";
 
 // Composer -> Earnings, AudioJungle-style (owner's brief), two tabs:
 //   Earnings   three numbers + a drill-down chart (All time -> year -> month)
@@ -40,11 +41,17 @@ interface ChartData {
   paidOutCents: number;
 }
 
-const Tile = ({ label, value, hint }: { label: string; value: string; hint?: string }) => (
+/** `cents` null = still loading: a soft placeholder instead of a "$0.00" that
+ *  then jumps; once loaded the number runs up (CountUp), in step with the chart. */
+const Tile = ({ label, cents, hint }: { label: string; cents: number | null; hint?: string }) => (
   <div className="rounded-xl border border-border bg-card p-4">
     <p className="font-body text-xs text-muted-foreground">{label}</p>
     <p className="mt-1 font-body text-2xl font-semibold tabular-nums" style={{ color: GOLD }}>
-      {value}
+      {cents == null ? (
+        <span className="inline-block h-7 w-24 animate-pulse rounded bg-white/[0.06] align-middle" />
+      ) : (
+        <CountUp cents={cents} format={money} />
+      )}
     </p>
     {hint && <p className="mt-1 font-body text-[11px] text-muted-foreground/80">{hint}</p>}
   </div>
@@ -124,7 +131,11 @@ const EarningsTab = () => {
     }
   };
 
-  const chart = (data?.bars ?? []).map((b) => ({ ...b, salesD: b.sales / 100, subsD: b.subscriptions / 100 }));
+  // Memoised: a new array on every hover would restart the bar animation.
+  const chart = useMemo(
+    () => (data?.bars ?? []).map((b) => ({ ...b, salesD: b.sales / 100, subsD: b.subscriptions / 100 })),
+    [data],
+  );
   const tableRows = (data?.bars ?? []).filter((b) => b.sales || b.subscriptions || b.refunds);
   const threshold = money(sum?.policy.thresholdCents ?? 5000);
 
@@ -133,12 +144,12 @@ const EarningsTab = () => {
       <div className="grid gap-3 sm:grid-cols-3">
         <Tile
           label={`This month (${monthName(now.slice(0, 7))})`}
-          value={money(data?.thisMonth.amountCents ?? 0)}
-          hint={`${data?.thisMonth.sales ?? 0} sale${data?.thisMonth.sales === 1 ? "" : "s"}`}
+          cents={data ? data.thisMonth.amountCents : null}
+          hint={data ? `${data.thisMonth.sales} sale${data.thisMonth.sales === 1 ? "" : "s"}` : undefined}
         />
         <Tile
           label="Ready to pay"
-          value={money(sum?.totals.payableCents ?? 0)}
+          cents={sum ? sum.totals.payableCents : null}
           hint={
             nextReady
               ? `+ ${money(nextReady.amount)} becomes ready on ${shortDate(nextReady.date)}`
@@ -149,8 +160,8 @@ const EarningsTab = () => {
         />
         <Tile
           label="Earned all time"
-          value={money(data?.lifetimeCents ?? 0)}
-          hint={`Paid out ${money(data?.paidOutCents ?? 0)}`}
+          cents={data ? data.lifetimeCents : null}
+          hint={data ? `Paid out ${money(data.paidOutCents)}` : undefined}
         />
       </div>
 
@@ -180,7 +191,10 @@ const EarningsTab = () => {
             );
           })}
           <span className="ml-auto font-body text-xs text-muted-foreground">
-            Total <span className="font-semibold text-foreground">{money(data?.total ?? 0)}</span>
+            Total{" "}
+            <span className="font-semibold text-foreground">
+              {data ? <CountUp cents={data.total} format={money} /> : "—"}
+            </span>
           </span>
         </div>
 
@@ -252,12 +266,28 @@ const EarningsTab = () => {
                   );
                 }}
               />
-              <Bar dataKey="subsD" stackId="a" name="Subscriptions" fill={GOLD_DIM} radius={[0, 0, 0, 0]}>
+              <Bar
+                dataKey="subsD"
+                stackId="a"
+                name="Subscriptions"
+                fill={GOLD_DIM}
+                radius={[0, 0, 0, 0]}
+                animationDuration={900}
+                animationEasing="ease-out"
+              >
                 {chart.map((_, i) => (
                   <Cell key={i} fillOpacity={hover === null || hover === i ? 1 : 0.55} cursor={level !== "month" ? "pointer" : undefined} />
                 ))}
               </Bar>
-              <Bar dataKey="salesD" stackId="a" name="Sales" fill={GOLD} radius={[4, 4, 0, 0]}>
+              <Bar
+                dataKey="salesD"
+                stackId="a"
+                name="Sales"
+                fill={GOLD}
+                radius={[4, 4, 0, 0]}
+                animationDuration={900}
+                animationEasing="ease-out"
+              >
                 {chart.map((_, i) => (
                   <Cell key={i} fillOpacity={hover === null || hover === i ? 1 : 0.55} cursor={level !== "month" ? "pointer" : undefined} />
                 ))}
@@ -461,10 +491,14 @@ const StatementTab = () => {
 
         <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
           {[
-            { k: "Earned", v: s ? `${s.earnedCents > 0 ? "+" : ""}${money(s.earnedCents)}` : "—", c: "text-emerald-400" },
-            { k: "UK tax withheld", v: s ? money(s.taxCents) : "—", c: "text-foreground" },
-            { k: "Paid to your bank", v: s ? money(s.paidCents) : "—", c: "text-foreground" },
-            { k: "Balance at end of period", v: s ? money(s.balanceCents) : "—", c: "" },
+            {
+              k: "Earned",
+              v: s ? <CountUp cents={s.earnedCents} format={(c) => `${c > 0 ? "+" : ""}${money(c)}`} /> : "—",
+              c: "text-emerald-400",
+            },
+            { k: "UK tax withheld", v: s ? <CountUp cents={s.taxCents} format={money} /> : "—", c: "text-foreground" },
+            { k: "Paid to your bank", v: s ? <CountUp cents={s.paidCents} format={money} /> : "—", c: "text-foreground" },
+            { k: "Balance at end of period", v: s ? <CountUp cents={s.balanceCents} format={money} /> : "—", c: "" },
           ].map((x, i) => (
             <div key={x.k} className={i > 0 ? "sm:border-l sm:border-border/60 sm:pl-4" : ""}>
               <p className="font-body text-xs text-muted-foreground">{x.k}</p>

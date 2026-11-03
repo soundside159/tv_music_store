@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { SectionHeading } from "@/components/SectionHeading";
 import PeriodTabs, { type PeriodId } from "@/components/PeriodTabs";
+import CountUp from "@/components/CountUp";
 
 // Admin -> Finance, top to bottom, one question per block (owner's brief):
 //   1. My income        what I earned as the store, as a composer, in total
@@ -102,13 +103,13 @@ const Card = ({
 );
 
 /** One big number with a label (the "My income" tiles). */
-const Big = ({ label, value, note, gold }: { label: string; value: string; note?: string; gold?: boolean }) => (
+const Big = ({ label, cents, note, gold }: { label: string; cents: number; note?: string; gold?: boolean }) => (
   <div
     className={`rounded-xl border p-4 ${gold ? "border-[#F4C430]/50 bg-[#F4C430]/[0.06]" : "border-border/70 bg-background/40"}`}
   >
     <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
     <p className="mt-1 font-body text-3xl font-semibold tabular-nums" style={{ color: gold ? GOLD : undefined }}>
-      {value}
+      <CountUp cents={cents} format={money} />
     </p>
     {note && <p className="mt-0.5 font-body text-[11px] text-muted-foreground">{note}</p>}
   </div>
@@ -318,7 +319,8 @@ const AdminFinance = () => {
   }
 
   const { income, flow } = report;
-  const label = report.period.label.toLowerCase();
+  const label = report.period.label; // "November", "October", "2026", "All time"
+  const noPayments = report.period.id === "all" ? "No payments yet." : `No payments in ${label}.`;
 
   // The money chain as one bar: every slice is a share of what customers paid.
   const slices = [
@@ -353,13 +355,13 @@ const AdminFinance = () => {
       {/* 1 — what I earned */}
       <Card title={`My income · ${label}`}>
         <div className="grid gap-3 sm:grid-cols-3">
-          <Big label="As TV Music Store" value={money(income.store)} note="The store's share after composers" />
+          <Big label="As TV Music Store" cents={income.store} note="The store's share after composers" />
           <Big
             label="As composer"
-            value={money(income.composer)}
+            cents={income.composer}
             note={income.composerNames.length ? income.composerNames.join(", ") : "No composer profile linked"}
           />
-          <Big label="Total to you" value={money(income.total)} gold />
+          <Big label="Total to you" cents={income.total} gold />
         </div>
         {income.splitting > 0 && (
           <p className="mt-3 font-body text-xs text-muted-foreground">
@@ -372,7 +374,7 @@ const AdminFinance = () => {
       {/* 2 — where the money went */}
       <Card title="Where the money went">
         {flow.gross === 0 ? (
-          <p className="py-4 text-center font-body text-sm text-muted-foreground">No payments {label}.</p>
+          <p className="py-4 text-center font-body text-sm text-muted-foreground">{noPayments}</p>
         ) : (
           <>
             <div className="flex h-3 w-full overflow-hidden rounded-full bg-background/60">
@@ -462,9 +464,17 @@ const AdminFinance = () => {
                   </div>
                   <div>
                     <p className="text-muted-foreground">Send to bank</p>
-                    <p className="font-semibold tabular-nums" style={{ color: GOLD }}>
-                      {money(b.toPay ?? b.released)}
-                    </p>
+                    {/* Only a real transfer amount once the balance reaches the
+                        minimum; below it nothing is sent, it rolls over. */}
+                    {b.payable ? (
+                      <p className="font-semibold tabular-nums" style={{ color: GOLD }}>
+                        {money(b.toPay ?? b.released)}
+                      </p>
+                    ) : (
+                      <p className="tabular-nums text-muted-foreground">
+                        — <span className="text-[10px]">from {money(report.policy.thresholdCents)}</span>
+                      </p>
+                    )}
                   </div>
                   <div>
                     <p className="text-muted-foreground">Still clearing</p>
@@ -480,7 +490,7 @@ const AdminFinance = () => {
       {/* 4 — the ledger for the period */}
       <Card title={`Payments · ${label}`}>
         {report.events.length === 0 ? (
-          <p className="py-4 text-center font-body text-sm text-muted-foreground">No payments {label}.</p>
+          <p className="py-4 text-center font-body text-sm text-muted-foreground">{noPayments}</p>
         ) : (
           <div className="divide-y divide-border/40">
             {report.events.map((e) => {

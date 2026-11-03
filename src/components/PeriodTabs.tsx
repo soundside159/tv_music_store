@@ -3,12 +3,20 @@
 
 export type PeriodId = "this_month" | "last_month" | "this_year" | "all";
 
-export const PERIODS: { id: PeriodId; label: string }[] = [
-  { id: "this_month", label: "This month" },
-  { id: "last_month", label: "Last month" },
-  { id: "this_year", label: "This year" },
-  { id: "all", label: "All time" },
-];
+// Labels are the real names ("November", "October", "2026") — "Last month"
+// read like "the last 30 days" (owner), but it is the previous calendar month.
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const now = () => new Date();
+export const periodLabel = (id: PeriodId): string => {
+  const d = now();
+  if (id === "this_month") return MONTHS[d.getUTCMonth()];
+  if (id === "last_month") return MONTHS[(d.getUTCMonth() + 11) % 12];
+  if (id === "this_year") return String(d.getUTCFullYear());
+  return "All time";
+};
+export const PERIODS: { id: PeriodId; label: string }[] = (["this_month", "last_month", "this_year", "all"] as PeriodId[]).map(
+  (id) => ({ id, label: periodLabel(id) }),
+);
 
 const PeriodTabs = ({ value, onChange }: { value: PeriodId; onChange: (p: PeriodId) => void }) => (
   <div className="flex flex-wrap gap-1 rounded-full border border-border/70 bg-card/60 p-1">

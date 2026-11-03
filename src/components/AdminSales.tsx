@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { CreditCard, Receipt, Repeat, ShoppingBag } from "lucide-react";
 import PeriodTabs, { type PeriodId } from "@/components/PeriodTabs";
+import CountUp from "@/components/CountUp";
 
 // Admin -> Dashboard "Sales": what sold, when, and for which composer.
 // Data: /api/admin/sales?period=this_month|last_month|this_year|all
@@ -33,6 +34,7 @@ interface Sale {
   composerSlug: string | null;
   tier: string | null;
   plan: string | null;
+  buyerId?: string | null;
   buyerName: string | null;
   buyerEmail: string | null;
 }
@@ -70,7 +72,7 @@ const Tile = ({
 }: {
   icon: typeof Receipt;
   label: string;
-  value: string;
+  value: React.ReactNode;
   sub?: { text: string; up: boolean } | null;
   note?: string;
 }) => (
@@ -91,8 +93,28 @@ const Tile = ({
   </Card>
 );
 
-const AdminSales = () => {
+const AdminSales = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => void } = {}) => {
   const [period, setPeriod] = useState<PeriodId>("this_month");
+  // "All sales": every sale of the selected period, same rows as "Latest".
+  const [showAll, setShowAll] = useState(false);
+  const [allSales, setAllSales] = useState<Sale[] | null>(null);
+  useEffect(() => {
+    if (!showAll) return;
+    let cancelled = false;
+    setAllSales(null);
+    fetch(`/api/admin/sales?period=${period}&all=1`, { credentials: "include" })
+      .then(async (res) => {
+        const d = (await res.json()) as Data & { error?: string };
+        if (!res.ok) throw new Error(d.error ?? "Failed to load sales");
+        if (!cancelled) setAllSales(d.recent);
+      })
+      .catch(() => {
+        if (!cancelled) setAllSales([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showAll, period]);
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -167,22 +189,19 @@ const AdminSales = () => {
             <Tile
               icon={Receipt}
               label={`Revenue · ${periodLabel}`}
-              value={money(data.totals.gross)}
-              sub={prev ? delta(data.totals.gross, prev.gross) : null}
+              value={<CountUp cents={data.totals.gross} format={money} />}
               note={`${money(data.totals.net)} after tax and fees`}
             />
             <Tile
               icon={ShoppingBag}
               label="Track licenses"
               value={String(data.totals.licenseCount)}
-              sub={prev ? delta(data.totals.licenseCount, prev.licenseCount) : null}
               note={money(data.totals.licenseGross)}
             />
             <Tile
               icon={Repeat}
               label="Subscription payments"
               value={String(data.totals.subscriptionCount)}
-              sub={prev ? delta(data.totals.subscriptionCount, prev.subscriptionCount) : null}
               note={money(data.totals.subscriptionGross)}
             />
             <Tile
@@ -198,17 +217,19 @@ const AdminSales = () => {
             <div className="grid grid-cols-3 gap-3 font-body">
               <div>
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Revenue (net)</p>
-                <p className="text-xl font-semibold tabular-nums text-foreground">{money(data.totals.net)}</p>
+                <p className="text-xl font-semibold tabular-nums text-foreground">
+                  <CountUp cents={data.totals.net} format={money} />
+                </p>
               </div>
               <div>
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">TV Music Store</p>
                 <p className="text-xl font-semibold tabular-nums" style={{ color: GOLD }}>
-                  {money(data.split.store)}
+                  <CountUp cents={data.split.store} format={money} />
                 </p>
               </div>
               <div>
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Composers</p>
-                <p className="text-xl font-semibold tabular-nums text-foreground">{money(data.split.composers)}</p>
+                <p className="text-xl font-semibold tabular-nums text-foreground"><CountUp cents={data.split.composers} format={money} /></p>
               </div>
             </div>
             {data.split.splitting > 0 && (
@@ -251,8 +272,8 @@ const AdminSales = () => {
                         fontSize: 12,
                       }}
                     />
-                    <Bar dataKey="license" name="Track licenses" stackId="a" fill={GOLD} />
-                    <Bar dataKey="subscription" name="Subscriptions" stackId="a" fill={GOLD_SOFT} radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="license" name="Track licenses" stackId="a" fill={GOLD} animationDuration={900} animationEasing="ease-out" />
+                    <Bar dataKey="subscription" name="Subscriptions" stackId="a" fill={GOLD_SOFT} radius={[3, 3, 0, 0]} animationDuration={900} animationEasing="ease-out" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -301,16 +322,24 @@ const AdminSales = () => {
 
           <Card>
             <div className="flex items-center justify-between gap-3">
-              <h3 className="font-body text-sm font-semibold text-foreground">Latest sales</h3>
-              <Link to="/admin?section=finance" className="font-body text-xs text-muted-foreground hover:text-[#F4C430]">
-                All payments →
-              </Link>
+              <h3 className="font-body text-sm font-semibold text-foreground">
+                {showAll ? `All sales · ${periodLabel}${allSales ? ` (${allSales.length})` : ""}` : "Latest sales"}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAll((v) => !v)}
+                className="font-body text-xs text-muted-foreground hover:text-[#F4C430]"
+              >
+                {showAll ? "← Latest only" : `All sales · ${periodLabel} →`}
+              </button>
             </div>
-            {data.recent.length === 0 ? (
-              <p className="mt-3 font-body text-xs text-muted-foreground">No sales yet.</p>
+            {showAll && !allSales ? (
+              <div className="mt-3 h-24 animate-pulse rounded-lg bg-white/[0.03]" />
+            ) : (showAll ? allSales ?? [] : data.recent).length === 0 ? (
+              <p className="mt-3 font-body text-xs text-muted-foreground">No sales {showAll ? `in ${periodLabel}` : "yet"}.</p>
             ) : (
               <ul className="mt-2 divide-y divide-border/60">
-                {data.recent.map((s) => (
+                {(showAll ? allSales ?? [] : data.recent).map((s) => (
                   <li
                     key={s.id}
                     className="grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-3 py-2.5 font-body text-xs sm:grid-cols-[5rem_minmax(0,1.4fr)_minmax(0,1fr)_auto]"
@@ -350,7 +379,18 @@ const AdminSales = () => {
                     </div>
                     <div className="hidden min-w-0 sm:block">
                       <span className="block truncate text-foreground">{s.buyerName || "—"}</span>
-                      <span className="block truncate text-muted-foreground">{s.buyerEmail ?? ""}</span>
+                      {s.buyerId && onOpenCustomer ? (
+                        <button
+                          type="button"
+                          onClick={() => onOpenCustomer(s.buyerId!)}
+                          title="Open customer profile"
+                          className="block max-w-full truncate text-left text-muted-foreground underline-offset-2 hover:text-[#F4C430] hover:underline"
+                        >
+                          {s.buyerEmail ?? "Customer"}
+                        </button>
+                      ) : (
+                        <span className="block truncate text-muted-foreground">{s.buyerEmail ?? ""}</span>
+                      )}
                     </div>
                     <span
                       className={`text-right font-semibold ${s.refunded ? "text-muted-foreground line-through" : "text-[#F4C430]"}`}

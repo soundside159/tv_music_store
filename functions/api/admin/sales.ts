@@ -149,26 +149,32 @@ const handle = async (ctx: Ctx) => {
     composer: string | null;
     composer_slug: string | null;
     tier: string | null;
+    buyer_id: string | null;
     buyer_name: string | null;
     buyer_email: string | null;
     plan: string | null;
   };
+  // Latest 10 overall by default; ?all=1 = every sale of the selected period.
+  const allSales = new URL(ctx.request.url).searchParams.get("all") === "1";
   const recentSql = (withPlan: boolean) =>
     `SELECT e.id, e.source, e.gross_cents AS gross, e.currency, e.status, e.created_at,
             t.title, t.slug AS track_slug, c.display_name AS composer, c.slug AS composer_slug,
-            o.tier, u.name AS buyer_name, u.email AS buyer_email,
+            o.tier, u.id AS buyer_id, u.name AS buyer_name, u.email AS buyer_email,
             ${withPlan ? "(SELECT s.plan FROM subscriptions s WHERE s.user_id = e.user_id ORDER BY s.rowid DESC LIMIT 1)" : "NULL"} AS plan
        FROM revenue_events e
        LEFT JOIN tracks t ON t.id = e.track_id OR t.slug = e.track_id
        LEFT JOIN composers c ON c.id = t.composer_id
        LEFT JOIN sync_orders o ON o.id = e.order_id
        LEFT JOIN users u ON u.id = e.user_id
-      ORDER BY e.created_at DESC LIMIT 10`;
+      ${allSales ? `WHERE ${inRange("e.created_at", 1, 2)}` : ""}
+      ORDER BY e.created_at DESC LIMIT ${allSales ? 1000 : 10}`;
   let recent: RecentRow[] = [];
   try {
-    recent = (await db.prepare(recentSql(true)).all<RecentRow>()).results ?? [];
+    const q = db.prepare(recentSql(true));
+    recent = (await (allSales ? q.bind(since, until) : q).all<RecentRow>()).results ?? [];
   } catch {
-    recent = (await db.prepare(recentSql(false)).all<RecentRow>()).results ?? [];
+    const q = db.prepare(recentSql(false));
+    recent = (await (allSales ? q.bind(since, until) : q).all<RecentRow>()).results ?? [];
   }
 
   const first = await db
@@ -201,6 +207,7 @@ const handle = async (ctx: Ctx) => {
       composerSlug: r.composer_slug,
       tier: r.tier,
       plan: r.plan,
+      buyerId: r.buyer_id,
       buyerName: r.buyer_name,
       buyerEmail: r.buyer_email,
     })),
