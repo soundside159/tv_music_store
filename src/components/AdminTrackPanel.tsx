@@ -1148,8 +1148,29 @@ export const AdminTrackTagsPanel = ({
   onTracksChanged: () => void;
 }) => {
   const [open, setOpen] = useState<Record<string, boolean>>({ useCase: true });
-  const [pending, setPending] = useState<string | null>(null);
   const { activePlayer, isPlaying, progress, playVersion } = usePlayer();
+
+  // Facet ticks are OPTIMISTIC (owner: ticking several in a row used to freeze
+  // the panel). A click flips the box at once; saves run one after another in
+  // the background; the page refetches the catalogue ONCE, a moment after the
+  // last save, instead of after every tick. A failed save puts the box back.
+  type FacetKey = "useCase" | "genre" | "mood";
+  const fromTrack = (key: FacetKey) =>
+    new Set(splitFilterValues(track[key] ?? "").map((v) => v.toLowerCase()));
+  const [overrides, setOverrides] = useState<Record<string, boolean>>({});
+  const saveChain = useRef<Promise<void>>(Promise.resolve());
+  const inFlight = useRef(0);
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // New track opened, or fresh data arrived with nothing pending: trust the server.
+  useEffect(() => {
+    if (inFlight.current === 0) setOverrides({});
+  }, [track.id, track.useCase, track.genre, track.mood]);
+  useEffect(
+    () => () => {
+      if (reloadTimer.current) clearTimeout(reloadTimer.current);
+    },
+    [],
+  );
 
   if (!data) {
     return (
@@ -1159,20 +1180,29 @@ export const AdminTrackTagsPanel = ({
     );
   }
 
-  const trackFacetValues = (key: "useCase" | "genre" | "mood") =>
-    new Set(splitFilterValues(track[key] ?? "").map((v) => v.toLowerCase()));
+  const isOn = (key: FacetKey, value: string) => {
+    const o = overrides[`${key}:${value.toLowerCase()}`];
+    return o !== undefined ? o : fromTrack(key).has(value.toLowerCase());
+  };
 
-  const toggleFacet = async (key: "useCase" | "genre" | "mood", value: string) => {
-    const has = trackFacetValues(key).has(value.toLowerCase());
-    const id = `${key}:${value}`;
-    setPending(id);
-    const ok = await run({
-      action: "bulk_update_tracks",
-      trackIds: [track.id],
-      facets: { [key]: has ? { remove: [value] } : { add: [value] } },
+  const toggleFacet = (key: FacetKey, value: string) => {
+    const id = `${key}:${value.toLowerCase()}`;
+    const next = !isOn(key, value);
+    setOverrides((o) => ({ ...o, [id]: next }));
+    inFlight.current += 1;
+    if (reloadTimer.current) clearTimeout(reloadTimer.current);
+    saveChain.current = saveChain.current.then(async () => {
+      const ok = await run({
+        action: "bulk_update_tracks",
+        trackIds: [track.id],
+        facets: { [key]: next ? { add: [value] } : { remove: [value] } },
+      });
+      if (!ok) setOverrides((o) => ({ ...o, [id]: !next }));
+      inFlight.current -= 1;
+      if (inFlight.current === 0) {
+        reloadTimer.current = setTimeout(() => onTracksChanged(), 1200);
+      }
     });
-    setPending(null);
-    if (ok) onTracksChanged();
   };
 
   // ---- Trending helpers (optimistic local list; server = set_trending) ----
@@ -1197,7 +1227,6 @@ export const AdminTrackTagsPanel = ({
   return (
     <PanelShell>
       {FACETS.map(({ key, label }) => {
-        const values = trackFacetValues(key);
         const isOpen = !!open[key];
         return (
           <div key={key} className="border-b border-border/50 py-2 last:border-b-0">
@@ -1214,17 +1243,15 @@ export const AdminTrackTagsPanel = ({
             {isOpen && (
               <div className="mt-1 flex flex-col">
                 {(data.vocabularies[key] ?? []).map((value) => {
-                  const active = values.has(value.toLowerCase());
-                  const busy = pending === `${key}:${value}`;
+                  const active = isOn(key, value);
                   return (
                     <button
                       key={value}
                       type="button"
-                      disabled={busy}
-                      onClick={() => void toggleFacet(key, value)}
+                      onClick={() => toggleFacet(key, value)}
                       className={`flex items-center gap-2 rounded px-1.5 py-1 text-left font-body text-xs transition-colors hover:bg-white/5 ${
-                        busy ? "opacity-50" : ""
-                      } ${active ? "text-foreground" : "text-muted-foreground"}`}
+                        active ? "text-foreground" : "text-muted-foreground"
+                      }`}
                     >
                       <span
                         className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
