@@ -1,4 +1,5 @@
 import { getSessionUser, json, newId, readJson, type Ctx, type D1Database } from "./_utils";
+import { ensureWlScan } from "./admin/_wlscan";
 
 // Customer YouTube-channel whitelist (Content ID clearing while subscribed).
 //   GET    /api/whitelist            -> { channels, plan, limit, used }
@@ -59,16 +60,19 @@ const parseRef = (url: string): string | null => {
 };
 
 const listResponse = async (db: D1Database, userId: string) => {
+  await ensureWlScan(db);
   const plan = await effectivePlan(db, userId);
+  const limit = PLAN_LIMITS[plan] ?? 0;
+  // Oldest channels keep working when a plan shrinks; the rest are paused.
   const rows = await db
     .prepare(
-      `SELECT id, channel_url, channel_ref, added_at FROM wl_channels
-        WHERE user_id = ?1 ORDER BY added_at DESC`,
+      `SELECT id, channel_url, channel_ref, added_at, yt_title FROM wl_channels
+        WHERE user_id = ?1 ORDER BY added_at ASC`,
     )
     .bind(userId)
-    .all<{ id: string; channel_url: string; channel_ref: string | null; added_at: string }>();
+    .all<{ id: string; channel_url: string; channel_ref: string | null; added_at: string; yt_title: string | null }>();
   return json({
-    channels: rows.results,
+    channels: rows.results.map((c, i) => ({ ...c, paused: limit === 0 || i >= limit })),
     plan,
     limit: PLAN_LIMITS[plan] ?? 0,
     used: rows.results.length,

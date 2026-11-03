@@ -28,6 +28,7 @@ import LicensesSection from "@/components/LicensesSection";
 import { logout, refreshSession, updateProfile, useAuthSession } from "@/hooks/useAuth";
 import { usePlayer } from "@/components/playerContext";
 import WaveformPreview from "@/components/WaveformPreview";
+import MyChannels from "@/components/MyChannels";
 import { BILLING_ENABLED, openBillingPortal, openPlanModal } from "@/lib/billing";
 import { downloadTrackVersion } from "@/lib/downloadTrack";
 
@@ -40,6 +41,7 @@ type SectionId =
   | "favourites"
   | "license"
   | "claims"
+  | "whitelist"
   | "billing"
   | "receipts"
   | "support"
@@ -58,6 +60,7 @@ const SECTION_IDS: SectionId[] = [
   "favourites",
   "license",
   "claims",
+  "whitelist",
   "billing",
   "receipts",
   "support",
@@ -975,9 +978,9 @@ const Account = () => {
 
             {section === "receipts" && <ReceiptsSection />}
 
-            {/* Customer channel whitelisting is PAUSED (owner decision
-                2026-07-18) — the MyChannels section is unmounted, claims are
-                handled per-video below. Admin tooling and data stay intact. */}
+            {/* Customer channel whitelisting is back (owner decision 2026-11-03):
+                channels are watched and scanned automatically (admin -> Whitelisting). */}
+            {section === "whitelist" && <MyChannels />}
 
             {section === "claims" && (
               <div className="flex flex-col gap-6">

@@ -61,10 +61,8 @@ export const accountNavGroups: { label: string; items: NavItem[] }[] = [
   {
     label: "Music",
     items: [
-      // Customer channel whitelisting is PAUSED (owner decision 2026-07-18):
-      // the "YouTube Whitelisting" item is hidden, claims are handled per-video
-      // via Copyright Claims. Admin tooling + data stay; re-add the item here
-      // to bring it back.
+      // Channel whitelisting is back (owner decision 2026-11-03).
+      { id: "whitelist", label: "Whitelisting", icon: ShieldCheck },
       { id: "license", label: "Licenses", icon: FileText },
       { id: "claims", label: "Copyright Claims", icon: ShieldCheck },
     ],

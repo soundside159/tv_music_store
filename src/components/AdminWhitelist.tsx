@@ -1,538 +1,592 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
-import { Check, ClipboardCopy, RefreshCw, Square, SquareCheckBig } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ChevronDown, ChevronRight, ExternalLink, Loader2, Mail, RefreshCw, Search, Send } from "lucide-react";
 import { toast } from "sonner";
 
-// Admin "Whitelisting" view, two tabs:
-//   Channels        — the original per-channel table with a "New videos" expander.
-//   All new videos  — the claim workflow: every new upload across all ACTIVE
-//                     channels in one list; select → Copy All → send to the
-//                     Content ID provider → Mark as sent (wl_handled). Handled
-//                     videos are struck through behind a "Show handled" toggle.
+// Admin "Whitelisting" (owner design 2026-11-03):
+//   Composers - one coloured line per composer; open it to see the videos that
+//               use their music; two buttons push new matches into the
+//               composers' Google Sheets and email them how many wait.
+//   Channels  - every customer channel grouped by customer, with released /
+//               not released counts and the "check videos from" date.
+//   Scanner   - desktop scanner status + composer sheet settings.
+// Data: /api/admin/wl-scan (functions/api/admin/_wlscan.ts, _wlsheets.ts).
 
-interface AdminChannel {
-  id: string;
-  channelUrl: string;
-  channelRef: string;
-  addedAt: string;
-  userId: string;
-  userEmail: string;
-  userName: string;
-  plan: string;
-  status: string;
-  active: boolean;
-}
-interface Video {
+interface Match {
+  id: number;
   videoId: string;
-  title: string;
+  videoTitle: string;
   publishedAt: string;
-  url: string;
-  handled?: boolean;
-  handledAt?: string | null;
-}
-interface VideoState {
-  loading: boolean;
-  error?: string;
-  inactive?: boolean;
-  videos?: Video[];
-}
-interface AllGroup {
   channelId: string;
-  channelUrl: string;
   channelTitle: string;
-  userId: string;
-  customerName: string;
-  customerEmail: string;
-  plan: string;
-  error?: string;
-  videos: Video[];
+  email: string;
+  track: string;
+  composerId: string;
+  composer: string;
+  regions: [number, number][];
+  total: number;
+  score: number;
+  eligible: boolean;
+  state: "new" | "in_sheet" | "released" | "not_eligible";
+  sheetDate: string | null;
+  releasedAt: string | null;
+  createdAt: string;
 }
-interface AllState {
-  loading: boolean;
-  error?: string;
-  groups?: AllGroup[];
+interface Channel {
+  id: string;
+  userId: string;
+  email: string;
+  url: string;
+  title: string;
+  addedAt: string;
+  checkFrom: string;
+  checkFromCustom: boolean;
+  state: "active" | "paused" | "noplan";
+  plan: string;
+  checked: number;
+  waiting: number;
+  released: number;
+  lead: number;
+}
+interface Composer {
+  id: string;
+  name: string;
+  email: string;
+  sheetId: string;
+  sheetUrl: string;
+}
+interface Overview {
+  composers: Composer[];
+  sheetsConnected: boolean;
+  scriptUrl: string;
+  scanner: { lastSeen: string | null; host: string | null; queue: number; week: number; errors: number };
+  channels: Channel[];
+  matches: Match[];
 }
 
 const GOLD = "#F4C430";
-const day = (s: string) => (s ? s.slice(0, 10) : "—");
+const PALETTE = ["#F4C430", "#ff8fb1", "#7cc7ff", "#9be38a", "#c9a0ff", "#ffb366", "#6ee7d8"];
+const API = "/api/admin/wl-scan";
 
-const copyText = async (text: string, what: string) => {
-  try {
-    await navigator.clipboard.writeText(text);
-    toast.success(`Copied ${what}`);
-  } catch {
-    toast.error("Clipboard unavailable — copy manually");
-  }
+const fmt = (s: number) => {
+  const t = Math.max(0, Math.round(s));
+  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
+};
+const strength = (score: number) => (score >= 150 ? "sure" : score >= 80 ? "good" : "weak");
+const daysSince = (iso: string | null) => {
+  if (!iso) return null;
+  const t = new Date(iso.replace(" ", "T") + (iso.length <= 19 ? "Z" : "")).getTime();
+  return Number.isNaN(t) ? null : Math.max(0, Math.floor((Date.now() - t) / 86400000));
+};
+const shortDate = (iso: string | null) =>
+  iso ? new Date(iso.replace(" ", "T") + (iso.length <= 19 ? "Z" : "")).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "";
+
+const post = async (body: Record<string, unknown>) => {
+  const res = await fetch(API, {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const d = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok || d.error) throw new Error(String(d.error ?? `Request failed (${res.status})`));
+  return d;
 };
 
+const Pill = ({ ok, children }: { ok: boolean; children: React.ReactNode }) => (
+  <span
+    className={`inline-flex items-center rounded-full px-2 py-0.5 font-body text-[11px] font-semibold ${
+      ok ? "bg-emerald-400/10 text-emerald-300" : "bg-white/5 text-muted-foreground"
+    }`}
+  >
+    {children}
+  </span>
+);
+
 const AdminWhitelist = () => {
-  const [view, setView] = useState<"all" | "channels">("all");
-  const [channels, setChannels] = useState<AdminChannel[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [vids, setVids] = useState<Record<string, VideoState>>({});
-  // --- "All new videos" workflow state ---
-  const [all, setAll] = useState<AllState | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [showHandled, setShowHandled] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [data, setData] = useState<Overview | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [tab, setTab] = useState<"composers" | "channels" | "scanner">("composers");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+  const [showReleased, setShowReleased] = useState(false);
+  const [open, setOpen] = useState<Record<string, boolean>>({});
 
-  useEffect(() => {
-    fetch("/api/admin/whitelist", { credentials: "include" })
+  const load = useCallback(() => {
+    fetch(`${API}?action=overview`, { credentials: "include" })
       .then(async (r) => {
-        const d = (await r.json()) as { channels?: AdminChannel[]; error?: string };
-        if (!r.ok || !d.channels) throw new Error(d.error ?? "Failed to load");
-        setChannels(d.channels);
+        const d = (await r.json()) as Overview & { error?: string };
+        if (!r.ok || d.error) throw new Error(d.error ?? "Failed to load");
+        setData(d);
+        setErr(null);
       })
-      .catch((e: Error) => setError(e.message));
+      .catch((e: Error) => setErr(e.message));
   }, []);
+  useEffect(load, [load]);
 
-  const loadAll = async () => {
-    setAll({ loading: true });
-    setSelected(new Set());
+  const act = async (name: string, body: Record<string, unknown>, done: (d: Record<string, unknown>) => string) => {
+    setBusy(name);
     try {
-      const r = await fetch("/api/admin/whitelist-videos-all", { credentials: "include" });
-      const d = (await r.json()) as { groups?: AllGroup[]; error?: string };
-      if (!r.ok || !d.groups) throw new Error(d.error ?? "Failed to load");
-      setAll({ loading: false, groups: d.groups });
+      const d = await post(body);
+      toast.success(done(d));
+      load();
     } catch (e) {
-      setAll({ loading: false, error: e instanceof Error ? e.message : "Failed" });
-    }
-  };
-
-  useEffect(() => {
-    if (view === "all" && !all) void loadAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view]);
-
-  const groups = useMemo(() => all?.groups ?? [], [all]);
-  const allVideos = useMemo(
-    () => groups.flatMap((g) => g.videos.map((v) => ({ ...v, group: g }))),
-    [groups],
-  );
-  const newVideos = allVideos.filter((v) => !v.handled);
-  const handledCount = allVideos.length - newVideos.length;
-
-  const toggleSelect = (videoId: string) => {
-    setSelected((s) => {
-      const next = new Set(s);
-      if (next.has(videoId)) next.delete(videoId);
-      else next.add(videoId);
-      return next;
-    });
-  };
-  const selectAll = () => setSelected(new Set(newVideos.map((v) => v.videoId)));
-  const selectNone = () => setSelected(new Set());
-
-  const copyAll = () => {
-    const chosen = selected.size > 0 ? newVideos.filter((v) => selected.has(v.videoId)) : newVideos;
-    if (chosen.length === 0) {
-      toast("Nothing to copy");
-      return;
-    }
-    void copyText(chosen.map((v) => v.url).join("\n"), `${chosen.length} link${chosen.length > 1 ? "s" : ""}`);
-  };
-
-  const markSent = async () => {
-    const chosen = newVideos.filter((v) => selected.has(v.videoId));
-    if (chosen.length === 0) {
-      toast("Select videos first");
-      return;
-    }
-    setBusy(true);
-    try {
-      const r = await fetch("/api/admin/whitelist-handled", {
-        method: "POST",
-        credentials: "include",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          videos: chosen.map((v) => ({
-            videoId: v.videoId,
-            userId: v.group.userId,
-            channelId: v.group.channelId,
-            url: v.url,
-            title: v.title,
-          })),
-        }),
-      });
-      if (!r.ok) {
-        const d = (await r.json().catch(() => ({}))) as { error?: string };
-        throw new Error(d.error ?? "Failed to mark");
-      }
-      const now = new Date().toISOString();
-      setAll((a) =>
-        a?.groups
-          ? {
-              ...a,
-              groups: a.groups.map((g) => ({
-                ...g,
-                videos: g.videos.map((v) =>
-                  selected.has(v.videoId) ? { ...v, handled: true, handledAt: now } : v,
-                ),
-              })),
-            }
-          : a,
-      );
-      setSelected(new Set());
-      toast.success(`Marked ${chosen.length} as sent`);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to mark");
+      toast.error(e instanceof Error ? e.message : "Failed");
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   };
 
-  const unmark = async (videoId: string) => {
-    try {
-      const r = await fetch(`/api/admin/whitelist-handled?videoId=${encodeURIComponent(videoId)}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      if (!r.ok) throw new Error("Failed");
-      setAll((a) =>
-        a?.groups
-          ? {
-              ...a,
-              groups: a.groups.map((g) => ({
-                ...g,
-                videos: g.videos.map((v) =>
-                  v.videoId === videoId ? { ...v, handled: false, handledAt: null } : v,
-                ),
-              })),
-            }
-          : a,
-      );
-    } catch {
-      toast.error("Couldn't un-mark");
-    }
-  };
+  const channelById = useMemo(() => new Map((data?.channels ?? []).map((c) => [c.id, c])), [data]);
 
-  const loadVideos = async (id: string) => {
-    setVids((v) => ({ ...v, [id]: { loading: true } }));
-    try {
-      const r = await fetch(`/api/admin/whitelist-videos?id=${encodeURIComponent(id)}`, { credentials: "include" });
-      const d = (await r.json()) as { videos?: Video[]; inactive?: boolean; error?: string };
-      if (!r.ok) throw new Error(d.error ?? "Failed to load videos");
-      setVids((v) => ({ ...v, [id]: { loading: false, videos: d.videos ?? [], inactive: d.inactive } }));
-    } catch (e) {
-      setVids((v) => ({ ...v, [id]: { loading: false, error: e instanceof Error ? e.message : "Failed" } }));
-    }
-  };
+  // Composers that have a sheet OR at least one match, in a stable colour order.
+  const composerList = useMemo(() => {
+    if (!data) return [];
+    const ids = new Map<string, { id: string; name: string; sheetUrl: string }>();
+    for (const c of data.composers) ids.set(c.id, { id: c.id, name: c.name, sheetUrl: c.sheetUrl });
+    for (const m of data.matches) if (!ids.has(m.composerId)) ids.set(m.composerId, { id: m.composerId, name: m.composer, sheetUrl: "" });
+    return [...ids.values()]
+      .filter((c) => c.sheetUrl || data.matches.some((m) => m.composerId === c.id))
+      .map((c, i) => ({ ...c, color: PALETTE[i % PALETTE.length] }));
+  }, [data]);
 
-  const toggle = (id: string) => {
-    if (openId === id) {
-      setOpenId(null);
-      return;
-    }
-    setOpenId(id);
-    if (!vids[id]) void loadVideos(id);
-  };
+  if (err) return <p className="font-body text-sm text-red-400">{err}</p>;
+  if (!data) return <p className="font-body text-sm text-muted-foreground">Loading whitelisting...</p>;
 
-  const q = query.trim().toLowerCase();
-  const rows = (channels ?? []).filter(
-    (c) =>
-      !q ||
-      c.channelUrl.toLowerCase().includes(q) ||
-      c.userEmail.toLowerCase().includes(q) ||
-      c.userName.toLowerCase().includes(q),
-  );
-  const activeCount = (channels ?? []).filter((c) => c.active).length;
+  const needle = q.trim().toLowerCase();
+  const matchHit = (m: Match) =>
+    !needle ||
+    m.videoTitle.toLowerCase().includes(needle) ||
+    m.videoId.toLowerCase().includes(needle) ||
+    needle.includes(m.videoId.toLowerCase()) ||
+    m.channelTitle.toLowerCase().includes(needle) ||
+    m.track.toLowerCase().includes(needle);
+  const eligible = data.matches.filter((m) => m.state !== "not_eligible");
+  const newCount = eligible.filter((m) => m.state === "new").length;
 
-  const TabButton = ({ id, label }: { id: "all" | "channels"; label: string }) => (
-    <button
-      type="button"
-      onClick={() => setView(id)}
-      className={`rounded-lg px-3 py-1.5 font-body text-xs font-semibold transition-colors ${
-        view === id
-          ? "bg-[#F4C430] text-background"
-          : "border border-border text-muted-foreground hover:border-[#F4C430]/60 hover:text-foreground"
-      }`}
-    >
-      {label}
-    </button>
-  );
+  const scannerOnline = data.scanner.lastSeen && Date.now() - new Date(data.scanner.lastSeen).getTime() < 10 * 60000;
 
   return (
-    <div className="rounded-xl border border-border bg-card p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg text-foreground">
-          Whitelisting{channels ? ` — ${activeCount} active` : ""}
-        </h2>
-        <div className="flex items-center gap-2">
-          <TabButton id="all" label="All new videos" />
-          <TabButton id="channels" label="Channels" />
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <h2 className="font-display text-2xl font-bold text-foreground">Whitelisting</h2>
+          <p className="mt-1 font-body text-sm text-muted-foreground">
+            New matches go into each composer's Google Sheet. Composers mark Released there.
+          </p>
         </div>
+        <button
+          type="button"
+          disabled={busy !== null || newCount === 0}
+          onClick={() =>
+            void act("sheets", { action: "sheets_update" }, (d) => {
+              const added = Object.values((d.added as Record<string, number>) ?? {}).reduce((a, b) => a + b, 0);
+              const miss = (d.missingSheets as string[]) ?? [];
+              return `${added} video(s) added to composer sheets${miss.length ? `; no sheet yet for ${miss.length} composer(s)` : ""}`;
+            })
+          }
+          className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 font-body text-xs font-semibold text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430] disabled:opacity-40"
+        >
+          {busy === "sheets" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+          Update composer sheets{newCount ? ` · ${newCount} new` : ""}
+        </button>
+        <button
+          type="button"
+          disabled={busy !== null}
+          onClick={() =>
+            void act("email", { action: "email_composers" }, (d) => {
+              const sent = (d.sent as string[]) ?? [];
+              const skipped = (d.skipped as string[]) ?? [];
+              return sent.length
+                ? `Emailed: ${sent.join(", ")}${skipped.length ? ` · skipped: ${skipped.join(", ")}` : ""}`
+                : `Nothing to send${skipped.length ? ` · ${skipped.join(", ")}` : ""}`;
+            })
+          }
+          className="inline-flex items-center gap-2 rounded-lg px-3 py-2 font-body text-xs font-bold text-black disabled:opacity-40"
+          style={{ background: GOLD }}
+        >
+          {busy === "email" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
+          Email composers
+        </button>
       </div>
 
-      {view === "all" && (
-        <div className="mt-4">
-          <p className="font-body text-xs text-muted-foreground">
-            New uploads across every active channel. Select → Copy All → send to your Content ID
-            provider → Mark as sent. Sent videos drop out of this list.
-          </p>
+      <div className="flex flex-wrap gap-1.5">
+        {(
+          [
+            ["composers", "Composers"],
+            ["channels", `Channels · ${data.channels.length}`],
+            ["scanner", "Scanner"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setTab(id)}
+            className={`rounded-full border px-3.5 py-1.5 font-body text-xs font-semibold transition-colors ${
+              tab === id ? "border-[#F4C430] bg-[#F4C430] text-black" : "border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-          {/* Toolbar */}
-          <div className="mt-4 flex flex-wrap items-center gap-2.5">
-            <span className="font-body text-xs text-foreground">
-              <span style={{ color: GOLD }} className="font-semibold">{newVideos.length} new</span>
-              {" · "}
-              {handledCount} handled
-            </span>
-            <span className="mx-1 h-4 w-px bg-border" />
-            <button
-              type="button"
-              onClick={selected.size === newVideos.length && newVideos.length > 0 ? selectNone : selectAll}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 font-body text-xs text-foreground hover:border-[#F4C430] hover:text-[#F4C430]"
-            >
-              {selected.size === newVideos.length && newVideos.length > 0 ? (
-                <SquareCheckBig className="h-3.5 w-3.5" />
-              ) : (
-                <Square className="h-3.5 w-3.5" />
-              )}
-              {selected.size === newVideos.length && newVideos.length > 0 ? "Select none" : "Select all"}
-            </button>
-            <button
-              type="button"
-              onClick={copyAll}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 font-body text-xs text-foreground hover:border-[#F4C430] hover:text-[#F4C430]"
-            >
-              <ClipboardCopy className="h-3.5 w-3.5" />
-              Copy {selected.size > 0 ? `${selected.size} selected` : "all"}
-            </button>
-            <button
-              type="button"
-              disabled={busy || selected.size === 0}
-              onClick={() => void markSent()}
-              className="inline-flex items-center gap-1.5 rounded-md bg-[#F4C430] px-2.5 py-1 font-body text-xs font-bold text-background hover:bg-[#F4C430]/85 disabled:opacity-40"
-            >
-              <Check className="h-3.5 w-3.5" />
-              Mark as sent{selected.size > 0 ? ` (${selected.size})` : ""}
-            </button>
-            <label className="ml-1 inline-flex cursor-pointer items-center gap-1.5 font-body text-xs text-muted-foreground">
+      {tab === "composers" && (
+        <>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex min-w-[260px] flex-1 items-center gap-2 rounded-xl border border-border bg-card px-3 py-2">
+              <Search className="h-4 w-4 text-muted-foreground" />
               <input
-                type="checkbox"
-                checked={showHandled}
-                onChange={(e) => setShowHandled(e.target.checked)}
-                className="accent-[#F4C430]"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search by video link or video title"
+                className="w-full bg-transparent font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
               />
-              Show handled
             </label>
-            <button
-              type="button"
-              onClick={() => void loadAll()}
-              title="Refresh"
-              className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 font-body text-xs text-muted-foreground hover:border-[#F4C430] hover:text-[#F4C430]"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${all?.loading ? "animate-spin" : ""}`} />
-              Refresh
-            </button>
+            <label className="flex cursor-pointer items-center gap-2 font-body text-sm text-foreground">
+              <input type="checkbox" checked={showReleased} onChange={(e) => setShowReleased(e.target.checked)} className="accent-[#F4C430]" />
+              Show released videos too
+            </label>
           </div>
 
-          {all?.loading && <p className="mt-4 font-body text-sm text-muted-foreground">Checking channels on YouTube…</p>}
-          {all?.error && <p className="mt-4 font-body text-xs text-red-400">{all.error}</p>}
-          {all && !all.loading && !all.error && groups.length === 0 && (
-            <p className="mt-4 font-body text-sm text-muted-foreground">No active whitelisted channels.</p>
+          {composerList.length === 0 && (
+            <p className="font-body text-sm text-muted-foreground">No matches yet. The desktop scanner adds them as it checks new videos.</p>
           )}
 
-          {groups.map((g) => {
-            const gNew = g.videos.filter((v) => !v.handled);
-            const gHandled = g.videos.length - gNew.length;
-            const shown = showHandled ? g.videos : gNew;
+          {composerList.map((c) => {
+            const mine = eligible.filter((m) => m.composerId === c.id);
+            const waiting = mine.filter((m) => m.state === "in_sheet");
+            const fresh = mine.filter((m) => m.state === "new");
+            const released = mine.filter((m) => m.state === "released");
+            const oldest = waiting.reduce((a, m) => Math.max(a, daysSince(m.sheetDate) ?? 0), 0);
+            const rows = mine
+              .filter((m) => showReleased || m.state !== "released")
+              .filter(matchHit)
+              .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+            const isOpen = needle ? rows.length > 0 : !!open[c.id];
+            if (needle && rows.length === 0) return null;
             return (
-              <div key={g.channelId} className="mt-5 rounded-lg border border-border/60 bg-background/40 p-3.5">
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <a
-                    href={g.channelUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-body text-sm font-semibold text-[#F4C430] hover:underline"
+              <div key={c.id} className="overflow-hidden rounded-2xl border border-border bg-card">
+                <div className="h-[3px]" style={{ background: c.color }} />
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={() => setOpen((o) => ({ ...o, [c.id]: !isOpen }))}
+                    className="flex items-center gap-2"
                   >
-                    {g.channelTitle || g.channelUrl}
-                  </a>
+                    {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                    <span className="min-w-[150px] text-left font-body text-base font-bold" style={{ color: c.color }}>
+                      {c.name}
+                    </span>
+                  </button>
                   <span className="font-body text-xs text-muted-foreground">
-                    {g.customerName || g.customerEmail} · <span className="capitalize">{g.plan}</span>
+                    <b className="mr-1 text-sm text-red-400">{waiting.length}</b>waiting
                   </span>
-                  <span className="ml-auto font-body text-xs text-muted-foreground">
-                    {gNew.length} new · {gHandled} handled
+                  <span className="font-body text-xs text-muted-foreground">
+                    <b className="mr-1 text-sm text-foreground">{fresh.length}</b>not in sheet yet
+                  </span>
+                  <span className="font-body text-xs text-muted-foreground">
+                    <b className="mr-1 text-sm text-emerald-300">{released.length}</b>released
+                  </span>
+                  <span className="font-body text-xs text-muted-foreground">
+                    {waiting.length ? (
+                      <>
+                        <b className="mr-1 text-sm text-red-400">{oldest}</b>
+                        {oldest === 1 ? "day oldest" : "days oldest"}
+                      </>
+                    ) : (
+                      "-"
+                    )}
+                  </span>
+                  <span className="ml-auto">
+                    {c.sheetUrl ? (
+                      <a
+                        href={c.sheetUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 font-body text-xs font-semibold text-foreground hover:border-[#F4C430] hover:text-[#F4C430]"
+                      >
+                        Open sheet <ExternalLink className="h-3 w-3" />
+                      </a>
+                    ) : (
+                      <span className="font-body text-xs text-muted-foreground">no sheet yet (Scanner tab)</span>
+                    )}
                   </span>
                 </div>
-                {g.error && <p className="mt-2 font-body text-xs text-red-400">{g.error}</p>}
-                {!g.error && shown.length === 0 && (
-                  <p className="mt-2 font-body text-xs text-muted-foreground">
-                    {g.videos.length === 0 ? "No new uploads since whitelisting." : "All handled."}
-                  </p>
-                )}
-                {shown.length > 0 && (
-                  <ul className="mt-2 space-y-1">
-                    {shown.map((v) => (
-                      <li key={v.videoId} className="flex items-center gap-2.5">
-                        {v.handled ? (
-                          <button
-                            type="button"
-                            onClick={() => void unmark(v.videoId)}
-                            title={`Sent ${day(v.handledAt ?? "")} — click to un-mark`}
-                            className="shrink-0 font-body text-[10px] uppercase tracking-wide text-muted-foreground hover:text-[#F4C430]"
-                          >
-                            undo
-                          </button>
-                        ) : (
-                          <input
-                            type="checkbox"
-                            checked={selected.has(v.videoId)}
-                            onChange={() => toggleSelect(v.videoId)}
-                            className="shrink-0 accent-[#F4C430]"
-                          />
-                        )}
-                        <a
-                          href={v.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={`min-w-0 flex-1 truncate font-body text-sm hover:underline ${
-                            v.handled ? "text-muted-foreground/60 line-through" : "text-foreground"
-                          }`}
+                {isOpen && (
+                  <div className="border-t border-border/60 px-4 pb-2">
+                    <div className="hidden grid-cols-[80px_1.5fr_1.1fr_1fr_0.9fr_90px_130px] gap-3 py-2 font-body text-[11px] uppercase tracking-wide text-muted-foreground md:grid">
+                      <div />
+                      <div>Video</div>
+                      <div>Track</div>
+                      <div>Where</div>
+                      <div>Customer</div>
+                      <div className="text-center">Days waiting</div>
+                      <div>Status</div>
+                    </div>
+                    {rows.length === 0 && <p className="py-3 font-body text-sm text-muted-foreground">Nothing open.</p>}
+                    {rows.map((m) => {
+                      const ch = channelById.get(m.channelId);
+                      const d = m.state === "in_sheet" ? daysSince(m.sheetDate) : null;
+                      return (
+                        <div
+                          key={m.id}
+                          className="grid grid-cols-[80px_1fr] items-center gap-3 border-t border-border/40 py-2.5 font-body text-[13px] md:grid-cols-[80px_1.5fr_1.1fr_1fr_0.9fr_90px_130px]"
                         >
-                          {v.title || v.videoId}
-                        </a>
-                        <span className="shrink-0 font-body text-xs text-muted-foreground">{day(v.publishedAt)}</span>
-                        {!v.handled && (
-                          <button
-                            type="button"
-                            onClick={() => void copyText(v.url, "link")}
-                            title="Copy link"
-                            className="shrink-0 text-muted-foreground transition-colors hover:text-[#F4C430]"
-                          >
-                            <ClipboardCopy className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
+                          <a href={`https://www.youtube.com/watch?v=${m.videoId}`} target="_blank" rel="noreferrer">
+                            <img
+                              src={`https://i.ytimg.com/vi/${m.videoId}/mqdefault.jpg`}
+                              alt=""
+                              loading="lazy"
+                              className="h-[45px] w-[80px] rounded-md object-cover"
+                            />
+                          </a>
+                          <div className="min-w-0">
+                            <a
+                              href={`https://www.youtube.com/watch?v=${m.videoId}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="block truncate font-semibold text-foreground hover:text-[#F4C430]"
+                            >
+                              {m.videoTitle || m.videoId}
+                            </a>
+                            <span className="block truncate text-[11px] text-muted-foreground">
+                              {m.channelTitle} · {shortDate(m.publishedAt)}
+                            </span>
+                          </div>
+                          <div className="truncate text-foreground">{m.track}</div>
+                          <div>
+                            {m.regions.map(([a, b]) => `${fmt(a)} - ${fmt(b)}`).join(", ")}
+                            <span className="block text-[11px] text-muted-foreground">
+                              plays {fmt(m.total)} · {strength(m.score)}
+                            </span>
+                          </div>
+                          <div className="min-w-0">
+                            <Pill ok>{(ch?.plan ?? "paid").replace(/^./, (x) => x.toUpperCase())} · when published</Pill>
+                            <span className="block truncate text-[11px] text-muted-foreground">{m.email}</span>
+                          </div>
+                          <div className={`text-center text-[15px] font-bold ${d !== null ? "text-red-400" : "text-muted-foreground/50"}`}>
+                            {d !== null ? d : "-"}
+                          </div>
+                          <div className="text-xs">
+                            {m.state === "new" && <span className="text-muted-foreground">Not in sheet yet</span>}
+                            {m.state === "in_sheet" && <span className="text-red-400">Waiting</span>}
+                            {m.state === "released" && <span className="text-emerald-300">✓ Released {shortDate(m.releasedAt)}</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             );
           })}
-        </div>
-      )}
-
-      {view === "channels" && (
-        <div className="mt-4">
-          <p className="mb-4 font-body text-xs text-muted-foreground">
-            Channels customers whitelisted. For each <span className="text-foreground">Active</span> one,
-            open "New videos" to see uploads since they whitelisted it.
+          <p className="font-body text-xs text-muted-foreground">
+            Videos published while the customer had no paid plan are not listed here. They are in Channels → "No active plan".
           </p>
-
-          <input
-            placeholder="Search by channel, email or name..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="mb-4 w-full max-w-md rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground focus:border-[#F4C430] focus:outline-none"
-          />
-
-          {error && <p className="mb-3 font-body text-xs text-red-400">{error}</p>}
-          {!channels && !error && <p className="font-body text-sm text-muted-foreground">Loading...</p>}
-          {channels && rows.length === 0 && (
-            <p className="font-body text-sm text-muted-foreground">No whitelisted channels.</p>
-          )}
-
-          {channels && rows.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] font-body text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                    <th className="py-2 pr-4">Status</th>
-                    <th className="py-2 pr-4">Channel</th>
-                    <th className="py-2 pr-4">Customer</th>
-                    <th className="py-2 pr-4">Plan</th>
-                    <th className="py-2 pr-4">Added</th>
-                    <th className="py-2" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((c) => {
-                    const vs = vids[c.id];
-                    const open = openId === c.id;
-                    return (
-                      <Fragment key={c.id}>
-                        <tr className="border-b border-border/50">
-                          <td className="py-2.5 pr-4">
-                            <span
-                              className={`rounded-full px-2 py-0.5 text-xs ${
-                                c.active ? "bg-[#F4C430]/15 text-[#F4C430]" : "bg-secondary text-muted-foreground"
-                              }`}
-                            >
-                              {c.active ? "Active" : "Inactive"}
-                            </span>
-                          </td>
-                          <td className="py-2.5 pr-4">
-                            <a href={c.channelUrl} target="_blank" rel="noopener noreferrer" className="text-[#F4C430] hover:underline">
-                              {c.channelRef || c.channelUrl}
-                            </a>
-                          </td>
-                          <td className="py-2.5 pr-4">
-                            <span className="block text-foreground">{c.userName || c.userEmail.split("@")[0]}</span>
-                            <span className="block text-xs text-muted-foreground">{c.userEmail}</span>
-                          </td>
-                          <td className="py-2.5 pr-4 capitalize" style={{ color: c.active ? GOLD : undefined }}>
-                            {c.plan}
-                            {c.status && c.status !== "active" ? ` (${c.status})` : ""}
-                          </td>
-                          <td className="py-2.5 pr-4 text-muted-foreground">{day(c.addedAt)}</td>
-                          <td className="py-2.5 text-right">
-                            <button
-                              type="button"
-                              onClick={() => toggle(c.id)}
-                              className="rounded-md border border-border px-2.5 py-1 text-xs text-foreground hover:border-[#F4C430] hover:text-[#F4C430]"
-                            >
-                              {open ? "Hide" : "New videos"}
-                            </button>
-                          </td>
-                        </tr>
-                        {open && (
-                          <tr className="border-b border-border/50 bg-background/40">
-                            <td colSpan={6} className="px-4 py-3">
-                              {vs?.loading && <p className="font-body text-xs text-muted-foreground">Loading videos...</p>}
-                              {vs?.error && <p className="font-body text-xs text-red-400">{vs.error}</p>}
-                              {vs?.inactive && (
-                                <p className="font-body text-xs text-muted-foreground">
-                                  Subscription is not active — not servicing new videos on this channel.
-                                </p>
-                              )}
-                              {vs && !vs.loading && !vs.error && !vs.inactive && (vs.videos?.length ?? 0) === 0 && (
-                                <p className="font-body text-xs text-muted-foreground">
-                                  No new uploads since this channel was whitelisted.
-                                </p>
-                              )}
-                              {vs?.videos && vs.videos.length > 0 && (
-                                <ul className="space-y-1.5">
-                                  {vs.videos.map((v) => (
-                                    <li key={v.videoId} className="flex items-center justify-between gap-3">
-                                      <a
-                                        href={v.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className={`truncate hover:underline ${
-                                          v.handled ? "text-muted-foreground/60 line-through" : "text-[#F4C430]"
-                                        }`}
-                                      >
-                                        {v.title || v.videoId}
-                                      </a>
-                                      <span className="shrink-0 font-body text-xs text-muted-foreground">{day(v.publishedAt)}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
-                            </td>
-                          </tr>
-                        )}
-                      </Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        </>
       )}
+
+      {tab === "channels" && <ChannelsTab data={data} reload={load} />}
+      {tab === "scanner" && (
+        <ScannerTab data={data} online={!!scannerOnline} busy={busy} act={act} reload={load} />
+      )}
+    </div>
+  );
+};
+
+const ChannelsTab = ({ data, reload }: { data: Overview; reload: () => void }) => {
+  const groups = useMemo(() => {
+    const g = new Map<string, Channel[]>();
+    for (const c of data.channels) g.set(c.userId, [...(g.get(c.userId) ?? []), c]);
+    return [...g.values()];
+  }, [data]);
+  const setFrom = async (id: string, date: string | null) => {
+    try {
+      await post({ action: "check_from", channelId: id, date });
+      toast.success(date ? `Videos from ${date} will be checked` : "Back to the default date");
+      reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed");
+    }
+  };
+  if (groups.length === 0) return <p className="font-body text-sm text-muted-foreground">No customer channels yet.</p>;
+  return (
+    <div className="rounded-2xl border border-border bg-card px-4 py-2">
+      <div className="hidden grid-cols-[1.6fr_0.7fr_1fr_0.7fr_0.7fr_0.7fr] gap-3 py-2 font-body text-[11px] uppercase tracking-wide text-muted-foreground md:grid">
+        <div>Channel</div>
+        <div>Plan</div>
+        <div>Check videos from</div>
+        <div>Checked</div>
+        <div>Not released</div>
+        <div>Released</div>
+      </div>
+      {groups.map((list) => {
+        const first = list[0];
+        const noplan = list.every((c) => c.state === "noplan");
+        const lead = list.reduce((a, c) => a + c.lead, 0);
+        return (
+          <div key={first.userId} className="border-t border-border/70 py-2">
+            <div className="flex flex-wrap items-center gap-2 py-1 font-body text-xs text-muted-foreground">
+              <b className="text-[13px] text-foreground">{first.email || first.userId}</b>
+              {list.length} channel{list.length === 1 ? "" : "s"} · {noplan ? "no active plan" : first.plan.toUpperCase()}
+              {noplan && lead > 0 && <span style={{ color: GOLD }}>{lead} claims could be released → send offer</span>}
+            </div>
+            {list.map((c) => (
+              <div
+                key={c.id}
+                className={`grid grid-cols-1 items-center gap-3 py-2 font-body text-[13px] md:grid-cols-[1.6fr_0.7fr_1fr_0.7fr_0.7fr_0.7fr] ${
+                  c.state === "active" ? "" : "opacity-60"
+                }`}
+              >
+                <div className="min-w-0">
+                  <a href={c.url} target="_blank" rel="noreferrer" className="block truncate font-semibold text-foreground hover:text-[#F4C430]">
+                    {c.title || c.url}
+                  </a>
+                  <span className="block truncate text-[11px] text-muted-foreground">
+                    {c.url.replace(/^https?:\/\/(www\.)?/, "")} · added {shortDate(c.addedAt)}
+                  </span>
+                </div>
+                <div>
+                  {c.state === "active" && <Pill ok>{c.plan.toUpperCase()}</Pill>}
+                  {c.state === "paused" && <Pill ok={false}>Paused · over limit</Pill>}
+                  {c.state === "noplan" && <Pill ok={false}>No active plan</Pill>}
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    defaultValue={c.checkFrom}
+                    onBlur={(e) => {
+                      if (e.target.value && e.target.value !== c.checkFrom) void setFrom(c.id, e.target.value);
+                    }}
+                    className="h-8 rounded-lg border border-border bg-background px-2 font-body text-xs text-foreground"
+                  />
+                  {c.checkFromCustom && (
+                    <button type="button" onClick={() => void setFrom(c.id, null)} className="text-[11px] text-muted-foreground hover:text-foreground">
+                      reset
+                    </button>
+                  )}
+                </div>
+                <div>{c.checked}</div>
+                <div className={`text-base font-bold ${c.waiting + c.lead ? "text-red-400" : "text-foreground"}`}>
+                  {c.waiting + c.lead}
+                </div>
+                <div className="text-base font-bold text-emerald-300">{c.released}</div>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const ScannerTab = ({
+  data,
+  online,
+  busy,
+  act,
+  reload,
+}: {
+  data: Overview;
+  online: boolean;
+  busy: string | null;
+  act: (n: string, b: Record<string, unknown>, done: (d: Record<string, unknown>) => string) => Promise<void>;
+  reload: () => void;
+}) => {
+  const [scriptUrl, setScriptUrl] = useState(data.scriptUrl);
+  const [token, setToken] = useState("");
+  const [sheets, setSheets] = useState<Record<string, string>>(
+    Object.fromEntries(data.composers.map((c) => [c.id, c.sheetUrl])),
+  );
+  const s = data.scanner;
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-border bg-card px-5 py-4">
+        <span className={`h-2.5 w-2.5 rounded-full ${online ? "bg-emerald-400 shadow-[0_0_10px_#34d399]" : "bg-red-400"}`} />
+        <div>
+          <b className="font-body text-sm text-foreground">Desktop scanner {online ? "online" : "offline"}</b>
+          <div className="font-body text-xs text-muted-foreground">
+            {s.lastSeen ? `${s.host ?? "scanner"} · last check ${shortDate(s.lastSeen)} ${new Date(s.lastSeen).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : "never connected"} · {s.queue} video(s) in queue
+            {s.errors ? ` · ${s.errors} failed` : ""}
+          </div>
+        </div>
+        <div className="ml-auto flex items-center gap-6 font-body">
+          <div className="text-right">
+            <b className="block text-xl text-foreground">{s.week}</b>
+            <small className="text-[11px] text-muted-foreground">videos checked this week</small>
+          </div>
+          <button
+            type="button"
+            disabled={busy !== null}
+            onClick={() =>
+              void act("refresh", { action: "refresh", force: true }, (d) => `${d.queued ?? 0} new video(s) queued from ${d.channels ?? 0} channel(s)`)
+            }
+            className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-foreground hover:border-[#F4C430] hover:text-[#F4C430] disabled:opacity-40"
+          >
+            {busy === "refresh" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            Look for new videos now
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-border bg-card px-5 py-4">
+        <h3 className="font-body text-sm font-semibold text-foreground">Composer sheets</h3>
+        <p className="mt-1 max-w-2xl font-body text-xs text-muted-foreground">
+          The site writes to the composers' Google Sheets through the small Google Apps Script in
+          tools/whitelist_sheets/Code.gs. Paste its Web app URL and the token you set in it, then one sheet link per
+          composer.
+        </p>
+        <div className="mt-3 grid max-w-3xl gap-2">
+          <input
+            value={scriptUrl}
+            onChange={(e) => setScriptUrl(e.target.value)}
+            placeholder="Apps Script Web app URL (https://script.google.com/macros/s/.../exec)"
+            className="h-9 rounded-lg border border-border bg-background px-3 font-body text-sm text-foreground"
+          />
+          <input
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            placeholder={data.sheetsConnected ? "Token (saved, leave empty to keep)" : "Token from Code.gs"}
+            className="h-9 rounded-lg border border-border bg-background px-3 font-body text-sm text-foreground"
+          />
+          {data.composers.map((c) => (
+            <div key={c.id} className="flex items-center gap-2">
+              <span className="w-36 shrink-0 truncate font-body text-sm text-foreground">{c.name}</span>
+              <input
+                value={sheets[c.id] ?? ""}
+                onChange={(e) => setSheets((x) => ({ ...x, [c.id]: e.target.value }))}
+                placeholder="Google Sheet link"
+                className="h-9 flex-1 rounded-lg border border-border bg-background px-3 font-body text-sm text-foreground"
+              />
+              <span className="w-40 shrink-0 truncate font-body text-[11px] text-muted-foreground">{c.email || "no login email"}</span>
+            </div>
+          ))}
+          <div>
+            <button
+              type="button"
+              disabled={busy !== null}
+              onClick={() =>
+                void act("cfg", { action: "sheets_config", scriptUrl, token, sheets }, () => "Sheet settings saved").then(() => {
+                  setToken("");
+                  reload();
+                })
+              }
+              className="rounded-lg px-4 py-2 font-body text-xs font-bold text-black disabled:opacity-40"
+              style={{ background: GOLD }}
+            >
+              Save settings
+            </button>
+            <button
+              type="button"
+              disabled={busy !== null || !data.sheetsConnected}
+              onClick={() => void act("sync", { action: "sheets_sync" }, (d) => `${d.released ?? 0} newly released from the sheets`)}
+              className="ml-2 rounded-lg border border-border px-4 py-2 font-body text-xs font-semibold text-foreground disabled:opacity-40"
+            >
+              Read statuses from sheets now
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

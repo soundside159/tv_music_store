@@ -1,0 +1,445 @@
+// Whitelist auto-scanning: shared data layer (underscore = not routed).
+//
+// Chain:
+//   customer adds a channel (wl_channels)
+//   -> refreshChannels(): new uploads published on/after the channel's
+//      check_from date go into wl_videos as 'queued'
+//   -> the desktop scanner (tools/whitelist_tester) takes the queue, downloads
+//      the audio, fingerprints it and posts the found tracks back
+//   -> wl_matches: one row per (video, track); eligible = the customer had a
+//      PAID plan when the video was published (license terms par. 4: tracks
+//      used while subscribed stay licensed forever)
+//   -> composer sheets / emails (_wlsheets.ts) move matches to in_sheet and
+//      read 'Released' back.
+
+import { bumpUsage } from "../_usage";
+import type { D1Database, Env } from "../_utils";
+import { ytChannel } from "./_whitelist";
+
+const YT = "https://www.googleapis.com/youtube/v3";
+export const PLAN_LIMITS: Record<string, number> = { free: 0, pro: 3, max: 10 };
+const CHECK_FROM_MARGIN_DAYS = 2;
+const REFRESH_EVERY_MIN = 30;
+const LEASE_MIN = 60;
+
+let ready = false;
+export const ensureWlScan = async (db: D1Database) => {
+  if (ready) return;
+  for (const sql of [
+    `ALTER TABLE wl_channels ADD COLUMN check_from TEXT`,
+    `ALTER TABLE wl_channels ADD COLUMN yt_title TEXT`,
+    `ALTER TABLE wl_channels ADD COLUMN yt_uploads TEXT`,
+    `ALTER TABLE wl_channels ADD COLUMN last_refresh TEXT`,
+  ]) {
+    try {
+      await db.prepare(sql).run();
+    } catch {
+      // column exists
+    }
+  }
+  await db
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS wl_videos (
+         video_id     TEXT PRIMARY KEY,
+         channel_id   TEXT NOT NULL,
+         user_id      TEXT NOT NULL,
+         title        TEXT,
+         published_at TEXT,
+         status       TEXT NOT NULL DEFAULT 'queued',
+         leased_at    TEXT,
+         scanned_at   TEXT,
+         note         TEXT,
+         found        INTEGER NOT NULL DEFAULT 0,
+         created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+       )`,
+    )
+    .run();
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_wl_videos_status ON wl_videos(status)`).run();
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_wl_videos_channel ON wl_videos(channel_id)`).run();
+  await db
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS wl_matches (
+         id           INTEGER PRIMARY KEY AUTOINCREMENT,
+         video_id     TEXT NOT NULL,
+         channel_id   TEXT NOT NULL,
+         user_id      TEXT NOT NULL,
+         track_id     TEXT,
+         track_title  TEXT NOT NULL,
+         composer_id  TEXT,
+         regions      TEXT,
+         total_s      REAL NOT NULL DEFAULT 0,
+         score        INTEGER NOT NULL DEFAULT 0,
+         eligible     INTEGER NOT NULL DEFAULT 0,
+         state        TEXT NOT NULL DEFAULT 'new',
+         sheet_date   TEXT,
+         released_at  TEXT,
+         created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+         UNIQUE (video_id, track_title)
+       )`,
+    )
+    .run();
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_wl_matches_state ON wl_matches(state)`).run();
+  ready = true;
+};
+
+/** YYYY-MM-DD minus n days. */
+const minusDays = (iso: string, n: number) => {
+  const d = new Date(iso.replace(" ", "T") + (iso.length <= 19 ? "Z" : ""));
+  if (isNaN(d.getTime())) return "";
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+};
+
+/** Current plan (only an active, non-free subscription counts). */
+export const currentPlan = async (db: D1Database, userId: string): Promise<string> => {
+  const sub = await db
+    .prepare(`SELECT plan, status FROM subscriptions WHERE user_id = ?1 ORDER BY rowid DESC LIMIT 1`)
+    .bind(userId)
+    .first<{ plan: string; status: string | null }>();
+  if (!sub) return "free";
+  return sub.status && sub.status !== "active" ? "free" : sub.plan || "free";
+};
+
+/** Did the user have a PAID plan on this date? Uses the billing periods
+ *  (subscription_licenses); falls back to the current plan when none exist. */
+export const paidOn = async (db: D1Database, userId: string, isoDate: string): Promise<boolean> => {
+  const day = (isoDate || "").slice(0, 10);
+  try {
+    const any = await db
+      .prepare(`SELECT 1 AS x FROM subscription_licenses WHERE user_id = ?1 LIMIT 1`)
+      .bind(userId)
+      .first<{ x: number }>();
+    if (any) {
+      const hit = await db
+        .prepare(
+          `SELECT 1 AS x FROM subscription_licenses
+            WHERE user_id = ?1 AND plan != 'free'
+              AND substr(period_start, 1, 10) <= ?2
+              AND (period_end IS NULL OR substr(period_end, 1, 10) >= ?2)
+            LIMIT 1`,
+        )
+        .bind(userId, day)
+        .first<{ x: number }>();
+      return !!hit;
+    }
+  } catch {
+    // table missing - fall through
+  }
+  return (await currentPlan(db, userId)) !== "free";
+};
+
+export interface ChannelRow {
+  id: string;
+  user_id: string;
+  channel_url: string;
+  added_at: string;
+  check_from: string | null;
+  yt_title: string | null;
+  yt_uploads: string | null;
+  last_refresh: string | null;
+  user_created: string | null;
+  email: string | null;
+}
+
+export const allChannels = async (db: D1Database): Promise<ChannelRow[]> => {
+  const r = await db
+    .prepare(
+      `SELECT w.id, w.user_id, w.channel_url, w.added_at, w.check_from, w.yt_title, w.yt_uploads,
+              w.last_refresh, u.created_at AS user_created, u.email AS email
+         FROM wl_channels w LEFT JOIN users u ON u.id = w.user_id
+        ORDER BY w.user_id, w.added_at`,
+    )
+    .all<ChannelRow>();
+  return r.results;
+};
+
+/** check_from: admin override, else registration date minus 2 days. */
+export const checkFromOf = (c: ChannelRow) =>
+  c.check_from || minusDays(c.user_created || c.added_at, CHECK_FROM_MARGIN_DAYS);
+
+/** Channel state by the owner's CURRENT plan: active / paused (over the plan's
+ *  channel limit, newest channels first to pause) / noplan. */
+export const channelStates = async (db: D1Database, channels: ChannelRow[]) => {
+  const out = new Map<string, { state: "active" | "paused" | "noplan"; plan: string }>();
+  const byUser = new Map<string, ChannelRow[]>();
+  for (const c of channels) byUser.set(c.user_id, [...(byUser.get(c.user_id) ?? []), c]);
+  for (const [uid, list] of byUser) {
+    const plan = await currentPlan(db, uid);
+    const limit = PLAN_LIMITS[plan] ?? 0;
+    list.forEach((c, i) => {
+      out.set(c.id, { plan, state: limit === 0 ? "noplan" : i < limit ? "active" : "paused" });
+    });
+  }
+  return out;
+};
+
+/** All uploads of a channel published on/after `since` (pages through the
+ *  uploads playlist, newest first, stops at the first older video). */
+const uploadsSince = async (key: string, playlist: string, since: string, db: D1Database) => {
+  const out: { videoId: string; title: string; publishedAt: string }[] = [];
+  let page = "";
+  for (let i = 0; i < 10; i++) {
+    void bumpUsage(db, "youtube", 1);
+    const res = await fetch(
+      `${YT}/playlistItems?part=snippet,contentDetails&maxResults=50&playlistId=${encodeURIComponent(playlist)}` +
+        (page ? `&pageToken=${page}` : "") +
+        `&key=${key}`,
+    );
+    if (!res.ok) break;
+    const data = (await res.json()) as {
+      nextPageToken?: string;
+      items?: {
+        snippet?: { title?: string; resourceId?: { videoId?: string } };
+        contentDetails?: { videoPublishedAt?: string };
+      }[];
+    };
+    let older = false;
+    for (const it of data.items ?? []) {
+      const id = it.snippet?.resourceId?.videoId;
+      const pub = it.contentDetails?.videoPublishedAt ?? "";
+      if (!id || !pub) continue; // private / not yet published
+      if (pub.slice(0, 10) < since) {
+        older = true;
+        continue;
+      }
+      out.push({ videoId: id, title: it.snippet?.title ?? "", publishedAt: pub });
+    }
+    if (older || !data.nextPageToken) break;
+    page = data.nextPageToken;
+  }
+  return out;
+};
+
+/** Queue new videos of every active / noplan channel (paused ones are skipped).
+ *  Each channel is asked at most every 30 min unless `force`. */
+export const refreshChannels = async (env: Env, force = false) => {
+  const db = env.DB;
+  await ensureWlScan(db);
+  if (!env.YOUTUBE_API_KEY) return { error: "YOUTUBE_API_KEY is not set", queued: 0, channels: 0 };
+  const channels = await allChannels(db);
+  const states = await channelStates(db, channels);
+  const now = new Date();
+  let queued = 0;
+  let asked = 0;
+  for (const c of channels) {
+    if (states.get(c.id)?.state === "paused") continue;
+    if (!force && c.last_refresh) {
+      const age = (now.getTime() - new Date(c.last_refresh + "Z").getTime()) / 60000;
+      if (age < REFRESH_EVERY_MIN) continue;
+    }
+    let uploads = c.yt_uploads;
+    if (!uploads) {
+      void bumpUsage(db, "youtube", 1);
+      const ch = await ytChannel(env.YOUTUBE_API_KEY, c.channel_url);
+      if (!ch) continue;
+      uploads = ch.uploads;
+      await db
+        .prepare(`UPDATE wl_channels SET yt_uploads = ?2, yt_title = ?3 WHERE id = ?1`)
+        .bind(c.id, ch.uploads, ch.title)
+        .run();
+    }
+    asked++;
+    const vids = await uploadsSince(env.YOUTUBE_API_KEY, uploads, checkFromOf(c), db);
+    for (const v of vids) {
+      const r = await db
+        .prepare(
+          `INSERT OR IGNORE INTO wl_videos (video_id, channel_id, user_id, title, published_at)
+           VALUES (?1, ?2, ?3, ?4, ?5)`,
+        )
+        .bind(v.videoId, c.id, c.user_id, v.title, v.publishedAt)
+        .run();
+      if ((r as { meta?: { changes?: number } }).meta?.changes) queued++;
+    }
+    await db
+      .prepare(`UPDATE wl_channels SET last_refresh = datetime('now') WHERE id = ?1`)
+      .bind(c.id)
+      .run();
+  }
+  return { queued, channels: asked };
+};
+
+/** Hand the scanner up to `limit` queued videos (leased for an hour). */
+export const takeQueue = async (db: D1Database, limit: number) => {
+  await ensureWlScan(db);
+  await db
+    .prepare(
+      `UPDATE wl_videos SET status = 'queued', leased_at = NULL
+        WHERE status = 'scanning' AND leased_at < datetime('now', ?1)`,
+    )
+    .bind(`-${LEASE_MIN} minutes`)
+    .run();
+  const rows = await db
+    .prepare(
+      `SELECT v.video_id, v.title, v.published_at, w.yt_title AS channel_title
+         FROM wl_videos v LEFT JOIN wl_channels w ON w.id = v.channel_id
+        WHERE v.status = 'queued' ORDER BY v.published_at DESC LIMIT ?1`,
+    )
+    .bind(limit)
+    .all<{ video_id: string; title: string; published_at: string; channel_title: string | null }>();
+  for (const r of rows.results) {
+    await db
+      .prepare(`UPDATE wl_videos SET status = 'scanning', leased_at = datetime('now') WHERE video_id = ?1`)
+      .bind(r.video_id)
+      .run();
+  }
+  const left = await db
+    .prepare(`SELECT COUNT(*) AS n FROM wl_videos WHERE status = 'queued'`)
+    .first<{ n: number }>();
+  return {
+    videos: rows.results.map((r) => ({
+      videoId: r.video_id,
+      url: `https://www.youtube.com/watch?v=${r.video_id}`,
+      title: r.title,
+      publishedAt: r.published_at,
+      channelTitle: r.channel_title ?? "",
+    })),
+    queueLeft: left?.n ?? 0,
+  };
+};
+
+export interface ScanMatch {
+  trackId?: string;
+  track: string;
+  regions: [number, number][];
+  total: number;
+  score: number;
+}
+
+/** Store the scanner's answer for one video. */
+export const saveResult = async (
+  db: D1Database,
+  videoId: string,
+  matches: ScanMatch[],
+  error?: string,
+  opts: { append?: boolean } = {},
+) => {
+  await ensureWlScan(db);
+  const v = await db
+    .prepare(`SELECT video_id, channel_id, user_id, published_at, note FROM wl_videos WHERE video_id = ?1`)
+    .bind(videoId)
+    .first<{ video_id: string; channel_id: string; user_id: string; published_at: string; note: string | null }>();
+  if (!v) return { ok: false, error: "unknown video" };
+  if (error) {
+    await db
+      .prepare(`UPDATE wl_videos SET status = 'error', note = ?2, scanned_at = datetime('now') WHERE video_id = ?1`)
+      .bind(videoId, error.slice(0, 300))
+      .run();
+    return { ok: true };
+  }
+  // A video the owner added by hand (an old video of a customer he brought in)
+  // is released whatever the date: that was his decision.
+  const eligible = v.note === "manual" || (await paidOn(db, v.user_id, v.published_at)) ? 1 : 0;
+  for (const m of matches) {
+    const t = m.trackId
+      ? await db
+          .prepare(`SELECT id, title, composer_id FROM tracks WHERE id = ?1`)
+          .bind(m.trackId)
+          .first<{ id: string; title: string; composer_id: string | null }>()
+      : await db
+          .prepare(`SELECT id, title, composer_id FROM tracks WHERE lower(title) = lower(?1) LIMIT 1`)
+          .bind(m.track)
+          .first<{ id: string; title: string; composer_id: string | null }>();
+    await db
+      .prepare(
+        `INSERT INTO wl_matches (video_id, channel_id, user_id, track_id, track_title, composer_id,
+                                 regions, total_s, score, eligible, state)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+         ON CONFLICT(video_id, track_title) DO UPDATE SET
+           regions = excluded.regions, total_s = excluded.total_s, score = excluded.score`,
+      )
+      .bind(
+        videoId,
+        v.channel_id,
+        v.user_id,
+        t?.id ?? m.trackId ?? null,
+        t?.title ?? m.track,
+        t?.composer_id ?? null,
+        JSON.stringify(m.regions.slice(0, 20)),
+        Math.round(m.total),
+        Math.round(m.score),
+        eligible,
+        eligible ? "new" : "not_eligible",
+      )
+      .run();
+  }
+  await db
+    .prepare(
+      `UPDATE wl_videos SET status = 'done', scanned_at = datetime('now'), leased_at = NULL,
+              found = CASE WHEN ?3 = 1 THEN found + ?2 ELSE ?2 END
+        WHERE video_id = ?1`,
+    )
+    .bind(videoId, matches.length, opts.append ? 1 : 0)
+    .run();
+  return { ok: true, eligible: !!eligible };
+};
+
+/** Published tracks with their full-version preview, for the scanner's base. */
+export const scanCatalog = async (db: D1Database) => {
+  const rows = await db
+    .prepare(
+      `SELECT t.id, t.title, t.created_at, c.display_name AS composer,
+              (SELECT v.preview_src FROM track_versions v WHERE v.track_id = t.id ORDER BY v.sort ASC LIMIT 1) AS src
+         FROM tracks t LEFT JOIN composers c ON c.id = t.composer_id
+        WHERE t.status = 'published'`,
+    )
+    .all<{ id: string; title: string; created_at: string | null; composer: string | null; src: string | null }>();
+  return rows.results.filter((r) => r.src).map((r) => ({
+    id: r.id,
+    title: r.title,
+    addedAt: (r.created_at ?? "").slice(0, 10),
+    composer: r.composer ?? "TV Music Store",
+    src: r.src as string,
+  }));
+};
+
+/** Owner adds one video by hand (scanner "Check a video" -> Send to site).
+ *  The video's channel must be one of the customers' whitelisted channels. */
+export const addManualVideo = async (env: Env, videoId: string) => {
+  const db = env.DB;
+  await ensureWlScan(db);
+  if (!env.YOUTUBE_API_KEY) return { error: "YOUTUBE_API_KEY is not set" };
+  void bumpUsage(db, "youtube", 1);
+  const res = await fetch(`${YT}/videos?part=snippet&id=${encodeURIComponent(videoId)}&key=${env.YOUTUBE_API_KEY}`);
+  const data = (await res.json().catch(() => ({}))) as {
+    items?: { snippet?: { channelId?: string; title?: string; publishedAt?: string; channelTitle?: string } }[];
+  };
+  const sn = data.items?.[0]?.snippet;
+  if (!sn?.channelId) return { error: "YouTube does not show this video (private or wrong link)." };
+  const uploads = "UU" + sn.channelId.slice(2);
+  let ch = await db
+    .prepare(`SELECT id, user_id FROM wl_channels WHERE yt_uploads = ?1 ORDER BY added_at LIMIT 1`)
+    .bind(uploads)
+    .first<{ id: string; user_id: string }>();
+  if (!ch) {
+    // channels not resolved yet: resolve them now and try again
+    for (const c of await allChannels(db)) {
+      if (c.yt_uploads) continue;
+      const r = await ytChannel(env.YOUTUBE_API_KEY, c.channel_url);
+      if (r) {
+        await db
+          .prepare(`UPDATE wl_channels SET yt_uploads = ?2, yt_title = ?3 WHERE id = ?1`)
+          .bind(c.id, r.uploads, r.title)
+          .run();
+      }
+    }
+    ch = await db
+      .prepare(`SELECT id, user_id FROM wl_channels WHERE yt_uploads = ?1 ORDER BY added_at LIMIT 1`)
+      .bind(uploads)
+      .first<{ id: string; user_id: string }>();
+  }
+  if (!ch) return { error: `"${sn.channelTitle ?? "This channel"}" is not on any customer's whitelist.` };
+  await db
+    .prepare(
+      `INSERT INTO wl_videos (video_id, channel_id, user_id, title, published_at, status, note)
+       VALUES (?1, ?2, ?3, ?4, ?5, 'scanning', 'manual')
+       ON CONFLICT(video_id) DO UPDATE SET note = 'manual', status = 'scanning'`,
+    )
+    .bind(videoId, ch.id, ch.user_id, sn.title ?? "", sn.publishedAt ?? "")
+    .run();
+  // earlier not-eligible matches of this video become releasable too
+  await db
+    .prepare(`UPDATE wl_matches SET eligible = 1, state = 'new' WHERE video_id = ?1 AND state = 'not_eligible'`)
+    .bind(videoId)
+    .run();
+  return { ok: true, channelTitle: sn.channelTitle ?? "" };
+};

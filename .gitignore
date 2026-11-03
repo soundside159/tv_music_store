@@ -30,3 +30,6 @@ vite.config.ts.timestamp-*
 sfx_uploader/
 _to_delete/
 .local-debug/
+
+tools/whitelist_tester/data/
+__pycache__/
