@@ -6,6 +6,7 @@ import {
   ArrowUp,
   Check,
   ChevronDown,
+  Copy,
   GripVertical,
   ImageUp,
   Link2,
@@ -523,6 +524,24 @@ export const AdminTrackCoverOverlay = ({
             >
               <Link2 className="h-4 w-4" />
             </button>
+            {track.cover && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  // Direct full-size image address (absolute, on our domain).
+                  const href = new URL(track.cover, window.location.origin).href;
+                  navigator.clipboard.writeText(href).then(
+                    () => toast.success("Image link copied"),
+                    () => toast.error("Could not copy"),
+                  );
+                }}
+                title="Copy direct image link"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-[#F4C430]/60 bg-card text-[#F4C430] transition-colors hover:bg-[#F4C430] hover:text-background disabled:opacity-50"
+              >
+                <Copy className="h-4 w-4" />
+              </button>
+            )}
             {track.cover && (
               <button
                 type="button"
