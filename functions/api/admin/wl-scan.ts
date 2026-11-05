@@ -3,6 +3,8 @@ import { adminTokenOk, getSessionUser, json, OWNER_EMAIL, readJson, type Ctx, ty
 import {
   addCustomChannel,
   addManualVideo,
+  addSoloVideo,
+  removeSoloVideo,
   allChannels,
   channelStates,
   checkFromOf,
@@ -110,6 +112,14 @@ export const onRequestGet = async (ctx: Ctx) => {
     )
     .all<Record<string, unknown>>();
 
+  // Every video the site knows, for the desktop scanner's channel lists.
+  const videos = await db
+    .prepare(
+      `SELECT video_id, channel_id, user_id, title, published_at, status, scanned_at, note, found
+         FROM wl_videos ORDER BY published_at DESC LIMIT 20000`,
+    )
+    .all<Record<string, unknown>>();
+
   const q = await db
     .prepare(
       `SELECT SUM(CASE WHEN status = 'queued' OR status = 'scanning' THEN 1 ELSE 0 END) AS queue,
@@ -164,6 +174,17 @@ export const onRequestGet = async (ctx: Ctx) => {
       released: cnt.get(c.id)?.released ?? 0,
       lead: cnt.get(c.id)?.lead ?? 0,
     })),
+    videos: videos.results.map((v) => ({
+      videoId: v.video_id,
+      channelId: v.channel_id,
+      userId: v.user_id,
+      title: v.title ?? "",
+      publishedAt: v.published_at ?? "",
+      status: v.status,
+      scannedAt: v.scanned_at ?? "",
+      note: v.note ?? "",
+      found: Number(v.found ?? 0),
+    })),
     matches: matches.results.map((m) => ({
       id: m.id,
       videoId: m.video_id,
@@ -204,7 +225,28 @@ export const onRequestPost = async (ctx: Ctx) => {
 
   switch (body.action) {
     case "refresh":
-      return json(await refreshChannels(ctx.env as Env, !!body.force));
+      return json(
+        await refreshChannels(ctx.env as Env, !!body.force, typeof body.channelId === "string" ? body.channelId : undefined),
+      );
+    case "lease": {
+      // The desktop scanner is about to check these videos itself.
+      const ids = (Array.isArray(body.videoIds) ? body.videoIds : []).map(String).filter((x) => /^[A-Za-z0-9_-]{11}$/.test(x));
+      for (const id of ids.slice(0, 500)) {
+        await db
+          .prepare(`UPDATE wl_videos SET status = 'scanning', leased_at = datetime('now') WHERE video_id = ?1`)
+          .bind(id)
+          .run();
+      }
+      return json({ ok: true, leased: ids.length });
+    }
+    case "solo_add": {
+      const vid = String(body.videoId ?? "");
+      if (!/^[A-Za-z0-9_-]{11}$/.test(vid)) return json({ error: "Bad video id" }, 400);
+      const r = await addSoloVideo(ctx.env as Env, String(body.userId ?? ""), vid);
+      return json(r, "error" in r ? 400 : 200);
+    }
+    case "solo_remove":
+      return json(await removeSoloVideo(db, String(body.videoId ?? "")));
     case "result": {
       const videoId = String(body.videoId ?? "");
       const raw = Array.isArray(body.matches) ? (body.matches as ScanMatch[]) : [];

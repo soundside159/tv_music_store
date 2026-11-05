@@ -27,6 +27,60 @@ const CHECK_FROM_MARGIN_DAYS = 2;
 const REFRESH_EVERY_MIN = 30;
 const LEASE_MIN = 60;
 export const CUSTOM_USER = "custom";
+/** A customer's "Solo videos": single videos the owner adds for that customer
+ *  without a channel. They live in a pseudo channel (channel_url = SOLO_URL)
+ *  that never counts against the plan's channel limit and is never refreshed. */
+export const SOLO_URL = "solo";
+export const isSolo = (c: { channel_url: string }) => c.channel_url === SOLO_URL;
+
+export const ensureSoloChannel = async (db: D1Database, userId: string) => {
+  const id = "wch_solo_" + userId;
+  await db
+    .prepare(
+      `INSERT OR IGNORE INTO wl_channels (id, user_id, channel_url, channel_ref, yt_title, yt_uploads, custom_group)
+       VALUES (?1, ?2, ?3, NULL, 'Solo videos', NULL, NULL)`,
+    )
+    .bind(id, userId, SOLO_URL)
+    .run();
+  return id;
+};
+
+/** Add one video to a customer's Solo videos (queued for the scanner). */
+export const addSoloVideo = async (env: Env, userId: string, videoId: string) => {
+  const db = env.DB;
+  await ensureWlScan(db);
+  if (!env.YOUTUBE_API_KEY) return { error: "YOUTUBE_API_KEY is not set" };
+  const user = await db.prepare(`SELECT id FROM users WHERE id = ?1`).bind(userId).first<{ id: string }>();
+  if (!user) return { error: "No such customer" };
+  void bumpUsage(db, "youtube", 1);
+  const res = await fetch(`${YT}/videos?part=snippet&id=${encodeURIComponent(videoId)}&key=${env.YOUTUBE_API_KEY}`);
+  const data = (await res.json().catch(() => ({}))) as {
+    items?: { snippet?: { title?: string; publishedAt?: string; channelTitle?: string } }[];
+  };
+  const sn = data.items?.[0]?.snippet;
+  if (!sn) return { error: "YouTube does not show this video (private or wrong link)." };
+  const dup = await db.prepare(`SELECT channel_id FROM wl_videos WHERE video_id = ?1`).bind(videoId).first<{ channel_id: string }>();
+  if (dup && !dup.channel_id.startsWith("wch_solo_")) return { error: "This video is already covered by a whitelisted channel." };
+  const chId = await ensureSoloChannel(db, userId);
+  await db
+    .prepare(
+      `INSERT INTO wl_videos (video_id, channel_id, user_id, title, published_at, status, note)
+       VALUES (?1, ?2, ?3, ?4, ?5, 'queued', 'solo')
+       ON CONFLICT(video_id) DO UPDATE SET channel_id = ?2, user_id = ?3, note = 'solo', status = 'queued'`,
+    )
+    .bind(videoId, chId, userId, sn.title ?? "", sn.publishedAt ?? "")
+    .run();
+  return { ok: true, channelId: chId, title: sn.title ?? "", channelTitle: sn.channelTitle ?? "" };
+};
+
+export const removeSoloVideo = async (db: D1Database, videoId: string) => {
+  await ensureWlScan(db);
+  const r = await db
+    .prepare(`DELETE FROM wl_videos WHERE video_id = ?1 AND channel_id LIKE 'wch_solo_%'`)
+    .bind(videoId)
+    .run();
+  return { ok: !!(r as { meta?: { changes?: number } }).meta?.changes };
+};
 
 let ready = false;
 export const ensureWlScan = async (db: D1Database) => {
@@ -199,9 +253,15 @@ export const channelStates = async (db: D1Database, channels: ChannelRow[]) => {
   for (const [uid, list] of byUser) {
     const plan = await currentPlan(db, uid);
     const limit = PLAN_LIMITS[plan] ?? 0;
-    list.forEach((c, i) => {
+    let i = 0;
+    for (const c of list) {
+      if (isSolo(c)) {
+        out.set(c.id, { plan, state: limit === 0 ? "noplan" : "active" }); // solo videos: no channel limit
+        continue;
+      }
       out.set(c.id, { plan, state: limit === 0 ? "noplan" : i < limit ? "active" : "paused" });
-    });
+      i++;
+    }
   }
   return out;
 };
@@ -245,7 +305,7 @@ const uploadsSince = async (key: string, playlist: string, since: string, db: D1
 
 /** Queue new videos of every active / noplan channel (paused ones are skipped).
  *  Each channel is asked at most every 30 min unless `force`. */
-export const refreshChannels = async (env: Env, force = false) => {
+export const refreshChannels = async (env: Env, force = false, onlyId?: string) => {
   const db = env.DB;
   await ensureWlScan(db);
   if (!env.YOUTUBE_API_KEY) return { error: "YOUTUBE_API_KEY is not set", queued: 0, channels: 0 };
@@ -255,6 +315,8 @@ export const refreshChannels = async (env: Env, force = false) => {
   let queued = 0;
   let asked = 0;
   for (const c of channels) {
+    if (isSolo(c)) continue;
+    if (onlyId && c.id !== onlyId) continue;
     if (states.get(c.id)?.state === "paused") continue;
     if (!force && c.last_refresh) {
       const age = (now.getTime() - new Date(c.last_refresh + "Z").getTime()) / 60000;
@@ -301,10 +363,18 @@ export const takeQueue = async (db: D1Database, limit: number) => {
     )
     .bind(`-${LEASE_MIN} minutes`)
     .run();
+  // Videos of a channel that was removed (by the customer, with the account,
+  // or a Custom list) must not be scanned: drop the leftovers first.
+  await db
+    .prepare(
+      `DELETE FROM wl_videos WHERE status IN ('queued','scanning')
+         AND channel_id NOT IN (SELECT id FROM wl_channels)`,
+    )
+    .run();
   const rows = await db
     .prepare(
       `SELECT v.video_id, v.title, v.published_at, w.yt_title AS channel_title
-         FROM wl_videos v LEFT JOIN wl_channels w ON w.id = v.channel_id
+         FROM wl_videos v JOIN wl_channels w ON w.id = v.channel_id
         WHERE v.status = 'queued' ORDER BY v.published_at DESC LIMIT ?1`,
     )
     .bind(limit)
@@ -481,7 +551,7 @@ export const addManualVideo = async (env: Env, videoId: string) => {
   if (!ch) {
     // channels not resolved yet: resolve them now and try again
     for (const c of await allChannels(db)) {
-      if (c.yt_uploads) continue;
+      if (c.yt_uploads || isSolo(c)) continue;
       const r = await ytChannel(env.YOUTUBE_API_KEY, c.channel_url);
       if (r) {
         await db
@@ -564,7 +634,10 @@ export const addCustomChannel = async (env: Env, group: string, url: string) => 
  *  checked yet leave the queue. */
 export const removeCustomChannel = async (db: D1Database, id: string) => {
   await ensureWlScan(db);
-  await db.prepare(`DELETE FROM wl_videos WHERE channel_id = ?1 AND status = 'queued'`).bind(id).run();
+  await db
+    .prepare(`DELETE FROM wl_videos WHERE channel_id = ?1 AND status IN ('queued','scanning')`)
+    .bind(id)
+    .run();
   const r = await db
     .prepare(`DELETE FROM wl_channels WHERE id = ?1 AND custom_group IS NOT NULL`)
     .bind(id)

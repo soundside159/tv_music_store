@@ -37,7 +37,7 @@ OWN_FFMPEG = "H:\\BACKUP\\py\\SOFT\\Youtube downloader\\ffmpeg.exe"
 
 PACKAGES = ["numpy", "scipy", "psutil", "onnxruntime", "soundfile", "yt-dlp[default]", "deno",
             "imageio-ffmpeg", "sounddevice", "PyQt6"]
-PACKAGES_VERSION = "4"
+PACKAGES_VERSION = "5"  # bump = packages (yt-dlp first of all) are updated on the next start
 VENV = os.path.join(DATA, "venv")
 VENV_PY = os.path.join(VENV, "Scripts", "python.exe") if os.name == "nt" else os.path.join(VENV, "bin", "python")
 VENV_OK = os.path.join(VENV, "packages_ok.txt")
@@ -172,10 +172,13 @@ def ydl_run(opts, fn):
         with yt_dlp.YoutubeDL(opts) as y:
             return fn(y)
     except Exception as e:
-        if "Sign in" not in str(e) and "cookies" not in str(e):
+        forbidden = "403" in str(e) or "Forbidden" in str(e)
+        if "Sign in" not in str(e) and "cookies" not in str(e) and not forbidden:
             raise
+    # YouTube refuses one way of downloading now and then (HTTP 403): the other
+    # "player clients" usually work, without and then with the saved sign-in.
     close_login_window()
-    variants = []
+    variants = [{}] if forbidden else []
     if os.path.isfile(COOKIES_TXT):
         variants.append({"cookiefile": COOKIES_TXT})
     if os.path.isdir(os.path.join(LOGIN_PROFILE, "Default")):
@@ -183,7 +186,7 @@ def ydl_run(opts, fn):
                          "cookiefile": COOKIES_TXT})
     last = None
     for extra in variants:
-        for client in (None, "web", "mweb", "web_creator", "tv"):
+        for client in (None, "tv", "mweb", "web_safari", "web", "web_creator", "ios"):
             o = dict(opts, **extra)
             if client:
                 o["extractor_args"] = {"youtube": {"player_client": [client]}}
@@ -192,8 +195,11 @@ def ydl_run(opts, fn):
                     return fn(y)
             except Exception as e2:
                 last = e2
-                if "age" not in str(e2).lower():
+                if "age" not in str(e2).lower() and "403" not in str(e2) and "Forbidden" not in str(e2):
                     break
+    if last is not None and ("403" in str(last) or "Forbidden" in str(last)):
+        raise RuntimeError("YouTube refused the download (HTTP 403) with every method. It is usually "
+                           "temporary: the video is checked again later.")
     raise RuntimeError("YouTube needs sign-in (Settings -> Sign in to YouTube). %s"
                        % (str(last).splitlines()[0] if last else ""))
 
@@ -241,8 +247,14 @@ class Base:
 
     def load(self):
         if os.path.isfile(DB_PATH) and os.path.isfile(DB_INDEX):
-            self.ht = fp.load_db(DB_PATH)
-            self.meta = json.load(open(DB_INDEX, encoding="utf-8"))
+            try:
+                self.ht = fp.load_db(DB_PATH)
+                self.meta = json.load(open(DB_INDEX, encoding="utf-8"))
+            except Exception:
+                # a damaged base (e.g. the PC switched off while saving): start a new one,
+                # the tracks are still on disk so rebuilding is quick
+                self.ht, self.meta = None, {}
+                return False
             for k, m in self.meta.items():  # site tracks always live in the current catalog folder
                 if m.get("source", "site") == "site":
                     m["path"] = os.path.join(CATALOG_DIR, k + ".mp3")
@@ -356,8 +368,14 @@ class Base:
         return added
 
     def save(self):
-        self.ht.save(DB_PATH)
-        json.dump(self.meta, open(DB_INDEX, "w", encoding="utf-8"))
+        # write next to the real files, then swap: a crash never leaves half a base
+        import gzip
+        with gzip.open(DB_PATH + ".tmp", "wb") as f:  # closed for sure before the swap
+            self.ht.save(DB_PATH + ".tmp", file_object=f)
+        os.replace(DB_PATH + ".tmp", DB_PATH)
+        with open(DB_INDEX + ".tmp", "w", encoding="utf-8") as f:
+            json.dump(self.meta, f)
+        os.replace(DB_INDEX + ".tmp", DB_INDEX)
 
     def title(self, name):
         m = self.meta.get(name)
@@ -1114,6 +1132,8 @@ class App(QtWidgets.QMainWindow):
         set_store(self.settings.get("store_dir") or None)
         MATCH.update(self.settings.get("match") or {})
         self.view_rows = []
+        self.retried = set()  # videos that got one more try after a YouTube 403
+        self.overview = None  # Admin -> Whitelisting data (customers, channels, finds)
         self.hcache = {}  # videoId -> {"h", "dur"} fingerprint of checked videos (this session)
         self.base = Base()
         self.sig = Signals()
@@ -1277,6 +1297,7 @@ class App(QtWidgets.QMainWindow):
                 self.stage("Site not reachable", 0)
         else:
             self.stage("Enter the admin token in Settings", 0)
+        self.load_overview()
         self.ui(self.refresh_status)
 
     # ---- Scanner page --------------------------------------------------------
@@ -1284,10 +1305,8 @@ class App(QtWidgets.QMainWindow):
         w = QtWidgets.QWidget()
         l = QtWidgets.QVBoxLayout(w)
         l.setContentsMargins(0, 0, 0, 0)
+        l.setSpacing(10)
         l.addWidget(label("Whitelist Scanner", "h1"))
-        l.addWidget(label("Takes new videos of whitelisted channels from the site, finds our tracks in them and "
-                          "sends the results to Admin -> Whitelisting. Leave it running.", "sub"))
-        l.addSpacing(10)
         c = card()
         cl = QtWidgets.QHBoxLayout(c)
         cl.setContentsMargins(18, 14, 18, 14)
@@ -1301,24 +1320,180 @@ class App(QtWidgets.QMainWindow):
         col.addWidget(self.st_title)
         col.addWidget(self.st_sub)
         cl.addLayout(col, 1)
-        self.k_checked = self.kpi(cl, "0", "videos checked")
-        self.k_found = self.kpi(cl, "0", "with our music")
+        self.k_customers = self.kpi(cl, "-", "customers")
+        self.k_channels = self.kpi(cl, "-", "channels")
+        self.k_checked = self.kpi(cl, "-", "videos checked")
+        self.k_found = self.kpi(cl, "-", "with our music")
+        self.k_queue = self.kpi(cl, "-", "in the queue")
         self.btn_run = QtWidgets.QPushButton("Start scanning")
         self.btn_run.setObjectName("gold")
         self.btn_run.clicked.connect(self.toggle)
         cl.addWidget(self.btn_run)
         l.addWidget(c)
-        l.addSpacing(8)
-        l.addWidget(label("LAST VIDEOS", "lbl"))
+
+        split = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
+        split.setHandleWidth(10)
+        top = QtWidgets.QWidget()
+        tl = QtWidgets.QVBoxLayout(top)
+        tl.setContentsMargins(0, 0, 0, 0)
+        tl.setSpacing(6)
+        row = QtWidgets.QHBoxLayout()
+        cap = label("CUSTOMERS AND CHANNELS", "lbl")
+        cap.setWordWrap(False)
+        row.addWidget(cap)
+        row.addStretch(1)
+        self.cust_filter = QtWidgets.QLineEdit()
+        self.cust_filter.setPlaceholderText("Find a customer, channel or video")
+        self.cust_filter.setFixedWidth(280)
+        self.cust_filter.textChanged.connect(lambda *_: self.fill_customers())
+        row.addWidget(self.cust_filter)
+        b = QtWidgets.QPushButton("Refresh")
+        b.setObjectName("ghost")
+        b.clicked.connect(lambda: self.bg(self.load_overview))
+        row.addWidget(b)
+        tl.addLayout(row)
+        self.cust = QtWidgets.QTreeWidget()
+        self.cust.setHeaderLabels(["Customer / channel / video", "Plan / state", "Checked", "Our music",
+                                   "Waiting", "Released"])
+        self.cust.setItemDelegate(KeepColors(self.cust))
+        self.cust.setUniformRowHeights(True)
+        hd = self.cust.header()
+        hd.setStretchLastSection(False)
+        hd.setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeMode.Stretch)
+        for i, wdt in enumerate([0, 170, 80, 85, 75, 80]):
+            if i:
+                self.cust.setColumnWidth(i, wdt)
+        self.cust.itemDoubleClicked.connect(self.open_cust_item)
+        tl.addWidget(self.cust, 1)
+        split.addWidget(top)
+
+        bottom = QtWidgets.QWidget()
+        bl = QtWidgets.QVBoxLayout(bottom)
+        bl.setContentsMargins(0, 0, 0, 0)
+        bl.setSpacing(6)
+        bl.addWidget(label("LAST VIDEOS CHECKED ON THIS COMPUTER", "lbl"))
         self.recent_list = QtWidgets.QTreeWidget()
         self.recent_list.setHeaderLabels(["Time", "Video", "Channel", "Found"])
         self.recent_list.setRootIsDecorated(False)
         self.recent_list.setAlternatingRowColors(True)
-        self.recent_list.setColumnWidth(0, 70)
-        self.recent_list.setColumnWidth(1, 360)
+        self.recent_list.setColumnWidth(0, 60)
+        self.recent_list.setColumnWidth(1, 380)
         self.recent_list.setColumnWidth(2, 200)
-        l.addWidget(self.recent_list, 1)
+        bl.addWidget(self.recent_list, 1)
+        split.addWidget(bottom)
+        split.setSizes([460, 200])
+        l.addWidget(split, 1)
         return w
+
+    # ---- customers overview (from the site) ------------------------------------
+    def load_overview(self):
+        if not self.settings.get("token"):
+            return
+        try:
+            d = api(self.settings, "GET", "?action=overview", timeout=60)
+        except Exception as e:
+            self.log("Could not load the customer list: %s" % e)
+            return
+        if d.get("error"):
+            self.log("Could not load the customer list: %s" % d["error"])
+            return
+        self.overview = d
+        self.ui(self.fill_customers)
+
+    def fill_customers(self):
+        d = self.overview
+        if not d:
+            return
+        chans = d.get("channels") or []
+        matches = d.get("matches") or []
+        by_chan = {}
+        for m in matches:
+            by_chan.setdefault(m.get("channelId"), []).append(m)
+        customers = {c["userId"] for c in chans if not c.get("group")}
+        found_videos = {m["videoId"] for m in matches}
+        self.k_customers.setText(str(len(customers)))
+        self.k_channels.setText(str(len(chans)))
+        self.k_checked.setText(str(sum(int(c.get("checked") or 0) for c in chans)))
+        self.k_found.setText(str(len(found_videos)))
+        self.k_queue.setText(str((d.get("scanner") or {}).get("queue", 0)))
+
+        q = self.cust_filter.text().strip().lower()
+        groups = {}
+        for c in chans:
+            key = ("custom", c["group"]) if c.get("group") else ("user", c["userId"])
+            groups.setdefault(key, []).append(c)
+        rank = {"active": 0, "paused": 1, "noplan": 2}
+
+        def group_sort(item):
+            (kind, _k), lst = item
+            best = min(rank.get(c["state"], 3) for c in lst)
+            return (kind == "custom", best, (lst[0].get("email") or lst[0].get("group") or "").lower())
+
+        plan_look = {"max": ("MAX", GOLD), "pro": ("PRO", GOLD), "custom": ("CUSTOM LIST", "#7cc7ff")}
+        state_look = {"active": ("Protected", GREEN), "paused": ("Paused: over plan limit", "#9a9a9a"),
+                      "noplan": ("No plan: claims not released", ORANGE)}
+        expanded = {self.cust.topLevelItem(i).data(0, 256) for i in range(self.cust.topLevelItemCount())
+                    if self.cust.topLevelItem(i).isExpanded()}
+        self.cust.clear()
+        bold = QtGui.QFont()
+        bold.setBold(True)
+        for (kind, key), lst in sorted(groups.items(), key=group_sort):
+            name = ("[Custom] " + key) if kind == "custom" else (lst[0].get("email") or key)
+            vids_all = [m for c in lst for m in by_chan.get(c["id"], [])]
+            text_all = " ".join([name] + [c.get("title") or c.get("url") or "" for c in lst] +
+                                [m.get("videoTitle") or "" for m in vids_all]).lower()
+            if q and q not in text_all:
+                continue
+            plan = "custom" if kind == "custom" else lst[0].get("plan") or "free"
+            pl_text, pl_col = plan_look.get(plan, ("NO PLAN", ORANGE))
+            waiting = sum(int(c.get("waiting") or 0) for c in lst)
+            top = QtWidgets.QTreeWidgetItem([
+                "%s   (%d channel%s)" % (name, len(lst), "" if len(lst) == 1 else "s"), pl_text,
+                str(sum(int(c.get("checked") or 0) for c in lst)), str(len({m["videoId"] for m in vids_all})),
+                str(waiting), str(sum(int(c.get("released") or 0) for c in lst))])
+            top.setData(0, 256, "%s:%s" % (kind, key))
+            top.setFont(0, bold)
+            top.setForeground(1, QtGui.QBrush(QtGui.QColor(pl_col)))
+            top.setFont(1, bold)
+            if waiting:
+                top.setForeground(4, QtGui.QBrush(QtGui.QColor(RED)))
+            self.cust.addTopLevelItem(top)
+            for c in sorted(lst, key=lambda c: rank.get(c["state"], 3)):
+                st_text, st_col = state_look.get(c["state"], (c["state"], "#9a9a9a"))
+                vids = by_chan.get(c["id"], [])
+                ch = QtWidgets.QTreeWidgetItem([
+                    c.get("title") or c.get("url") or "", st_text, str(c.get("checked") or 0),
+                    str(len({m["videoId"] for m in vids})), str(c.get("waiting") or 0), str(c.get("released") or 0)])
+                ch.setData(0, 256, c.get("url") or "")
+                ch.setToolTip(0, "%s\nVideos checked from %s" % (c.get("url") or "", c.get("checkFrom") or "?"))
+                ch.setForeground(1, QtGui.QBrush(QtGui.QColor(st_col)))
+                top.addChild(ch)
+                per_video = {}
+                for m in vids:
+                    per_video.setdefault(m["videoId"], []).append(m)
+                for vid, ms in sorted(per_video.items(), key=lambda x: x[1][0].get("publishedAt") or "", reverse=True):
+                    states = {m["state"] for m in ms}
+                    if "in_sheet" in states or "new" in states:
+                        vs, vc = "waiting for release", RED
+                    elif states == {"released"}:
+                        vs, vc = "released", GREEN
+                    elif "not_eligible" in states:
+                        vs, vc = "no plan when published", ORANGE
+                    else:
+                        vs, vc = ", ".join(sorted(states)), "#9a9a9a"
+                    vi = QtWidgets.QTreeWidgetItem([
+                        "%s   -   %s" % (ms[0].get("videoTitle") or vid, ", ".join(sorted({m["track"] for m in ms}))),
+                        vs, "", "", "", ""])
+                    vi.setData(0, 256, "https://www.youtube.com/watch?v=" + vid)
+                    vi.setForeground(1, QtGui.QBrush(QtGui.QColor(vc)))
+                    vi.setToolTip(0, "Double-click to open the video")
+                    ch.addChild(vi)
+            top.setExpanded(bool(q) or top.data(0, 256) in expanded or len(groups) <= 6)
+
+    def open_cust_item(self, it, _col):
+        url = it.data(0, 256) or ""
+        if url.startswith("http"):
+            QtGui.QDesktopServices.openUrl(QtCore.QUrl(url))
 
     def kpi(self, lay, val, text):
         box = QtWidgets.QVBoxLayout()
@@ -1341,10 +1516,6 @@ class App(QtWidgets.QMainWindow):
                              % (self.settings["site"].replace("https://", ""), len(self.base.meta),
                                 self.settings["interval_min"])))
         self.btn_run.setText("Stop" if on else "Start scanning")
-        checked = len(self.recent)
-        found = sum(1 for r in self.recent if r["found"])
-        self.k_checked.setText(str(checked))
-        self.k_found.setText(str(found))
         self.side_status.setText(("Scanner: running" if on else "Scanner: stopped"))
         n_local = sum(1 for m in self.base.meta.values() if m.get("source") == "local")
         self.base_lbl.setText("Track base: %d tracks from the site + %d from the unreleased folder "
@@ -1392,6 +1563,7 @@ class App(QtWidgets.QMainWindow):
                     self.scan_one(v)
         finally:
             self.busy = False
+            self.load_overview()
             self.ui(self.refresh_status)
 
     def recheck_fresh(self):
@@ -1450,6 +1622,16 @@ class App(QtWidgets.QMainWindow):
                         pass
         except Exception as e:
             msg = str(e).splitlines()[0] if str(e) else repr(e)
+            if "403" in msg and v["videoId"] not in self.retried:
+                # YouTube said no this time: back into the queue, tried again next round
+                self.retried.add(v["videoId"])
+                self.log("%s: YouTube refused the download (403), will try again later" % title)
+                try:
+                    api(self.settings, "POST", "", {"action": "requeue", "videoId": v["videoId"]})
+                except Exception:
+                    pass
+                self.add_recent(v, "retry later (YouTube 403)")
+                return
             self.log("%s: FAILED %s" % (title, msg))
             try:
                 api(self.settings, "POST", "", {"action": "result", "videoId": v["videoId"], "error": msg})
@@ -1458,14 +1640,17 @@ class App(QtWidgets.QMainWindow):
             self.add_recent(v, "error: " + msg[:60])
 
     def add_recent(self, v, found):
+        problem = bool(found) and (found.startswith("error") or found.startswith("retry"))
         rec = {"time": time.strftime("%H:%M"), "title": v.get("title", ""), "channel": v.get("channelTitle", ""),
-               "found": found if found and not found.startswith("error") else ""}
+               "found": found if found and not problem else ""}
         self.recent.insert(0, rec)
 
         def put():
             it = QtWidgets.QTreeWidgetItem([rec["time"], rec["title"], rec["channel"], found or "-"])
             if rec["found"]:
                 it.setForeground(3, QtGui.QBrush(QtGui.QColor(RED)))
+            elif problem:
+                it.setForeground(3, QtGui.QBrush(QtGui.QColor(ORANGE)))
             self.recent_list.insertTopLevelItem(0, it)
             self.refresh_status()
         self.ui(put)

@@ -134,6 +134,19 @@ export const onRequestDelete = async (ctx: Ctx) => {
   await ensureWhitelistTable(db);
   const id = new URL(ctx.request.url).searchParams.get("id");
   if (!id) return json({ error: "id required" }, 400);
+  // Videos of this channel that are still waiting for the scanner go too;
+  // results already found stay as history.
+  try {
+    await db
+      .prepare(
+        `DELETE FROM wl_videos WHERE channel_id = ?1 AND status IN ('queued','scanning')
+           AND channel_id IN (SELECT id FROM wl_channels WHERE id = ?1 AND user_id = ?2)`,
+      )
+      .bind(id, user.id)
+      .run();
+  } catch {
+    // wl_videos not created yet - nothing queued
+  }
   await db
     .prepare(`DELETE FROM wl_channels WHERE id = ?1 AND user_id = ?2`)
     .bind(id, user.id)

@@ -7,7 +7,7 @@ import { getSessionUser, json, OWNER_EMAIL, readJson, type Ctx } from "./_utils"
 //                                   trackSlugs = catalogue tracks, trackNames =
 //                                   free-typed titles (the customer may type
 //                                   anything; legacy trackSlug also accepted).
-//                                   At least ONE track is required. The video's
+//                                   The track is optional. The video's
 //                                   YouTube title is captured and stored.
 //                                   Re-submitting the same video merges the
 //                                   tracks into the open ticket.
@@ -64,7 +64,7 @@ const ensureClaimsTable = async (ctx: Ctx) => {
   // The prod table pre-dates these columns; CREATE TABLE IF NOT EXISTS never
   // alters an existing table, so add them the same self-healing way
   // wl_channels got channel_ref.
-  for (const col of ["track_ids TEXT", "track_names TEXT", "video_title TEXT"]) {
+  for (const col of ["track_ids TEXT", "track_names TEXT", "video_title TEXT", "details TEXT"]) {
     try {
       await ctx.env.DB.prepare(`ALTER TABLE claim_requests ADD COLUMN ${col}`).run();
     } catch {
@@ -119,7 +119,10 @@ export const onRequestPost = async (ctx: Ctx) => {
     trackSlug?: string;
     trackSlugs?: string[];
     trackNames?: string[];
+    details?: string;
   }>(ctx.request);
+  // Optional free text from the customer (track name, where the music plays...).
+  const details = typeof body?.details === "string" ? body.details.trim().slice(0, 1000) : "";
   const raw = body?.videoUrl?.trim() ?? "";
   const videoId = videoIdOf(raw);
   if (!videoId) {
@@ -143,11 +146,8 @@ export const onRequestPost = async (ctx: Ctx) => {
     ),
   ].slice(0, 10);
 
-  // A claim without a track is useless to everyone — we would not know what to
-  // release. The form enforces this too; this is the backstop.
-  if (slugsIn.length === 0 && freeNames.length === 0) {
-    return json({ error: "Name at least one track used in the video", code: "notrack" }, 400);
-  }
+  // The track is optional (owner 2026-11-05): the whitelist scanner can tell
+  // which of our tracks plays in the video.
 
   // Ask YouTube whether the video exists and whether we can see it (and grab
   // its title for the owner's queue and the customer's list).
@@ -210,7 +210,7 @@ export const onRequestPost = async (ctx: Ctx) => {
   // Already asked for this one? Don't create a second ticket — but DO merge any
   // newly named tracks into the open one, so "oh, and this track too" works.
   const existing = await ctx.env.DB.prepare(
-    `SELECT id, track_ids, track_names, track_id FROM claim_requests
+    `SELECT id, track_ids, track_names, track_id, details FROM claim_requests
       WHERE user_id = ?1 AND video_url = ?2 AND status <> 'done' LIMIT 1`,
   )
     .bind(user.id, url)
@@ -219,6 +219,7 @@ export const onRequestPost = async (ctx: Ctx) => {
       track_ids: string | null;
       track_names: string | null;
       track_id: string | null;
+      details: string | null;
     }>();
   if (existing) {
     const mergedIds = [
@@ -233,7 +234,8 @@ export const onRequestPost = async (ctx: Ctx) => {
       `UPDATE claim_requests
           SET track_ids = ?1, track_names = ?2,
               track_id = COALESCE(track_id, ?3),
-              video_title = COALESCE(video_title, ?4)
+              video_title = COALESCE(video_title, ?4),
+              details = ?6
         WHERE id = ?5`,
     )
       .bind(
@@ -242,6 +244,7 @@ export const onRequestPost = async (ctx: Ctx) => {
         trackIds[0] ?? null,
         videoTitle,
         existing.id,
+        [existing.details, details].filter(Boolean).join("\n").slice(0, 2000) || null,
       )
       .run();
     return json({ ok: true, duplicate: true });
@@ -253,8 +256,8 @@ export const onRequestPost = async (ctx: Ctx) => {
 
   await ctx.env.DB.prepare(
     `INSERT INTO claim_requests
-       (user_id, track_id, composer_id, video_url, status, track_ids, track_names, video_title)
-     VALUES (?1, ?2, ?3, ?4, 'new', ?5, ?6, ?7)`,
+       (user_id, track_id, composer_id, video_url, status, track_ids, track_names, video_title, details)
+     VALUES (?1, ?2, ?3, ?4, 'new', ?5, ?6, ?7, ?8)`,
   )
     .bind(
       user.id,
@@ -264,6 +267,7 @@ export const onRequestPost = async (ctx: Ctx) => {
       trackIds.length > 0 ? JSON.stringify(trackIds) : null,
       freeNames.length > 0 ? JSON.stringify(freeNames) : null,
       videoTitle,
+      details || null,
     )
     .run();
 
@@ -280,6 +284,7 @@ interface ClaimRow {
   track_id: string | null;
   track_ids: string | null;
   track_names: string | null;
+  details: string | null;
   user_email?: string;
   user_name?: string | null;
   user_id?: string;
@@ -297,7 +302,7 @@ export const onRequestGet = async (ctx: Ctx) => {
   const rows = all
     ? await ctx.env.DB.prepare(
         `SELECT c.id, c.video_url, c.video_title, c.status, c.created_at, c.resolved_at,
-                c.track_id, c.track_ids, c.track_names, c.user_id,
+                c.track_id, c.track_ids, c.track_names, c.details, c.user_id,
                 u.email AS user_email, u.name AS user_name
            FROM claim_requests c
            LEFT JOIN users u ON u.id = c.user_id
@@ -305,7 +310,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       ).all<ClaimRow>()
     : await ctx.env.DB.prepare(
         `SELECT c.id, c.video_url, c.video_title, c.status, c.created_at, c.resolved_at,
-                c.track_id, c.track_ids, c.track_names
+                c.track_id, c.track_ids, c.track_names, c.details
            FROM claim_requests c
           WHERE c.user_id = ?1
           ORDER BY c.created_at DESC LIMIT 100`,
@@ -340,6 +345,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       track_title: tracks[0]?.title ?? null, // legacy field, older UI reads it
       tracks,
       track_names: parseIds(r.track_names), // free-typed titles
+      details: r.details ?? null,
       ...(all
         ? { user_id: r.user_id, user_email: r.user_email, user_name: r.user_name ?? null }
         : {}),

@@ -25,6 +25,8 @@ interface Claim {
   tracks: ClaimTrack[];
   /** Free-typed track titles (customer wrote anything) — no composer known. */
   trackNames: string[];
+  /** Optional free text from the customer (track, where it plays, anything). */
+  details: string | null;
   userId: string | null;
   userEmail: string;
   userName: string | null;
@@ -68,6 +70,7 @@ const AdminClaims = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => 
           resolved_at: string | null;
           tracks?: ClaimTrack[];
           track_names?: string[];
+          details?: string | null;
           user_id?: string;
           user_email?: string;
           user_name?: string | null;
@@ -85,6 +88,7 @@ const AdminClaims = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => 
           resolvedAt: c.resolved_at,
           tracks: c.tracks ?? [],
           trackNames: c.track_names ?? [],
+          details: c.details ?? null,
           userId: c.user_id ?? null,
           userEmail: c.user_email ?? "",
           userName: c.user_name ?? null,
@@ -185,6 +189,7 @@ const AdminClaims = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => 
       (t) => t.title.toLowerCase().includes(q) || (t.composer ?? "").toLowerCase().includes(q),
     ) ||
     c.trackNames.some((n) => n.toLowerCase().includes(q)) ||
+    (c.details ?? "").toLowerCase().includes(q) ||
     (c.videoTitle ?? "").toLowerCase().includes(q);
 
   // ≤200 rows — plain filtering, no memo gymnastics needed.
@@ -372,8 +377,11 @@ const AdminClaims = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => 
                   )}
                 </td>
                 <td className="py-3 pr-4">
+                  {c.details && (
+                    <p className="mb-1 whitespace-pre-line text-xs text-muted-foreground">{c.details}</p>
+                  )}
                   {c.tracks.length === 0 && c.trackNames.length === 0 ? (
-                    <span className="text-xs text-muted-foreground">not specified</span>
+                    !c.details && <span className="text-xs text-muted-foreground">not specified</span>
                   ) : (
                     <ul className="space-y-0.5">
                       {c.tracks.map((t) => (
