@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, ExternalLink, Loader2, Mail, RefreshCw, Search, Send } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink, Loader2, Mail, Plus, RefreshCw, Search, Send, X } from "lucide-react";
 import { toast } from "sonner";
 
 // Admin "Whitelisting" (owner design 2026-11-03):
@@ -8,6 +8,8 @@ import { toast } from "sonner";
 //               composers' Google Sheets and email them how many wait.
 //   Channels  - every customer channel grouped by customer, with released /
 //               not released counts and the "check videos from" date.
+//   Custom    - the owner's own lists of channels (e.g. "Pixabay": other stocks
+//               ask him to release claims). No customer, no plan, always released.
 //   Scanner   - desktop scanner status + composer sheet settings.
 // Data: /api/admin/wl-scan (functions/api/admin/_wlscan.ts, _wlsheets.ts).
 
@@ -40,6 +42,7 @@ interface Channel {
   addedAt: string;
   checkFrom: string;
   checkFromCustom: boolean;
+  group: string;
   state: "active" | "paused" | "noplan";
   plan: string;
   checked: number;
@@ -105,7 +108,7 @@ const Pill = ({ ok, children }: { ok: boolean; children: React.ReactNode }) => (
 const AdminWhitelist = () => {
   const [data, setData] = useState<Overview | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [tab, setTab] = useState<"composers" | "channels" | "scanner">("composers");
+  const [tab, setTab] = useState<"composers" | "channels" | "custom" | "scanner">("composers");
   const [busy, setBusy] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [showReleased, setShowReleased] = useState(false);
@@ -213,7 +216,8 @@ const AdminWhitelist = () => {
         {(
           [
             ["composers", "Composers"],
-            ["channels", `Channels · ${data.channels.length}`],
+            ["channels", `Channels · ${data.channels.filter((c) => !c.group).length}`],
+            ["custom", `Custom · ${data.channels.filter((c) => c.group).length}`],
             ["scanner", "Scanner"],
           ] as const
         ).map(([id, label]) => (
@@ -361,8 +365,14 @@ const AdminWhitelist = () => {
                             </span>
                           </div>
                           <div className="min-w-0">
-                            <Pill ok>{(ch?.plan ?? "paid").replace(/^./, (x) => x.toUpperCase())} · when published</Pill>
-                            <span className="block truncate text-[11px] text-muted-foreground">{m.email}</span>
+                            {ch?.group ? (
+                              <Pill ok>Custom · {ch.group}</Pill>
+                            ) : (
+                              <>
+                                <Pill ok>{(ch?.plan ?? "paid").replace(/^./, (x) => x.toUpperCase())} · when published</Pill>
+                                <span className="block truncate text-[11px] text-muted-foreground">{m.email}</span>
+                              </>
+                            )}
                           </div>
                           <div className={`text-center text-[15px] font-bold ${d !== null ? "text-red-400" : "text-muted-foreground/50"}`}>
                             {d !== null ? d : "-"}
@@ -387,6 +397,7 @@ const AdminWhitelist = () => {
       )}
 
       {tab === "channels" && <ChannelsTab data={data} reload={load} />}
+      {tab === "custom" && <CustomTab data={data} reload={load} />}
       {tab === "scanner" && (
         <ScannerTab data={data} online={!!scannerOnline} busy={busy} act={act} reload={load} />
       )}
@@ -397,7 +408,7 @@ const AdminWhitelist = () => {
 const ChannelsTab = ({ data, reload }: { data: Overview; reload: () => void }) => {
   const groups = useMemo(() => {
     const g = new Map<string, Channel[]>();
-    for (const c of data.channels) g.set(c.userId, [...(g.get(c.userId) ?? []), c]);
+    for (const c of data.channels) if (!c.group) g.set(c.userId, [...(g.get(c.userId) ?? []), c]);
     return [...g.values()];
   }, [data]);
   const setFrom = async (id: string, date: string | null) => {
@@ -476,6 +487,177 @@ const ChannelsTab = ({ data, reload }: { data: Overview; reload: () => void }) =
           </div>
         );
       })}
+    </div>
+  );
+};
+
+// Owner's own channel lists ("Pixabay", ...). Found tracks go into the
+// composers' sheets like customer videos, marked "[Pixabay] Channel".
+const CustomTab = ({ data, reload }: { data: Overview; reload: () => void }) => {
+  const groups = useMemo(() => {
+    const g = new Map<string, Channel[]>();
+    for (const c of data.channels) if (c.group) g.set(c.group, [...(g.get(c.group) ?? []), c]);
+    return [...g.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [data]);
+  const [group, setGroup] = useState("");
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const add = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!group.trim() || !url.trim()) {
+      toast.error("Enter a list name and a channel link");
+      return;
+    }
+    setBusy(true);
+    try {
+      const d = await post({ action: "custom_add", group: group.trim(), url: url.trim() });
+      toast.success(`${String(d.title || "Channel")} added to ${group.trim()}`);
+      setUrl("");
+      reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async (c: Channel) => {
+    if (!window.confirm(`Remove "${c.title || c.url}" from ${c.group}? Videos found so far stay in the sheets.`)) return;
+    try {
+      await post({ action: "custom_remove", channelId: c.id });
+      toast.success("Channel removed");
+      reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed");
+    }
+  };
+  const setFrom = async (id: string, date: string | null) => {
+    try {
+      await post({ action: "check_from", channelId: id, date });
+      toast.success(date ? `Videos from ${date} will be checked` : "Back to the default date");
+      reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed");
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <form onSubmit={add} className="rounded-2xl border border-border bg-card px-5 py-4">
+        <h3 className="font-body text-sm font-semibold text-foreground">Add a channel to your own list</h3>
+        <p className="mt-1 max-w-2xl font-body text-xs text-muted-foreground">
+          For channels other stocks ask you to whitelist. No customer or plan needed: claims on our tracks are always
+          released. New videos are checked from the day you add the channel (change the date below for older ones).
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <input
+            value={group}
+            onChange={(e) => setGroup(e.target.value)}
+            list="wl-custom-groups"
+            placeholder="List name, e.g. Pixabay"
+            className="h-9 w-56 rounded-lg border border-border bg-background px-3 font-body text-sm text-foreground"
+          />
+          <datalist id="wl-custom-groups">
+            {groups.map(([g]) => (
+              <option key={g} value={g} />
+            ))}
+          </datalist>
+          <input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="YouTube channel link (youtube.com/@name)"
+            className="h-9 min-w-[260px] flex-1 rounded-lg border border-border bg-background px-3 font-body text-sm text-foreground"
+          />
+          <button
+            type="submit"
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 font-body text-xs font-bold text-black disabled:opacity-40"
+            style={{ background: GOLD }}
+          >
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+            Add channel
+          </button>
+        </div>
+        {groups.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {groups.map(([g]) => (
+              <button
+                key={g}
+                type="button"
+                onClick={() => setGroup(g)}
+                className={`rounded-full border px-2.5 py-0.5 font-body text-[11px] ${
+                  group === g ? "border-[#F4C430] text-[#F4C430]" : "border-border text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {g}
+              </button>
+            ))}
+          </div>
+        )}
+      </form>
+
+      {groups.length === 0 && <p className="font-body text-sm text-muted-foreground">No custom lists yet.</p>}
+
+      {groups.map(([g, list], gi) => (
+        <div key={g} className="overflow-hidden rounded-2xl border border-border bg-card">
+          <div className="h-[3px]" style={{ background: PALETTE[(gi + 2) % PALETTE.length] }} />
+          <div className="flex flex-wrap items-center gap-3 px-4 pt-3 font-body text-xs text-muted-foreground">
+            <b className="text-base text-foreground">{g}</b>
+            {list.length} channel{list.length === 1 ? "" : "s"}
+          </div>
+          <div className="px-4 pb-2">
+            <div className="hidden grid-cols-[1.6fr_1fr_0.6fr_0.7fr_0.6fr_32px] gap-3 py-2 font-body text-[11px] uppercase tracking-wide text-muted-foreground md:grid">
+              <div>Channel</div>
+              <div>Check videos from</div>
+              <div>Checked</div>
+              <div>Not released</div>
+              <div>Released</div>
+              <div />
+            </div>
+            {list.map((c) => (
+              <div
+                key={c.id}
+                className="grid grid-cols-1 items-center gap-3 border-t border-border/40 py-2 font-body text-[13px] md:grid-cols-[1.6fr_1fr_0.6fr_0.7fr_0.6fr_32px]"
+              >
+                <div className="min-w-0">
+                  <a href={c.url} target="_blank" rel="noreferrer" className="block truncate font-semibold text-foreground hover:text-[#F4C430]">
+                    {c.title || c.url}
+                  </a>
+                  <span className="block truncate text-[11px] text-muted-foreground">
+                    {c.url.replace(/^https?:\/\/(www\.)?/, "")} · added {shortDate(c.addedAt)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    defaultValue={c.checkFrom}
+                    onBlur={(e) => {
+                      if (e.target.value && e.target.value !== c.checkFrom) void setFrom(c.id, e.target.value);
+                    }}
+                    className="h-8 rounded-lg border border-border bg-background px-2 font-body text-xs text-foreground"
+                  />
+                  {c.checkFromCustom && (
+                    <button type="button" onClick={() => void setFrom(c.id, null)} className="text-[11px] text-muted-foreground hover:text-foreground">
+                      reset
+                    </button>
+                  )}
+                </div>
+                <div>{c.checked}</div>
+                <div className={`text-base font-bold ${c.waiting ? "text-red-400" : "text-foreground"}`}>{c.waiting}</div>
+                <div className="text-base font-bold text-emerald-300">{c.released}</div>
+                <button
+                  type="button"
+                  onClick={() => void remove(c)}
+                  aria-label="Remove channel"
+                  className="rounded-md p-1 text-muted-foreground transition-colors hover:text-red-400"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 };

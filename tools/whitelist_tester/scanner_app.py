@@ -671,6 +671,10 @@ class App(QtWidgets.QMainWindow):
 
     def _stage(self, text, frac):
         self.stage_lbl.setText(text)
+        # The bar is shown only while something is being done; when a step is
+        # finished (or the scanner just waits) it disappears.
+        idle = frac >= 1 or text.startswith(("Error", "Site not", "Enter the", "Waiting"))
+        self.pbar.setVisible(not idle)
         if frac < 0:
             self.pbar.setRange(0, 0)
         else:

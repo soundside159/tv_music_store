@@ -11,9 +11,14 @@
 //      used while subscribed stay licensed forever)
 //   -> composer sheets / emails (_wlsheets.ts) move matches to in_sheet and
 //      read 'Released' back.
+//
+// Custom lists (owner, 2026-11-05): channels the owner adds himself in
+// Admin -> Whitelisting -> Custom, grouped by a name (e.g. "Pixabay": other
+// stocks ask him to release claims). They belong to no customer
+// (user_id = CUSTOM_USER), need no plan and are always released.
 
 import { bumpUsage } from "../_usage";
-import type { D1Database, Env } from "../_utils";
+import { newId, type D1Database, type Env } from "../_utils";
 import { ytChannel } from "./_whitelist";
 
 const YT = "https://www.googleapis.com/youtube/v3";
@@ -21,6 +26,7 @@ export const PLAN_LIMITS: Record<string, number> = { free: 0, pro: 3, max: 10 };
 const CHECK_FROM_MARGIN_DAYS = 2;
 const REFRESH_EVERY_MIN = 30;
 const LEASE_MIN = 60;
+export const CUSTOM_USER = "custom";
 
 let ready = false;
 export const ensureWlScan = async (db: D1Database) => {
@@ -30,6 +36,7 @@ export const ensureWlScan = async (db: D1Database) => {
     `ALTER TABLE wl_channels ADD COLUMN yt_title TEXT`,
     `ALTER TABLE wl_channels ADD COLUMN yt_uploads TEXT`,
     `ALTER TABLE wl_channels ADD COLUMN last_refresh TEXT`,
+    `ALTER TABLE wl_channels ADD COLUMN custom_group TEXT`,
   ]) {
     try {
       await db.prepare(sql).run();
@@ -139,13 +146,14 @@ export interface ChannelRow {
   last_refresh: string | null;
   user_created: string | null;
   email: string | null;
+  custom_group: string | null;
 }
 
 export const allChannels = async (db: D1Database): Promise<ChannelRow[]> => {
   const r = await db
     .prepare(
       `SELECT w.id, w.user_id, w.channel_url, w.added_at, w.check_from, w.yt_title, w.yt_uploads,
-              w.last_refresh, u.created_at AS user_created, u.email AS email
+              w.last_refresh, w.custom_group, u.created_at AS user_created, u.email AS email
          FROM wl_channels w LEFT JOIN users u ON u.id = w.user_id
         ORDER BY w.user_id, w.added_at`,
     )
@@ -162,7 +170,13 @@ export const checkFromOf = (c: ChannelRow) =>
 export const channelStates = async (db: D1Database, channels: ChannelRow[]) => {
   const out = new Map<string, { state: "active" | "paused" | "noplan"; plan: string }>();
   const byUser = new Map<string, ChannelRow[]>();
-  for (const c of channels) byUser.set(c.user_id, [...(byUser.get(c.user_id) ?? []), c]);
+  for (const c of channels) {
+    if (c.custom_group) {
+      out.set(c.id, { plan: "custom", state: "active" }); // owner's own list: always on
+      continue;
+    }
+    byUser.set(c.user_id, [...(byUser.get(c.user_id) ?? []), c]);
+  }
   for (const [uid, list] of byUser) {
     const plan = await currentPlan(db, uid);
     const limit = PLAN_LIMITS[plan] ?? 0;
@@ -315,9 +329,19 @@ export const saveResult = async (
 ) => {
   await ensureWlScan(db);
   const v = await db
-    .prepare(`SELECT video_id, channel_id, user_id, published_at, note FROM wl_videos WHERE video_id = ?1`)
+    .prepare(
+      `SELECT v.video_id, v.channel_id, v.user_id, v.published_at, v.note, w.custom_group
+         FROM wl_videos v LEFT JOIN wl_channels w ON w.id = v.channel_id WHERE v.video_id = ?1`,
+    )
     .bind(videoId)
-    .first<{ video_id: string; channel_id: string; user_id: string; published_at: string; note: string | null }>();
+    .first<{
+      video_id: string;
+      channel_id: string;
+      user_id: string;
+      published_at: string;
+      note: string | null;
+      custom_group: string | null;
+    }>();
   if (!v) return { ok: false, error: "unknown video" };
   if (error) {
     await db
@@ -328,7 +352,9 @@ export const saveResult = async (
   }
   // A video the owner added by hand (an old video of a customer he brought in)
   // is released whatever the date: that was his decision.
-  const eligible = v.note === "manual" || (await paidOn(db, v.user_id, v.published_at)) ? 1 : 0;
+  // Channels of the owner's Custom lists are always released.
+  const eligible =
+    v.custom_group || v.note === "manual" || (await paidOn(db, v.user_id, v.published_at)) ? 1 : 0;
   for (const m of matches) {
     const t = m.trackId
       ? await db
@@ -427,7 +453,11 @@ export const addManualVideo = async (env: Env, videoId: string) => {
       .bind(uploads)
       .first<{ id: string; user_id: string }>();
   }
-  if (!ch) return { error: `"${sn.channelTitle ?? "This channel"}" is not on any customer's whitelist.` };
+  if (!ch) {
+    return {
+      error: `"${sn.channelTitle ?? "This channel"}" is not on any customer's whitelist or Custom list.`,
+    };
+  }
   await db
     .prepare(
       `INSERT INTO wl_videos (video_id, channel_id, user_id, title, published_at, status, note)
@@ -442,4 +472,60 @@ export const addManualVideo = async (env: Env, videoId: string) => {
     .bind(videoId)
     .run();
   return { ok: true, channelTitle: sn.channelTitle ?? "" };
+};
+
+/** Owner adds a channel to one of his Custom lists (e.g. "Pixabay"). */
+export const addCustomChannel = async (env: Env, group: string, url: string) => {
+  const db = env.DB;
+  await ensureWlScan(db);
+  const name = group.trim().slice(0, 60);
+  const link = url.trim();
+  if (!name) return { error: "Enter a list name (for example Pixabay)." };
+  if (!/^(https?:\/\/)?(www\.|m\.)?youtube\.com\/(@[\w.-]+|channel\/[\w-]+|c\/[\w.-]+|user\/[\w.-]+)/i.test(link)) {
+    return { error: "Paste a YouTube channel link (youtube.com/@name or youtube.com/channel/...)." };
+  }
+  const full = link.startsWith("http") ? link : `https://${link}`;
+  let title = "";
+  let uploads: string | null = null;
+  if (env.YOUTUBE_API_KEY) {
+    void bumpUsage(db, "youtube", 1);
+    const ch = await ytChannel(env.YOUTUBE_API_KEY, full);
+    if (!ch) return { error: "YouTube does not know this channel. Check the link." };
+    title = ch.title;
+    uploads = ch.uploads;
+  }
+  if (uploads) {
+    const dup = await db
+      .prepare(`SELECT custom_group, user_id FROM wl_channels WHERE yt_uploads = ?1 LIMIT 1`)
+      .bind(uploads)
+      .first<{ custom_group: string | null; user_id: string }>();
+    if (dup) {
+      return {
+        error: dup.custom_group
+          ? `This channel is already in the "${dup.custom_group}" list.`
+          : "This channel is already on a customer's whitelist.",
+      };
+    }
+  }
+  const id = newId("wch");
+  await db
+    .prepare(
+      `INSERT INTO wl_channels (id, user_id, channel_url, channel_ref, yt_title, yt_uploads, custom_group)
+       VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6)`,
+    )
+    .bind(id, CUSTOM_USER, full, title || null, uploads, name)
+    .run();
+  return { ok: true, id, title };
+};
+
+/** Remove a Custom channel. Its found matches stay (history); videos not
+ *  checked yet leave the queue. */
+export const removeCustomChannel = async (db: D1Database, id: string) => {
+  await ensureWlScan(db);
+  await db.prepare(`DELETE FROM wl_videos WHERE channel_id = ?1 AND status = 'queued'`).bind(id).run();
+  const r = await db
+    .prepare(`DELETE FROM wl_channels WHERE id = ?1 AND custom_group IS NOT NULL`)
+    .bind(id)
+    .run();
+  return { ok: !!(r as { meta?: { changes?: number } }).meta?.changes };
 };

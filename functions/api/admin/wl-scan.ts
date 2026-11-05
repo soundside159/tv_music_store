@@ -1,12 +1,14 @@
 import { cachedValue } from "../_cache";
 import { adminTokenOk, getSessionUser, json, OWNER_EMAIL, readJson, type Ctx, type Env } from "../_utils";
 import {
+  addCustomChannel,
   addManualVideo,
   allChannels,
   channelStates,
   checkFromOf,
   ensureWlScan,
   refreshChannels,
+  removeCustomChannel,
   saveResult,
   scanCatalog,
   takeQueue,
@@ -29,6 +31,8 @@ import { emailComposers, getSheetsConfig, setSheetsConfig, sheetUrl, syncSheets,
 // POST {action:"sheets_sync"}    -> read "Released" back from the sheets
 // POST {action:"email_composers"}
 // POST {action:"sheets_config", scriptUrl, token, sheets:{composerId: sheetIdOrUrl}}
+// POST {action:"custom_add", group, url}   -> owner's Custom list channel
+// POST {action:"custom_remove", channelId}
 
 const SEEN_KEY = "wl_scanner_seen";
 
@@ -152,6 +156,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       addedAt: c.added_at,
       checkFrom: checkFromOf(c),
       checkFromCustom: !!c.check_from,
+      group: c.custom_group ?? "",
       state: states.get(c.id)?.state ?? "noplan",
       plan: states.get(c.id)?.plan ?? "free",
       checked: chk.get(c.id) ?? 0,
@@ -262,6 +267,12 @@ export const onRequestPost = async (ctx: Ctx) => {
       });
       return json({ ok: true });
     }
+    case "custom_add": {
+      const r = await addCustomChannel(ctx.env as Env, String(body.group ?? ""), String(body.url ?? ""));
+      return "error" in r && r.error ? json(r, 400) : json(r);
+    }
+    case "custom_remove":
+      return json(await removeCustomChannel(db, String(body.channelId ?? "")));
     case "requeue": {
       await db
         .prepare(`UPDATE wl_videos SET status = 'queued', leased_at = NULL WHERE video_id = ?1`)

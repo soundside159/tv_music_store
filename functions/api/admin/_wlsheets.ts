@@ -79,7 +79,7 @@ export const updateSheets = async (db: D1Database) => {
   const rows = await db
     .prepare(
       `SELECT m.id, m.composer_id, m.track_title, m.regions, m.video_id,
-              v.title AS video_title, v.published_at, w.yt_title AS channel_title
+              v.title AS video_title, v.published_at, w.yt_title AS channel_title, w.custom_group
          FROM wl_matches m
          LEFT JOIN wl_videos v ON v.video_id = m.video_id
          LEFT JOIN wl_channels w ON w.id = m.channel_id
@@ -95,6 +95,7 @@ export const updateSheets = async (db: D1Database) => {
       video_title: string | null;
       published_at: string | null;
       channel_title: string | null;
+      custom_group: string | null;
     }>();
   const byComposer = new Map<string, typeof rows.results>();
   for (const r of rows.results) {
@@ -122,7 +123,8 @@ export const updateSheets = async (db: D1Database) => {
           // keep empty
         }
         return [
-          r.channel_title ?? "",
+          // Custom-list channels show where the request came from: "[Pixabay] Channel"
+          (r.custom_group ? `[${r.custom_group}] ` : "") + (r.channel_title ?? ""),
           `https://www.youtube.com/watch?v=${r.video_id}`,
           r.video_title ?? "",
           r.track_title,
