@@ -78,7 +78,7 @@ export const updateSheets = async (db: D1Database) => {
   const c = await getSheetsConfig(db);
   const rows = await db
     .prepare(
-      `SELECT m.id, m.composer_id, m.track_title, m.regions, m.video_id,
+      `SELECT m.id, m.composer_id, m.track_title, m.regions, m.video_id, m.on_site,
               v.title AS video_title, v.published_at, w.yt_title AS channel_title, w.custom_group
          FROM wl_matches m
          LEFT JOIN wl_videos v ON v.video_id = m.video_id
@@ -89,6 +89,7 @@ export const updateSheets = async (db: D1Database) => {
     .all<{
       id: number;
       composer_id: string | null;
+      on_site: number | null;
       track_title: string;
       regions: string | null;
       video_id: string;
@@ -133,6 +134,7 @@ export const updateSheets = async (db: D1Database) => {
           "Release",
           "",
           `TVMS-${r.id}`,
+          r.on_site === 0 ? "Not yet" : "Yes",
         ];
       }),
     });

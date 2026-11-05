@@ -14,7 +14,7 @@
 var TOKEN = 'CHANGE_ME';
 
 var HEADER = ['Channel', 'Video link', 'Video title', 'Track found', 'Where in video',
-              'Video published', 'Action', 'Your notes', 'Ref'];
+              'Video published', 'Action', 'Your notes', 'Ref', 'On TV Music Store'];
 var COL_ACTION = 7;  // 1-based
 var COL_REF = 9;
 
@@ -30,12 +30,16 @@ function sheetOf(id) {
     sh.setFrozenRows(1);
     sh.setColumnWidth(1, 160); sh.setColumnWidth(2, 260); sh.setColumnWidth(3, 260);
     sh.setColumnWidth(4, 200); sh.setColumnWidth(5, 170); sh.setColumnWidth(6, 110);
-    sh.setColumnWidth(7, 110); sh.setColumnWidth(8, 220); sh.setColumnWidth(9, 90);
+    sh.setColumnWidth(7, 110); sh.setColumnWidth(8, 220); sh.setColumnWidth(9, 90); sh.setColumnWidth(10, 130);
     // Released = green, Release = red (conditional formatting on the Action column)
+    // On TV Music Store: "Not yet" = the track still has to be uploaded to the site (red)
     var col = sh.getRange('G2:G');
+    var site = sh.getRange('J2:J');
     sh.setConditionalFormatRules([
       SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Released').setBackground('#e6f4ea').setFontColor('#137333').setRanges([col]).build(),
-      SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Release').setBackground('#fce8e6').setFontColor('#c5221f').setRanges([col]).build()
+      SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Release').setBackground('#fce8e6').setFontColor('#c5221f').setRanges([col]).build(),
+      SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Not yet').setBackground('#fce8e6').setFontColor('#c5221f').setRanges([site]).build(),
+      SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Yes').setFontColor('#137333').setRanges([site]).build()
     ]);
   }
   return sh;
@@ -48,7 +52,11 @@ function doPost(e) {
     var sh = sheetOf(b.sheetId);
 
     if (b.action === 'append') {
-      var rows = b.rows || [];
+      var rows = (b.rows || []).map(function (r) {
+        // older site versions send 9 columns: pad to the header width
+        while (r.length < HEADER.length) r.push('');
+        return r.slice(0, HEADER.length);
+      });
       if (!rows.length) return out({ ok: true, added: 0 });
       sh.appendRow([b.date]);
       var dr = sh.getLastRow();

@@ -220,27 +220,84 @@ def download_audio(video_id, progress=None):
 
 
 # ------------------------------------------------------------ track base --
+UNRELEASED = os.path.join(HERE, "unreleased")  # your tracks not on the site yet: unreleased/<Composer>/<Track>.wav
+AUDIO_EXT = (".wav", ".mp3", ".flac", ".aif", ".aiff", ".ogg", ".m4a")
+DEFAULT_COMPOSERS = ["Lumine Wave", "Vicate", "DredStudio"]
+
+
+def norm_title(t):
+    return "".join(ch for ch in (t or "").lower() if ch.isalnum())
+
+
 class Base:
-    """Fingerprint base of the site's published tracks (full versions)."""
+    """Fingerprint base: the site's published tracks (full versions) plus the
+    tracks in the "unreleased" folder (not on the site yet).
+    Keys: site tracks = site track id, folder tracks = "local:<path>"."""
 
     def __init__(self):
         self.ht = None
-        self.meta = {}  # base name -> {id, title, composer, path, addedAt}
-        self.fresh = []  # (track id, hashes) added since the last re-check
+        self.meta = {}  # key -> {id, title, composer, path, addedAt, source, slug, mtime}
+        self.fresh = []  # (key, hashes) added since the last re-check
 
     def load(self):
         if os.path.isfile(DB_PATH) and os.path.isfile(DB_INDEX):
             self.ht = fp.load_db(DB_PATH)
             self.meta = json.load(open(DB_INDEX, encoding="utf-8"))
+            for k, m in self.meta.items():  # site tracks always live in the current catalog folder
+                if m.get("source", "site") == "site":
+                    m["path"] = os.path.join(CATALOG_DIR, k + ".mp3")
         return self.ht is not None
 
-    def update(self, settings, log, progress):
-        """Download new tracks from the site and add them to the base."""
-        tracks = api(settings, "GET", "?action=catalog", timeout=120)["tracks"]
-        os.makedirs(CATALOG_DIR, exist_ok=True)
+    def _new_table(self):
         if self.ht is None:
             import hash_table
             self.ht = hash_table.HashTable(hashbits=20, depth=100, maxtime=65536)
+
+    def _remove(self, key, log):
+        m = self.meta.pop(key, None)
+        try:
+            self.ht.remove(key)
+        except Exception:
+            pass
+        if m and m.get("source", "site") == "site":
+            try:
+                os.remove(m["path"])
+            except OSError:
+                pass
+        if m:
+            log("Removed from the base: %s (%s)" % (m["title"], "deleted on the site" if m.get("source", "site") == "site"
+                                                     else "file gone from the unreleased folder"))
+
+    def _add(self, key, path, info):
+        hashes = fp.hashes_of(fp.load_mono(path), fp.DB_DENSITY, 1)
+        self.ht.store(key, hashes)
+        self.meta[key] = dict(info, path=path)
+        self.fresh.append((key, hashes))
+
+    def update(self, settings, log, progress):
+        """Bring the base in line with the site and the unreleased folder:
+        new tracks are added, deleted ones removed. Returns the number added."""
+        os.makedirs(CATALOG_DIR, exist_ok=True)
+        self._new_table()
+        added = 0
+        site_error = None
+        try:
+            tracks = api(settings, "GET", "?action=catalog", timeout=120)["tracks"]
+        except Exception as e:  # site not reachable: keep the site tracks, still read the folder
+            tracks, site_error = None, e
+        if tracks is not None:
+            added += self._update_site(settings, tracks, log, progress)
+        added += self._update_local(log, progress)
+        self.save()
+        if site_error is not None:
+            raise site_error
+        return added
+
+    def _update_site(self, settings, tracks, log, progress):
+        added = 0
+        site_ids = {t["id"] for t in tracks}
+        for key in [k for k, m in self.meta.items() if m.get("source", "site") == "site" and k not in site_ids]:
+            self._remove(key, log)
         new = [t for t in tracks if t["id"] not in self.meta]
         if new:
             log("Site catalogue: %d tracks, %d new for the base." % (len(tracks), len(new)))
@@ -254,15 +311,49 @@ class Base:
                 with urllib.request.urlopen(req, timeout=120) as r, open(path + ".part", "wb") as f:
                     f.write(r.read())
                 os.replace(path + ".part", path)
-            hashes = fp.hashes_of(fp.load_mono(path), fp.DB_DENSITY, 1)
-            self.ht.store(t["id"], hashes)
-            self.meta[t["id"]] = {"id": t["id"], "title": t["title"], "composer": t["composer"], "path": path,
-                                  "addedAt": t.get("addedAt", "")}
-            self.fresh.append((t["id"], hashes))
+            self._add(t["id"], path, {"id": t["id"], "title": t["title"], "composer": t["composer"],
+                                      "addedAt": t.get("addedAt", ""), "slug": t.get("slug", ""), "source": "site"})
+            added += 1
             if (i + 1) % 20 == 0:
                 self.save()
-        self.save()
-        return len(new)
+        for t in tracks:  # slugs / titles may change on the site
+            m = self.meta.get(t["id"])
+            if m is not None:
+                m["slug"], m["title"], m["composer"] = t.get("slug", ""), t["title"], t["composer"]
+        return added
+
+    def _update_local(self, log, progress):
+        added = 0
+        for c in DEFAULT_COMPOSERS:
+            os.makedirs(os.path.join(UNRELEASED, c), exist_ok=True)
+        files = {}
+        for root, _dirs, names in os.walk(UNRELEASED):
+            for n in names:
+                if n.lower().endswith(AUDIO_EXT):
+                    full = os.path.join(root, n)
+                    rel = os.path.relpath(full, UNRELEASED).replace("\\", "/")
+                    files["local:" + rel.lower()] = (full, rel)
+        for key, m in list(self.meta.items()):
+            if m.get("source") == "local":
+                f = files.get(key)
+                if not f or abs(os.path.getmtime(f[0]) - m.get("mtime", 0)) > 1:
+                    self._remove(key, log)  # gone or replaced (a changed file is added again below)
+        todo = [k for k in files if k not in self.meta]
+        for i, key in enumerate(todo):
+            full, rel = files[key]
+            parts = rel.split("/")
+            composer = parts[0] if len(parts) > 1 else "TV Music Store"
+            title = os.path.splitext(parts[-1])[0]
+            progress("Adding unreleased tracks  %d / %d  %s" % (i + 1, len(todo), title), (i + 1) / max(1, len(todo)))
+            try:
+                self._add(key, full, {"id": key, "title": title, "composer": composer, "source": "local",
+                                      "addedAt": time.strftime("%Y-%m-%d"), "mtime": os.path.getmtime(full)})
+                added += 1
+            except Exception as e:
+                log("Could not read %s: %s" % (rel, e))
+        if todo:
+            log("Unreleased folder: %d new track(s) added to the base." % len(todo))
+        return added
 
     def save(self):
         self.ht.save(DB_PATH)
@@ -276,34 +367,191 @@ class Base:
         m = self.meta.get(name)
         return m["composer"] if m else ""
 
+    def site_state(self, key):
+        """("site" | "dup" | "local" | "gone", url or "") of a found track:
+        site = on the site, local = only in the unreleased folder,
+        dup = in both, gone = deleted from the site (and the base)."""
+        m = self.meta.get(key)
+        if m is None:
+            return ("local" if str(key).startswith("local:") else "gone"), ""
+        t = norm_title(m["title"])
+        if m.get("source") == "local":
+            twin = next((x for x in self.meta.values() if x.get("source", "site") == "site"
+                         and norm_title(x["title"]) == t), None)
+            return ("dup", self.url(twin)) if twin else ("local", "")
+        twin = any(x.get("source") == "local" and norm_title(x["title"]) == t for x in self.meta.values())
+        return ("dup" if twin else "site"), self.url(m)
 
-def find_in_audio(base, audio, novoice, progress, debug=None):
-    """All tracks found in one audio file: list of rows (one per track).
-    `debug` (a list) receives the matcher's details for the check log."""
-    samples = fp.load_mono(audio)
-    found = []
-    progress("Analysing audio...", None)
-    h = fp.query_hashes(samples, lambda k, n: progress("Analysing audio  part %d of %d" % (k, n), k / max(1, n)))
-    found += fp.find_tracks(
-        samples, base.ht, hashes=h,
-        progress=lambda k, n: progress("Searching the track base  %d%%" % (100 * k // max(1, n)), k / max(1, n)))
-    if debug is not None:
-        debug.append(("original audio", dict(fp.LAST_DEBUG)))
-    if novoice:
-        if not os.path.isfile(MODEL_PATH):
-            progress("Downloading voice removal model (65 MB)...", None)
-            urllib.request.urlretrieve(MODEL_URL, MODEL_PATH + ".part")
-            os.replace(MODEL_PATH + ".part", MODEL_PATH)
-        clean = os.path.splitext(audio)[0] + ".novoice.wav"
-        if not os.path.isfile(clean):
-            sep.separate(audio, clean, MODEL_PATH,
-                         lambda k, n: progress("Removing voice  %d%%" % (100 * k // max(1, n)), k / max(1, n)))
-        found_clean = fp.find_tracks(fp.load_mono(clean), base.ht)
-        if debug is not None:
-            debug.append(("voice removed", dict(fp.LAST_DEBUG)))
-        for g in found_clean:
-            if not any(o["track"] == g["track"] and abs(o["start"] - g["start"]) < 8 for o in found):
-                found.append(g)
+    def url(self, m):
+        site = (load_settings().get("site") or DEFAULTS["site"]).rstrip("/")
+        return "%s/track/%s" % (site, m.get("slug") or m.get("id"))
+
+
+# Matching rules (Check a video -> Matching settings; saved in settings.json
+# and used by the automatic scanner too).
+MATCH_DEFAULTS = {"min_len": 6.0, "min_score": 60, "min_windows": 3, "strong": 150, "align": 1.0,
+                  "noise_ratio": 2.5, "pitch": 1}
+MATCH = dict(MATCH_DEFAULTS)
+
+
+def match_kw():
+    return {"min_len": float(MATCH["min_len"]), "min_score": int(MATCH["min_score"]),
+            "min_windows": int(MATCH["min_windows"]), "strong": int(MATCH["strong"]),
+            "align": float(MATCH["align"]), "noise_ratio": float(MATCH.get("noise_ratio", 2.5))}
+
+
+def near_list(base, debug_runs):
+    """The strongest candidates of a check (found or rejected), for the
+    "why" panel: kept with the check result."""
+    out = []
+    for name, d in debug_runs:
+        pitch = 0
+        if name.startswith("pitch moved"):
+            pitch = -int(name.split()[2])
+        for c in d.get("chains", [])[:12]:
+            out.append(dict(c, title=base.title(c["track"]), run=name, pitch=pitch))
+    return out
+
+
+def ru_verdict(v):
+    if v == "found":
+        return "\u043d\u0430\u0439\u0434\u0435\u043d"
+    if "matching part only" in v:
+        return "\u0437\u0432\u0443\u0447\u0438\u0442 \u0441\u043b\u0438\u0448\u043a\u043e\u043c \u043a\u043e\u0440\u043e\u0442\u043a\u043e"
+    if "score" in v and "noise" not in v:
+        return "\u0441\u043b\u0430\u0431\u0430\u044f \u0443\u0432\u0435\u0440\u0435\u043d\u043d\u043e\u0441\u0442\u044c"
+    if "window" in v:
+        return "\u043c\u0430\u043b\u043e \u043a\u0443\u0441\u043a\u043e\u0432 \u043f\u043e\u0434\u0440\u044f\u0434"
+    if "overlaps" in v:
+        return "\u043f\u0435\u0440\u0435\u043a\u0440\u044b\u0442 \u0431\u043e\u043b\u0435\u0435 \u0441\u0438\u043b\u044c\u043d\u044b\u043c \u0442\u0440\u0435\u043a\u043e\u043c"
+    if "noise" in v:
+        return "\u043f\u043e\u0447\u0442\u0438 \u043a\u0430\u043a \u0441\u043b\u0443\u0447\u0430\u0439\u043d\u044b\u0439 \u0448\u0443\u043c"
+    return v
+
+
+def cand_rows(base, c):
+    """Rejected candidates of a check as table rows (to listen and judge)."""
+    found = {(r["track"], int(a)) for r in c.get("rows") or [] for a, _b in r["regions"]}
+    out, seen = [], set()
+    for n in c.get("near") or []:
+        if n.get("verdict") == "found":
+            continue
+        key = (n["track"], int(n["start"]) // 5)
+        if key in seen or any(t == n["track"] and abs(a - n["start"]) < 8 for t, a in found):
+            continue
+        seen.add(key)
+        part = {"start": n["start"], "end": n["end"], "track_pos": n["track_pos"], "score": n["score"],
+                "windows": n["windows"], "pct": n.get("pct", 0), "pitch": n.get("pitch", 0)}
+        out.append({"track": n["track"], "title": n["title"], "composer": base.composer(n["track"]),
+                    "regions": [[n["start"], n["end"]]], "parts": [part], "total": max(0.0, n["end"] - n["start"]),
+                    "score": n["score"], "rejected": n["verdict"], "pitch": n.get("pitch", 0)})
+        if len(out) >= 6:
+            break
+    return out
+
+
+def noise_of(near, track):
+    """Random noise level of a check: the strongest WEAK candidate of another
+    track (real music rejected only for being short does not count)."""
+    return max([n["score"] for n in near if n["track"] != track and n["verdict"] != "found"
+                and (n["score"] < int(MATCH["min_score"]) or n["windows"] < int(MATCH["min_windows"]))] or [0])
+
+
+def reliability(c, row):
+    """Short verdict for the table: (word, colour). Same rule as the "why" text."""
+    if row.get("rejected"):
+        return "\u043e\u0442\u0431\u0440\u043e\u0448\u0435\u043d", "#9a9a9a"
+    near = c.get("near") or []
+    noise = noise_of(near, row["track"])
+    parts = row.get("parts") or []
+    length = max([p["end"] - p["start"] for p in parts] or [0])
+    ratio = row["score"] / max(noise, 15)
+    if ratio >= 5 and length >= 10:
+        return "\u043d\u0430\u0434\u0451\u0436\u043d\u043e", GREEN
+    if ratio >= 2.5:
+        return "\u043f\u0440\u043e\u0432\u0435\u0440\u044c", GOLD
+    return "\u0441\u043e\u043c\u043d\u0438\u0442\u0435\u043b\u044c\u043d\u043e", RED
+
+
+def why_text(c, row):
+    """Plain explanation under the waveforms: why this track was found (or why
+    nothing was), with the numbers to compare videos."""
+    near = c.get("near") or []
+    if row is None:
+        if not near:
+            return ("<b>\u041d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e.</b> \u041d\u0438 \u043e\u0434\u0438\u043d \u043a\u0443\u0441\u043e\u043a \u0432\u0438\u0434\u0435\u043e \u043d\u0435 \u043f\u043e\u0445\u043e\u0436 \u043d\u0438 \u043d\u0430 \u043e\u0434\u0438\u043d \u0442\u0440\u0435\u043a \u0431\u0430\u0437\u044b. "
+                    "\u041d\u0430\u0436\u043c\u0438 \u00ab\u041f\u0435\u0440\u0435\u043f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c \u044d\u0442\u043e \u0432\u0438\u0434\u0435\u043e\u00bb, \u0447\u0442\u043e\u0431\u044b \u0443\u0432\u0438\u0434\u0435\u0442\u044c \u043f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438.")
+        lines = ["<b>\u041f\u043e\u0447\u0435\u043c\u0443 \u043d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e.</b> \u0411\u043b\u0438\u0436\u0430\u0439\u0448\u0438\u0435 \u043a\u0430\u043d\u0434\u0438\u0434\u0430\u0442\u044b (\u0432\u0441\u0435 \u043e\u0442\u0431\u0440\u043e\u0448\u0435\u043d\u044b):"]
+        for n in near[:4]:
+            lines.append("&nbsp;&nbsp;- %s: \u0432 \u0432\u0438\u0434\u0435\u043e %s-%s, \u0443\u0432\u0435\u0440\u0435\u043d\u043d\u043e\u0441\u0442\u044c %d, \u0441\u043e\u0432\u043f\u0430\u043b\u043e %.1f%% \u043e\u0442\u043f\u0435\u0447\u0430\u0442\u043a\u0430, \u043a\u0443\u0441\u043a\u043e\u0432 %d "
+                         "&rarr; <span style='color:#ff9f43'>%s</span>"
+                         % (n["title"], fmt(n["start"]), fmt(n["end"]), n["score"], n.get("pct", 0), n["windows"],
+                            ru_verdict(n["verdict"])))
+        return "<br>".join(lines)
+    parts = row.get("parts") or []
+    best = max(parts, key=lambda p: p["end"] - p["start"]) if parts else None
+    noise = noise_of(near, row["track"])
+    if best is None:
+        return "<b>%s</b>" % row["title"]
+    length = best["end"] - best["start"]
+    if row.get("rejected"):
+        return "<br>".join([
+            "<b>\u041f\u043e\u0447\u0435\u043c\u0443 \u041d\u0415 \u0437\u0430\u0441\u0447\u0438\u0442\u0430\u043d \u00ab%s\u00bb</b> &nbsp;<span style='color:%s'><b>%s</b></span>"
+            % (row["title"], ORANGE, ru_verdict(row["rejected"])),
+            "\u041f\u043e\u0445\u043e\u0436\u0438\u0439 \u043a\u0443\u0441\u043e\u043a: \u0432 \u0432\u0438\u0434\u0435\u043e %s-%s = \u0432 \u0442\u0440\u0435\u043a\u0435 %s-%s (%s)."
+            % (fmt(best["start"]), fmt(best["end"]), fmt(best["track_pos"]), fmt(best["track_pos"] + length),
+               fmt(length)),
+            "\u0423\u0432\u0435\u0440\u0435\u043d\u043d\u043e\u0441\u0442\u044c <b>%d</b> (\u043f\u043e\u0440\u043e\u0433 %d), \u0441\u043e\u0432\u043f\u0430\u043b\u043e <b>%.1f%%</b> \u043e\u0442\u043f\u0435\u0447\u0430\u0442\u043a\u0430, \u043a\u0443\u0441\u043a\u043e\u0432 \u043f\u043e\u0434\u0440\u044f\u0434 <b>%d</b> (\u043d\u0443\u0436\u043d\u043e %d), "
+            "\u0434\u043b\u0438\u043d\u0430 %s (\u043d\u0443\u0436\u043d\u043e %s)." % (row["score"], int(MATCH["min_score"]), best.get("pct", 0),
+                                      best.get("windows", 0), int(MATCH["min_windows"]), fmt(length),
+                                      fmt(float(MATCH["min_len"]))),
+            "\u041f\u043e\u0441\u043b\u0443\u0448\u0430\u0439 \u043e\u0431\u0430 \u043a\u0443\u0441\u043a\u0430: \u0435\u0441\u043b\u0438 \u044d\u0442\u043e \u0438 \u043f\u0440\u0430\u0432\u0434\u0430 \u043d\u0430\u0448 \u0442\u0440\u0435\u043a, \u043e\u0441\u043b\u0430\u0431\u044c \u043d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 \u043d\u0438\u0436\u0435 \u0438 \u043d\u0430\u0436\u043c\u0438 \u00ab\u041f\u0435\u0440\u0435\u043f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c\u00bb.",
+        ])
+    ratio = row["score"] / max(noise, 15)
+    if reliability(c, row)[0] == "\u043d\u0430\u0434\u0451\u0436\u043d\u043e":
+        verdict = "<span style='color:%s'><b>\u041d\u0430\u0434\u0451\u0436\u043d\u043e\u0435 \u0441\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0435.</b></span>" % GREEN
+    elif reliability(c, row)[0] == "\u043f\u0440\u043e\u0432\u0435\u0440\u044c":
+        verdict = "<span style='color:%s'><b>\u041f\u043e\u0445\u043e\u0436\u0435 \u043d\u0430 \u043f\u0440\u0430\u0432\u0434\u0443, \u043d\u043e \u043b\u0443\u0447\u0448\u0435 \u043f\u043e\u0441\u043b\u0443\u0448\u0430\u0439.</b></span>" % GOLD
+    else:
+        verdict = ("<span style='color:%s'><b>\u0421\u043e\u043c\u043d\u0438\u0442\u0435\u043b\u044c\u043d\u043e:</b> \u043f\u043e\u0447\u0442\u0438 \u043d\u0435 \u043e\u0442\u043b\u0438\u0447\u0430\u0435\u0442\u0441\u044f \u043e\u0442 \u0441\u043b\u0443\u0447\u0430\u0439\u043d\u043e\u0433\u043e \u0448\u0443\u043c\u0430, "
+                   "\u0441\u043a\u043e\u0440\u0435\u0435 \u0432\u0441\u0435\u0433\u043e \u043b\u043e\u0436\u043d\u043e\u0435.</span>" % RED)
+    lines = [
+        "<b>\u041f\u043e\u0447\u0435\u043c\u0443 \u043d\u0430\u0439\u0434\u0435\u043d \u00ab%s\u00bb</b> &nbsp;%s" % (row["title"], verdict),
+        "\u0421\u043e\u0432\u043f\u0430\u0434\u0430\u0435\u0442 <b>%s \u043f\u043e\u0434\u0440\u044f\u0434</b>: \u0432 \u0432\u0438\u0434\u0435\u043e %s-%s = \u0432 \u0442\u0440\u0435\u043a\u0435 %s-%s."
+        % (fmt(length), fmt(best["start"]), fmt(best["end"]), fmt(best["track_pos"]),
+           fmt(best["track_pos"] + length)),
+        "\u0423\u0432\u0435\u0440\u0435\u043d\u043d\u043e\u0441\u0442\u044c <b>%d</b> (\u043f\u043e\u0440\u043e\u0433 %d). \u0421\u0430\u043c\u044b\u0439 \u0441\u0438\u043b\u044c\u043d\u044b\u0439 \u0441\u043b\u0443\u0447\u0430\u0439\u043d\u044b\u0439 \u0448\u0443\u043c \u0432 \u044d\u0442\u043e\u043c \u0432\u0438\u0434\u0435\u043e: %d, "
+        "\u0442\u043e \u0435\u0441\u0442\u044c \u0441\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0435 \u0441\u0438\u043b\u044c\u043d\u0435\u0435 \u0448\u0443\u043c\u0430 \u0432 <b>%.1f \u0440\u0430\u0437\u0430</b>." % (row["score"], int(MATCH["min_score"]), noise, ratio),
+        "\u0421\u043e\u0432\u043f\u0430\u043b\u043e <b>%.1f%%</b> \u043e\u0442\u043f\u0435\u0447\u0430\u0442\u043a\u0430 \u0437\u0432\u0443\u043a\u0430 \u0432 \u043b\u0443\u0447\u0448\u0435\u043c \u043a\u0443\u0441\u043a\u0435 (\u0443 \u0447\u0438\u0441\u0442\u043e\u0439 \u043c\u0443\u0437\u044b\u043a\u0438 \u043e\u0431\u044b\u0447\u043d\u043e 4-7%%, \u043f\u043e\u0434 \u0433\u043e\u043b\u043e\u0441\u043e\u043c \u0434\u0438\u043a\u0442\u043e\u0440\u0430 1-2%%, "
+        "\u0443 \u0441\u043b\u0443\u0447\u0430\u0439\u043d\u043e\u0433\u043e \u0448\u0443\u043c\u0430 \u043c\u0435\u043d\u044c\u0448\u0435 1%%)." % best.get("pct", 0),
+        "\u041a\u0443\u0441\u043a\u043e\u0432 \u043f\u043e 8 \u0441\u0435\u043a \u043f\u043e\u0434\u0440\u044f\u0434, \u0441\u043e\u0432\u043f\u0430\u0432\u0448\u0438\u0445 \u0441 \u043e\u0434\u043d\u0438\u043c \u043c\u0435\u0441\u0442\u043e\u043c \u0442\u0440\u0435\u043a\u0430: <b>%d</b> (\u043d\u0443\u0436\u043d\u043e %d)."
+        % (best.get("windows", 0), int(MATCH["min_windows"])),
+    ]
+    if row.get("pitch"):
+        lines.append("<span style='color:%s'>\u0422\u043e\u043d \u0442\u0440\u0435\u043a\u0430 \u0432 \u0432\u0438\u0434\u0435\u043e %s \u043d\u0430 %d \u043f\u043e\u043b\u0443\u0442\u043e\u043d%s</span> (\u0442\u0430\u043a \u0447\u0430\u0441\u0442\u043e \u0434\u0435\u043b\u0430\u044e\u0442, \u0447\u0442\u043e\u0431\u044b "
+                     "\u043e\u0431\u043e\u0439\u0442\u0438 Content ID): \u043f\u0440\u043e\u0433\u0440\u0430\u043c\u043c\u0430 \u043d\u0430\u0448\u043b\u0430 \u0435\u0433\u043e, \u0441\u0434\u0432\u0438\u043d\u0443\u0432 \u0437\u0432\u0443\u043a \u0432\u0438\u0434\u0435\u043e \u043e\u0431\u0440\u0430\u0442\u043d\u043e."
+                     % (GOLD, "\u043f\u043e\u043d\u0438\u0436\u0435\u043d" if row["pitch"] < 0 else "\u043f\u043e\u0432\u044b\u0448\u0435\u043d", abs(row["pitch"]),
+                        "" if abs(row["pitch"]) == 1 else "\u0430"))
+    if len(parts) > 1:
+        lines.append("\u0422\u0440\u0435\u043a \u0437\u0432\u0443\u0447\u0438\u0442 \u0432 \u0432\u0438\u0434\u0435\u043e %d \u0440\u0430\u0437(\u0430), \u0432\u0441\u0435\u0433\u043e %s." % (len(row["regions"]), fmt(row["total"])))
+    return "<br>".join(lines)
+
+
+def match_payload(base, r):
+    """One found track as the site expects it (onSite = published on the site)."""
+    return {"trackId": r["track"], "track": r["title"], "composer": r.get("composer", ""),
+            "onSite": base.site_state(r["track"])[0] in ("site", "dup"),
+            "regions": r["regions"], "total": r["total"], "score": r["score"]}
+
+
+def site_look(state):
+    """(text, colour) of the Site column."""
+    return {"site": ("\u043d\u0430 \u0441\u0430\u0439\u0442\u0435 \u2197", GREEN), "dup": ("\u0434\u0443\u0431\u043b\u044c", GOLD), "local": ("\u043d\u0435 \u0437\u0430\u043b\u0438\u0442", RED),
+            "gone": ("\u0443\u0434\u0430\u043b\u0451\u043d \u0441 \u0441\u0430\u0439\u0442\u0430", RED)}[state]
+
+
+def group_rows(base, found):
+    """Found segments -> one row per track (parts close together merged)."""
     by = {}
     for g in sorted(found, key=lambda x: x["start"]):
         by.setdefault(g["track"], []).append(g)
@@ -315,11 +563,70 @@ def find_in_audio(base, audio, novoice, progress, debug=None):
                 regions[-1][1] = max(regions[-1][1], g["end"])
             else:
                 regions.append([g["start"], g["end"]])
+        best = max(parts, key=lambda p: p["score"])
         rows.append({"track": name, "title": base.title(name), "composer": base.composer(name),
                      "regions": regions, "parts": parts, "total": sum(b - a for a, b in regions),
-                     "score": max(p["score"] for p in parts)})
+                     "score": best["score"], "pitch": best.get("pitch", 0)})
+    # The same track found twice (site copy + unreleased-folder copy): keep the site one.
+    site_titles = {norm_title(r["title"]) for r in rows if not str(r["track"]).startswith("local:")}
+    rows = [r for r in rows if not (str(r["track"]).startswith("local:") and norm_title(r["title"]) in site_titles)]
     rows.sort(key=lambda r: -r["total"])
-    return samples, rows
+    return rows
+
+
+PITCH_SHIFTS = [-2, -1, 1, 2]  # semitones: uploaders often move the pitch to dodge Content ID
+
+
+def match_shifts(base, hs, dur, debug=None, progress=None):
+    """Search every fingerprint (original + pitch moved) and merge the finds.
+    hs = {semitones the video was moved by: hashes}. A find in the copy moved
+    by +2 means the video itself has the track 2 semitones LOWER (pitch -2)."""
+    found = []
+    for st in sorted(hs, key=lambda x: (x != 0, abs(x), x)):
+        if progress and st:
+            progress("Searching with the pitch moved %+d" % st, None)
+        segs = fp.find_tracks(None, base.ht, hashes=hs[st], dur=dur, **match_kw())
+        if debug is not None:
+            debug.append(("original audio" if st == 0 else "pitch moved %+d semitones" % st, dict(fp.LAST_DEBUG)))
+        for g in segs:
+            g["pitch"] = -st
+            if not any(o["track"] == g["track"] and o["start"] < g["end"] and g["start"] < o["end"] for o in found):
+                found.append(g)
+    return found
+
+
+def find_in_audio(base, audio, novoice, progress, debug=None, keep=None):
+    """All tracks found in one audio file: list of rows (one per track).
+    `debug` (a list) receives the matcher's details for the check log,
+    `keep` (a dict) receives the audio fingerprints for instant re-matching.
+    With "pitch" on, the audio is also searched moved by -2..+2 semitones."""
+    samples = fp.load_mono(audio)
+    dur = len(samples) / fp.SR
+    progress("Analysing audio...", None)
+    semis = PITCH_SHIFTS if MATCH.get("pitch") else []
+    hs = fp.query_hashes_pitched(samples, semis,
+                                 lambda k, n: progress("Analysing audio  part %d of %d" % (k, n), k / max(1, n)))
+    if keep is not None:
+        keep["hs"], keep["dur"] = hs, dur
+    progress("Searching the track base...", None)
+    found = match_shifts(base, hs, dur, debug, progress)
+    if novoice:
+        if not os.path.isfile(MODEL_PATH):
+            progress("Downloading voice removal model (65 MB)...", None)
+            urllib.request.urlretrieve(MODEL_URL, MODEL_PATH + ".part")
+            os.replace(MODEL_PATH + ".part", MODEL_PATH)
+        clean = os.path.splitext(audio)[0] + ".novoice.wav"
+        if not os.path.isfile(clean):
+            sep.separate(audio, clean, MODEL_PATH,
+                         lambda k, n: progress("Removing voice  %d%%" % (100 * k // max(1, n)), k / max(1, n)))
+        found_clean = fp.find_tracks(fp.load_mono(clean), base.ht, **match_kw())
+        if debug is not None:
+            debug.append(("voice removed", dict(fp.LAST_DEBUG)))
+        for g in found_clean:
+            g["pitch"] = 0
+            if not any(o["track"] == g["track"] and abs(o["start"] - g["start"]) < 8 for o in found):
+                found.append(g)
+    return samples, group_rows(base, found)
 
 
 def rows_from_segments(base, found):
@@ -347,17 +654,121 @@ def save_print(video_id, samples, published):
                         dur=np.array([len(samples) / fp.SR]), pub=np.array([published or ""]))
 
 
-HINT_FOUND = ("Gold = where the track plays. Click to listen from there, mouse wheel to zoom, drag to move, "
-              "double-click to see all.")
-HINT_CLEAN = "Click to listen from there, mouse wheel to zoom, drag to move, double-click to see all."
+HINT_FOUND = ("\u0426\u0432\u0435\u0442\u043e\u043c = \u0433\u0434\u0435 \u0437\u0432\u0443\u0447\u0438\u0442 \u0442\u0440\u0435\u043a. \u041a\u043b\u0438\u043a = \u0441\u043b\u0443\u0448\u0430\u0442\u044c \u0441 \u044d\u0442\u043e\u0433\u043e \u043c\u0435\u0441\u0442\u0430, \u043a\u043e\u043b\u0451\u0441\u0438\u043a\u043e = \u043f\u0440\u0438\u0431\u043b\u0438\u0437\u0438\u0442\u044c, "
+              "\u0442\u044f\u043d\u0443\u0442\u044c = \u0434\u0432\u0438\u0433\u0430\u0442\u044c, \u0434\u0432\u043e\u0439\u043d\u043e\u0439 \u043a\u043b\u0438\u043a = \u0432\u0441\u0451 \u0430\u0443\u0434\u0438\u043e.")
+HINT_CLEAN = "\u041a\u043b\u0438\u043a = \u0441\u043b\u0443\u0448\u0430\u0442\u044c \u0441 \u044d\u0442\u043e\u0433\u043e \u043c\u0435\u0441\u0442\u0430, \u043a\u043e\u043b\u0451\u0441\u0438\u043a\u043e = \u043f\u0440\u0438\u0431\u043b\u0438\u0437\u0438\u0442\u044c, \u0442\u044f\u043d\u0443\u0442\u044c = \u0434\u0432\u0438\u0433\u0430\u0442\u044c, \u0434\u0432\u043e\u0439\u043d\u043e\u0439 \u043a\u043b\u0438\u043a = \u0432\u0441\u0451 \u0430\u0443\u0434\u0438\u043e."
 CHECKS = os.path.join(DATA, "checks.json")
 CHECK_LOG = os.path.join(DATA, "check_log.txt")  # details of every check (for tuning the matching)
+
+# ---- storage folder ---------------------------------------------------------
+# The big things (track base, downloaded tracks and video audio, results,
+# the unreleased folder, the voice model) can live on another disk:
+# Settings -> Storage folder. settings.json, the Python environment and the
+# YouTube sign-in always stay in data/ next to this file.
+STORE_ITEMS = ["catalog", "cache", "prints", "unreleased", "site_db.pklz", "site_db.json", "checks.json",
+               "check_log.txt", "UVR-MDX-NET-Inst_HQ_3.onnx"]
+STORE_SUB = "TVMS scanner data"
+
+
+def set_store(root):
+    """Point every storage path at `root` (None = the old places)."""
+    global CACHE, CATALOG_DIR, DB_PATH, DB_INDEX, PRINTS, MODEL_PATH, CHECKS, CHECK_LOG, UNRELEASED, STORE
+    STORE = root or DATA
+    CACHE = os.path.join(STORE, "cache")
+    CATALOG_DIR = os.path.join(STORE, "catalog")
+    DB_PATH = os.path.join(STORE, "site_db.pklz")
+    DB_INDEX = os.path.join(STORE, "site_db.json")
+    PRINTS = os.path.join(STORE, "prints")
+    MODEL_PATH = os.path.join(STORE, "UVR-MDX-NET-Inst_HQ_3.onnx")
+    CHECKS = os.path.join(STORE, "checks.json")
+    CHECK_LOG = os.path.join(STORE, "check_log.txt")
+    UNRELEASED = os.path.join(root, "unreleased") if root else os.path.join(HERE, "unreleased")
+
+
+STORE = DATA
+
+
+def store_sources():
+    """(name, current path) of every storage item that exists now."""
+    cur = {"catalog": CATALOG_DIR, "cache": CACHE, "prints": PRINTS, "unreleased": UNRELEASED,
+           "site_db.pklz": DB_PATH, "site_db.json": DB_INDEX, "checks.json": CHECKS, "check_log.txt": CHECK_LOG,
+           "UVR-MDX-NET-Inst_HQ_3.onnx": MODEL_PATH}
+    return [(n, cur[n]) for n in STORE_ITEMS if os.path.exists(cur[n])]
+
+
+def move_store(dest_root, progress, log):
+    """Copy everything to dest_root, check it, then delete the old copies.
+    Same disk = a quick rename. Returns the new root."""
+    import shutil
+    os.makedirs(dest_root, exist_ok=True)
+    items = store_sources()
+    files = []
+    for name, src in items:
+        if os.path.isdir(src):
+            for r, _d, fs in os.walk(src):
+                for f in fs:
+                    full = os.path.join(r, f)
+                    files.append((full, os.path.join(dest_root, name, os.path.relpath(full, src))))
+        else:
+            files.append((src, os.path.join(dest_root, name)))
+    same_disk = os.path.splitdrive(os.path.abspath(dest_root))[0].lower() == \
+        os.path.splitdrive(os.path.abspath(STORE))[0].lower()
+    total = sum(os.path.getsize(a) for a, _b in files) or 1
+    done = 0
+    for i, (a, b) in enumerate(files):
+        os.makedirs(os.path.dirname(b), exist_ok=True)
+        if same_disk:
+            os.replace(a, b)
+        else:
+            shutil.copy2(a, b)
+            if os.path.getsize(a) != os.path.getsize(b):
+                raise RuntimeError("Copy check failed for %s" % a)
+        done += os.path.getsize(b)
+        progress("Moving storage  %d / %d files  (%.0f / %.0f MB)" % (i + 1, len(files), done / 1e6, total / 1e6),
+                 done / total)
+    # everything is safely in the new place: remove the old copies
+    for name, src in items:
+        try:
+            if os.path.isdir(src):
+                shutil.rmtree(src)
+            elif os.path.exists(src):
+                os.remove(src)
+        except OSError as e:
+            log("Could not remove the old %s (%s). You can delete it by hand." % (src, e))
+    log("Storage moved: %d files, %.0f MB -> %s" % (len(files), total / 1e6, dest_root))
+    return dest_root
+
+
+def fix_paths_after_move(old_root, old_unreleased, new_root):
+    """Stored absolute paths (track base, check results) point to the new place."""
+    def fix(p):
+        if not p:
+            return p
+        for old, new in ((old_unreleased, os.path.join(new_root, "unreleased")), (old_root, new_root)):
+            if os.path.normcase(p).startswith(os.path.normcase(old) + os.sep):
+                return new + p[len(old):]
+        return p
+    try:
+        meta = json.load(open(DB_INDEX, encoding="utf-8"))
+        for m in meta.values():
+            m["path"] = fix(m.get("path"))
+        json.dump(meta, open(DB_INDEX, "w", encoding="utf-8"))
+    except Exception:
+        pass
+    try:
+        ch = json.load(open(CHECKS, encoding="utf-8"))
+        for c in ch.values():
+            if c.get("audio"):
+                c["audio"] = fix(c["audio"])
+        save_checks(ch)
+    except Exception:
+        pass
 
 
 def write_check_log(base, video_id, title, novoice, rows, debug_runs, seconds):
     """One block per checked video: what was found and every near miss."""
     try:
-        os.makedirs(DATA, exist_ok=True)
+        os.makedirs(os.path.dirname(CHECK_LOG), exist_ok=True)
         with open(CHECK_LOG, "a", encoding="utf-8") as f:
             f.write("=" * 78 + "\n")
             f.write("%s  %s  https://youtu.be/%s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), title, video_id))
@@ -384,7 +795,7 @@ def load_checks():
 
 
 def save_checks(d):
-    os.makedirs(DATA, exist_ok=True)
+    os.makedirs(os.path.dirname(CHECKS), exist_ok=True)
     tmp = CHECKS + ".tmp"
     json.dump(d, open(tmp, "w", encoding="utf-8"), default=float)
     os.replace(tmp, CHECKS)
@@ -399,6 +810,7 @@ def envelope(samples, n=1200):
 
 # ------------------------------------------------------------------- style --
 RED = "#ff5c5c"
+ORANGE = "#ff9f43"
 GREEN = "#5ee69a"
 STATUS_COLORS = {"none": "#4a4a4a", "queue": "#8f8f8f", "run": GOLD, "found": RED, "clean": GREEN,
                  "err": "#ff9f43"}
@@ -407,6 +819,13 @@ QSS = """
 * { font-family: 'Inter', 'Segoe UI', sans-serif; color: #f2f2f2; }
 QMainWindow, QWidget#root { background: #111111; }
 QDialog, QMessageBox { background: #161616; }
+QToolTip { background: #1d1d1d; color: #f2f2f2; border: 1px solid #3a3a3a; border-radius: 6px; padding: 6px 8px;
+           font-size: 12px; }
+*:focus { outline: none; }
+QScrollArea, QScrollArea > QWidget > QWidget { background: transparent; border: none; }
+QLabel#why { background: #141414; border: 1px solid #262626; border-radius: 12px; padding: 10px 14px;
+             font-size: 13px; color: #dcdcdc; }
+QLabel#help { color: #8a8a8a; font-size: 11px; }
 QMessageBox QLabel { color: #f2f2f2; font-size: 13px; }
 QMessageBox QPushButton { min-width: 84px; }
 QWidget#side { background: #0c0c0c; border-right: 1px solid #1f1f1f; }
@@ -453,7 +872,8 @@ QHeaderView::section { background: #161616; color: #8f8f8f; border: none; border
                        padding: 6px; font-size: 11px; font-weight: 700; }
 QPlainTextEdit { background: #0e0e0e; border: 1px solid #222; border-radius: 10px; font-family: Consolas;
                  font-size: 12px; color: #bdbdbd; }
-QSpinBox { background: #111; border: 1px solid #2c2c2c; border-radius: 8px; padding: 6px; }
+QSpinBox, QDoubleSpinBox { background: #111; border: 1px solid #2c2c2c; border-radius: 8px; padding: 5px 6px; }
+QSpinBox:focus, QDoubleSpinBox:focus { border-color: #F4C430; }
 QComboBox { background: #111; border: 1px solid #2c2c2c; border-radius: 10px; padding: 8px 12px; font-size: 13px; }
 QComboBox:hover { border-color: #F4C430; }
 QComboBox::drop-down { border: none; width: 18px; }
@@ -503,10 +923,11 @@ class Wave(QtWidgets.QWidget):
         self.setMouseTracking(True)
         self.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
 
-    def set(self, env, gold, dur=0.0, key=None):
+    def set(self, env, gold, dur=0.0, key=None, color=None):
         if key is None or key != self.key:
             self.v0, self.v1 = 0.0, 1.0  # another audio: show all of it
         self.env, self.gold, self.dur, self.key = env, gold, dur, key
+        self.color = color or GOLD
         self.update()
 
     # -- view helpers --
@@ -594,13 +1015,15 @@ class Wave(QtWidgets.QWidget):
             if b < self.v0 or a > self.v1:
                 continue
             xa, xb = self.x_of(a), self.x_of(b)
-            p.fillRect(QtCore.QRectF(xa, 0, max(2, xb - xa), h), QtGui.QColor("#3a3214"))
+            bg = QtGui.QColor(getattr(self, "color", GOLD))
+            bg.setAlpha(45)
+            p.fillRect(QtCore.QRectF(xa, 0, max(2, xb - xa), h), bg)
         n = len(self.env)
         if n:
             m = float(self.env.max()) or 1.0
             mid = h / 2
             per_px = span * n / max(1, w)
-            grey, gold = QtGui.QColor("#6f6f6f"), QtGui.QColor(GOLD)
+            grey, gold = QtGui.QColor("#6f6f6f"), QtGui.QColor(getattr(self, "color", GOLD))
             for x in range(w):
                 f = self.v0 + x / w * span
                 i = int(f * n)
@@ -643,13 +1066,39 @@ class Cancelled(Exception):
 
 
 class KeepColors(QtWidgets.QStyledItemDelegate):
-    """Selected rows keep their own text colours (red = found, green = clean)."""
+    """Selected rows keep their own text colours (red = found, green = clean);
+    cells without a colour stay light (Windows would paint them black)."""
 
     def initStyleOption(self, opt, index):
         super().initStyleOption(opt, index)
         fg = index.data(QtCore.Qt.ItemDataRole.ForegroundRole)
-        if fg is not None:
-            opt.palette.setBrush(QtGui.QPalette.ColorRole.HighlightedText, fg)
+        opt.palette.setBrush(QtGui.QPalette.ColorRole.HighlightedText,
+                             fg if fg is not None else QtGui.QBrush(QtGui.QColor("#f2f2f2")))
+        opt.state &= ~QtWidgets.QStyle.StateFlag.State_HasFocus  # no dotted frame around cells
+
+
+class CleanStyle(QtWidgets.QProxyStyle):
+    """Fusion look on every Windows version, without the dotted focus frames."""
+
+    def drawPrimitive(self, el, opt, p, w=None):
+        if el == QtWidgets.QStyle.PrimitiveElement.PE_FrameFocusRect:
+            return
+        super().drawPrimitive(el, opt, p, w)
+
+
+def dark_palette():
+    pal = QtGui.QPalette()
+    c = QtGui.QColor
+    R_ = QtGui.QPalette.ColorRole
+    for role, col in [(R_.Window, "#111111"), (R_.WindowText, "#f2f2f2"), (R_.Base, "#161616"),
+                      (R_.AlternateBase, "#191919"), (R_.ToolTipBase, "#1d1d1d"), (R_.ToolTipText, "#f2f2f2"),
+                      (R_.Text, "#f2f2f2"), (R_.Button, "#1c1c1c"), (R_.ButtonText, "#f2f2f2"),
+                      (R_.BrightText, "#ffffff"), (R_.Highlight, "#2b2610"), (R_.HighlightedText, "#f2f2f2"),
+                      (R_.PlaceholderText, "#777777"), (R_.Link, GOLD)]:
+        pal.setColor(role, c(col))
+    pal.setColor(QtGui.QPalette.ColorGroup.Disabled, R_.Text, c("#666666"))
+    pal.setColor(QtGui.QPalette.ColorGroup.Disabled, R_.ButtonText, c("#666666"))
+    return pal
 
 
 class Signals(QtCore.QObject):
@@ -662,6 +1111,10 @@ class App(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         self.settings = load_settings()
+        set_store(self.settings.get("store_dir") or None)
+        MATCH.update(self.settings.get("match") or {})
+        self.view_rows = []
+        self.hcache = {}  # videoId -> {"h", "dur"} fingerprint of checked videos (this session)
         self.base = Base()
         self.sig = Signals()
         self.sig.log.connect(self._log)
@@ -893,8 +1346,10 @@ class App(QtWidgets.QMainWindow):
         self.k_checked.setText(str(checked))
         self.k_found.setText(str(found))
         self.side_status.setText(("Scanner: running" if on else "Scanner: stopped"))
-        self.base_lbl.setText("Track base: %d published tracks from the site (full versions). New tracks are "
-                              "added automatically every few hours." % len(self.base.meta))
+        n_local = sum(1 for m in self.base.meta.values() if m.get("source") == "local")
+        self.base_lbl.setText("Track base: %d tracks from the site + %d from the unreleased folder "
+                              "(unreleased/<Composer>/<Track title>.wav). Tracks deleted on the site or from the "
+                              "folder leave the base by themselves." % (len(self.base.meta) - n_local, n_local))
 
     def toggle(self):
         if not self.settings["token"]:
@@ -959,15 +1414,13 @@ class App(QtWidgets.QMainWindow):
                 continue
             self.stage("Re-checking videos for the new track(s)  %d / %d" % (i + 1, len(files)),
                        (i + 1) / max(1, len(files)))
-            segs = fp.find_tracks(None, small, hashes=z["h"], dur=float(z["dur"][0]))
+            segs = fp.find_tracks(None, small, hashes=z["h"], dur=float(z["dur"][0]), **match_kw())
             if not segs:
                 continue
             rows = rows_from_segments(self.base, segs)
             vid = f[:-4]
             api(self.settings, "POST", "", {"action": "result", "videoId": vid, "append": True,
-                                            "matches": [{"trackId": r["track"], "track": r["title"],
-                                                         "regions": r["regions"], "total": r["total"],
-                                                         "score": r["score"]} for r in rows]})
+                                            "matches": [match_payload(self.base, r) for r in rows]})
             hits += 1
             self.log("Re-check: %s found in %s" % (", ".join(r["title"] for r in rows), vid))
         self.log("Re-check for new track(s) done: %d video(s) with them." % hits)
@@ -983,8 +1436,7 @@ class App(QtWidgets.QMainWindow):
             write_check_log(self.base, v["videoId"], "[auto] " + title, self.settings["novoice"], rows, dbg,
                             time.time() - t0)
             save_print(v["videoId"], samples, v.get("publishedAt", ""))
-            matches = [{"trackId": r["track"], "track": r["title"], "regions": r["regions"],
-                        "total": r["total"], "score": r["score"]} for r in rows]
+            matches = [match_payload(self.base, r) for r in rows]
             api(self.settings, "POST", "", {"action": "result", "videoId": v["videoId"], "matches": matches})
             found = ", ".join("%s (%s)" % (r["title"], r["composer"]) for r in rows)
             self.log("%s: %s  [%.0f s]" % (title, found or "nothing", time.time() - t0))
@@ -1111,7 +1563,7 @@ class App(QtWidgets.QMainWindow):
         col.addWidget(self.d_title)
         col.addWidget(self.d_sub)
         head.addLayout(col, 1)
-        self.btn_open = QtWidgets.QPushButton("Open on YouTube")
+        self.btn_open = QtWidgets.QPushButton("\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u043d\u0430 YouTube")
         self.btn_open.setObjectName("ghost")
         self.btn_open.clicked.connect(self.open_youtube)
         head.addWidget(self.btn_open, 0, QtCore.Qt.AlignmentFlag.AlignTop)
@@ -1131,15 +1583,18 @@ class App(QtWidgets.QMainWindow):
         pl.setContentsMargins(0, 0, 0, 0)
         pl.setSpacing(8)
         self.res = QtWidgets.QTreeWidget()
-        self.res.setHeaderLabels(["Track found", "Composer", "Where in the video", "Plays", "Match"])
+        self.res.setHeaderLabels(["\u0422\u0440\u0435\u043a", "\u041a\u043e\u043c\u043f\u043e\u0437\u0438\u0442\u043e\u0440", "\u0413\u0434\u0435 \u0432 \u0432\u0438\u0434\u0435\u043e", "\u0417\u0432\u0443\u0447\u0438\u0442", "\u0418\u0442\u043e\u0433", "\u0421\u0430\u0439\u0442"])
         self.res.setRootIsDecorated(False)
         rh = self.res.header()
         rh.setStretchLastSection(False)
         rh.setSectionResizeMode(2, QtWidgets.QHeaderView.ResizeMode.Stretch)
-        self.res.setColumnWidth(0, 170)
-        self.res.setColumnWidth(1, 105)
+        self.res.setColumnWidth(0, 135)
+        self.res.setColumnWidth(1, 92)
         self.res.setColumnWidth(3, 52)
-        self.res.setColumnWidth(4, 56)
+        self.res.setColumnWidth(4, 86)
+        self.res.setColumnWidth(5, 96)
+        self.res.itemClicked.connect(self.open_site_cell)
+        self.res.setMouseTracking(True)
         self.res.setMaximumHeight(150)
         self.res.setItemDelegate(KeepColors(self.res))
         self.res.itemSelectionChanged.connect(self.draw)
@@ -1148,13 +1603,13 @@ class App(QtWidgets.QMainWindow):
         self.clean_lbl.setStyleSheet("color:%s;font-size:13px;font-weight:600" % GREEN)
         pl.addWidget(self.clean_lbl)
         pl.addSpacing(4)
-        self.video_lbl = label("VIDEO AUDIO  -  click to listen", "lbl")
+        self.video_lbl = label("\u0410\u0423\u0414\u0418\u041e \u0412\u0418\u0414\u0415\u041e", "lbl")
         pl.addWidget(self.video_lbl)
         self.w_video = Wave()
         self.w_video.clicked.connect(lambda f: self.click_play("video", f))
         pl.addWidget(self.w_video)
         pl.addSpacing(4)
-        self.track_lbl = label("TRACK", "lbl")
+        self.track_lbl = label("\u0422\u0420\u0415\u041a", "lbl")
         pl.addWidget(self.track_lbl)
         self.w_track = Wave()
         self.w_track.clicked.connect(lambda f: self.click_play("track", f))
@@ -1162,22 +1617,165 @@ class App(QtWidgets.QMainWindow):
         row = QtWidgets.QHBoxLayout()
         self.hint_lbl = label(HINT_FOUND, "muted")
         row.addWidget(self.hint_lbl, 1)
-        stop = QtWidgets.QPushButton("Stop sound")
+        stop = QtWidgets.QPushButton("\u0421\u0442\u043e\u043f \u0437\u0432\u0443\u043a")
         stop.setObjectName("ghost")
         stop.clicked.connect(self.stop_play)
         row.addWidget(stop)
         pl.addLayout(row)
+        pl.addSpacing(6)
+        self.why_lbl = label("", "why")
+        self.why_lbl.setTextFormat(QtCore.Qt.TextFormat.RichText)
+        pl.addWidget(self.why_lbl)
+        pl.addSpacing(6)
+        pl.addWidget(self.match_box())
         pl.addStretch(1)
-        self.d_stack.addWidget(res_page)
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setWidget(res_page)
+        self.d_stack.addWidget(scroll)
         rl.addWidget(self.d_stack, 1)
         split.addWidget(right)
         split.setStretchFactor(0, 5)
         split.setStretchFactor(1, 6)
-        split.setSizes([520, 620])
+        split.setSizes([470, 700])
         l.addWidget(split, 1)
         self.show_video(None)
         self.update_check_btn()
         return w
+
+    # -- matching settings (play with them on one video, then save) --
+    def match_box(self):
+        box = QtWidgets.QFrame()
+        box.setObjectName("card")
+        g = QtWidgets.QGridLayout(box)
+        g.setContentsMargins(14, 10, 14, 12)
+        g.setHorizontalSpacing(14)
+        g.setVerticalSpacing(4)
+        g.addWidget(label("\u041d\u0410\u0421\u0422\u0420\u041e\u0419\u041a\u0418 \u041f\u041e\u0418\u0421\u041a\u0410", "lbl"), 0, 0, 1, 3)
+        spec = [
+            ("min_len", "\u041c\u0438\u043d. \u0434\u043b\u0438\u043d\u0430, \u0441\u0435\u043a", 0.0, 120.0, 0.5, 1,
+             "\u0421\u043a\u043e\u043b\u044c\u043a\u043e \u0441\u0435\u043a\u0443\u043d\u0434 \u043f\u043e\u0434\u0440\u044f\u0434 \u0442\u0440\u0435\u043a \u0434\u043e\u043b\u0436\u0435\u043d \u0441\u043e\u0432\u043f\u0430\u0434\u0430\u0442\u044c. \u0411\u043e\u043b\u044c\u0448\u0435 = \u043c\u0435\u043d\u044c\u0448\u0435 \u043b\u043e\u0436\u043d\u044b\u0445 \u043d\u0430\u0445\u043e\u0434\u043e\u043a."),
+            ("min_score", "\u041c\u0438\u043d. \u0443\u0432\u0435\u0440\u0435\u043d\u043d\u043e\u0441\u0442\u044c", 1, 2000, 5, 0,
+             "\u0421\u043a\u043e\u043b\u044c\u043a\u043e \u0442\u043e\u0447\u0435\u043a \u043e\u0442\u043f\u0435\u0447\u0430\u0442\u043a\u0430 \u0437\u0432\u0443\u043a\u0430 \u0434\u043e\u043b\u0436\u043d\u043e \u0441\u043e\u0432\u043f\u0430\u0441\u0442\u044c \u0432 \u043b\u0443\u0447\u0448\u0435\u043c \u043a\u0443\u0441\u043a\u0435. \u0411\u043e\u043b\u044c\u0448\u0435 = \u0441\u0442\u0440\u043e\u0436\u0435."),
+            ("min_windows", "\u041a\u0443\u0441\u043a\u043e\u0432 \u043f\u043e\u0434\u0440\u044f\u0434", 1, 50, 1, 0,
+             "\u041a\u0443\u0441\u043a\u043e\u0432 \u043f\u043e 8 \u0441\u0435\u043a (\u043a\u0430\u0436\u0434\u044b\u0435 2 \u0441\u0435\u043a), \u0441\u043e\u0432\u043f\u0430\u0432\u0448\u0438\u0445 \u0441 \u043e\u0434\u043d\u0438\u043c \u043c\u0435\u0441\u0442\u043e\u043c \u0442\u0440\u0435\u043a\u0430. \u0411\u043e\u043b\u044c\u0448\u0435 = \u0441\u0442\u0440\u043e\u0436\u0435."),
+            ("strong", "\u0421\u0438\u043b\u044c\u043d\u0430\u044f \u0443\u0432\u0435\u0440\u0435\u043d\u043d\u043e\u0441\u0442\u044c", 1, 5000, 10, 0,
+             "\u0421 \u0442\u0430\u043a\u043e\u0439 \u0443\u0432\u0435\u0440\u0435\u043d\u043d\u043e\u0441\u0442\u044c\u044e \u0445\u0432\u0430\u0442\u0430\u0435\u0442 \u043e\u0434\u043d\u043e\u0433\u043e \u043a\u0443\u0441\u043a\u0430 (\u043c\u0438\u043d. \u0434\u043b\u0438\u043d\u0430 \u0432\u0441\u0451 \u0440\u0430\u0432\u043d\u043e \u043d\u0443\u0436\u043d\u0430)."),
+            ("align", "\u0422\u043e\u0447\u043d\u043e\u0441\u0442\u044c, \u0441\u0435\u043a", 0.1, 5.0, 0.1, 1,
+             "\u041d\u0430\u0441\u043a\u043e\u043b\u044c\u043a\u043e \u0440\u043e\u0432\u043d\u043e \u043a\u0443\u0441\u043a\u0438 \u0434\u043e\u043b\u0436\u043d\u044b \u0438\u0434\u0442\u0438 \u043f\u043e \u0442\u0440\u0435\u043a\u0443. \u041c\u0435\u043d\u044c\u0448\u0435 = \u0441\u0442\u0440\u043e\u0436\u0435."),
+            ("noise_ratio", "\u0421\u0438\u043b\u044c\u043d\u0435\u0435 \u0448\u0443\u043c\u0430, \u0440\u0430\u0437", 1.0, 20.0, 0.5, 1,
+             "\u0412\u043e \u0441\u043a\u043e\u043b\u044c\u043a\u043e \u0440\u0430\u0437 \u043d\u0430\u0445\u043e\u0434\u043a\u0430 \u0434\u043e\u043b\u0436\u043d\u0430 \u0431\u044b\u0442\u044c \u0441\u0438\u043b\u044c\u043d\u0435\u0435 \u0441\u043b\u0443\u0447\u0430\u0439\u043d\u043e\u0433\u043e \u0448\u0443\u043c\u0430 \u044d\u0442\u043e\u0433\u043e \u0432\u0438\u0434\u0435\u043e. \u0411\u043e\u043b\u044c\u0448\u0435 = \u0441\u0442\u0440\u043e\u0436\u0435."),
+        ]
+        self.mspins = {}
+        for i, (k, text, lo, hi, step, dec, tip) in enumerate(spec):
+            sb = QtWidgets.QDoubleSpinBox() if dec else QtWidgets.QSpinBox()
+            if dec:
+                sb.setDecimals(dec)
+            sb.setRange(lo, hi)
+            sb.setSingleStep(step)
+            sb.setValue(MATCH[k])
+            lb = label(text, "muted")
+            lb.setStyleSheet("color:#cfcfcf;font-size:12px;font-weight:600")
+            r0, col = 1 + (i // 3) * 3, i % 3  # two rows of three
+            g.addWidget(lb, r0, col)
+            g.addWidget(sb, r0 + 1, col)
+            hl = label(tip, "help")
+            hl.setMinimumHeight(48)  # three lines; wrapped labels get squeezed in a grid otherwise
+            g.addWidget(hl, r0 + 2, col, QtCore.Qt.AlignmentFlag.AlignTop)
+            self.mspins[k] = sb
+        self.cb_pitch = QtWidgets.QCheckBox("\u0418\u0441\u043a\u0430\u0442\u044c \u0438 \u0432 \u0438\u0437\u043c\u0435\u043d\u0451\u043d\u043d\u043e\u043c \u0442\u043e\u043d\u0435 (\u00b11 \u0438 \u00b12 \u043f\u043e\u043b\u0443\u0442\u043e\u043d\u0430)")
+        self.cb_pitch.setChecked(bool(MATCH.get("pitch")))
+        self.cb_pitch.toggled.connect(lambda *_: self.match_note_update())
+        g.addItem(QtWidgets.QSpacerItem(0, 8), 7, 0)
+        g.addWidget(self.cb_pitch, 8, 0, 1, 3)
+        g.addWidget(label("\u041d\u0430\u0445\u043e\u0434\u0438\u0442 \u0442\u0440\u0435\u043a\u0438, \u0443 \u043a\u043e\u0442\u043e\u0440\u044b\u0445 \u0432 \u0432\u0438\u0434\u0435\u043e \u0441\u0434\u0432\u0438\u043d\u0443\u0442 \u0442\u043e\u043d (\u0442\u0430\u043a \u043e\u0431\u0445\u043e\u0434\u044f\u0442 Content ID). "
+                          "\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u0438\u0434\u0451\u0442 \u043d\u0435\u043c\u043d\u043e\u0433\u043e \u0434\u043e\u043b\u044c\u0448\u0435.", "help"), 9, 0, 1, 3)
+        row = QtWidgets.QHBoxLayout()
+        self.match_note = label("", "muted")
+        row.addWidget(self.match_note, 1)
+        b_reset = QtWidgets.QPushButton("\u0421\u0431\u0440\u043e\u0441\u0438\u0442\u044c")
+        b_reset.setObjectName("ghost")
+        b_reset.clicked.connect(self.match_reset)
+        b_save = QtWidgets.QPushButton("\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c")
+        b_save.setObjectName("ghost")
+        b_save.clicked.connect(self.match_save)
+        b_apply = QtWidgets.QPushButton("\u041f\u0435\u0440\u0435\u043f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c \u044d\u0442\u043e \u0432\u0438\u0434\u0435\u043e")
+        b_apply.setObjectName("gold")
+        b_apply.clicked.connect(self.rematch)
+        row.addWidget(b_reset)
+        row.addWidget(b_save)
+        row.addWidget(b_apply)
+        g.addItem(QtWidgets.QSpacerItem(0, 8), 10, 0)
+        g.addLayout(row, 11, 0, 1, 3)
+        for sb in self.mspins.values():
+            sb.valueChanged.connect(lambda *_: self.match_note_update())
+        self.match_note_update()
+        return box
+
+    def match_values(self):
+        v = {k: sb.value() for k, sb in self.mspins.items()}
+        v["pitch"] = 1 if self.cb_pitch.isChecked() else 0
+        return v
+
+    def match_note_update(self):
+        saved = dict(MATCH_DEFAULTS, **(self.settings.get("match") or {}))
+        cur = self.match_values()
+        same = all(abs(float(cur[k]) - float(saved[k])) < 1e-6 for k in cur)
+        self.match_note.setText("\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u044b" if same else "\u041d\u0435 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u043e: \u043d\u0430\u0436\u043c\u0438 \u00ab\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c\u00bb, \u0447\u0442\u043e\u0431\u044b \u043e\u0441\u0442\u0430\u0432\u0438\u0442\u044c")
+
+    def match_reset(self):
+        for k, sb in self.mspins.items():
+            sb.setValue(MATCH_DEFAULTS[k])
+        self.cb_pitch.setChecked(bool(MATCH_DEFAULTS["pitch"]))
+        self.match_note_update()
+
+    def match_save(self):
+        MATCH.update(self.match_values())
+        self.settings["match"] = dict(MATCH)
+        save_settings(self.settings)
+        self.log("Matching settings saved (the automatic scanner uses them too): %s" % self.settings["match"])
+        self.match_note_update()
+
+    def rematch(self):
+        vid = self.cur_vid
+        c = self.checks.get(vid) if vid else None
+        if not c or c.get("error") or vid == self.checking:
+            return
+        MATCH.update(self.match_values())  # in use now; Save keeps them after a restart
+        self.match_note_update()
+        self.bg(self._rematch, vid)
+
+    def _rematch(self, vid):
+        c = self.checks[vid]
+        t0 = time.time()
+        k = self.hcache.get(vid) or {}
+        need = [0] + (PITCH_SHIFTS if MATCH.get("pitch") else [])
+        hs = dict(k.get("hs") or {})
+        if any(st not in hs for st in need):
+            audio = c.get("audio") or ""
+            if not os.path.isfile(audio):
+                self.log("The audio of this video is not on disk any more. Check it again.")
+                return
+            self.stage("Analysing audio...", None)
+            hs.update(fp.query_hashes_pitched(fp.load_mono(audio), [st for st in need if st]))
+            k = self.hcache[vid] = {"hs": hs, "dur": k.get("dur") or c["dur"]}
+        dbg = []
+        found = match_shifts(self.base, {st: hs[st] for st in need}, k["dur"], dbg)
+        rows = group_rows(self.base, found)
+        c["rows"] = rows
+        c["at"] = time.strftime("%Y-%m-%d %H:%M")
+        c["near"] = near_list(self.base, dbg)
+        try:
+            save_checks(self.checks)
+        except Exception:
+            pass
+        write_check_log(self.base, vid, "[re-check %s, pitch %s] %s" % (match_kw(), "on" if MATCH.get("pitch") else "off",
+                                                                         c.get("title", vid)), False, rows, dbg,
+                        time.time() - t0)
+        self.stage("Re-checked: %s" % (", ".join(r["title"] for r in rows) or "nothing found"), 1)
+        self.ui(lambda: (self.refresh_item(vid), self.show_if_current(vid), self.update_counts()))
 
     # -- video states --
     def vstatus(self, vid):
@@ -1346,12 +1944,15 @@ class App(QtWidgets.QMainWindow):
                 try:
                     audio = download_audio(vid, prog)
                     dbg = []
-                    samples, rows = find_in_audio(self.base, audio, novoice, prog, dbg)
+                    keep = {}
+                    samples, rows = find_in_audio(self.base, audio, novoice, prog, dbg, keep)
+                    self.hcache[vid] = keep
                     write_check_log(self.base, vid, v["title"], novoice, rows, dbg, time.time() - t0)
                     env = envelope(samples, 6000)
                     self.checks[vid] = {"title": v["title"], "dur": len(samples) / fp.SR, "rows": rows,
                                         "env": [round(float(x), 4) for x in env], "audio": audio,
-                                        "novoice": novoice, "at": time.strftime("%Y-%m-%d %H:%M")}
+                                        "novoice": novoice, "at": time.strftime("%Y-%m-%d %H:%M"),
+                                        "near": near_list(self.base, dbg)}
                     self.log("%s: %s  [%.0f s]" % (v["title"], ", ".join(r["title"] for r in rows) or "clean",
                                                    time.time() - t0))
                 except Cancelled:
@@ -1424,6 +2025,12 @@ class App(QtWidgets.QMainWindow):
         bits = [fmt(v["dur"])] if v.get("dur") else []
         bits.append('<span style="color:%s;font-weight:700">%s</span>' % (STATUS_COLORS[key] if key != "none"
                                                                           else "#8f8f8f", text))
+        if c and c.get("rows") and not c.get("error"):
+            st = [self.base.site_state(r["track"])[0] for r in c["rows"]]
+            cnt = [(st.count("site"), "\u043d\u0430 \u0441\u0430\u0439\u0442\u0435", GREEN), (st.count("local") + st.count("gone"), "\u043d\u0435 \u0437\u0430\u043b\u0438\u0442", RED),
+                   (st.count("dup"), "\u0434\u0443\u0431\u043b\u044c", GOLD)]
+            bits.append(" &middot; ".join("<span style='color:%s'>%d %s</span>" % (col, n, word)
+                                          for n, word, col in cnt if n))
         if c and c.get("at"):
             bits.append("checked " + c["at"] + (" (voice removed)" if c.get("novoice") else ""))
         self.d_sub.setText("   |   ".join(bits))
@@ -1446,24 +2053,51 @@ class App(QtWidgets.QMainWindow):
             return
         self.d_stack.setCurrentIndex(1)
         rows = c["rows"]
+        cands = cand_rows(self.base, c)
+        self.view_rows = rows + cands
         self.res.blockSignals(True)
         self.res.clear()
-        for r in rows:
-            it = QtWidgets.QTreeWidgetItem([r["title"], r["composer"],
+        for r in self.view_rows:
+            rej = bool(r.get("rejected"))
+            title = r["title"] + ("  (\u0442\u043e\u043d %+d)" % r["pitch"] if r.get("pitch") else "")
+            it = QtWidgets.QTreeWidgetItem([title, r["composer"],
                                             ", ".join("%s-%s" % (fmt(a), fmt(b)) for a, b in r["regions"]),
-                                            fmt(r["total"]), strength_word(r["score"])])
-            it.setForeground(0, QtGui.QBrush(QtGui.QColor(RED)))
+                                            fmt(r["total"]), reliability(c, r)[0]])
+            it.setForeground(4, QtGui.QBrush(QtGui.QColor(reliability(c, r)[1])))
+            st, url = self.base.site_state(r["track"])
+            it.setText(5, site_look(st)[0])
+            it.setData(5, 256, url)
+            if url:
+                it.setToolTip(5, "\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0442\u0440\u0435\u043a \u043d\u0430 \u0441\u0430\u0439\u0442\u0435: " + url)
+            f5 = it.font(5)
+            f5.setBold(True)
+            it.setFont(5, f5)
+            it.setForeground(0, QtGui.QBrush(QtGui.QColor(ORANGE if rej else RED)))
+            it.setForeground(5, QtGui.QBrush(QtGui.QColor(site_look(self.base.site_state(r["track"])[0])[1])))
+            if rej:
+                for col in range(1, 5):
+                    it.setForeground(col, QtGui.QBrush(QtGui.QColor("#9a9a9a")))
+                it.setToolTip(0, "\u041d\u0435 \u0437\u0430\u0441\u0447\u0438\u0442\u0430\u043d: " + ru_verdict(r["rejected"]))
             self.res.addTopLevelItem(it)
-        self.res.setVisible(bool(rows))
-        self.res.setFixedHeight(min(150, 34 + 32 * max(1, len(rows))))
+        view = self.view_rows
+        self.res.setVisible(bool(view))
+        self.res.setFixedHeight(min(220, 34 + 32 * max(1, len(view))))
         self.clean_lbl.setVisible(not rows)
-        self.hint_lbl.setText(HINT_FOUND if rows else HINT_CLEAN)
-        self.track_lbl.setVisible(bool(rows))
-        self.w_track.setVisible(bool(rows))
-        if rows:
+        self.clean_lbl.setText("\u041d\u0430\u0448\u0438\u0445 \u0442\u0440\u0435\u043a\u043e\u0432 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e." + (
+            " \u0412 \u0442\u0430\u0431\u043b\u0438\u0446\u0435 \u0431\u043b\u0438\u0436\u0430\u0439\u0448\u0438\u0435 \u043f\u043e\u0445\u043e\u0436\u0438\u0435 \u043a\u0443\u0441\u043a\u0438 (\u043e\u0440\u0430\u043d\u0436\u0435\u0432\u044b\u0435), \u043a\u043e\u0442\u043e\u0440\u044b\u0435 \u043f\u0440\u043e\u0433\u0440\u0430\u043c\u043c\u0430 \u043e\u0442\u0431\u0440\u043e\u0441\u0438\u043b\u0430: \u043f\u043e\u0441\u043b\u0443\u0448\u0430\u0439 \u0438 \u043f\u0440\u043e\u0432\u0435\u0440\u044c."
+            if cands else ""))
+        self.hint_lbl.setText(HINT_FOUND if view else HINT_CLEAN)
+        self.track_lbl.setVisible(bool(view))
+        self.w_track.setVisible(bool(view))
+        if view:
             self.res.setCurrentItem(self.res.topLevelItem(0))
         self.res.blockSignals(False)
         self.draw()
+
+    def open_site_cell(self, it, col):
+        url = it.data(5, 256) if it is not None else ""
+        if col == 5 and url:
+            QtGui.QDesktopServices.openUrl(QtCore.QUrl(url))
 
     def open_youtube(self):
         if self.cur_vid:
@@ -1492,8 +2126,7 @@ class App(QtWidgets.QMainWindow):
             self.log("Not sent: %s" % res["error"])
             return
         api(self.settings, "POST", "", {"action": "result", "videoId": vid, "matches": [
-            {"trackId": x["track"], "track": x["title"], "regions": x["regions"], "total": x["total"],
-             "score": x["score"]} for x in c["rows"]]})
+            match_payload(self.base, x) for x in c["rows"]]})
         if os.path.isfile(c.get("audio") or ""):
             save_print(vid, fp.load_mono(c["audio"]), "")
         self.log("Sent to the site: %s (%s). It is in Admin -> Whitelisting now." % (c["title"], res.get("channelTitle", "")))
@@ -1505,17 +2138,19 @@ class App(QtWidgets.QMainWindow):
         if not c or not it:
             return None
         i = self.res.indexOfTopLevelItem(it)
-        return c["rows"][i] if 0 <= i < len(c["rows"]) else None
+        view = getattr(self, "view_rows", None) or c["rows"]
+        return view[i] if 0 <= i < len(view) else None
 
     def draw(self):
         c = self.cur_check()
         if not c:
             return
         row = self.sel_row()
+        self.why_lbl.setText(why_text(c, row))
         dur = max(c["dur"], 0.1)
         self.w_video.set(np.array(c["env"], np.float32), [(a / dur, b / dur) for a, b in row["regions"]] if row else [],
-                         dur, key=self.cur_vid)
-        self.video_lbl.setText("VIDEO AUDIO  -  click to listen")
+                         dur, key=self.cur_vid, color=ORANGE if row and row.get("rejected") else GOLD)
+        self.video_lbl.setText("\u0410\u0423\u0414\u0418\u041e \u0412\u0418\u0414\u0415\u041e")
         if not row:
             self.w_track.set(None, [], key=None)
             return
@@ -1529,8 +2164,8 @@ class App(QtWidgets.QMainWindow):
             return
         env, tdur = self.track_env[name]
         used = [(p["track_pos"] / tdur, (p["track_pos"] + p["end"] - p["start"]) / tdur) for p in row.get("parts", [])]
-        self.w_track.set(env, used, tdur, key=name)
-        self.track_lbl.setText("TRACK  -  %s" % row["title"].upper())
+        self.w_track.set(env, used, tdur, key=name, color=ORANGE if row.get("rejected") else GOLD)
+        self.track_lbl.setText("\u0422\u0420\u0415\u041a  -  %s" % row["title"].upper())
 
     # ---- listening -------------------------------------------------------------
     def click_play(self, which, frac):
@@ -1640,12 +2275,113 @@ class App(QtWidgets.QMainWindow):
         h3.setContentsMargins(18, 14, 18, 14)
         self.base_lbl = label("", "muted")
         h3.addWidget(self.base_lbl, 1)
+        b3 = QtWidgets.QPushButton("Open unreleased folder")
+        b3.setToolTip("Tracks not on the site yet: put them in unreleased/<Composer>/<Track title>.wav")
+        b3.clicked.connect(lambda: (os.makedirs(UNRELEASED, exist_ok=True),
+                                    QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(UNRELEASED))))
+        h3.addWidget(b3)
         b2 = QtWidgets.QPushButton("Update track base now")
         b2.clicked.connect(lambda: self.bg(self._update_base))
         h3.addWidget(b2)
         l.addWidget(c3)
+        l.addSpacing(10)
+        c4 = card()
+        h4 = QtWidgets.QHBoxLayout(c4)
+        h4.setContentsMargins(18, 14, 18, 14)
+        col4 = QtWidgets.QVBoxLayout()
+        col4.addWidget(label("STORAGE FOLDER", "lbl"))
+        self.store_lbl = label("", "muted")
+        col4.addWidget(self.store_lbl)
+        h4.addLayout(col4, 1)
+        b5 = QtWidgets.QPushButton("Open")
+        b5.clicked.connect(lambda: QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(STORE)))
+        h4.addWidget(b5)
+        self.btn_store = QtWidgets.QPushButton("Move to another disk...")
+        self.btn_store.clicked.connect(self.change_store)
+        h4.addWidget(self.btn_store)
+        l.addWidget(c4)
+        self.update_store_lbl()
         l.addStretch(1)
         return w
+
+    # ---- storage folder ----------------------------------------------------------
+    def update_store_lbl(self):
+        import shutil
+        try:
+            free = shutil.disk_usage(STORE if os.path.isdir(STORE) else os.path.dirname(STORE)).free / 1e9
+        except Exception:
+            free = 0
+        size = 0
+        for _n, path in store_sources():
+            if os.path.isdir(path):
+                for r, _d, fs in os.walk(path):
+                    size += sum(os.path.getsize(os.path.join(r, f)) for f in fs)
+            else:
+                size += os.path.getsize(path)
+        self.store_lbl.setText("%s\nTrack base, downloaded tracks and video audio, results, unreleased folder: "
+                               "%.1f GB. Free on this disk: %.0f GB." % (STORE, size / 1e9, free))
+
+    def change_store(self):
+        start = os.path.dirname(STORE) if self.settings.get("store_dir") else os.path.expanduser("~")
+        root = QtWidgets.QFileDialog.getExistingDirectory(self, "Where should the scanner keep its data?", start)
+        if not root:
+            return
+        dest = os.path.join(root, STORE_SUB)
+        if os.path.normcase(os.path.abspath(dest)) == os.path.normcase(os.path.abspath(STORE)):
+            return
+        if os.path.normcase(os.path.abspath(dest)).startswith(os.path.normcase(os.path.abspath(STORE)) + os.sep):
+            QtWidgets.QMessageBox.information(self, "Storage folder", "Pick a folder outside the current one.")
+            return
+        ok = QtWidgets.QMessageBox.question(
+            self, "Move storage",
+            "Move the scanner data to\n%s ?\n\nScanning and listening stop while it moves (they wait for the "
+            "video being checked now). The old copies are deleted only after everything is copied." % dest)
+        if ok != QtWidgets.QMessageBox.StandardButton.Yes:
+            return
+        self.btn_store.setEnabled(False)
+        was_running = self.running
+        # stop everything that could hold an audio file open
+        self.running = False
+        self.timer.stop()
+        self.stop_checking() if self.loop_on else None
+        self.stop_play()
+        self.refresh_status()
+        self.bg(self._move_store, dest, was_running)
+
+    def _move_store(self, dest, was_running):
+        try:
+            t0 = time.time()
+            while self.busy or self.loop_on:
+                self.stage("Waiting for the current video to finish before moving...", None)
+                time.sleep(1)
+                if time.time() - t0 > 1800:
+                    raise RuntimeError("the scanner is still busy, try again later")
+            try:
+                import sounddevice as sd
+                sd.stop()
+            except Exception:
+                pass
+            old_root, old_unrel = STORE, UNRELEASED
+            move_store(dest, self.stage, self.log)
+            set_store(dest)
+            fix_paths_after_move(old_root, old_unrel, dest)
+            self.settings["store_dir"] = dest
+            save_settings(self.settings)
+            self.base.load()
+            self.checks = load_checks()
+            self.stage("Storage moved to %s" % dest, 1)
+        except Exception as e:
+            self.log("ERROR: moving the storage failed: %s. Nothing was deleted; the scanner keeps using %s."
+                     % (e, STORE))
+            self.stage("Moving failed", 0)
+        finally:
+            def done():
+                self.btn_store.setEnabled(True)
+                self.update_store_lbl()
+                self.refresh_status()
+                if was_running:
+                    self.toggle()
+            self.ui(done)
 
     def _update_base(self):
         n = self.base.update(self.settings, self.log, self.stage)
@@ -1666,6 +2402,8 @@ class App(QtWidgets.QMainWindow):
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
+    app.setStyle(CleanStyle("Fusion"))
+    app.setPalette(dark_palette())
     app.setStyleSheet(QSS)
     w = App()
     w.show()

@@ -98,7 +98,7 @@ export const onRequestGet = async (ctx: Ctx) => {
   const matches = await db
     .prepare(
       `SELECT m.id, m.video_id, m.track_title, m.composer_id, m.regions, m.total_s, m.score,
-              m.eligible, m.state, m.sheet_date, m.released_at, m.created_at,
+              m.eligible, m.state, m.sheet_date, m.released_at, m.created_at, m.on_site,
               v.title AS video_title, v.published_at, w.yt_title AS channel_title, w.id AS channel_id,
               u.email AS email, c.display_name AS composer
          FROM wl_matches m
@@ -185,6 +185,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       total: m.total_s,
       score: m.score,
       eligible: !!m.eligible,
+      onSite: m.on_site === undefined || m.on_site === null ? true : !!m.on_site,
       state: m.state,
       sheetDate: m.sheet_date,
       releasedAt: m.released_at,
@@ -216,6 +217,8 @@ export const onRequestPost = async (ctx: Ctx) => {
           regions: Array.isArray(m.regions) ? m.regions.filter((r) => Array.isArray(r) && r.length === 2) : [],
           total: Number(m.total) || 0,
           score: Number(m.score) || 0,
+          composer: typeof m.composer === "string" ? m.composer.slice(0, 120) : undefined,
+          onSite: typeof m.onSite === "boolean" ? m.onSite : undefined,
         }));
       return json(
         await saveResult(db, videoId, matches, typeof body.error === "string" ? body.error : undefined, {

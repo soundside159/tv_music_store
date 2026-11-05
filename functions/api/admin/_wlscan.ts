@@ -86,6 +86,12 @@ export const ensureWlScan = async (db: D1Database) => {
     )
     .run();
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_wl_matches_state ON wl_matches(state)`).run();
+  try {
+    // 0 = the track is only in the owner's "unreleased" folder (not on the site yet)
+    await db.prepare(`ALTER TABLE wl_matches ADD COLUMN on_site INTEGER NOT NULL DEFAULT 1`).run();
+  } catch {
+    // column exists
+  }
   ready = true;
 };
 
@@ -97,8 +103,20 @@ const minusDays = (iso: string, n: number) => {
   return d.toISOString().slice(0, 10);
 };
 
-/** Current plan (only an active, non-free subscription counts). */
+/** Admins have full access without a subscription: for whitelisting they
+ *  count as Max (10 channels, claims always released). */
+const isAdminUser = async (db: D1Database, userId: string) => {
+  try {
+    const u = await db.prepare(`SELECT role FROM users WHERE id = ?1`).bind(userId).first<{ role: string | null }>();
+    return u?.role === "admin";
+  } catch {
+    return false;
+  }
+};
+
+/** Current plan (only an active, non-free subscription counts; admins = max). */
 export const currentPlan = async (db: D1Database, userId: string): Promise<string> => {
+  if (await isAdminUser(db, userId)) return "max";
   const sub = await db
     .prepare(`SELECT plan, status FROM subscriptions WHERE user_id = ?1 ORDER BY rowid DESC LIMIT 1`)
     .bind(userId)
@@ -110,6 +128,7 @@ export const currentPlan = async (db: D1Database, userId: string): Promise<strin
 /** Did the user have a PAID plan on this date? Uses the billing periods
  *  (subscription_licenses); falls back to the current plan when none exist. */
 export const paidOn = async (db: D1Database, userId: string, isoDate: string): Promise<boolean> => {
+  if (await isAdminUser(db, userId)) return true;
   const day = (isoDate || "").slice(0, 10);
   try {
     const any = await db
@@ -317,6 +336,8 @@ export interface ScanMatch {
   regions: [number, number][];
   total: number;
   score: number;
+  composer?: string;
+  onSite?: boolean;
 }
 
 /** Store the scanner's answer for one video. */
@@ -356,7 +377,8 @@ export const saveResult = async (
   const eligible =
     v.custom_group || v.note === "manual" || (await paidOn(db, v.user_id, v.published_at)) ? 1 : 0;
   for (const m of matches) {
-    const t = m.trackId
+    const local = !m.trackId || m.trackId.startsWith("local:");
+    const t = !local
       ? await db
           .prepare(`SELECT id, title, composer_id FROM tracks WHERE id = ?1`)
           .bind(m.trackId)
@@ -365,26 +387,38 @@ export const saveResult = async (
           .prepare(`SELECT id, title, composer_id FROM tracks WHERE lower(title) = lower(?1) LIMIT 1`)
           .bind(m.track)
           .first<{ id: string; title: string; composer_id: string | null }>();
+    // A track from the owner's unreleased folder: its composer comes by name.
+    let composerId = t?.composer_id ?? null;
+    if (!composerId && m.composer) {
+      const c = await db
+        .prepare(`SELECT id FROM composers WHERE lower(display_name) = lower(?1) LIMIT 1`)
+        .bind(m.composer)
+        .first<{ id: string }>();
+      composerId = c?.id ?? null;
+    }
+    const onSite = m.onSite === false ? 0 : t ? 1 : 0;
     await db
       .prepare(
         `INSERT INTO wl_matches (video_id, channel_id, user_id, track_id, track_title, composer_id,
-                                 regions, total_s, score, eligible, state)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+                                 regions, total_s, score, eligible, state, on_site)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
          ON CONFLICT(video_id, track_title) DO UPDATE SET
-           regions = excluded.regions, total_s = excluded.total_s, score = excluded.score`,
+           regions = excluded.regions, total_s = excluded.total_s, score = excluded.score,
+           on_site = excluded.on_site`,
       )
       .bind(
         videoId,
         v.channel_id,
         v.user_id,
-        t?.id ?? m.trackId ?? null,
+        t?.id ?? (local ? null : m.trackId) ?? null,
         t?.title ?? m.track,
-        t?.composer_id ?? null,
+        composerId,
         JSON.stringify(m.regions.slice(0, 20)),
         Math.round(m.total),
         Math.round(m.score),
         eligible,
         eligible ? "new" : "not_eligible",
+        onSite,
       )
       .run();
   }
@@ -403,14 +437,22 @@ export const saveResult = async (
 export const scanCatalog = async (db: D1Database) => {
   const rows = await db
     .prepare(
-      `SELECT t.id, t.title, t.created_at, c.display_name AS composer,
+      `SELECT t.id, t.slug, t.title, t.created_at, c.display_name AS composer,
               (SELECT v.preview_src FROM track_versions v WHERE v.track_id = t.id ORDER BY v.sort ASC LIMIT 1) AS src
          FROM tracks t LEFT JOIN composers c ON c.id = t.composer_id
         WHERE t.status = 'published'`,
     )
-    .all<{ id: string; title: string; created_at: string | null; composer: string | null; src: string | null }>();
+    .all<{
+      id: string;
+      slug: string | null;
+      title: string;
+      created_at: string | null;
+      composer: string | null;
+      src: string | null;
+    }>();
   return rows.results.filter((r) => r.src).map((r) => ({
     id: r.id,
+    slug: r.slug ?? "",
     title: r.title,
     addedAt: (r.created_at ?? "").slice(0, 10),
     composer: r.composer ?? "TV Music Store",

@@ -1,5 +1,5 @@
 import { getSessionUser, json, newId, readJson, type Ctx, type D1Database } from "./_utils";
-import { ensureWlScan } from "./admin/_wlscan";
+import { currentPlan, ensureWlScan } from "./admin/_wlscan";
 
 // Customer YouTube-channel whitelist (Content ID clearing while subscribed).
 //   GET    /api/whitelist            -> { channels, plan, limit, used }
@@ -42,14 +42,8 @@ export const ensureWhitelistTable = async (db: D1Database): Promise<void> => {
 };
 
 /** The user's current effective plan (only an active subscription counts). */
-const effectivePlan = async (db: D1Database, userId: string): Promise<string> => {
-  const sub = await db
-    .prepare(`SELECT plan, status FROM subscriptions WHERE user_id = ?1 ORDER BY rowid DESC LIMIT 1`)
-    .bind(userId)
-    .first<{ plan: string; status: string | null }>();
-  if (!sub) return "free";
-  return sub.status && sub.status !== "active" ? "free" : sub.plan || "free";
-};
+// Same rule as the scanner (admins count as Max without a subscription).
+const effectivePlan = (db: D1Database, userId: string): Promise<string> => currentPlan(db, userId);
 
 // Accept only plausible YouTube channel URLs; capture @handle / channel id / user.
 const CHANNEL_RE =

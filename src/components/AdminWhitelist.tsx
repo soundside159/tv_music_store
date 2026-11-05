@@ -28,6 +28,7 @@ interface Match {
   total: number;
   score: number;
   eligible: boolean;
+  onSite: boolean;
   state: "new" | "in_sheet" | "released" | "not_eligible";
   sheetDate: string | null;
   releasedAt: string | null;
@@ -357,7 +358,14 @@ const AdminWhitelist = () => {
                               {m.channelTitle} · {shortDate(m.publishedAt)}
                             </span>
                           </div>
-                          <div className="truncate text-foreground">{m.track}</div>
+                          <div className="min-w-0">
+                            <span className="block truncate text-foreground">{m.track}</span>
+                            {!m.onSite && (
+                              <span className="mt-0.5 inline-block rounded-full bg-red-400/10 px-2 py-0.5 text-[10px] font-bold text-red-300">
+                                Not on site yet
+                              </span>
+                            )}
+                          </div>
                           <div>
                             {m.regions.map(([a, b]) => `${fmt(a)} - ${fmt(b)}`).join(", ")}
                             <span className="block text-[11px] text-muted-foreground">
