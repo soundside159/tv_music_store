@@ -277,8 +277,9 @@ class Base:
         return m["composer"] if m else ""
 
 
-def find_in_audio(base, audio, novoice, progress):
-    """All tracks found in one audio file: list of rows (one per track)."""
+def find_in_audio(base, audio, novoice, progress, debug=None):
+    """All tracks found in one audio file: list of rows (one per track).
+    `debug` (a list) receives the matcher's details for the check log."""
     samples = fp.load_mono(audio)
     found = []
     progress("Analysing audio...", None)
@@ -286,6 +287,8 @@ def find_in_audio(base, audio, novoice, progress):
     found += fp.find_tracks(
         samples, base.ht, hashes=h,
         progress=lambda k, n: progress("Searching the track base  %d%%" % (100 * k // max(1, n)), k / max(1, n)))
+    if debug is not None:
+        debug.append(("original audio", dict(fp.LAST_DEBUG)))
     if novoice:
         if not os.path.isfile(MODEL_PATH):
             progress("Downloading voice removal model (65 MB)...", None)
@@ -295,7 +298,10 @@ def find_in_audio(base, audio, novoice, progress):
         if not os.path.isfile(clean):
             sep.separate(audio, clean, MODEL_PATH,
                          lambda k, n: progress("Removing voice  %d%%" % (100 * k // max(1, n)), k / max(1, n)))
-        for g in fp.find_tracks(fp.load_mono(clean), base.ht):
+        found_clean = fp.find_tracks(fp.load_mono(clean), base.ht)
+        if debug is not None:
+            debug.append(("voice removed", dict(fp.LAST_DEBUG)))
+        for g in found_clean:
             if not any(o["track"] == g["track"] and abs(o["start"] - g["start"]) < 8 for o in found):
                 found.append(g)
     by = {}
@@ -341,7 +347,33 @@ def save_print(video_id, samples, published):
                         dur=np.array([len(samples) / fp.SR]), pub=np.array([published or ""]))
 
 
-CHECKS = os.path.join(DATA, "checks.json")  # results of "Check a video" (survive restarts)
+HINT_FOUND = ("Gold = where the track plays. Click to listen from there, mouse wheel to zoom, drag to move, "
+              "double-click to see all.")
+HINT_CLEAN = "Click to listen from there, mouse wheel to zoom, drag to move, double-click to see all."
+CHECKS = os.path.join(DATA, "checks.json")
+CHECK_LOG = os.path.join(DATA, "check_log.txt")  # details of every check (for tuning the matching)
+
+
+def write_check_log(base, video_id, title, novoice, rows, debug_runs, seconds):
+    """One block per checked video: what was found and every near miss."""
+    try:
+        os.makedirs(DATA, exist_ok=True)
+        with open(CHECK_LOG, "a", encoding="utf-8") as f:
+            f.write("=" * 78 + "\n")
+            f.write("%s  %s  https://youtu.be/%s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), title, video_id))
+            f.write("voice removal: %s   check took %.0f s\n" % ("on" if novoice else "off", seconds))
+            f.write("FOUND: %s\n" % (", ".join("%s (%s) at %s, score %d" % (
+                r["title"], r["composer"], ", ".join("%s-%s" % (fmt(a), fmt(b)) for a, b in r["regions"]),
+                r["score"]) for r in rows) or "nothing"))
+            for name, d in debug_runs:
+                f.write("-- %s: %s s of audio, %s windows matched something\n"
+                        % (name, d.get("duration"), d.get("windows_with_hits")))
+                for c in d.get("chains", [])[:25]:
+                    f.write("   %-34s %6s-%-6s track@%-6s win %-3d score %-4d %s\n" % (
+                        base.title(c["track"])[:34], fmt(c["start"]), fmt(c["end"]), fmt(c["track_pos"]), c["windows"],
+                        c["score"], c["verdict"]))
+    except Exception:
+        pass  # results of "Check a video" (survive restarts)
 
 
 def load_checks():
@@ -450,7 +482,9 @@ def label(text, name=None):
 
 
 class Wave(QtWidgets.QWidget):
-    """Waveform with gold regions; click = play from there."""
+    """Waveform with gold regions.
+    Click = play from there. Mouse wheel = zoom in/out at the cursor,
+    drag = move along, double-click = whole audio again."""
     clicked = QtCore.pyqtSignal(float)
 
     def __init__(self, height=84):
@@ -460,27 +494,88 @@ class Wave(QtWidgets.QWidget):
         self.head = None
         self.hover = None
         self.dur = 0.0
+        self.key = None
+        self.v0, self.v1 = 0.0, 1.0  # visible part of the audio (0..1)
+        self.press = None  # (x, v0, v1) while the mouse button is down
+        self.dragged = False
         self.setMinimumHeight(height)
         self.setMaximumHeight(height + 30)
         self.setMouseTracking(True)
         self.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
 
-    def set(self, env, gold, dur=0.0):
-        self.env, self.gold, self.dur = env, gold, dur
+    def set(self, env, gold, dur=0.0, key=None):
+        if key is None or key != self.key:
+            self.v0, self.v1 = 0.0, 1.0  # another audio: show all of it
+        self.env, self.gold, self.dur, self.key = env, gold, dur, key
         self.update()
+
+    # -- view helpers --
+    def frac_at(self, x):
+        return self.v0 + max(0.0, min(1.0, x / max(1, self.width()))) * (self.v1 - self.v0)
+
+    def x_of(self, f):
+        return (f - self.v0) / max(1e-9, self.v1 - self.v0) * self.width()
+
+    def set_view(self, a, span):
+        span = max(self.min_span(), min(1.0, span))
+        a = max(0.0, min(1.0 - span, a))
+        self.v0, self.v1 = a, a + span
+        self.update()
+
+    def min_span(self):
+        # never closer than about 3 seconds across the whole width
+        return min(1.0, 3.0 / self.dur) if self.dur else 0.002
+
+    # -- mouse --
+    def wheelEvent(self, e):
+        if self.env is None:
+            return
+        dy = e.angleDelta().y()
+        dx = e.angleDelta().x()
+        span = self.v1 - self.v0
+        if dx and not dy or e.modifiers() & QtCore.Qt.KeyboardModifier.ShiftModifier:
+            step = -(dx or dy) / 120.0 * span * 0.15
+            self.set_view(self.v0 + step, span)
+            return
+        if not dy:
+            return
+        x = e.position().x()
+        anchor = self.frac_at(x)
+        new = span * (0.8 ** (dy / 120.0))
+        new = max(self.min_span(), min(1.0, new))
+        self.set_view(anchor - x / max(1, self.width()) * new, new)
 
     def mousePressEvent(self, e):
-        if self.env is not None:
-            self.clicked.emit(max(0.0, min(1.0, e.position().x() / max(1, self.width()))))
+        if self.env is not None and e.button() == QtCore.Qt.MouseButton.LeftButton:
+            self.press = (e.position().x(), self.v0, self.v1)
+            self.dragged = False
 
     def mouseMoveEvent(self, e):
-        self.hover = max(0.0, min(1.0, e.position().x() / max(1, self.width())))
+        x = e.position().x()
+        if self.press is not None:
+            x0, a, b = self.press
+            if abs(x - x0) > 4 and (b - a) < 1.0:
+                self.dragged = True
+                self.setCursor(QtCore.Qt.CursorShape.ClosedHandCursor)
+                self.set_view(a - (x - x0) / max(1, self.width()) * (b - a), b - a)
+        self.hover = max(0.0, min(1.0, x / max(1, self.width())))
         self.update()
+
+    def mouseReleaseEvent(self, e):
+        if self.press is not None and not self.dragged and self.env is not None:
+            self.clicked.emit(self.frac_at(e.position().x()))
+        self.press = None
+        self.dragged = False
+        self.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+
+    def mouseDoubleClickEvent(self, e):
+        self.set_view(0.0, 1.0)
 
     def leaveEvent(self, _):
         self.hover = None
         self.update()
 
+    # -- drawing --
     def paintEvent(self, _):
         p = QtGui.QPainter(self)
         p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
@@ -494,41 +589,57 @@ class Wave(QtWidgets.QWidget):
             p.drawText(self.rect(), QtCore.Qt.AlignmentFlag.AlignCenter, "No audio")
             p.end()
             return
+        span = self.v1 - self.v0
         for a, b in self.gold:
-            p.fillRect(QtCore.QRectF(a * w, 0, max(2, (b - a) * w), h), QtGui.QColor("#3a3214"))
-        if self.env is not None and len(self.env):
+            if b < self.v0 or a > self.v1:
+                continue
+            xa, xb = self.x_of(a), self.x_of(b)
+            p.fillRect(QtCore.QRectF(xa, 0, max(2, xb - xa), h), QtGui.QColor("#3a3214"))
+        n = len(self.env)
+        if n:
             m = float(self.env.max()) or 1.0
-            n = len(self.env)
             mid = h / 2
+            per_px = span * n / max(1, w)
             grey, gold = QtGui.QColor("#6f6f6f"), QtGui.QColor(GOLD)
             for x in range(w):
-                i = int(x / w * n)
-                v = float(self.env[i:i + max(1, n // w)].max()) / m if i < n else 0.0
-                f = x / w
+                f = self.v0 + x / w * span
+                i = int(f * n)
+                v = float(self.env[i:i + max(1, int(per_px + 1))].max()) / m if i < n else 0.0
                 p.setPen(gold if any(a <= f <= b for a, b in self.gold) else grey)
                 p.drawLine(x, int(mid - v * mid * 0.9), x, int(mid + v * mid * 0.9))
-        if self.head is not None:
+        if self.head is not None and self.v0 <= self.head <= self.v1:
             p.setPen(QtGui.QPen(QtGui.QColor("#ffffff"), 2))
-            x = int(self.head * w)
+            x = int(self.x_of(self.head))
             p.drawLine(x, 0, x, h)
         f = p.font()
         f.setPointSize(8)
         p.setFont(f)
         if self.dur:
-            p.setPen(QtGui.QColor("#666"))
-            p.drawText(QtCore.QRectF(6, h - 16, 60, 14), QtCore.Qt.AlignmentFlag.AlignLeft, "0:00")
-            p.drawText(QtCore.QRectF(w - 66, h - 16, 60, 14), QtCore.Qt.AlignmentFlag.AlignRight, fmt(self.dur))
+            p.setPen(QtGui.QColor("#777"))
+            p.drawText(QtCore.QRectF(6, h - 16, 60, 14), QtCore.Qt.AlignmentFlag.AlignLeft, fmt(self.v0 * self.dur))
+            p.drawText(QtCore.QRectF(w - 66, h - 16, 60, 14), QtCore.Qt.AlignmentFlag.AlignRight, fmt(self.v1 * self.dur))
+        if span < 0.999:
+            # where we are in the whole audio: thin bar on top
+            p.fillRect(QtCore.QRectF(0, 0, w, 3), QtGui.QColor("#262626"))
+            p.fillRect(QtCore.QRectF(self.v0 * w, 0, max(4, span * w), 3), QtGui.QColor(GOLD))
+            p.setPen(QtGui.QColor("#777"))
+            p.drawText(QtCore.QRectF(w / 2 - 60, h - 16, 120, 14), QtCore.Qt.AlignmentFlag.AlignCenter,
+                       "zoom x%d" % round(1 / span))
         if self.hover is not None:
             x = int(self.hover * w)
             p.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255, 90), 1))
             p.drawLine(x, 0, x, h)
             if self.dur:
-                t = fmt(self.hover * self.dur)
+                t = fmt(self.frac_at(x) * self.dur)
                 tx = min(max(x + 6, 4), w - 50)
-                p.fillRect(QtCore.QRectF(tx - 3, 3, 44, 16), QtGui.QColor(0, 0, 0, 170))
+                p.fillRect(QtCore.QRectF(tx - 3, 6, 44, 16), QtGui.QColor(0, 0, 0, 170))
                 p.setPen(QtGui.QColor("#ffffff"))
-                p.drawText(QtCore.QRectF(tx - 3, 3, 44, 16), QtCore.Qt.AlignmentFlag.AlignCenter, t)
+                p.drawText(QtCore.QRectF(tx - 3, 6, 44, 16), QtCore.Qt.AlignmentFlag.AlignCenter, t)
         p.end()
+
+
+class Cancelled(Exception):
+    pass
 
 
 class KeepColors(QtWidgets.QStyledItemDelegate):
@@ -566,6 +677,7 @@ class App(QtWidgets.QMainWindow):
         self.checking = None  # videoId being checked now
         self.qlock = threading.Lock()
         self.loop_on = False
+        self.cancel = False
         self.check_pct = 0
         self.cur_vid = None  # video shown on the right
         self.vmeta = {}  # videoId -> {id, title, dur, short}
@@ -865,8 +977,11 @@ class App(QtWidgets.QMainWindow):
         title = v.get("title") or v["videoId"]
         try:
             audio = download_audio(v["videoId"], lambda t, f: self.stage("%s  -  %s" % (title[:40], t), f))
+            dbg = []
             samples, rows = find_in_audio(self.base, audio, self.settings["novoice"],
-                                          lambda t, f: self.stage("%s  -  %s" % (title[:40], t), f))
+                                          lambda t, f: self.stage("%s  -  %s" % (title[:40], t), f), dbg)
+            write_check_log(self.base, v["videoId"], "[auto] " + title, self.settings["novoice"], rows, dbg,
+                            time.time() - t0)
             save_print(v["videoId"], samples, v.get("publishedAt", ""))
             matches = [{"trackId": r["track"], "track": r["title"], "regions": r["regions"],
                         "total": r["total"], "score": r["score"]} for r in rows]
@@ -970,6 +1085,11 @@ class App(QtWidgets.QMainWindow):
         self.cb_voice.setToolTip("Finds quiet music under talking. Takes several times longer.")
         row.addWidget(self.cb_voice)
         row.addStretch(1)
+        self.btn_stop = QtWidgets.QPushButton("Stop")
+        self.btn_stop.setToolTip("Stop checking: the video being checked now and the queue")
+        self.btn_stop.clicked.connect(self.stop_checking)
+        self.btn_stop.setVisible(False)
+        row.addWidget(self.btn_stop)
         self.btn_check = QtWidgets.QPushButton("Check selected")
         self.btn_check.setObjectName("gold")
         self.btn_check.clicked.connect(self.check_selected)
@@ -1040,7 +1160,7 @@ class App(QtWidgets.QMainWindow):
         self.w_track.clicked.connect(lambda f: self.click_play("track", f))
         pl.addWidget(self.w_track)
         row = QtWidgets.QHBoxLayout()
-        self.hint_lbl = label("Gold = where the track plays. Click a waveform to listen from there.", "muted")
+        self.hint_lbl = label(HINT_FOUND, "muted")
         row.addWidget(self.hint_lbl, 1)
         stop = QtWidgets.QPushButton("Stop sound")
         stop.setObjectName("ghost")
@@ -1194,6 +1314,8 @@ class App(QtWidgets.QMainWindow):
             if start:
                 self.loop_on = True
         if start:
+            self.cancel = False
+            self.btn_stop.setVisible(True)
             self.bg(self._check_loop)
         self.update_counts()
         if self.cur_vid:
@@ -1213,6 +1335,8 @@ class App(QtWidgets.QMainWindow):
                 t0 = time.time()
 
                 def prog(text, frac, title=v["title"], v_id=vid):
+                    if self.cancel:
+                        raise Cancelled()
                     self.stage("%s  -  %s" % (title[:50], text), frac)
                     if frac is not None:
                         pct = int(100 * frac)
@@ -1221,14 +1345,23 @@ class App(QtWidgets.QMainWindow):
                             self.ui(lambda: self.refresh_item(v_id))
                 try:
                     audio = download_audio(vid, prog)
-                    samples, rows = find_in_audio(self.base, audio, novoice, prog)
-                    env = envelope(samples)
+                    dbg = []
+                    samples, rows = find_in_audio(self.base, audio, novoice, prog, dbg)
+                    write_check_log(self.base, vid, v["title"], novoice, rows, dbg, time.time() - t0)
+                    env = envelope(samples, 6000)
                     self.checks[vid] = {"title": v["title"], "dur": len(samples) / fp.SR, "rows": rows,
                                         "env": [round(float(x), 4) for x in env], "audio": audio,
                                         "novoice": novoice, "at": time.strftime("%Y-%m-%d %H:%M")}
                     self.log("%s: %s  [%.0f s]" % (v["title"], ", ".join(r["title"] for r in rows) or "clean",
                                                    time.time() - t0))
+                except Cancelled:
+                    self.log("%s: stopped" % v["title"])
                 except Exception as e:
+                    if self.cancel:
+                        self.log("%s: stopped" % v["title"])
+                        self.checking = None
+                        self.ui(lambda v=vid: (self.refresh_item(v), self.show_if_current(v)))
+                        continue
                     msg = str(e).splitlines()[0] if str(e) else repr(e)
                     msg = msg.replace("ERROR: ", "").split("; please report")[0][:220]
                     self.checks[vid] = {"title": v["title"], "error": msg, "at": time.strftime("%Y-%m-%d %H:%M")}
@@ -1240,10 +1373,25 @@ class App(QtWidgets.QMainWindow):
                 self.checking = None
                 self.ui(lambda v=vid: (self.refresh_item(v), self.show_if_current(v), self.update_counts(),
                                        self.apply_filter()))
-            self.stage("All selected videos checked", 1)
+            self.stage("Stopped" if self.cancel else "All selected videos checked", 1)
         finally:
             self.checking = None
             self.loop_on = False
+            self.cancel = False
+            self.ui(lambda: self.btn_stop.setVisible(False))
+
+    def stop_checking(self):
+        with self.qlock:
+            dropped = [q[0] for q in self.queue]
+            self.queue.clear()
+            self.cancel = True
+        self.btn_stop.setVisible(False)
+        self.stage("Stopping...", None)
+        for v in dropped:
+            self.refresh_item(v)
+        self.update_counts()
+        if self.cur_vid:
+            self.show_video(self.cur_vid)
 
     def show_if_current(self, vid):
         if vid == self.cur_vid:
@@ -1309,8 +1457,7 @@ class App(QtWidgets.QMainWindow):
         self.res.setVisible(bool(rows))
         self.res.setFixedHeight(min(150, 34 + 32 * max(1, len(rows))))
         self.clean_lbl.setVisible(not rows)
-        self.hint_lbl.setText("Gold = where the track plays. Click a waveform to listen from there." if rows
-                              else "Click the waveform to listen from there.")
+        self.hint_lbl.setText(HINT_FOUND if rows else HINT_CLEAN)
         self.track_lbl.setVisible(bool(rows))
         self.w_track.setVisible(bool(rows))
         if rows:
@@ -1367,22 +1514,22 @@ class App(QtWidgets.QMainWindow):
         row = self.sel_row()
         dur = max(c["dur"], 0.1)
         self.w_video.set(np.array(c["env"], np.float32), [(a / dur, b / dur) for a, b in row["regions"]] if row else [],
-                         dur)
+                         dur, key=self.cur_vid)
         self.video_lbl.setText("VIDEO AUDIO  -  click to listen")
         if not row:
-            self.w_track.set(None, [])
+            self.w_track.set(None, [], key=None)
             return
         name = row["track"]
         path = (self.base.meta.get(name) or {}).get("path")
         if name not in self.track_env and path and os.path.isfile(path):
             t = fp.load_mono(path)
-            self.track_env[name] = (envelope(t), len(t) / fp.SR)
+            self.track_env[name] = (envelope(t, 6000), len(t) / fp.SR)
         if name not in self.track_env:
-            self.w_track.set(None, [])
+            self.w_track.set(None, [], key=None)
             return
         env, tdur = self.track_env[name]
         used = [(p["track_pos"] / tdur, (p["track_pos"] + p["end"] - p["start"]) / tdur) for p in row.get("parts", [])]
-        self.w_track.set(env, used, tdur)
+        self.w_track.set(env, used, tdur, key=name)
         self.track_lbl.setText("TRACK  -  %s" % row["title"].upper())
 
     # ---- listening -------------------------------------------------------------
@@ -1429,6 +1576,9 @@ class App(QtWidgets.QMainWindow):
             self.play = None
             return
         wave.head = (pos + el) / max(dur, 0.1)
+        span = wave.v1 - wave.v0
+        if span < 1.0 and wave.press is None and not (wave.v0 <= wave.head <= wave.v1):
+            wave.set_view(wave.head - span * 0.1, span)  # zoomed in: the view follows the sound
         wave.update()
 
     def stop_play(self):

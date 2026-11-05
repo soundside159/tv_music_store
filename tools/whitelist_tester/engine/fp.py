@@ -37,6 +37,11 @@ MIN_SCORE = 60  # best window of an aligned chain
 MIN_WINDOWS = 3  # aligned windows in a row (about 12 s of music)
 STRONG_SCORE = 150  # a single window this strong counts on its own
 
+# Details of the last find_tracks() call, for the app's check log: every chain
+# of windows (found or rejected) with its score, so wrong or missed matches
+# can be studied and the rules tuned.
+LAST_DEBUG = {}
+
 _NO_WINDOW = 0x08000000 if os.name == "nt" else 0  # hide ffmpeg console on Windows
 
 
@@ -238,12 +243,18 @@ def find_tracks(samples, ht, min_score=MIN_SCORE, strong=STRONG_SCORE, min_windo
         if not joined:
             chains.append({"track": name, "start": t0, "end": t1, "last_s": s,
                            "last_pos": pos, "track_pos": pos + (t0 - s), "n": 1, "score": score})
+    global LAST_DEBUG
     dur = dur if dur is not None else len(samples) / SR
     out = []
     for c in chains:
         if (c["n"] >= min_windows and c["score"] >= min_score) or c["score"] >= strong:
             out.append({"track": c["track"], "start": c["start"], "end": min(c["end"], dur),
                         "track_pos": c["track_pos"], "score": c["score"], "windows": c["n"]})
+            c["verdict"] = "found"
+        elif c["score"] < min_score:
+            c["verdict"] = "rejected: score %d < %d" % (c["score"], min_score)
+        else:
+            c["verdict"] = "rejected: only %d window(s) in a row, need %d" % (c["n"], min_windows)
     # A weak hit that overlaps a much stronger one is the strong track's shadow.
     keep = []
     for g in out:
@@ -251,4 +262,13 @@ def find_tracks(samples, ht, min_score=MIN_SCORE, strong=STRONG_SCORE, min_windo
                      and o["start"] < g["end"] + HOP_S and g["start"] < o["end"] + HOP_S for o in out)
         if not shadow:
             keep.append(g)
+        else:
+            for c in chains:
+                if c["track"] == g["track"] and c["start"] == g["start"]:
+                    c["verdict"] = "rejected: overlaps a much stronger track"
+    LAST_DEBUG = {"duration": round(dur, 1), "windows_with_hits": len(hits),
+                  "chains": [{"track": c["track"], "start": round(c["start"], 1), "end": round(c["end"], 1),
+                              "track_pos": round(c["track_pos"], 1), "windows": c["n"], "score": c["score"],
+                              "verdict": c.get("verdict", "")}
+                             for c in sorted(chains, key=lambda c: -c["score"])]}
     return sorted(keep, key=lambda g: g["start"])
