@@ -341,6 +341,23 @@ def save_print(video_id, samples, published):
                         dur=np.array([len(samples) / fp.SR]), pub=np.array([published or ""]))
 
 
+CHECKS = os.path.join(DATA, "checks.json")  # results of "Check a video" (survive restarts)
+
+
+def load_checks():
+    try:
+        return json.load(open(CHECKS, encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def save_checks(d):
+    os.makedirs(DATA, exist_ok=True)
+    tmp = CHECKS + ".tmp"
+    json.dump(d, open(tmp, "w", encoding="utf-8"), default=float)
+    os.replace(tmp, CHECKS)
+
+
 def envelope(samples, n=1200):
     if len(samples) < n:
         return np.abs(samples) if len(samples) else np.zeros(n, np.float32)
@@ -349,15 +366,33 @@ def envelope(samples, n=1200):
 
 
 # ------------------------------------------------------------------- style --
+RED = "#ff5c5c"
+GREEN = "#5ee69a"
+STATUS_COLORS = {"none": "#4a4a4a", "queue": "#8f8f8f", "run": GOLD, "found": RED, "clean": GREEN,
+                 "err": "#ff9f43"}
+
 QSS = """
 * { font-family: 'Inter', 'Segoe UI', sans-serif; color: #f2f2f2; }
 QMainWindow, QWidget#root { background: #111111; }
+QDialog, QMessageBox { background: #161616; }
+QMessageBox QLabel { color: #f2f2f2; font-size: 13px; }
+QMessageBox QPushButton { min-width: 84px; }
 QWidget#side { background: #0c0c0c; border-right: 1px solid #1f1f1f; }
 QPushButton#nav { text-align: left; padding: 9px 14px; border-radius: 8px; border: none;
                   background: transparent; color: #bdbdbd; font-size: 14px; }
-QPushButton#nav:checked { background: #1f1f1f; color: #ffffff; }
-QLabel#h1 { font-size: 26px; font-weight: 800; }
+QPushButton#nav:hover { background: #171717; color: #ffffff; }
+QPushButton#nav:checked { background: #1d1a10; color: #F4C430; font-weight: 700; }
+QLabel#brand { background: #F4C430; color: #111; font-weight: 900; font-size: 12px; border-radius: 7px; }
+QLabel#h1 { font-size: 24px; font-weight: 800; }
+QLabel#h2 { font-size: 16px; font-weight: 800; }
 QLabel#sub { color: #8f8f8f; font-size: 13px; }
+QLabel#empty { color: #777; font-size: 14px; }
+QPushButton#ghost { background: transparent; border: 1px solid #2a2a2a; color: #bdbdbd; padding: 5px 10px;
+                    font-size: 12px; }
+QPushButton#ghost:hover { border-color: #F4C430; color: #F4C430; }
+QPushButton#ghost:checked { border-color: #F4C430; color: #F4C430; }
+QSplitter::handle { background: transparent; }
+QWidget#pane { background: #151515; border: 1px solid #242424; border-radius: 14px; }
 QLabel#muted { color: #8f8f8f; font-size: 12px; }
 QLabel#lbl { color: #8f8f8f; font-size: 11px; font-weight: 700; letter-spacing: 1px; }
 QFrame#card { background: #161616; border: 1px solid #262626; border-radius: 14px; }
@@ -378,13 +413,20 @@ QProgressBar { background: #222; border: none; border-radius: 4px; height: 8px; 
 QProgressBar::chunk { background: #F4C430; border-radius: 4px; }
 QTreeWidget, QListWidget { background: #161616; border: 1px solid #262626; border-radius: 12px; font-size: 13px;
                            alternate-background-color: #191919; }
-QTreeWidget::item, QListWidget::item { padding: 6px 4px; }
-QTreeWidget::item:selected, QListWidget::item:selected { background: #2a2410; color: #F4C430; }
+QTreeWidget::item, QListWidget::item { padding: 7px 4px; border: none; }
+QTreeWidget::item:hover { background: #1c1c1c; }
+QTreeWidget::item:selected, QListWidget::item:selected { background: #2b2610; }
+QTreeWidget:focus { outline: none; }
 QHeaderView::section { background: #161616; color: #8f8f8f; border: none; border-bottom: 1px solid #262626;
                        padding: 6px; font-size: 11px; font-weight: 700; }
 QPlainTextEdit { background: #0e0e0e; border: 1px solid #222; border-radius: 10px; font-family: Consolas;
                  font-size: 12px; color: #bdbdbd; }
 QSpinBox { background: #111; border: 1px solid #2c2c2c; border-radius: 8px; padding: 6px; }
+QComboBox { background: #111; border: 1px solid #2c2c2c; border-radius: 10px; padding: 8px 12px; font-size: 13px; }
+QComboBox:hover { border-color: #F4C430; }
+QComboBox::drop-down { border: none; width: 18px; }
+QComboBox QAbstractItemView { background: #161616; border: 1px solid #2c2c2c; selection-background-color: #2a2410;
+                              selection-color: #F4C430; outline: none; }
 QScrollBar:vertical { background: transparent; width: 10px; }
 QScrollBar::handle:vertical { background: #2c2c2c; border-radius: 5px; }
 QScrollBar:horizontal { background: transparent; height: 10px; }
@@ -411,25 +453,47 @@ class Wave(QtWidgets.QWidget):
     """Waveform with gold regions; click = play from there."""
     clicked = QtCore.pyqtSignal(float)
 
-    def __init__(self):
+    def __init__(self, height=84):
         super().__init__()
         self.env = None
         self.gold = []
         self.head = None
-        self.setMinimumHeight(74)
+        self.hover = None
+        self.dur = 0.0
+        self.setMinimumHeight(height)
+        self.setMaximumHeight(height + 30)
+        self.setMouseTracking(True)
         self.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
 
-    def set(self, env, gold):
-        self.env, self.gold = env, gold
+    def set(self, env, gold, dur=0.0):
+        self.env, self.gold, self.dur = env, gold, dur
         self.update()
 
     def mousePressEvent(self, e):
-        self.clicked.emit(max(0.0, min(1.0, e.position().x() / max(1, self.width()))))
+        if self.env is not None:
+            self.clicked.emit(max(0.0, min(1.0, e.position().x() / max(1, self.width()))))
+
+    def mouseMoveEvent(self, e):
+        self.hover = max(0.0, min(1.0, e.position().x() / max(1, self.width())))
+        self.update()
+
+    def leaveEvent(self, _):
+        self.hover = None
+        self.update()
 
     def paintEvent(self, _):
         p = QtGui.QPainter(self)
+        p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        path = QtGui.QPainterPath()
+        path.addRoundedRect(QtCore.QRectF(self.rect()), 10, 10)
+        p.setClipPath(path)
         p.fillRect(self.rect(), QtGui.QColor("#141414"))
         w, h = self.width(), self.height()
+        if self.env is None:
+            p.setPen(QtGui.QColor("#555"))
+            p.drawText(self.rect(), QtCore.Qt.AlignmentFlag.AlignCenter, "No audio")
+            p.end()
+            return
         for a, b in self.gold:
             p.fillRect(QtCore.QRectF(a * w, 0, max(2, (b - a) * w), h), QtGui.QColor("#3a3214"))
         if self.env is not None and len(self.env):
@@ -447,7 +511,34 @@ class Wave(QtWidgets.QWidget):
             p.setPen(QtGui.QPen(QtGui.QColor("#ffffff"), 2))
             x = int(self.head * w)
             p.drawLine(x, 0, x, h)
+        f = p.font()
+        f.setPointSize(8)
+        p.setFont(f)
+        if self.dur:
+            p.setPen(QtGui.QColor("#666"))
+            p.drawText(QtCore.QRectF(6, h - 16, 60, 14), QtCore.Qt.AlignmentFlag.AlignLeft, "0:00")
+            p.drawText(QtCore.QRectF(w - 66, h - 16, 60, 14), QtCore.Qt.AlignmentFlag.AlignRight, fmt(self.dur))
+        if self.hover is not None:
+            x = int(self.hover * w)
+            p.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255, 90), 1))
+            p.drawLine(x, 0, x, h)
+            if self.dur:
+                t = fmt(self.hover * self.dur)
+                tx = min(max(x + 6, 4), w - 50)
+                p.fillRect(QtCore.QRectF(tx - 3, 3, 44, 16), QtGui.QColor(0, 0, 0, 170))
+                p.setPen(QtGui.QColor("#ffffff"))
+                p.drawText(QtCore.QRectF(tx - 3, 3, 44, 16), QtCore.Qt.AlignmentFlag.AlignCenter, t)
         p.end()
+
+
+class KeepColors(QtWidgets.QStyledItemDelegate):
+    """Selected rows keep their own text colours (red = found, green = clean)."""
+
+    def initStyleOption(self, opt, index):
+        super().initStyleOption(opt, index)
+        fg = index.data(QtCore.Qt.ItemDataRole.ForegroundRole)
+        if fg is not None:
+            opt.palette.setBrush(QtGui.QPalette.ColorRole.HighlightedText, fg)
 
 
 class Signals(QtCore.QObject):
@@ -468,11 +559,21 @@ class App(QtWidgets.QMainWindow):
         self.running = False
         self.busy = False
         self.recent = []
-        self.result = None
         self.track_env = {}
         self.play = None
+        self.checks = load_checks()  # videoId -> result of a manual check
+        self.queue = []  # (videoId, novoice) waiting to be checked
+        self.checking = None  # videoId being checked now
+        self.qlock = threading.Lock()
+        self.loop_on = False
+        self.check_pct = 0
+        self.cur_vid = None  # video shown on the right
+        self.vmeta = {}  # videoId -> {id, title, dur, short}
+        self.vitems = {}  # videoId -> list item
+        self.dots = {}
         self.setWindowTitle("TV Music Store - Whitelist Scanner")
-        self.resize(1180, 820)
+        self.resize(1320, 860)
+        self.setMinimumSize(1000, 640)
 
         root = QtWidgets.QWidget()
         root.setObjectName("root")
@@ -486,9 +587,17 @@ class App(QtWidgets.QMainWindow):
         side.setFixedWidth(210)
         sl = QtWidgets.QVBoxLayout(side)
         sl.setContentsMargins(14, 22, 14, 14)
-        title = label("TV MUSIC STORE", "lbl")
-        sl.addWidget(title)
-        sl.addSpacing(10)
+        brand = QtWidgets.QHBoxLayout()
+        mark = QtWidgets.QLabel("TV")
+        mark.setObjectName("brand")
+        mark.setFixedSize(28, 28)
+        mark.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        brand.addWidget(mark)
+        bt = QtWidgets.QLabel("Whitelist\nScanner")
+        bt.setStyleSheet("font-size:12px;font-weight:800;line-height:1")
+        brand.addWidget(bt, 1)
+        sl.addLayout(brand)
+        sl.addSpacing(18)
         self.pages = QtWidgets.QStackedWidget()
         self.navs = []
         for i, name in enumerate(["Scanner", "Check a video", "Settings"]):
@@ -505,20 +614,30 @@ class App(QtWidgets.QMainWindow):
 
         right = QtWidgets.QWidget()
         rl = QtWidgets.QVBoxLayout(right)
-        rl.setContentsMargins(28, 24, 28, 18)
+        rl.setContentsMargins(24, 20, 24, 14)
+        rl.setSpacing(10)
         rl.addWidget(self.pages, 1)
         bar = QtWidgets.QHBoxLayout()
         self.stage_lbl = label("", "muted")
+        self.stage_lbl.setWordWrap(False)
         self.pbar = QtWidgets.QProgressBar()
-        self.pbar.setFixedWidth(320)
+        self.pbar.setFixedWidth(260)
+        self.pbar.setFixedHeight(6)
         self.pbar.setTextVisible(False)
         self.pbar.setRange(0, 1000)
+        self.btn_log = QtWidgets.QPushButton("Log")
+        self.btn_log.setObjectName("ghost")
+        self.btn_log.setCheckable(True)
+        self.btn_log.toggled.connect(lambda on: self.logbox.setVisible(on))
         bar.addWidget(self.stage_lbl, 1)
         bar.addWidget(self.pbar)
+        bar.addSpacing(10)
+        bar.addWidget(self.btn_log)
         rl.addLayout(bar)
         self.logbox = QtWidgets.QPlainTextEdit()
         self.logbox.setReadOnly(True)
-        self.logbox.setFixedHeight(120)
+        self.logbox.setFixedHeight(130)
+        self.logbox.setVisible(False)
         rl.addWidget(self.logbox)
         lay.addWidget(right, 1)
 
@@ -544,6 +663,8 @@ class App(QtWidgets.QMainWindow):
 
     def _log(self, msg):
         self.logbox.appendPlainText(time.strftime("%H:%M  ") + msg)
+        if msg.startswith("ERROR") or "FAILED" in msg or msg.startswith("Could not"):
+            self.btn_log.setChecked(True)  # problems open the log by themselves
 
     def stage(self, text, frac=None):
         self.sig.stage.emit(text, -1.0 if frac is None else float(frac))
@@ -773,73 +894,234 @@ class App(QtWidgets.QMainWindow):
         def put():
             it = QtWidgets.QTreeWidgetItem([rec["time"], rec["title"], rec["channel"], found or "-"])
             if rec["found"]:
-                it.setForeground(3, QtGui.QBrush(QtGui.QColor(GOLD)))
+                it.setForeground(3, QtGui.QBrush(QtGui.QColor(RED)))
             self.recent_list.insertTopLevelItem(0, it)
             self.refresh_status()
         self.ui(put)
 
     # ---- Check a video page --------------------------------------------------
+    # Left: the channel's videos (as many as you like, Ctrl/Shift to pick
+    # several). Each row shows its state: grey = not checked, gold = checking,
+    # green = clean, red = our music found. Right: the HIGHLIGHTED video -
+    # tracks found, both waveforms, click to listen. Results are kept in
+    # data/checks.json, so a channel loaded again shows what was checked.
     def page_check(self):
         w = QtWidgets.QWidget()
         l = QtWidgets.QVBoxLayout(w)
         l.setContentsMargins(0, 0, 0, 0)
+        l.setSpacing(12)
         l.addWidget(label("Check a video", "h1"))
-        l.addWidget(label("Paste a channel or video link, pick a video and check it. Nothing is sent to the site.",
-                          "sub"))
+
+        split = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
+        split.setHandleWidth(12)
+        split.setChildrenCollapsible(False)
+
+        # -- left: link + list --
+        left = QtWidgets.QFrame()
+        left.setObjectName("pane")
+        ll = QtWidgets.QVBoxLayout(left)
+        ll.setContentsMargins(14, 14, 14, 14)
+        ll.setSpacing(10)
         row = QtWidgets.QHBoxLayout()
         self.url = QtWidgets.QLineEdit()
-        self.url.setPlaceholderText("YouTube channel or video link")
+        self.url.setPlaceholderText("Paste a YouTube channel or video link")
         self.url.returnPressed.connect(self.load_videos)
-        b = QtWidgets.QPushButton("Load videos")
+        b = QtWidgets.QPushButton("Load")
         b.clicked.connect(self.load_videos)
         row.addWidget(self.url, 1)
         row.addWidget(b)
-        l.addLayout(row)
+        ll.addLayout(row)
+        row = QtWidgets.QHBoxLayout()
+        self.vfilter = QtWidgets.QLineEdit()
+        self.vfilter.setPlaceholderText("Filter by title")
+        self.vfilter.textChanged.connect(self.apply_filter)
+        row.addWidget(self.vfilter, 1)
+        self.only = QtWidgets.QComboBox()
+        self.only.addItems(["All", "Not checked", "Our music found", "Clean"])
+        self.only.currentIndexChanged.connect(self.apply_filter)
+        row.addWidget(self.only)
+        ll.addLayout(row)
         self.vlist = QtWidgets.QTreeWidget()
-        self.vlist.setHeaderLabels(["Video", "Length"])
+        self.vlist.setHeaderLabels(["Video", "Length", "Result"])
         self.vlist.setRootIsDecorated(False)
-        self.vlist.setColumnWidth(0, 640)
+        self.vlist.setUniformRowHeights(True)
+        self.vlist.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.vlist.setIconSize(QtCore.QSize(10, 10))
+        self.vlist.setItemDelegate(KeepColors(self.vlist))
+        hd = self.vlist.header()
+        hd.setStretchLastSection(False)
+        hd.setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeMode.Stretch)
+        hd.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeMode.Fixed)
+        hd.setSectionResizeMode(2, QtWidgets.QHeaderView.ResizeMode.Fixed)
+        self.vlist.setColumnWidth(1, 64)
+        self.vlist.setColumnWidth(2, 118)
+        self.vlist.currentItemChanged.connect(lambda cur, _p: self.show_video(cur.data(0, 256) if cur else None))
+        self.vlist.itemSelectionChanged.connect(self.update_check_btn)
         self.vlist.itemDoubleClicked.connect(lambda *_: self.check_selected())
-        l.addWidget(self.vlist, 2)
-        row2 = QtWidgets.QHBoxLayout()
-        self.cb_voice = QtWidgets.QCheckBox("Remove voice first (slower, finds quiet music under talking)")
-        row2.addWidget(self.cb_voice)
-        row2.addStretch(1)
-        self.btn_send = QtWidgets.QPushButton("Manual check")
-        self.btn_send.setToolTip("For an old video of a customer you brought in: the claims will be released "
-                                 "whatever the video date.")
-        self.btn_send.setEnabled(False)
-        self.btn_send.clicked.connect(self.send_manual)
-        row2.addWidget(self.btn_send)
-        self.btn_check = QtWidgets.QPushButton("Check selected video")
+        ll.addWidget(self.vlist, 1)
+        self.vcount = label("Paste a link above. Pick several videos with Ctrl or Shift.", "muted")
+        ll.addWidget(self.vcount)
+        row = QtWidgets.QHBoxLayout()
+        self.cb_voice = QtWidgets.QCheckBox("Remove voice (slower)")
+        self.cb_voice.setToolTip("Finds quiet music under talking. Takes several times longer.")
+        row.addWidget(self.cb_voice)
+        row.addStretch(1)
+        self.btn_check = QtWidgets.QPushButton("Check selected")
         self.btn_check.setObjectName("gold")
         self.btn_check.clicked.connect(self.check_selected)
-        row2.addWidget(self.btn_check)
-        l.addLayout(row2)
+        row.addWidget(self.btn_check)
+        ll.addLayout(row)
+        split.addWidget(left)
+
+        # -- right: the highlighted video --
+        right = QtWidgets.QFrame()
+        right.setObjectName("pane")
+        rl = QtWidgets.QVBoxLayout(right)
+        rl.setContentsMargins(18, 16, 18, 16)
+        rl.setSpacing(10)
+        head = QtWidgets.QHBoxLayout()
+        col = QtWidgets.QVBoxLayout()
+        col.setSpacing(4)
+        self.d_title = label("No video selected", "h2")
+        self.d_sub = label("", "muted")
+        col.addWidget(self.d_title)
+        col.addWidget(self.d_sub)
+        head.addLayout(col, 1)
+        self.btn_open = QtWidgets.QPushButton("Open on YouTube")
+        self.btn_open.setObjectName("ghost")
+        self.btn_open.clicked.connect(self.open_youtube)
+        head.addWidget(self.btn_open, 0, QtCore.Qt.AlignmentFlag.AlignTop)
+        self.btn_send = QtWidgets.QPushButton("Manual check")
+        self.btn_send.setToolTip("For an old video of a customer you brought in: sends the result to the site, "
+                                 "and the claims are released whatever the video date.")
+        self.btn_send.clicked.connect(self.send_manual)
+        head.addWidget(self.btn_send, 0, QtCore.Qt.AlignmentFlag.AlignTop)
+        rl.addLayout(head)
+
+        self.d_stack = QtWidgets.QStackedWidget()
+        self.d_empty = label("", "empty")
+        self.d_empty.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.d_stack.addWidget(self.d_empty)
+        res_page = QtWidgets.QWidget()
+        pl = QtWidgets.QVBoxLayout(res_page)
+        pl.setContentsMargins(0, 0, 0, 0)
+        pl.setSpacing(8)
         self.res = QtWidgets.QTreeWidget()
         self.res.setHeaderLabels(["Track found", "Composer", "Where in the video", "Plays", "Match"])
         self.res.setRootIsDecorated(False)
-        self.res.setColumnWidth(0, 230)
-        self.res.setColumnWidth(1, 130)
-        self.res.setColumnWidth(2, 360)
-        self.res.setFixedHeight(120)
+        rh = self.res.header()
+        rh.setStretchLastSection(False)
+        rh.setSectionResizeMode(2, QtWidgets.QHeaderView.ResizeMode.Stretch)
+        self.res.setColumnWidth(0, 170)
+        self.res.setColumnWidth(1, 105)
+        self.res.setColumnWidth(3, 52)
+        self.res.setColumnWidth(4, 56)
+        self.res.setMaximumHeight(150)
+        self.res.setItemDelegate(KeepColors(self.res))
         self.res.itemSelectionChanged.connect(self.draw)
-        l.addWidget(self.res)
-        l.addWidget(label("YOUTUBE AUDIO  -  gold = selected track, click to listen", "lbl"))
+        pl.addWidget(self.res)
+        self.clean_lbl = label("None of our tracks found in this video.", "sub")
+        self.clean_lbl.setStyleSheet("color:%s;font-size:13px;font-weight:600" % GREEN)
+        pl.addWidget(self.clean_lbl)
+        pl.addSpacing(4)
+        self.video_lbl = label("VIDEO AUDIO  -  click to listen", "lbl")
+        pl.addWidget(self.video_lbl)
         self.w_video = Wave()
         self.w_video.clicked.connect(lambda f: self.click_play("video", f))
-        l.addWidget(self.w_video)
-        self.track_lbl = label("TRACK  -  gold = parts used in the video, click to listen", "lbl")
-        l.addWidget(self.track_lbl)
+        pl.addWidget(self.w_video)
+        pl.addSpacing(4)
+        self.track_lbl = label("TRACK", "lbl")
+        pl.addWidget(self.track_lbl)
         self.w_track = Wave()
         self.w_track.clicked.connect(lambda f: self.click_play("track", f))
-        l.addWidget(self.w_track)
+        pl.addWidget(self.w_track)
+        row = QtWidgets.QHBoxLayout()
+        self.hint_lbl = label("Gold = where the track plays. Click a waveform to listen from there.", "muted")
+        row.addWidget(self.hint_lbl, 1)
         stop = QtWidgets.QPushButton("Stop sound")
+        stop.setObjectName("ghost")
         stop.clicked.connect(self.stop_play)
-        l.addWidget(stop, 0, QtCore.Qt.AlignmentFlag.AlignRight)
-        self.videos = []
+        row.addWidget(stop)
+        pl.addLayout(row)
+        pl.addStretch(1)
+        self.d_stack.addWidget(res_page)
+        rl.addWidget(self.d_stack, 1)
+        split.addWidget(right)
+        split.setStretchFactor(0, 5)
+        split.setStretchFactor(1, 6)
+        split.setSizes([520, 620])
+        l.addWidget(split, 1)
+        self.show_video(None)
+        self.update_check_btn()
         return w
 
+    # -- video states --
+    def vstatus(self, vid):
+        """(key, text) of a video: none / queue / run / found / clean / err."""
+        if vid == self.checking:
+            return "run", "Checking %d%%" % self.check_pct
+        if any(q[0] == vid for q in self.queue):
+            return "queue", "Queued"
+        c = self.checks.get(vid)
+        if not c:
+            return "none", "Not checked"
+        if c.get("error"):
+            return "err", "Error"
+        n = len(c.get("rows") or [])
+        if n:
+            return "found", "%d track%s found" % (n, "" if n == 1 else "s")
+        return "clean", "Clean"
+
+    def dot_icon(self, key):
+        if key not in self.dots:
+            pm = QtGui.QPixmap(20, 20)
+            pm.fill(QtCore.Qt.GlobalColor.transparent)
+            p = QtGui.QPainter(pm)
+            p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+            p.setBrush(QtGui.QColor(STATUS_COLORS[key]))
+            p.setPen(QtCore.Qt.PenStyle.NoPen)
+            p.drawEllipse(3, 3, 14, 14)
+            p.end()
+            ic = QtGui.QIcon()
+            ic.addPixmap(pm, QtGui.QIcon.Mode.Normal)
+            ic.addPixmap(pm, QtGui.QIcon.Mode.Selected)
+            self.dots[key] = ic
+        return self.dots[key]
+
+    def refresh_item(self, vid):
+        it = self.vitems.get(vid)
+        if it is None:
+            return
+        key, text = self.vstatus(vid)
+        it.setIcon(0, self.dot_icon(key))
+        it.setText(2, text)
+        it.setForeground(2, QtGui.QBrush(QtGui.QColor(STATUS_COLORS[key] if key != "none" else "#777")))
+        f = it.font(2)
+        f.setBold(key in ("found", "run"))
+        it.setFont(2, f)
+
+    def update_counts(self):
+        if not self.vmeta:
+            return
+        ids = list(self.vmeta)
+        st = [self.vstatus(v)[0] for v in ids]
+        self.vcount.setText("%d videos   |   %d checked   |   %d with our music"
+                            % (len(ids), sum(s in ("found", "clean") for s in st), st.count("found")))
+
+    def apply_filter(self, *_):
+        q = self.vfilter.text().strip().lower()
+        mode = self.only.currentIndex()
+        want = {0: None, 1: ("none", "err"), 2: ("found",), 3: ("clean",)}[mode]
+        for vid, it in self.vitems.items():
+            ok = (not q or q in self.vmeta[vid]["title"].lower()) and (want is None or self.vstatus(vid)[0] in want)
+            it.setHidden(not ok)
+
+    def update_check_btn(self):
+        n = len([i for i in self.vlist.selectedItems() if not i.isHidden()])
+        self.btn_check.setText("Check selected (%d)" % n if n > 1 else "Check selected")
+        self.btn_check.setEnabled(n > 0)
+
+    # -- loading a channel --
     def load_videos(self):
         url = self.url.text().strip()
         if url:
@@ -852,7 +1134,7 @@ class App(QtWidgets.QMainWindow):
         vids = []
         for t in targets:
             try:
-                info = ydl_run({"quiet": True, "extract_flat": True, "playlistend": 60, "skip_download": True},
+                info = ydl_run({"quiet": True, "extract_flat": True, "playlistend": 1000, "skip_download": True},
                                lambda y: y.extract_info(t, download=False, process=not single))
             except Exception as e:
                 self.log("Could not read %s: %s" % (t, str(e).splitlines()[0] if str(e) else e))
@@ -861,92 +1143,228 @@ class App(QtWidgets.QMainWindow):
                 if e and e.get("id"):
                     vids.append({"id": e["id"], "title": e.get("title") or e["id"], "dur": e.get("duration") or 0,
                                  "short": t.endswith("/shorts")})
-        self.videos = vids
+        self.ui(lambda: self.fill_videos(vids))
+        self.stage("%d videos loaded" % len(vids), 1)
 
-        def fill():
-            self.vlist.clear()
-            for v in vids:
-                self.vlist.addTopLevelItem(QtWidgets.QTreeWidgetItem(
-                    [("[Short] " if v["short"] else "") + v["title"], fmt(v["dur"]) if v["dur"] else ""]))
-        self.ui(fill)
-        self.stage("%d videos" % len(vids), 1)
+    def fill_videos(self, vids):
+        self.vlist.clear()
+        self.vitems, self.vmeta = {}, {}
+        for v in vids:
+            if v["id"] in self.vmeta:
+                continue
+            self.vmeta[v["id"]] = v
+            it = QtWidgets.QTreeWidgetItem([("[Short]  " if v["short"] else "") + v["title"],
+                                            fmt(v["dur"]) if v["dur"] else ""])
+            it.setData(0, 256, v["id"])
+            it.setToolTip(0, v["title"])
+            it.setTextAlignment(1, QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter)
+            self.vlist.addTopLevelItem(it)
+            self.vitems[v["id"]] = it
+            self.refresh_item(v["id"])
+        self.apply_filter()
+        self.update_counts()
+        if vids:
+            self.vlist.setCurrentItem(self.vlist.topLevelItem(0))
 
+    # -- checking (one after another, in the background) --
     def check_selected(self):
-        it = self.vlist.currentItem()
-        if not it or self.base.ht is None:
-            if self.base.ht is None:
-                self.log("The track base is not ready yet (Settings -> token).")
+        if self.base.ht is None:
+            QtWidgets.QMessageBox.information(
+                self, "Track base not ready",
+                "The track base is empty, so there is nothing to search for yet.\n\n"
+                "Enter the admin token in Settings: the program then downloads the site's tracks (one time).")
             return
-        v = self.videos[self.vlist.indexOfTopLevelItem(it)]
-        self.btn_check.setEnabled(False)
-        self.bg(self._check, v, self.cb_voice.isChecked())
+        items = [i for i in self.vlist.selectedItems() if not i.isHidden()]
+        novoice = self.cb_voice.isChecked()
+        added = 0
+        for it in sorted(items, key=self.vlist.indexOfTopLevelItem):
+            vid = it.data(0, 256)
+            if vid == self.checking or any(q[0] == vid for q in self.queue):
+                continue
+            with self.qlock:
+                self.queue.append((vid, novoice))
+            self.refresh_item(vid)
+            added += 1
+        with self.qlock:
+            start = added and not self.loop_on
+            if start:
+                self.loop_on = True
+        if start:
+            self.bg(self._check_loop)
+        self.update_counts()
+        if self.cur_vid:
+            self.show_video(self.cur_vid)
 
-    def _check(self, v, novoice):
-        t0 = time.time()
+    def _check_loop(self):
         try:
-            audio = download_audio(v["id"], self.stage)
-            samples, rows = find_in_audio(self.base, audio, novoice, self.stage)
-            self.result = {"env": envelope(samples), "dur": len(samples) / fp.SR, "rows": rows, "audio": audio,
-                           "videoId": v["id"], "title": v["title"], "samples_len": len(samples)}
-            self.checked_samples = samples
-            self.ui(lambda: self.btn_send.setEnabled(bool(rows) and bool(self.settings["token"])))
+            while True:
+                with self.qlock:
+                    if not self.queue:
+                        self.loop_on = False
+                        break
+                    vid, novoice = self.queue.pop(0)
+                self.checking, self.check_pct = vid, 0
+                self.ui(lambda v=vid: (self.refresh_item(v), self.show_if_current(v)))
+                v = self.vmeta.get(vid) or {"id": vid, "title": vid, "dur": 0}
+                t0 = time.time()
 
-            def fill():
-                self.res.clear()
-                for r in rows:
-                    it = QtWidgets.QTreeWidgetItem([r["title"], r["composer"],
-                                                    ", ".join("%s-%s" % (fmt(a), fmt(b)) for a, b in r["regions"]),
-                                                    fmt(r["total"]), strength_word(r["score"])])
-                    it.setForeground(0, QtGui.QBrush(QtGui.QColor(GOLD)))
-                    self.res.addTopLevelItem(it)
-                if rows:
-                    self.res.setCurrentItem(self.res.topLevelItem(0))
-                self.draw()
-            self.ui(fill)
-            self.stage("Done in %.0f s  -  %s" % (time.time() - t0, "%d track(s) found" % len(rows) if rows
-                                                   else "no tracks from the base"), 1)
+                def prog(text, frac, title=v["title"], v_id=vid):
+                    self.stage("%s  -  %s" % (title[:50], text), frac)
+                    if frac is not None:
+                        pct = int(100 * frac)
+                        if pct != self.check_pct:
+                            self.check_pct = pct
+                            self.ui(lambda: self.refresh_item(v_id))
+                try:
+                    audio = download_audio(vid, prog)
+                    samples, rows = find_in_audio(self.base, audio, novoice, prog)
+                    env = envelope(samples)
+                    self.checks[vid] = {"title": v["title"], "dur": len(samples) / fp.SR, "rows": rows,
+                                        "env": [round(float(x), 4) for x in env], "audio": audio,
+                                        "novoice": novoice, "at": time.strftime("%Y-%m-%d %H:%M")}
+                    self.log("%s: %s  [%.0f s]" % (v["title"], ", ".join(r["title"] for r in rows) or "clean",
+                                                   time.time() - t0))
+                except Exception as e:
+                    msg = str(e).splitlines()[0] if str(e) else repr(e)
+                    msg = msg.replace("ERROR: ", "").split("; please report")[0][:220]
+                    self.checks[vid] = {"title": v["title"], "error": msg, "at": time.strftime("%Y-%m-%d %H:%M")}
+                    self.log("%s: FAILED %s" % (v["title"], msg))
+                try:
+                    save_checks(self.checks)
+                except Exception as e:
+                    self.log("Could not save results: %s" % e)
+                self.checking = None
+                self.ui(lambda v=vid: (self.refresh_item(v), self.show_if_current(v), self.update_counts(),
+                                       self.apply_filter()))
+            self.stage("All selected videos checked", 1)
         finally:
-            self.ui(lambda: self.btn_check.setEnabled(True))
+            self.checking = None
+            self.loop_on = False
+
+    def show_if_current(self, vid):
+        if vid == self.cur_vid:
+            self.show_video(vid)
+
+    # -- right side --
+    def show_video(self, vid):
+        # The video shown on the right gets a bold gold title in the list.
+        for v_id in {self.cur_vid, vid}:
+            it = self.vitems.get(v_id)
+            if it is not None:
+                f = it.font(0)
+                f.setBold(v_id == vid)
+                it.setFont(0, f)
+                it.setForeground(0, QtGui.QBrush(QtGui.QColor(GOLD if v_id == vid else "#f2f2f2")))
+        self.cur_vid = vid
+        self.stop_play()
+        v = self.vmeta.get(vid) or {}
+        c = self.checks.get(vid) if vid else None
+        if not vid:
+            self.d_title.setText("No video selected")
+            self.d_sub.setText("")
+            self.d_empty.setText("Load a channel on the left and click a video.")
+            self.d_stack.setCurrentIndex(0)
+            self.btn_open.setEnabled(False)
+            self.btn_send.setEnabled(False)
+            return
+        self.d_title.setText(v.get("title") or (c or {}).get("title") or vid)
+        key, text = self.vstatus(vid)
+        bits = [fmt(v["dur"])] if v.get("dur") else []
+        bits.append('<span style="color:%s;font-weight:700">%s</span>' % (STATUS_COLORS[key] if key != "none"
+                                                                          else "#8f8f8f", text))
+        if c and c.get("at"):
+            bits.append("checked " + c["at"] + (" (voice removed)" if c.get("novoice") else ""))
+        self.d_sub.setText("   |   ".join(bits))
+        self.btn_open.setEnabled(True)
+        has_rows = bool(c and c.get("rows"))
+        self.btn_send.setEnabled(has_rows and bool(self.settings["token"]) and key not in ("run", "queue"))
+        if key in ("run", "queue"):
+            self.d_empty.setText("Checking now, see the progress at the bottom." if key == "run"
+                                 else "Waiting in the queue.")
+            self.d_stack.setCurrentIndex(0)
+            return
+        if not c:
+            self.d_empty.setText("Not checked yet.\n\nPress \"Check selected\" or double-click the video.")
+            self.d_stack.setCurrentIndex(0)
+            return
+        if c.get("error"):
+            self.d_empty.setText("The check failed:\n%s\n\nSelect it and press \"Check selected\" to try again."
+                                 % c["error"])
+            self.d_stack.setCurrentIndex(0)
+            return
+        self.d_stack.setCurrentIndex(1)
+        rows = c["rows"]
+        self.res.blockSignals(True)
+        self.res.clear()
+        for r in rows:
+            it = QtWidgets.QTreeWidgetItem([r["title"], r["composer"],
+                                            ", ".join("%s-%s" % (fmt(a), fmt(b)) for a, b in r["regions"]),
+                                            fmt(r["total"]), strength_word(r["score"])])
+            it.setForeground(0, QtGui.QBrush(QtGui.QColor(RED)))
+            self.res.addTopLevelItem(it)
+        self.res.setVisible(bool(rows))
+        self.res.setFixedHeight(min(150, 34 + 32 * max(1, len(rows))))
+        self.clean_lbl.setVisible(not rows)
+        self.hint_lbl.setText("Gold = where the track plays. Click a waveform to listen from there." if rows
+                              else "Click the waveform to listen from there.")
+        self.track_lbl.setVisible(bool(rows))
+        self.w_track.setVisible(bool(rows))
+        if rows:
+            self.res.setCurrentItem(self.res.topLevelItem(0))
+        self.res.blockSignals(False)
+        self.draw()
+
+    def open_youtube(self):
+        if self.cur_vid:
+            QtGui.QDesktopServices.openUrl(QtCore.QUrl("https://www.youtube.com/watch?v=" + self.cur_vid))
+
+    def cur_check(self):
+        c = self.checks.get(self.cur_vid) if self.cur_vid else None
+        return c if c and not c.get("error") and "env" in c else None
 
     def send_manual(self):
-        if not self.result or not self.result["rows"]:
+        c = self.cur_check()
+        if not c or not c["rows"]:
             return
-        r = self.result
         ok = QtWidgets.QMessageBox.question(
             self, "Manual check",
             "Send %d track(s) found in \"%s\" to Admin -> Whitelisting?\n\nThe video must be on a customer's "
-            "whitelisted channel. Its claims will be released whatever the video date." % (len(r["rows"]), r["title"]))
+            "whitelisted channel. Its claims will be released whatever the video date." % (len(c["rows"]), c["title"]))
         if ok != QtWidgets.QMessageBox.StandardButton.Yes:
             return
         self.btn_send.setEnabled(False)
-        self.bg(self._send_manual, r)
+        self.bg(self._send_manual, self.cur_vid, c)
 
-    def _send_manual(self, r):
-        res = api(self.settings, "POST", "", {"action": "manual", "videoId": r["videoId"]})
+    def _send_manual(self, vid, c):
+        res = api(self.settings, "POST", "", {"action": "manual", "videoId": vid})
         if res.get("error"):
             self.log("Not sent: %s" % res["error"])
             return
-        api(self.settings, "POST", "", {"action": "result", "videoId": r["videoId"], "matches": [
+        api(self.settings, "POST", "", {"action": "result", "videoId": vid, "matches": [
             {"trackId": x["track"], "track": x["title"], "regions": x["regions"], "total": x["total"],
-             "score": x["score"]} for x in r["rows"]]})
-        save_print(r["videoId"], self.checked_samples, "")
-        self.log("Sent to the site: %s (%s). It is in Admin -> Whitelisting now." % (r["title"], res.get("channelTitle", "")))
+             "score": x["score"]} for x in c["rows"]]})
+        if os.path.isfile(c.get("audio") or ""):
+            save_print(vid, fp.load_mono(c["audio"]), "")
+        self.log("Sent to the site: %s (%s). It is in Admin -> Whitelisting now." % (c["title"], res.get("channelTitle", "")))
         self.stage("Sent to the site", 1)
 
     def sel_row(self):
-        if not self.result:
-            return None
+        c = self.cur_check()
         it = self.res.currentItem()
-        if not it:
+        if not c or not it:
             return None
-        return self.result["rows"][self.res.indexOfTopLevelItem(it)]
+        i = self.res.indexOfTopLevelItem(it)
+        return c["rows"][i] if 0 <= i < len(c["rows"]) else None
 
     def draw(self):
-        if not self.result:
+        c = self.cur_check()
+        if not c:
             return
         row = self.sel_row()
-        dur = max(self.result["dur"], 0.1)
-        self.w_video.set(self.result["env"], [(a / dur, b / dur) for a, b in row["regions"]] if row else [])
+        dur = max(c["dur"], 0.1)
+        self.w_video.set(np.array(c["env"], np.float32), [(a / dur, b / dur) for a, b in row["regions"]] if row else [],
+                         dur)
+        self.video_lbl.setText("VIDEO AUDIO  -  click to listen")
         if not row:
             self.w_track.set(None, [])
             return
@@ -956,19 +1374,23 @@ class App(QtWidgets.QMainWindow):
             t = fp.load_mono(path)
             self.track_env[name] = (envelope(t), len(t) / fp.SR)
         if name not in self.track_env:
+            self.w_track.set(None, [])
             return
         env, tdur = self.track_env[name]
-        used = [(p["track_pos"] / tdur, (p["track_pos"] + p["end"] - p["start"]) / tdur) for p in row["parts"]]
-        self.w_track.set(env, used)
-        self.track_lbl.setText("TRACK  -  %s  (%s)  -  gold = parts used in the video, click to listen"
-                               % (row["title"].upper(), fmt(tdur)))
+        used = [(p["track_pos"] / tdur, (p["track_pos"] + p["end"] - p["start"]) / tdur) for p in row.get("parts", [])]
+        self.w_track.set(env, used, tdur)
+        self.track_lbl.setText("TRACK  -  %s" % row["title"].upper())
 
     # ---- listening -------------------------------------------------------------
     def click_play(self, which, frac):
-        if not self.result:
+        c = self.cur_check()
+        if not c:
             return
         if which == "video":
-            path, dur, wave = self.result["audio"], self.result["dur"], self.w_video
+            path, dur, wave = c.get("audio"), c["dur"], self.w_video
+            if not path or not os.path.isfile(path):
+                self.log("The audio of this video is not on disk any more. Check it again to listen.")
+                return
         else:
             row = self.sel_row()
             if not row or row["track"] not in self.track_env:
@@ -1006,6 +1428,8 @@ class App(QtWidgets.QMainWindow):
         wave.update()
 
     def stop_play(self):
+        if self.play is None:
+            return
         try:
             import sounddevice as sd
             sd.stop()
@@ -1027,7 +1451,7 @@ class App(QtWidgets.QMainWindow):
         self.e_site = QtWidgets.QLineEdit(self.settings["site"])
         self.e_token = QtWidgets.QLineEdit(self.settings["token"])
         self.e_token.setEchoMode(QtWidgets.QLineEdit.EchoMode.Password)
-        self.e_token.setPlaceholderText("ADMIN_API_TOKEN from Cloudflare (same as the SFX uploader)")
+        self.e_token.setPlaceholderText("ADMIN_API_TOKEN from Cloudflare")
         self.s_interval = QtWidgets.QSpinBox()
         self.s_interval.setRange(1, 120)
         self.s_interval.setValue(int(self.settings["interval_min"]))
