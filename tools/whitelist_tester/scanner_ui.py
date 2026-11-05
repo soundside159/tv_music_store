@@ -855,7 +855,12 @@ SESSION_LOG = os.path.join(DATA, "session_log.txt")  # this run only, cleared on
 
 QSS = """
 * { font-family: 'Segoe UI', 'Inter', sans-serif; color: #d8dde1; font-size: 12px; }
-QMainWindow, QWidget#root { background: #485259; }
+QMainWindow { background: #485259; }
+QWidget#root { background: #12181D; }
+QPushButton#win { background: transparent; border: none; border-radius: 3px; color: #8a9299; font-size: 13px; padding: 0; }
+QPushButton#win:hover { background: #323b42; color: #ffffff; }
+QPushButton#winx { background: transparent; border: none; border-radius: 3px; color: #8a9299; font-size: 12px; padding: 0; }
+QPushButton#winx:hover { background: #ff3c3c; color: #ffffff; }
 QDialog, QMessageBox { background: #252E33; }
 QToolTip { background: #252E33; color: #d8dde1; border: 1px solid #4A5057; border-radius: 4px; padding: 5px 8px;
            font-size: 11px; }
@@ -1485,13 +1490,16 @@ class App(QtWidgets.QMainWindow):
         self.setWindowTitle("TV Music Store - Whitelist Scanner")
         self.resize(1320, 860)
         self.setMinimumSize(1000, 640)
+        self.setWindowFlags(QtCore.Qt.WindowType.FramelessWindowHint | QtCore.Qt.WindowType.Window)
+        self.setMouseTracking(True)
 
         root = QtWidgets.QWidget()
         root.setObjectName("root")
         self.setCentralWidget(root)
         lay = QtWidgets.QVBoxLayout(root)
-        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setContentsMargins(4, 4, 4, 4)
         lay.setSpacing(0)
+        root.setMouseTracking(True)
 
         # -- header strip: triangle menu, title, mode switch --
         hdr = QtWidgets.QWidget()
@@ -1525,6 +1533,22 @@ class App(QtWidgets.QMainWindow):
         self.hdr_sub = QtWidgets.QLabel("")
         self.hdr_sub.setObjectName("hdrsub")
         hl.addWidget(self.hdr_sub)
+        hl.addSpacing(10)
+        for text, fn, name in (("\u2013", self.showMinimized, "win"), ("\u25a1", self.toggle_max, "win"),
+                               ("\u2715", self.close, "winx")):
+            b = QtWidgets.QPushButton(text)
+            b.setObjectName(name)
+            b.setFixedSize(28, 22)
+            b.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+            b.clicked.connect(fn)
+            hl.addWidget(b)
+        self.hdr = hdr
+        self._drag = None
+        self._resize = None
+        hdr.mousePressEvent = self._hdr_press
+        hdr.mouseMoveEvent = self._hdr_move
+        hdr.mouseReleaseEvent = self._hdr_release
+        hdr.mouseDoubleClickEvent = lambda e: self.toggle_max()
         lay.addWidget(hdr)
         lay.addWidget(self.pages, 1)
 
@@ -1566,6 +1590,80 @@ class App(QtWidgets.QMainWindow):
         self.play_timer = QtCore.QTimer(self)
         self.play_timer.timeout.connect(self._play_tick)
         self.bg(self.prepare)
+
+    # ---- our own title bar: move, maximize, resize from the edges ----
+    def toggle_max(self):
+        if self.isMaximized():
+            self.showNormal()
+        else:
+            self.showMaximized()
+
+    def _hdr_press(self, e):
+        if e.button() == QtCore.Qt.MouseButton.LeftButton and not self.isMaximized():
+            self._drag = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
+        e.accept()
+
+    def _hdr_move(self, e):
+        if getattr(self, "_drag", None) is not None and (e.buttons() & QtCore.Qt.MouseButton.LeftButton):
+            self.move(e.globalPosition().toPoint() - self._drag)
+        e.accept()
+
+    def _hdr_release(self, e):
+        self._drag = None
+        e.accept()
+
+    def _edges_at(self, pos):
+        m = 6
+        l = pos.x() <= m
+        r = pos.x() >= self.width() - m
+        t = pos.y() <= m
+        b = pos.y() >= self.height() - m
+        return l, r, t, b
+
+    def mousePressEvent(self, e):
+        if e.button() == QtCore.Qt.MouseButton.LeftButton and not self.isMaximized():
+            edges = self._edges_at(e.position().toPoint())
+            if any(edges):
+                self._resize = (edges, e.globalPosition().toPoint(), self.geometry())
+                e.accept()
+                return
+        super().mousePressEvent(e)
+
+    def mouseMoveEvent(self, e):
+        rs = getattr(self, "_resize", None)
+        if rs is not None and (e.buttons() & QtCore.Qt.MouseButton.LeftButton):
+            (l, r, t, b), start, geo = rs
+            d = e.globalPosition().toPoint() - start
+            g = QtCore.QRect(geo)
+            if l:
+                g.setLeft(min(geo.left() + d.x(), geo.right() - self.minimumWidth()))
+            if r:
+                g.setRight(max(geo.right() + d.x(), geo.left() + self.minimumWidth()))
+            if t:
+                g.setTop(min(geo.top() + d.y(), geo.bottom() - self.minimumHeight()))
+            if b:
+                g.setBottom(max(geo.bottom() + d.y(), geo.top() + self.minimumHeight()))
+            self.setGeometry(g)
+            e.accept()
+            return
+        if not self.isMaximized():
+            l, r, t, b = self._edges_at(e.position().toPoint())
+            if (l and t) or (r and b):
+                cur = QtCore.Qt.CursorShape.SizeFDiagCursor
+            elif (r and t) or (l and b):
+                cur = QtCore.Qt.CursorShape.SizeBDiagCursor
+            elif l or r:
+                cur = QtCore.Qt.CursorShape.SizeHorCursor
+            elif t or b:
+                cur = QtCore.Qt.CursorShape.SizeVerCursor
+            else:
+                cur = QtCore.Qt.CursorShape.ArrowCursor
+            self.setCursor(cur)
+        super().mouseMoveEvent(e)
+
+    def mouseReleaseEvent(self, e):
+        self._resize = None
+        super().mouseReleaseEvent(e)
 
     def open_menu(self):
         m = QtWidgets.QMenu(self)
@@ -1797,21 +1895,33 @@ class App(QtWidgets.QMainWindow):
         for m in d.get("matches") or []:
             self.matches_by_vid.setdefault(m["videoId"], []).append(m)
         groups = {}
+        users = {u["id"]: u for u in d.get("users") or []}
+        for u in users.values():
+            groups.setdefault("user:" + u["id"], [])  # every customer, channels or not
         for c in chans:
             key = ("custom:" + c["group"]) if c.get("group") else ("user:" + c["userId"])
             groups.setdefault(key, []).append(c)
         rank = {"active": 0, "paused": 1, "noplan": 2}
+
+        def gname(key, lst):
+            if key.startswith("custom:"):
+                return key.split(":", 1)[1]
+            u = users.get(key.split(":", 1)[1]) or {}
+            return u.get("email") or (lst[0].get("email") if lst else "") or key
+
         out = []
-        for i, (key, lst) in enumerate(sorted(groups.items(), key=lambda kv: (kv[0].startswith("custom"),
-                                                                               (kv[1][0].get("email") or kv[1][0].get("group") or "").lower()))):
+        for i, (key, lst) in enumerate(sorted(groups.items(),
+                                              key=lambda kv: (kv[0].startswith("custom"), gname(*kv).lower()))):
             kind = "custom" if key.startswith("custom:") else "user"
-            name = key.split(":", 1)[1] if kind == "custom" else (lst[0].get("email") or key)
+            uid = key.split(":", 1)[1] if kind == "user" else "custom"
             for c in lst:
                 c["videos"] = [v for v in self.vid_rows.values() if v["channelId"] == c["id"]]
                 c["videos"].sort(key=lambda v: v.get("publishedAt") or "", reverse=True)
             lst.sort(key=lambda c: (c.get("url") == "solo", rank.get(c["state"], 3)))
-            out.append({"key": key, "kind": kind, "name": name, "userId": lst[0]["userId"],
-                        "plan": "custom" if kind == "custom" else (lst[0].get("plan") or "free"),
+            plan = "custom" if kind == "custom" else ((users.get(uid) or {}).get("plan") or
+                                                      (lst[0].get("plan") if lst else "free"))
+            out.append({"key": key, "kind": kind, "name": gname(key, lst), "userId": uid, "plan": plan,
+                        "registered": (users.get(uid) or {}).get("createdAt", "")[:10] if kind == "user" else "",
                         "color": PALETTE[i % len(PALETTE)], "channels": lst})
         self.cust = out
         if self.sel_key not in {c["key"] for c in out}:
@@ -1921,7 +2031,10 @@ class App(QtWidgets.QMainWindow):
         head.setSpacing(10)
         head.addWidget(label(c["name"], "h1"))
         plan = {"max": "MAX plan", "pro": "PRO plan", "custom": "Custom list"}.get(c["plan"], "No plan")
-        head.addWidget(label("%s  \u00b7  %d channel%s" % (plan, len(chans), "" if len(chans) == 1 else "s"), "warm"))
+        info = "%s  \u00b7  %d channel%s" % (plan, len(chans), "" if len(chans) == 1 else "s")
+        if c.get("registered"):
+            info += "  \u00b7  registered %s" % c["registered"]
+        head.addWidget(label(info, "warm"))
         head.addStretch(1)
         head.addWidget(label("%d new match%s not in sheets" % (n_new, "" if n_new == 1 else "es"), "muted"))
         b = QtWidgets.QPushButton("Send to Sheets")

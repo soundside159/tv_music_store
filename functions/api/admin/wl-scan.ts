@@ -112,6 +112,17 @@ export const onRequestGet = async (ctx: Ctx) => {
     )
     .all<Record<string, unknown>>();
 
+  // Every customer, with or without channels, so the desktop scanner can add
+  // Solo videos for anyone. Plan = latest subscription row (free when none).
+  const users = await db
+    .prepare(
+      `SELECT u.id, u.email, u.created_at, u.role,
+              (SELECT s.plan FROM subscriptions s WHERE s.user_id = u.id
+                  AND (s.status IS NULL OR s.status = 'active') ORDER BY s.rowid DESC LIMIT 1) AS plan
+         FROM users u ORDER BY u.email`,
+    )
+    .all<{ id: string; email: string; created_at: string; role: string | null; plan: string | null }>();
+
   // Every video the site knows, for the desktop scanner's channel lists.
   const videos = await db
     .prepare(
@@ -173,6 +184,12 @@ export const onRequestGet = async (ctx: Ctx) => {
       waiting: cnt.get(c.id)?.waiting ?? 0,
       released: cnt.get(c.id)?.released ?? 0,
       lead: cnt.get(c.id)?.lead ?? 0,
+    })),
+    users: users.results.map((u) => ({
+      id: u.id,
+      email: u.email,
+      createdAt: u.created_at,
+      plan: u.role === "admin" ? "max" : u.plan || "free",
     })),
     videos: videos.results.map((v) => ({
       videoId: v.video_id,
