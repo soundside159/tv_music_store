@@ -246,7 +246,7 @@ const AdminWhitelist = () => {
         {(
           [
             ["composers", "Composers"],
-            ["channels", `Channels · ${data.channels.filter((c) => !c.group).length}`],
+            ["channels", `Channels / videos · ${data.channels.filter((c) => !c.group && c.url !== "solo").length}`],
             ["custom", `Custom · ${(data.customLists ?? [...new Set(data.channels.filter((c) => c.group).map((c) => c.group))]).length}`],
             ["scanner", "Scanner"],
           ] as const
@@ -651,9 +651,7 @@ const ChannelsTab = ({ data, reload }: { data: Overview; reload: () => void }) =
                   <a href={c.url} target="_blank" rel="noreferrer" className="block truncate font-semibold text-foreground hover:text-[#F4C430]">
                     {c.title || c.url}
                   </a>
-                  <span className="block truncate text-[11px] text-muted-foreground">
-                    {c.url.replace(/^https?:\/\/(www\.)?/, "")} · added {shortDate(c.addedAt)}
-                  </span>
+                  <span className="block truncate text-[11px] text-muted-foreground">added {shortDate(c.addedAt)}</span>
                 </div>
                 <div>
                   {c.state === "active" && <Pill ok>{c.plan.toUpperCase()}</Pill>}

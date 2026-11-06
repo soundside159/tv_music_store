@@ -171,9 +171,17 @@ const MyChannels = () => {
                 <button
                   type="button"
                   onClick={upgrade}
-                  className="shrink-0 rounded-full border border-border px-2.5 py-1 font-body text-[11px] font-semibold text-muted-foreground"
+                  className="group/np relative flex shrink-0 items-center gap-1 rounded-full border border-red-400/30 bg-red-400/10 px-2.5 py-1 font-body text-[11px] font-bold text-red-300"
                 >
-                  Paused · upgrade to resume
+                  <ShieldCheck className="h-3 w-3" /> Not protected
+                  <span
+                    role="tooltip"
+                    className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-64 rounded-lg border border-border bg-card p-3 text-left font-body text-xs font-normal leading-relaxed text-foreground opacity-0 shadow-xl transition-opacity group-hover/np:opacity-100"
+                  >
+                    {limit === 0
+                      ? "Your subscription is not active, so claims on this channel are not released any more. Renew your subscription and protection resumes by itself, nothing to re-add."
+                      : "This channel is over your plan's limit, so its claims are not released. Upgrade your plan or remove another channel."}
+                  </span>
                 </button>
               ) : (
                 <span className="group/prot relative flex shrink-0 cursor-default items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 font-body text-[11px] font-bold text-emerald-300">
