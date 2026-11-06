@@ -343,7 +343,40 @@ export const onRequestGet = async (ctx: Ctx) => {
     rows.results.flatMap((r) => claimIds(r)),
   );
 
+  // What the scanner knows about each video: queued = checking, a match sent to
+  // the composer = in progress, every match released = released.
+  const scanOf = new Map<string, { state: string; tracks: string[] }>();
+  try {
+    const vids = [...new Set(rows.results.map((r) => videoIdOf(r.video_url)).filter((v): v is string => !!v))].slice(0, 200);
+    if (vids.length) {
+      const marks = vids.map((_, i) => `?${i + 1}`).join(",");
+      const vrows = await ctx.env.DB.prepare(`SELECT video_id, status FROM wl_videos WHERE video_id IN (${marks})`)
+        .bind(...vids)
+        .all<{ video_id: string; status: string }>();
+      for (const v of vrows.results) scanOf.set(v.video_id, { state: v.status === "done" ? "clean" : "checking", tracks: [] });
+      const mrows = await ctx.env.DB.prepare(
+        `SELECT video_id, track_title, state FROM wl_matches WHERE video_id IN (${marks}) AND state != 'removed'`,
+      )
+        .bind(...vids)
+        .all<{ video_id: string; track_title: string; state: string }>();
+      const byVid = new Map<string, { video_id: string; track_title: string; state: string }[]>();
+      for (const m of mrows.results) byVid.set(m.video_id, [...(byVid.get(m.video_id) ?? []), m]);
+      for (const [vid, ms] of byVid) {
+        const cur = scanOf.get(vid) ?? { state: "checking", tracks: [] };
+        cur.tracks = [...new Set(ms.map((m) => m.track_title))];
+        cur.state = ms.every((m) => m.state === "released") ? "released"
+          : ms.some((m) => m.state === "in_sheet" || m.state === "new") ? "in_progress"
+          : ms.some((m) => m.state === "not_eligible") ? "no_license" : cur.state;
+        scanOf.set(vid, cur);
+      }
+    }
+  } catch {
+    // the whitelist tables may not exist yet: no scanner info
+  }
+
   const claims = rows.results.map((r) => {
+    const vid = videoIdOf(r.video_url);
+    const scan = (vid && scanOf.get(vid)) || { state: "checking", tracks: [] };
     const tracks = claimIds(r)
       .map((id) => info.get(id))
       .filter((t): t is TrackInfo => !!t)
@@ -359,6 +392,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       tracks,
       track_names: parseIds(r.track_names), // free-typed titles
       details: r.details ?? null,
+      scan: { state: r.status === "done" ? "released" : scan.state, tracks: scan.tracks },
       ...(all
         ? { user_id: r.user_id, user_email: r.user_email, user_name: r.user_name ?? null }
         : {}),

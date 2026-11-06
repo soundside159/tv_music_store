@@ -143,6 +143,7 @@ export const updateSheets = async (db: D1Database, onlyMatchId?: number) => {
         .prepare(`UPDATE wl_matches SET state = 'in_sheet', sheet_date = datetime('now') WHERE id = ?1`)
         .bind(r.id)
         .run();
+      await claimTicket(db, r.video_id, "in_progress");
     }
     done[composerId] = list.length;
   }
@@ -208,10 +209,37 @@ export const syncSheets = async (db: D1Database) => {
         )
         .bind(Number(m[1]))
         .run();
-      if (isReleased && (res as { meta?: { changes?: number } }).meta?.changes) released++;
+      if (isReleased && (res as { meta?: { changes?: number } }).meta?.changes) {
+        released++;
+        const v = await db.prepare(`SELECT video_id FROM wl_matches WHERE id = ?1`).bind(Number(m[1])).first<{ video_id: string }>();
+        if (v) {
+          const open = await db
+            .prepare(`SELECT 1 AS x FROM wl_matches WHERE video_id = ?1 AND state IN ('new','in_sheet') LIMIT 1`)
+            .bind(v.video_id)
+            .first<{ x: number }>();
+          if (!open) await claimTicket(db, v.video_id, "done");
+        }
+      }
     }
   }
   return { released };
+};
+
+/** A customer's Copyright Claims ticket for this video follows the match:
+ *  sent to the composer = in_progress, every match released = done. */
+const claimTicket = async (db: D1Database, videoId: string, status: "in_progress" | "done") => {
+  try {
+    await db
+      .prepare(
+        status === "done"
+          ? `UPDATE claim_requests SET status = 'done', resolved_at = datetime('now') WHERE video_url LIKE ?1 AND status != 'done'`
+          : `UPDATE claim_requests SET status = 'in_progress' WHERE video_url LIKE ?1 AND status = 'new'`,
+      )
+      .bind(`%${videoId}%`)
+      .run();
+  } catch {
+    // no tickets table: nothing to follow
+  }
 };
 
 /** Sync, then tell each composer how many videos still wait (only if > 0). */

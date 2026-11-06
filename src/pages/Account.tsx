@@ -372,6 +372,7 @@ const Account = () => {
       createdAt: string;
       trackTitles: string[];
       details: string | null;
+      scan: { state: string; tracks: string[] };
     }[]
   >([]);
   const [claimUrl, setClaimUrl] = useState("");
@@ -393,6 +394,7 @@ const Account = () => {
           video_title?: string | null;
           status: string;
           created_at: string;
+          scan?: { state: string; tracks: string[] };
           tracks?: { id: string; title: string }[];
           track_names?: string[];
           track_title?: string | null;
@@ -408,6 +410,7 @@ const Account = () => {
           createdAt: c.created_at,
           trackTitles: [...(c.tracks ?? []).map((t) => t.title), ...(c.track_names ?? [])],
           details: c.details ?? null,
+          scan: c.scan ?? { state: "checking", tracks: [] },
         })),
       );
     } catch {
@@ -937,12 +940,15 @@ const Account = () => {
                     its YouTube title), the music named for it, and the date. */}
                 {claims.length > 0 && (
                   <SectionCard title="Sent requests">
-                    <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto] items-center gap-x-4">
+                    <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto_auto] items-center gap-x-4">
                       <span className="border-b border-border pb-2 font-body text-xs uppercase tracking-wide text-muted-foreground">
                         YouTube link
                       </span>
                       <span className="border-b border-border pb-2 font-body text-xs uppercase tracking-wide text-muted-foreground">
                         Used Music
+                      </span>
+                      <span className="border-b border-border pb-2 font-body text-xs uppercase tracking-wide text-muted-foreground">
+                        Status
                       </span>
                       <span className="border-b border-border pb-2 text-right font-body text-xs uppercase tracking-wide text-muted-foreground">
                         Date
@@ -965,7 +971,11 @@ const Account = () => {
                             )}
                           </span>
                           <span className="min-w-0 border-b border-border/50 py-3 pr-2 font-body text-sm text-foreground">
-                            {c.trackTitles.length > 0 ? (
+                            {c.scan.tracks.length > 0 ? (
+                              <span className="block truncate" title={c.scan.tracks.join(", ")}>
+                                {c.scan.tracks.join(", ")}
+                              </span>
+                            ) : c.trackTitles.length > 0 ? (
                               <span className="block truncate" title={c.trackTitles.join(", ")}>
                                 {c.trackTitles.join(", ")}
                               </span>
@@ -976,6 +986,40 @@ const Account = () => {
                             ) : (
                               <span className="text-xs text-muted-foreground">We will find it</span>
                             )}
+                          </span>
+                          <span className="border-b border-border/50 py-3 pr-2">
+                            {(() => {
+                              const st = c.scan.state;
+                              const look =
+                                st === "released"
+                                  ? ["Released", "bg-emerald-400/10 text-emerald-300"]
+                                  : st === "in_progress"
+                                    ? ["In progress", "bg-amber-400/10 text-amber-300"]
+                                    : st === "no_license"
+                                      ? ["License needed", "bg-red-400/10 text-red-300"]
+                                      : st === "clean"
+                                        ? ["Checked", "bg-slate-400/10 text-slate-300"]
+                                        : ["Checking", "bg-slate-400/10 text-slate-300"];
+                              const tip =
+                                st === "released"
+                                  ? "The claim has been released."
+                                  : st === "in_progress"
+                                    ? "Our track was found and the release was sent to the composer, usually within one working day."
+                                    : st === "no_license"
+                                      ? "Our track was found but no license covers it on your account; license the track or a plan and the claim is released."
+                                      : st === "clean"
+                                        ? "We checked the video and did not find our music in it. If a claim is still there, reply to our email or write to us."
+                                        : "The video is in our queue to be checked.";
+                              return (
+                                <span
+                                  title={tip}
+                                  className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 font-body text-[11px] font-bold ${look[1]}`}
+                                >
+                                  <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                                  {look[0]}
+                                </span>
+                              );
+                            })()}
                           </span>
                           <span className="whitespace-nowrap border-b border-border/50 py-3 text-right font-body text-xs text-muted-foreground">
                             {fmtDate(c.createdAt)}

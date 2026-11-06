@@ -61,7 +61,7 @@ const listResponse = async (db: D1Database, userId: string) => {
   const rows = await db
     .prepare(
       `SELECT id, channel_url, channel_ref, added_at, yt_title FROM wl_channels
-        WHERE user_id = ?1 ORDER BY added_at ASC`,
+        WHERE user_id = ?1 AND channel_url != 'solo' ORDER BY added_at ASC`,
     )
     .bind(userId)
     .all<{ id: string; channel_url: string; channel_ref: string | null; added_at: string; yt_title: string | null }>();
