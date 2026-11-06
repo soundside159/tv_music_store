@@ -1309,45 +1309,6 @@ class FnLineEdit(QtWidgets.QLineEdit):
         self._fb_to(0.0)
 
 
-class GlyphX(QtWidgets.QWidget):
-    """Vector close cross; hover turns red."""
-    clicked = QtCore.pyqtSignal()
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setFixedSize(18, 18)
-        self.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-        self._hp = 0.0
-        self._anim = QtCore.QVariantAnimation(self)
-        self._anim.setDuration(180)
-        self._anim.valueChanged.connect(lambda v: (setattr(self, "_hp", float(v)), self.update()))
-
-    def _to(self, end):
-        self._anim.stop()
-        self._anim.setStartValue(self._hp)
-        self._anim.setEndValue(float(end))
-        self._anim.start()
-
-    def enterEvent(self, e):
-        self._to(1.0)
-
-    def leaveEvent(self, e):
-        self._to(0.0)
-
-    def mousePressEvent(self, e):
-        if e.button() == QtCore.Qt.MouseButton.LeftButton:
-            self.clicked.emit()
-
-    def paintEvent(self, _):
-        p = QtGui.QPainter(self)
-        p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
-        c = _lerp(QtGui.QColor(TEXT_GRAY), QtGui.QColor("#ff3c3c"), self._hp)
-        p.setPen(QtGui.QPen(c, 1.6))
-        p.drawLine(QtCore.QPointF(5, 5), QtCore.QPointF(13, 13))
-        p.drawLine(QtCore.QPointF(13, 5), QtCore.QPointF(5, 13))
-        p.end()
-
-
 class FnDialog(QtWidgets.QDialog):
     """Frameless dialog in the Script Manager style: 30px header, content, fade-in with a short rise."""
 
@@ -1369,7 +1330,7 @@ class FnDialog(QtWidgets.QDialog):
         t.setStyleSheet("color: %s; font-size: 12px; font-weight: bold; background: transparent;" % TEXT_WHITE)
         hl.addWidget(t)
         hl.addStretch(1)
-        x = GlyphX()
+        x = Glyph("x", hover_color="#ff3c3c", size=18)
         x.clicked.connect(self.reject)
         hl.addWidget(x)
         root.addWidget(hdr)
@@ -1624,6 +1585,173 @@ class FnSlider(QtWidgets.QWidget):
         self.update()
 
 
+class Glyph(QtWidgets.QWidget):
+    """Vector icon button drawn with lines, hover fades the colour (Script Manager _GlyphButton).
+    kinds: refresh, plus, x, minimize, maximize, restore, copy, external."""
+    clicked = QtCore.pyqtSignal()
+
+    def __init__(self, kind, hover_color=None, size=18, circle=False, idle_color="#8a9299", tip="", parent=None):
+        super().__init__(parent)
+        self.kind = kind
+        self.hover_color = QtGui.QColor(hover_color or ACCENT)
+        self.idle_color = QtGui.QColor(idle_color)
+        self.circle = circle
+        self.setFixedSize(size, size)
+        self.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+        if tip:
+            self.setToolTip(tip)
+        self._hp = 0.0
+        self._anim = QtCore.QVariantAnimation(self)
+        self._anim.setDuration(180)
+        self._anim.setEasingCurve(QtCore.QEasingCurve.Type.OutCubic)
+        self._anim.valueChanged.connect(lambda v: (setattr(self, "_hp", float(v)), self.update()))
+
+    def _to(self, end):
+        self._anim.stop()
+        self._anim.setStartValue(self._hp)
+        self._anim.setEndValue(float(end))
+        self._anim.start()
+
+    def enterEvent(self, e):
+        self._to(1.0)
+
+    def leaveEvent(self, e):
+        self._to(0.0)
+
+    def mousePressEvent(self, e):
+        e.accept()
+
+    def mouseReleaseEvent(self, e):
+        if e.button() == QtCore.Qt.MouseButton.LeftButton and self.rect().contains(e.position().toPoint()):
+            self.clicked.emit()
+
+    def paintEvent(self, _e):
+        p = QtGui.QPainter(self)
+        p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
+        w = self.width()
+        c = w / 2.0
+        col = _lerp(self.idle_color, self.hover_color, self._hp)
+        if self.circle:
+            p.setPen(QtGui.QPen(_lerp(QtGui.QColor(BORDER), self.hover_color, self._hp), 1.0))
+            p.setBrush(QtGui.QColor(BG_INPUT))
+            p.drawEllipse(QtCore.QRectF(0.5, 0.5, w - 1, w - 1))
+        pen = QtGui.QPen(col, 1.6)
+        pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(QtCore.Qt.PenJoinStyle.RoundJoin)
+        p.setPen(pen)
+        p.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+        k = self.kind
+        s = w / 18.0  # everything below is drawn for an 18px box
+        if k == "refresh":
+            r = 4.6 * s
+            p.drawArc(QtCore.QRectF(c - r, c - r, 2 * r, 2 * r), 40 * 16, 290 * 16)
+            # arrow head at the end of the arc (top right)
+            import math
+            a = math.radians(40)
+            tip = QtCore.QPointF(c + r * math.cos(a), c - r * math.sin(a))
+            p.drawLine(tip, QtCore.QPointF(tip.x() - 3.2 * s, tip.y() - 0.6 * s))
+            p.drawLine(tip, QtCore.QPointF(tip.x() + 0.2 * s, tip.y() - 3.4 * s))
+        elif k == "plus":
+            r = 4.0 * s
+            p.drawLine(QtCore.QPointF(c - r, c), QtCore.QPointF(c + r, c))
+            p.drawLine(QtCore.QPointF(c, c - r), QtCore.QPointF(c, c + r))
+        elif k == "x":
+            r = 3.8 * s
+            p.drawLine(QtCore.QPointF(c - r, c - r), QtCore.QPointF(c + r, c + r))
+            p.drawLine(QtCore.QPointF(c + r, c - r), QtCore.QPointF(c - r, c + r))
+        elif k == "minimize":
+            r = 4.0 * s
+            p.drawLine(QtCore.QPointF(c - r, c + 1), QtCore.QPointF(c + r, c + 1))
+        elif k == "maximize":
+            r = 3.8 * s
+            pen.setWidthF(1.3)
+            p.setPen(pen)
+            p.drawRect(QtCore.QRectF(c - r, c - r, 2 * r, 2 * r))
+        elif k == "restore":
+            r = 3.2 * s
+            pen.setWidthF(1.3)
+            p.setPen(pen)
+            p.drawRect(QtCore.QRectF(c - r - 1.5, c - r + 1.5, 2 * r, 2 * r))
+            p.drawPolyline(QtGui.QPolygonF([QtCore.QPointF(c - r + 1.5, c - r + 1.5), QtCore.QPointF(c - r + 1.5, c - r - 1.5),
+                                            QtCore.QPointF(c + r + 1.5, c - r - 1.5), QtCore.QPointF(c + r + 1.5, c + r - 1.5),
+                                            QtCore.QPointF(c + r - 1.5, c + r - 1.5)]))
+        elif k == "copy":
+            pen.setWidthF(1.3)
+            p.setPen(pen)
+            r = 3.4 * s
+            p.drawRoundedRect(QtCore.QRectF(c - r + 1.5, c - r + 1.5, 2 * r, 2 * r), 1.5, 1.5)
+            p.drawPolyline(QtGui.QPolygonF([QtCore.QPointF(c - r - 1.5, c + r - 2.5), QtCore.QPointF(c - r - 1.5, c - r - 1.5),
+                                            QtCore.QPointF(c + r - 2.5, c - r - 1.5)]))
+        elif k == "external":
+            r = 3.6 * s
+            p.drawLine(QtCore.QPointF(c - r, c + r), QtCore.QPointF(c + r, c - r))
+            p.drawPolyline(QtGui.QPolygonF([QtCore.QPointF(c - 0.5, c - r), QtCore.QPointF(c + r, c - r),
+                                            QtCore.QPointF(c + r, c + 0.5)]))
+        p.end()
+
+
+class MenuTriangle(QtWidgets.QWidget):
+    """The program's menu triangle: points right, on hover turns down and goes orange."""
+    clicked = QtCore.pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(14, 14)
+        self.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+        self._hp = 0.0
+        self._hold = False
+        self._anim = QtCore.QVariantAnimation(self)
+        self._anim.setDuration(120)
+        self._anim.setEasingCurve(QtCore.QEasingCurve.Type.OutCubic)
+        self._anim.valueChanged.connect(lambda v: (setattr(self, "_hp", float(v)), self.update()))
+
+    def _to(self, end):
+        self._anim.stop()
+        self._anim.setStartValue(self._hp)
+        self._anim.setEndValue(float(end))
+        self._anim.start()
+
+    def paintEvent(self, _e):
+        import math
+        p = QtGui.QPainter(self)
+        p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
+        p.setPen(QtCore.Qt.PenStyle.NoPen)
+        idle = QtGui.QColor(TEXT_WHITE)
+        idle.setAlpha(200)
+        p.setBrush(_lerp(idle, QtGui.QColor("#ef7f02"), self._hp))
+        cx, cy = self.width() / 2.0, self.height() / 2.0
+        ang = self._hp * math.pi / 2.0
+        ca, sa = math.cos(ang), math.sin(ang)
+        pts = [(2.5, 0.0), (-2.5, -5.0), (-2.5, 5.0)]
+        p.drawPolygon(QtGui.QPolygonF([QtCore.QPointF(cx + x * ca - y * sa, cy + x * sa + y * ca) for x, y in pts]))
+        p.end()
+
+    def enterEvent(self, e):
+        self._to(1.0)
+
+    def leaveEvent(self, e):
+        if not self._hold:
+            self._to(0.0)
+
+    def menu_closed(self):
+        self._hold = False
+        if not self.rect().contains(self.mapFromGlobal(QtGui.QCursor.pos())):
+            self._to(0.0)
+
+    def mousePressEvent(self, e):
+        e.accept()
+        if e.button() == QtCore.Qt.MouseButton.LeftButton and not self._hold:
+            self._hold = True
+            self._to(1.0)
+            home = self.pos()
+            self.move(home.x(), home.y() + 2)
+            QtCore.QTimer.singleShot(80, lambda: self.move(home))
+            QtCore.QTimer.singleShot(150, self.clicked.emit)
+
+    def mouseReleaseEvent(self, e):
+        e.accept()
+
+
 # ---- small painted widgets in the Script Manager language ----
 class Chevron(QtWidgets.QPushButton):
     """Small triangle: down = open, right = closed."""
@@ -1750,12 +1878,9 @@ class RailItem(QtWidgets.QWidget):
             self.clicked.emit(self.key)
 
 
-def circle_button(text, tip):
-    b = QtWidgets.QPushButton(text)
-    b.setObjectName("circle")
-    b.setToolTip(tip)
-    b.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-    return b
+def circle_button(kind, tip):
+    """Round vector button in the rail headers: kind = refresh | plus."""
+    return Glyph(kind, size=18, circle=True, idle_color=TEXT_ROW, tip=tip)
 
 
 def tag_label(text, fg, bg):
@@ -1914,7 +2039,7 @@ class App(QtWidgets.QMainWindow):
         hl = QtWidgets.QHBoxLayout(hdr)
         hl.setContentsMargins(10, 0, 10, 0)
         hl.setSpacing(14)
-        self.menu_btn = Chevron(True, ACCENT)
+        self.menu_btn = MenuTriangle()
         self.menu_btn.setToolTip("Menu")
         self.menu_btn.clicked.connect(self.open_menu)
         hl.addWidget(self.menu_btn)
@@ -1940,14 +2065,14 @@ class App(QtWidgets.QMainWindow):
         self.hdr_sub.setObjectName("hdrsub")
         hl.addWidget(self.hdr_sub)
         hl.addSpacing(10)
-        for text, fn, name in (("\u2013", self.showMinimized, "win"), ("\u25a1", self.toggle_max, "win"),
-                               ("\u2715", self.close, "winx")):
-            b = QtWidgets.QPushButton(text)
-            b.setObjectName(name)
-            b.setFixedSize(28, 22)
-            b.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+        for kind, fn, hov in (("minimize", self.showMinimized, TEXT_WHITE), ("maximize", self.toggle_max, TEXT_WHITE),
+                              ("x", self.close, "#ff3c3c")):
+            b = Glyph(kind, hover_color=hov, size=18)
             b.clicked.connect(fn)
             hl.addWidget(b)
+            hl.addSpacing(4)
+            if kind == "maximize":
+                self.btn_max = b
         self.hdr = hdr
         self._drag = None
         self._resize = None
@@ -2004,6 +2129,8 @@ class App(QtWidgets.QMainWindow):
             self.showNormal()
         else:
             self.showMaximized()
+        self.btn_max.kind = "restore" if self.isMaximized() else "maximize"
+        self.btn_max.update()
 
     def _hdr_press(self, e):
         if e.button() == QtCore.Qt.MouseButton.LeftButton and not self.isMaximized():
@@ -2098,6 +2225,7 @@ class App(QtWidgets.QMainWindow):
         m.addSeparator()
         m.addAction("Reset scan results on the site (scan everything again)", self.reset_site_scans)
         m.exec(self.menu_btn.mapToGlobal(QtCore.QPoint(0, self.menu_btn.height() + 4)))
+        self.menu_btn.menu_closed()
 
     def reset_site_scans(self):
         if not ask_yes(self, "Reset scan results",
@@ -2435,11 +2563,11 @@ class App(QtWidgets.QMainWindow):
             n.setObjectName("cnt")
             hh.addWidget(n)
             if kind == "custom":
-                b = circle_button("+", "Add a channel to a Custom list")
+                b = circle_button("plus", "Add a channel to a Custom list")
                 b.clicked.connect(self.add_custom)
                 hh.addWidget(b)
-            r = circle_button("\u21bb", "Ask the site to look for new videos and reload the list")
-            r.clicked.connect(lambda _, f=True: self.bg(self.reload_site, f))
+            r = circle_button("refresh", "Ask the site to look for new videos and reload the list")
+            r.clicked.connect(lambda: self.bg(self.reload_site, True))
             hh.addWidget(r)
             self.rail_lay.addWidget(head)
             if getattr(self, open_attr):
@@ -2480,9 +2608,6 @@ class App(QtWidgets.QMainWindow):
             return
         chans = [ch for ch in c["channels"] if ch.get("url") != "solo"]
         solo = [ch for ch in c["channels"] if ch.get("url") == "solo"]
-        n_new = sum(1 for ch in c["channels"] for v in ch["videos"]
-                    for m in self.matches_by_vid.get(v["videoId"], []) if m.get("state") == "new")
-
         head = QtWidgets.QHBoxLayout()
         head.setSpacing(10)
         head.addWidget(label(c["name"], "h1"))
@@ -2492,12 +2617,14 @@ class App(QtWidgets.QMainWindow):
             info += "  \u00b7  registered %s" % c["registered"]
         head.addWidget(label(info, "warm"))
         head.addStretch(1)
-        head.addWidget(label("%d new match%s not in sheets" % (n_new, "" if n_new == 1 else "es"), "muted"))
-        b = AnimatedButton("Send to Sheets", accent=GREEN)
-        b.setToolTip("New matches go to each composer's Google Sheet")
-        b.setEnabled(n_new > 0)
-        b.clicked.connect(lambda: self.bg(self.send_sheets))
-        head.addWidget(b)
+        self.new_lbl = label("", "muted")
+        self.new_lbl.setWordWrap(False)
+        head.addWidget(self.new_lbl)
+        self.btn_sheets = AnimatedButton("Send to Sheets", accent=GREEN)
+        self.btn_sheets.setToolTip("New matches go to each composer's Google Sheet")
+        self.btn_sheets.clicked.connect(lambda: self.bg(self.send_sheets))
+        head.addWidget(self.btn_sheets)
+        self.update_new_count()
         hw = QtWidgets.QWidget()
         hw.setLayout(head)
         self.content_lay.addWidget(hw)
@@ -2547,6 +2674,16 @@ class App(QtWidgets.QMainWindow):
                 self.content_lay.addWidget(self.video_table(ch))
         self.content_lay.addStretch(1)
         self.update_scan_marks()
+
+    def update_new_count(self):
+        """'N new matches not in sheets' for the selected customer (site-wide count is on the site)."""
+        c = self.cust_by_key(self.sel_key)
+        if not c or not hasattr(self, "new_lbl"):
+            return
+        n_new = sum(1 for ch in c["channels"] for v in ch["videos"]
+                    for m in self.matches_by_vid.get(v["videoId"], []) if m.get("state") == "new")
+        self.new_lbl.setText("%d new match%s not in sheets" % (n_new, "" if n_new == 1 else "es"))
+        self.btn_sheets.setEnabled(n_new > 0)
 
     def toggle_channel(self, chid, open_):
         if open_:
@@ -2608,6 +2745,8 @@ class App(QtWidgets.QMainWindow):
             if i:
                 t.setColumnWidth(i, wdt)
         t.itemClicked.connect(lambda it, col, tt=t: self.on_video_click(tt, it, col))
+        t.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
+        t.customContextMenuRequested.connect(lambda pos, tt=t: self.video_menu(tt, pos))
         self.vtables[ch["id"]] = t
         for v in ch["videos"]:
             vid = v["videoId"]
@@ -2692,6 +2831,56 @@ class App(QtWidgets.QMainWindow):
             self.open_vid.add(vid)
             self.add_wave_row(t, it, vid)
         t.setFixedHeight(self.table_height(t))
+
+    def video_menu(self, t, pos):
+        it = t.itemAt(pos)
+        vid = it.data(0, 256) if it else None
+        if not vid:
+            return
+        v = self.vid_rows.get(vid) or {}
+        m = QtWidgets.QMenu(self)
+        m.addAction("Open on YouTube", lambda: QtGui.QDesktopServices.openUrl(
+            QtCore.QUrl("https://www.youtube.com/watch?v=" + vid)))
+        m.addAction("Copy video link", lambda: QtWidgets.QApplication.clipboard().setText(
+            "https://www.youtube.com/watch?v=" + vid))
+        if self.matches_by_vid.get(vid):
+            m.addSeparator()
+            m.addAction("Remove match from the site and the composer's sheet", lambda: self.remove_match(vid))
+        if v.get("note") == "solo" or str(v.get("channelId", "")).startswith("wch_solo_"):
+            m.addSeparator()
+            m.addAction("Remove this solo video", lambda: self.remove_solo(vid))
+        m.exec(t.viewport().mapToGlobal(pos))
+
+    def remove_match(self, vid):
+        title = (self.vid_rows.get(vid) or {}).get("title") or vid
+        if not ask_yes(self, "Remove match", "Remove the match of \"%s\" from the site and delete its row from "
+                       "the composer's sheet? The video stays, the track just will not be counted as found." % title,
+                       "Remove"):
+            return
+
+        def go():
+            try:
+                r = api(self.settings, "POST", "", {"action": "match_remove", "videoId": vid}, timeout=120)
+                self.log("Remove match: %s" % (r.get("error") or "%d removed, %d sheet row(s)"
+                                                % (r.get("removed", 0), r.get("sheetRows", 0))))
+            except Exception as e:
+                self.log("Remove match failed: %s" % e)
+            self.load_overview()
+        self.bg(go)
+
+    def remove_solo(self, vid):
+        title = (self.vid_rows.get(vid) or {}).get("title") or vid
+        if not ask_yes(self, "Remove solo video", "Remove \"%s\" from this customer's solo videos?" % title, "Remove"):
+            return
+
+        def go():
+            try:
+                r = api(self.settings, "POST", "", {"action": "solo_remove", "videoId": vid}, timeout=60)
+                self.log("Remove solo: %s" % (r.get("error") or "ok"))
+            except Exception as e:
+                self.log("Remove solo failed: %s" % e)
+            self.load_overview()
+        self.bg(go)
 
     def add_wave_row(self, t, it, vid):
         it.takeChildren()
@@ -2893,6 +3082,7 @@ class App(QtWidgets.QMainWindow):
             t, it = self.vitems_site[vid]
             self.add_wave_row(t, it, vid)
             t.setFixedHeight(self.table_height(t))
+        self.update_new_count()
         self.update_scan_marks()
 
     def site_stopped(self, vid):

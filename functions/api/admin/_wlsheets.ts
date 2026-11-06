@@ -134,7 +134,7 @@ export const updateSheets = async (db: D1Database) => {
           "Release",
           "",
           `TVMS-${r.id}`,
-          r.on_site === 0 ? "Not yet" : "Yes",
+          r.on_site === 0 ? "No" : "Yes",
         ];
       }),
     });
@@ -147,6 +147,32 @@ export const updateSheets = async (db: D1Database) => {
     done[composerId] = list.length;
   }
   return { added: done, missingSheets: missing };
+};
+
+/** Delete one match (a video added by mistake): its row leaves the composer's
+ *  sheet when it was sent there, then the match itself is removed. */
+export const removeMatch = async (db: D1Database, matchId: number) => {
+  await ensureWlScan(db);
+  const m = await db
+    .prepare(`SELECT id, composer_id, state FROM wl_matches WHERE id = ?1`)
+    .bind(matchId)
+    .first<{ id: number; composer_id: string | null; state: string }>();
+  if (!m) return { ok: false, error: "No such match" };
+  let sheetRows = 0;
+  if (m.composer_id && m.state !== "new") {
+    const c = await getSheetsConfig(db);
+    const sheetId = c.sheets[m.composer_id];
+    if (sheetId && c.scriptUrl && c.token) {
+      try {
+        const r = await callScript(c, { action: "remove", sheetId, refs: [`TVMS-${m.id}`] });
+        sheetRows = Number(r.removed ?? 0);
+      } catch (e) {
+        return { ok: false, error: "The sheet did not answer: " + (e instanceof Error ? e.message : String(e)) };
+      }
+    }
+  }
+  await db.prepare(`DELETE FROM wl_matches WHERE id = ?1`).bind(matchId).run();
+  return { ok: true, sheetRows };
 };
 
 /** Read every composer sheet; rows set to "Released" mark their match released. */
@@ -206,7 +232,8 @@ export const emailComposers = async (env: Env) => {
     const subject = `${n} video${n === 1 ? " is" : "s are"} waiting for a claim release`;
     const html = `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.55;color:#1a1a1a;max-width:560px">
 <h2 style="font-size:20px;margin:0 0 10px">${subject}</h2>
-<p>Hi ${r.name ?? "there"},<br>customers with an active TV Music Store plan used your music. The videos and tracks are in your sheet. Please release the claims in your Content ID dashboard and set <b>Action</b> to <b>Released</b> in the sheet.</p>
+<p>Hi ${r.name ?? "there"},</p>
+<p>Your music was licensed for the videos listed in your sheet. Please release the Content ID claim on each video, then set <b>Action</b> to <b>Released</b> in the sheet.</p>
 <div style="border:1px solid #eee;border-radius:10px;padding:14px 16px;background:#fafafa;margin:14px 0">
 <b>Waiting for release:</b> ${n} video${n === 1 ? "" : "s"}${r.today ? ` (${r.today} added today)` : ""}<br>
 <b>Released so far:</b> ${r.released}</div>

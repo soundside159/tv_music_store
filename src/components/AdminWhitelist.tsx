@@ -389,6 +389,18 @@ const AdminWhitelist = () => {
                             {m.state === "new" && <span className="text-muted-foreground">Not in sheet yet</span>}
                             {m.state === "in_sheet" && <span className="text-red-400">Waiting</span>}
                             {m.state === "released" && <span className="text-emerald-300">✓ Released {shortDate(m.releasedAt)}</span>}
+                            <button
+                              type="button"
+                              title="Added by mistake? Removes this match from the site and from the composer's sheet."
+                              className="mt-1 block text-[11px] text-muted-foreground underline-offset-2 hover:text-red-400 hover:underline"
+                              onClick={() => {
+                                if (!window.confirm("Remove this match from the site and from the composer's sheet?")) return;
+                                void act("remove", { action: "match_remove", matchId: m.id }, (d) =>
+                                  `Removed (${d.sheetRows ?? 0} sheet row(s))`);
+                              }}
+                            >
+                              Remove
+                            </button>
                           </div>
                         </div>
                       );

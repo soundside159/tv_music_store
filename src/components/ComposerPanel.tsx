@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import ComposerUpload, { useComposerTracks } from "@/components/ComposerUpload";
 import ComposerEarnings from "@/components/ComposerEarnings";
@@ -22,6 +22,7 @@ export type ComposerSectionId =
   | "agreement"
   | "earnings"
   | "requests"
+  | "claims"
   | "profile";
 
 export const COMPOSER_SECTION_IDS: ComposerSectionId[] = [
@@ -30,6 +31,7 @@ export const COMPOSER_SECTION_IDS: ComposerSectionId[] = [
   "upload",
   "agreement",
   "requests",
+  "claims",
   "profile",
 ];
 
@@ -93,10 +95,9 @@ const ComposerPanel = ({ section }: { section: ComposerSectionId }) => {
   }, [myDownloads]);
 
   const myTracks = composer ? mockComposerTracks.filter((t) => t.composerId === composer.id) : [];
-  const myClaims = composer ? mockClaimRequests.filter((c) => c.composerId === composer.id) : [];
-  const myBriefs = composer
-    ? mockBriefs.filter((b) => b.assignedComposerId === composer.id || b.assignedComposerId === null)
-    : [];
+  // Requests show real data only; the demo claims and briefs are gone (06.11.2026).
+  const myClaims: typeof mockClaimRequests = [];
+  const myBriefs: typeof mockBriefs = [];
 
   // While the real profile is loading, show an empty placeholder: the mock
   // persona fallback below used to flash demo numbers (342 downloads, a demo
@@ -376,6 +377,8 @@ const ComposerPanel = ({ section }: { section: ComposerSectionId }) => {
         </>
       )}
 
+      {section === "claims" && <ComposerClaims />}
+
       {section === "profile" && (
         <Card title="Public profile & payouts">
           <p className="mb-4 font-body text-xs text-muted-foreground">
@@ -403,6 +406,55 @@ const ComposerPanel = ({ section }: { section: ComposerSectionId }) => {
         </Card>
       )}
     </>
+  );
+};
+
+/** Claims: the composer's own Google Sheet of videos that wait for a Content ID release. */
+const ComposerClaims = () => {
+  const [data, setData] = useState<{ sheetUrl: string; waiting: number; released: number; total: number } | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    fetch("/api/composer/claims", { credentials: "include" })
+      .then(async (r) => {
+        const d = (await r.json()) as { error?: string; sheetUrl?: string; waiting?: number; released?: number; total?: number };
+        if (!r.ok || d.error) throw new Error(d.error || "Failed");
+        setData({ sheetUrl: d.sheetUrl ?? "", waiting: d.waiting ?? 0, released: d.released ?? 0, total: d.total ?? 0 });
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "Failed"));
+  }, []);
+  return (
+    <Card title="Content ID claims">
+      <p className="font-body text-sm text-muted-foreground">
+        When a customer with an active plan uses your track in a YouTube video, the video appears in your
+        claim sheet. Release the claim in your Content ID dashboard, then set <b className="text-foreground">Action</b> to{" "}
+        <b className="text-foreground">Released</b> in the sheet. The site picks it up by itself.
+      </p>
+      {error && <p className="mt-3 font-body text-sm text-red-400">{error}</p>}
+      {data && (
+        <div className="mt-5 flex flex-wrap items-center gap-6">
+          <div className="font-body text-sm">
+            <span className={`text-2xl font-semibold ${data.waiting ? "text-red-400" : "text-foreground"}`}>{data.waiting}</span>
+            <span className="ml-2 text-muted-foreground">waiting for release</span>
+          </div>
+          <div className="font-body text-sm">
+            <span className="text-2xl font-semibold text-emerald-300">{data.released}</span>
+            <span className="ml-2 text-muted-foreground">released</span>
+          </div>
+          {data.sheetUrl ? (
+            <a
+              href={data.sheetUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="ml-auto rounded-lg bg-[#F4C430] px-5 py-2 font-body text-sm font-semibold text-background transition-colors hover:bg-[#F4C430]/85"
+            >
+              Open my sheet
+            </a>
+          ) : (
+            <span className="ml-auto font-body text-xs text-muted-foreground">Your sheet is not set up yet. Write to us.</span>
+          )}
+        </div>
+      )}
+    </Card>
   );
 };
 

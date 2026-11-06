@@ -13,8 +13,12 @@
  */
 var TOKEN = 'CHANGE_ME';
 
+// Column names as the composer sees them. 'Match ID' is the site's reference
+// (do not edit); 'Track uploaded to the site' answers whether the track the
+// scanner found is already published on TV Music Store (No = upload it).
 var HEADER = ['Channel', 'Video link', 'Video title', 'Track found', 'Where in video',
-              'Video published', 'Action', 'Your notes', 'Ref', 'On TV Music Store'];
+              'Video published', 'Action', 'Your notes', 'Match ID (do not edit)', 'Track uploaded to the site'];
+var OLD_HEADERS = { 'Ref': 'Match ID (do not edit)', 'On TV Music Store': 'Track uploaded to the site' };
 var COL_ACTION = 7;  // 1-based
 var COL_REF = 9;
 
@@ -24,6 +28,16 @@ function out(obj) {
 
 function sheetOf(id) {
   var sh = SpreadsheetApp.openById(id).getSheets()[0];
+  if (sh.getLastRow() > 0) {
+    // an older sheet: rename the columns in place, the rows stay
+    var head = sh.getRange(1, 1, 1, HEADER.length).getValues()[0];
+    var changed = false;
+    for (var i = 0; i < head.length; i++) {
+      var h = String(head[i] || '');
+      if (OLD_HEADERS[h]) { head[i] = OLD_HEADERS[h]; changed = true; }
+    }
+    if (changed) sh.getRange(1, 1, 1, HEADER.length).setValues([head]);
+  }
   if (sh.getLastRow() === 0) {
     sh.appendRow(HEADER);
     sh.getRange(1, 1, 1, HEADER.length).setFontWeight('bold').setBackground('#f1f3f4');
@@ -32,12 +46,13 @@ function sheetOf(id) {
     sh.setColumnWidth(4, 200); sh.setColumnWidth(5, 170); sh.setColumnWidth(6, 110);
     sh.setColumnWidth(7, 110); sh.setColumnWidth(8, 220); sh.setColumnWidth(9, 90); sh.setColumnWidth(10, 130);
     // Released = green, Release = red (conditional formatting on the Action column)
-    // On TV Music Store: "Not yet" = the track still has to be uploaded to the site (red)
+    // Track uploaded to the site: "No" = the track still has to be uploaded to the site (red)
     var col = sh.getRange('G2:G');
     var site = sh.getRange('J2:J');
     sh.setConditionalFormatRules([
       SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Released').setBackground('#e6f4ea').setFontColor('#137333').setRanges([col]).build(),
       SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Release').setBackground('#fce8e6').setFontColor('#c5221f').setRanges([col]).build(),
+      SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('No').setBackground('#fce8e6').setFontColor('#c5221f').setRanges([site]).build(),
       SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Not yet').setBackground('#fce8e6').setFontColor('#c5221f').setRanges([site]).build(),
       SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Yes').setFontColor('#137333').setRanges([site]).build()
     ]);
@@ -67,6 +82,21 @@ function doPost(e) {
       sh.getRange(start, COL_ACTION, rows.length, 1).setDataValidation(rule);
       sh.getRange(start, COL_REF, rows.length, 1).setFontColor('#9aa0a6');
       return out({ ok: true, added: rows.length });
+    }
+
+    if (b.action === 'remove') {
+      // delete the rows whose Match ID is in b.refs (a video added by mistake)
+      var refs = {};
+      (b.refs || []).forEach(function (r) { refs[String(r)] = true; });
+      var lastR = sh.getLastRow();
+      var removed = 0;
+      if (lastR >= 2) {
+        var ids = sh.getRange(2, COL_REF, lastR - 1, 1).getValues();
+        for (var j = ids.length - 1; j >= 0; j--) {
+          if (refs[String(ids[j][0] || '')]) { sh.deleteRow(j + 2); removed++; }
+        }
+      }
+      return out({ ok: true, removed: removed });
     }
 
     if (b.action === 'status') {

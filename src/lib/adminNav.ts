@@ -134,6 +134,8 @@ export const composerNavItems: NavItem[] = [
   { id: "upload", label: "Upload", icon: UploadCloud },
   { id: "agreement", label: "Agreement", icon: FileSignature },
   { id: "requests", label: "Requests", icon: Inbox },
+  // Claim sheet: the composer's own Google Sheet of videos waiting for a Content ID release
+  { id: "claims", label: "Claims", icon: FileSpreadsheet },
   // No "Profile" here — the composer's account profile lives in the Account
   // menu; a second one would just be the same fields twice.
 ];

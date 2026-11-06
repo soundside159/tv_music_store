@@ -16,7 +16,7 @@ import {
   takeQueue,
   type ScanMatch,
 } from "./_wlscan";
-import { emailComposers, getSheetsConfig, setSheetsConfig, sheetUrl, syncSheets, updateSheets } from "./_wlsheets";
+import { emailComposers, getSheetsConfig, removeMatch, setSheetsConfig, sheetUrl, syncSheets, updateSheets } from "./_wlsheets";
 
 // /api/admin/wl-scan - whitelist auto-scanning (see _wlscan.ts for the chain).
 // Used by the admin page (session) and the desktop scanner (x-admin-token).
@@ -278,6 +278,25 @@ export const onRequestPost = async (ctx: Ctx) => {
         cleared = (rm as { meta?: { changes?: number } }).meta?.changes ?? 0;
       }
       return json({ ok: true, requeued: (r as { meta?: { changes?: number } }).meta?.changes ?? 0, cleared });
+    }
+    case "match_remove": {
+      // one match id, or every match of a video
+      const ids: number[] = [];
+      if (body.matchId !== undefined) ids.push(Number(body.matchId));
+      if (typeof body.videoId === "string") {
+        const rs = await db.prepare(`SELECT id FROM wl_matches WHERE video_id = ?1`).bind(body.videoId).all<{ id: number }>();
+        ids.push(...rs.results.map((r) => r.id));
+      }
+      let removed = 0;
+      let sheetRows = 0;
+      for (const id of ids) {
+        if (!Number.isFinite(id)) continue;
+        const r = await removeMatch(db, id);
+        if (!r.ok) return json({ error: r.error }, 502);
+        removed++;
+        sheetRows += r.sheetRows ?? 0;
+      }
+      return json({ ok: true, removed, sheetRows });
     }
     case "solo_remove":
       return json(await removeSoloVideo(db, String(body.videoId ?? "")));

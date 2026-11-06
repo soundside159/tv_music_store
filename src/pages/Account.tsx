@@ -51,6 +51,7 @@ type SectionId =
   | "composer-agreement"
   | "composer-earnings"
   | "composer-requests"
+  | "composer-claims"
   | "composer-profile";
 
 const SECTION_IDS: SectionId[] = [
@@ -69,6 +70,7 @@ const SECTION_IDS: SectionId[] = [
   "composer-agreement",
   "composer-earnings",
   "composer-requests",
+  "composer-claims",
   "composer-profile",
 ];
 
