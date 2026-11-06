@@ -17,10 +17,20 @@ var TOKEN = 'CHANGE_ME';
 // (do not edit); 'Track uploaded to the site' answers whether the track the
 // scanner found is already published on TV Music Store (No = upload it).
 var HEADER = ['Channel', 'Video link', 'Video title', 'Track found', 'Where in video',
-              'Video published', 'Action', 'Your notes', 'Match ID (do not edit)', 'Track uploaded to the site'];
+              'Video published', 'Action', 'Your notes', 'Match ID (do not edit)', 'Track uploaded to the site',
+              'Track in the scanner base'];
 var OLD_HEADERS = { 'Ref': 'Match ID (do not edit)', 'On TV Music Store': 'Track uploaded to the site' };
 var COL_ACTION = 7;  // 1-based
 var COL_REF = 9;
+
+function dateKey(v) {
+  // '06.11.2026', a Date cell or '2026-11-06' -> 'YYYY-MM-DD'
+  if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  var t = String(v || '').trim();
+  var m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(t);
+  if (m) return m[3] + '-' + m[2] + '-' + m[1];
+  return t;
+}
 
 function out(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
@@ -37,6 +47,10 @@ function sheetOf(id) {
       if (OLD_HEADERS[h]) { head[i] = OLD_HEADERS[h]; changed = true; }
     }
     if (changed) sh.getRange(1, 1, 1, HEADER.length).setValues([head]);
+    // a sheet made with fewer columns: add the missing headers on the right
+    for (var k = 0; k < HEADER.length; k++) {
+      if (!String(head[k] || '')) sh.getRange(1, k + 1).setValue(HEADER[k]).setFontWeight('bold').setBackground('#f1f3f4');
+    }
   }
   if (sh.getLastRow() === 0) {
     sh.appendRow(HEADER);
@@ -45,6 +59,7 @@ function sheetOf(id) {
     sh.setColumnWidth(1, 160); sh.setColumnWidth(2, 260); sh.setColumnWidth(3, 260);
     sh.setColumnWidth(4, 200); sh.setColumnWidth(5, 170); sh.setColumnWidth(6, 110);
     sh.setColumnWidth(7, 110); sh.setColumnWidth(8, 220); sh.setColumnWidth(9, 90); sh.setColumnWidth(10, 130);
+    sh.setColumnWidth(11, 140);
     // Released = green, Release = red (conditional formatting on the Action column)
     // Track uploaded to the site: "No" = the track still has to be uploaded to the site (red)
     var col = sh.getRange('G2:G');
@@ -73,10 +88,20 @@ function doPost(e) {
         return r.slice(0, HEADER.length);
       });
       if (!rows.length) return out({ ok: true, added: 0 });
-      sh.appendRow([b.date]);
-      var dr = sh.getLastRow();
-      sh.getRange(dr, 1, 1, HEADER.length).setBackground('#fff4c2').setFontWeight('bold');
-      var start = dr + 1;
+      // the last date row is today's? then just add under it; else a new date row
+      var lastRow = sh.getLastRow();
+      var lastDate = '';
+      for (var q = lastRow; q >= 2; q--) {
+        var cellA = sh.getRange(q, 1).getValue();
+        var cellB = String(sh.getRange(q, 2).getValue() || '');
+        if (cellB === '' && cellA !== '') { lastDate = dateKey(cellA); break; }
+      }
+      if (lastDate !== dateKey(b.date)) {
+        sh.appendRow([b.date]);
+        var dr = sh.getLastRow();
+        sh.getRange(dr, 1, 1, HEADER.length).setBackground('#fff4c2').setFontWeight('bold');
+      }
+      var start = sh.getLastRow() + 1;
       sh.getRange(start, 1, rows.length, HEADER.length).setValues(rows).setFontWeight('normal').setBackground(null);
       var rule = SpreadsheetApp.newDataValidation().requireValueInList(['Release', 'Released'], true).build();
       sh.getRange(start, COL_ACTION, rows.length, 1).setDataValidation(rule);
@@ -94,6 +119,16 @@ function doPost(e) {
         var ids = sh.getRange(2, COL_REF, lastR - 1, 1).getValues();
         for (var j = ids.length - 1; j >= 0; j--) {
           if (refs[String(ids[j][0] || '')]) { sh.deleteRow(j + 2); removed++; }
+        }
+        // a date row with nothing under it (next row is another date or the end) goes too
+        var n = sh.getLastRow();
+        for (var r2 = n; r2 >= 2; r2--) {
+          var a = sh.getRange(r2, 1).getValue(), bb = String(sh.getRange(r2, 2).getValue() || '');
+          if (bb !== '' || a === '') continue;
+          var next = r2 + 1;
+          var nextIsDate = next > sh.getLastRow() ||
+            (String(sh.getRange(next, 2).getValue() || '') === '' && sh.getRange(next, 1).getValue() !== '');
+          if (nextIsDate) sh.deleteRow(r2);
         }
       }
       return out({ ok: true, removed: removed });

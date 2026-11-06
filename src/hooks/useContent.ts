@@ -28,6 +28,7 @@ interface ApiContentItem {
   image?: string;
   theme?: string;
   trackIds?: string[];
+  photoSettings?: Record<string, number> | null;
 }
 
 export interface LiveComposer {
@@ -233,6 +234,7 @@ const mapCollections = (data: ApiContent): MusicCollection[] =>
     // No default artwork (owner request): a fresh item shows an EMPTY card
     // until he uploads or AI-generates a cover himself.
     image: c.image ?? "",
+    photoSettings: c.photoSettings ?? null,
   }));
 
 /** Collections for the catalog strip / collections pages (live only, no mocks). */
@@ -270,6 +272,7 @@ export interface LivePlaylist {
   /** Section on the /playlists page ("Featured", "Podcast"…); "" = ungrouped. */
   theme: string;
   trackIds: string[];
+  photoSettings?: Record<string, number> | null;
 }
 
 const mapPlaylists = (data: ApiContent): LivePlaylist[] =>
@@ -282,6 +285,7 @@ const mapPlaylists = (data: ApiContent): LivePlaylist[] =>
     image: p.image ?? "",
     theme: p.theme ?? "",
     trackIds: p.trackIds ?? [],
+    photoSettings: p.photoSettings ?? null,
   }));
 
 /** Playlists for /playlists pages (live only, no mocks). */

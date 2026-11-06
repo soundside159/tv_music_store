@@ -11,16 +11,38 @@ const buildContent = async (ctx: Ctx): Promise<Response> => {
   if (!ctx.env.DB) return json({ error: "DB not bound" }, 503);
   const db = ctx.env.DB;
 
-  const collections = await db
-    .prepare(`SELECT id, title, short_title, description, image FROM collections ORDER BY sort`)
-    .all<{ id: string; title: string; short_title: string | null; description: string | null; image: string | null }>();
+  const parseSettings = (v: string | null | undefined): Record<string, number> | null => {
+    try {
+      return v ? (JSON.parse(v) as Record<string, number>) : null;
+    } catch {
+      return null;
+    }
+  };
+  type ColRow = { id: string; title: string; short_title: string | null; description: string | null; image: string | null; photo_settings?: string | null };
+  const collections = await (async () => {
+    try {
+      return await db
+        .prepare(`SELECT id, title, short_title, description, image, photo_settings FROM collections ORDER BY sort`)
+        .all<ColRow>();
+    } catch {
+      return await db.prepare(`SELECT id, title, short_title, description, image FROM collections ORDER BY sort`).all<ColRow>();
+    }
+  })();
   // `theme` groups the /playlists page into sections; older DBs may not have
   // the column yet (added lazily by the admin API) — degrade gracefully.
+  type PlRow = { id: string; title: string; description: string | null; image: string | null; theme: string | null; photo_settings?: string | null };
   const playlists = await (async () => {
     try {
       return await db
+        .prepare(`SELECT id, title, description, image, theme, photo_settings FROM playlists ORDER BY sort`)
+        .all<PlRow>();
+    } catch {
+      // older DB: no photo_settings and maybe no theme yet
+    }
+    try {
+      return await db
         .prepare(`SELECT id, title, description, image, theme FROM playlists ORDER BY sort`)
-        .all<{ id: string; title: string; description: string | null; image: string | null; theme: string | null }>();
+        .all<PlRow>();
     } catch {
       const legacy = await db
         .prepare(`SELECT id, title, description, image FROM playlists ORDER BY sort`)
@@ -164,6 +186,7 @@ const buildContent = async (ctx: Ctx): Promise<Response> => {
       shortTitle: c.short_title ?? c.title,
       description: c.description ?? "",
       image: c.image ?? "",
+      photoSettings: parseSettings(c.photo_settings),
       trackIds: colMap[c.id] ?? [],
     })),
     playlists: playlists.results.map((p) => ({
@@ -172,6 +195,7 @@ const buildContent = async (ctx: Ctx): Promise<Response> => {
       description: p.description ?? "",
       image: p.image ?? "",
       theme: p.theme ?? "",
+      photoSettings: parseSettings(p.photo_settings),
       trackIds: plMap[p.id] ?? [],
     })),
   });

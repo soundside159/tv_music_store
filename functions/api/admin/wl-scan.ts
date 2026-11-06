@@ -346,6 +346,7 @@ export const onRequestPost = async (ctx: Ctx) => {
           score: Number(m.score) || 0,
           composer: typeof m.composer === "string" ? m.composer.slice(0, 120) : undefined,
           onSite: typeof m.onSite === "boolean" ? m.onSite : undefined,
+          inBase: typeof m.inBase === "string" ? m.inBase : undefined,
         }));
       return json(
         await saveResult(db, videoId, matches, typeof body.error === "string" ? body.error : undefined, {

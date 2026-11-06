@@ -66,13 +66,18 @@ const merge = (s?: Record<string, number> | null): PhotoSettings => ({ ...PHOTO_
 const ArtistPhoto = ({
   photo,
   composerId,
+  kind = "composer",
   saved,
   editable,
+  title = "Photo settings",
 }: {
   photo: string;
+  /** composer id, or a collection / playlist id when `kind` says so */
   composerId: string;
+  kind?: "composer" | "collection" | "playlist";
   saved?: Record<string, number> | null;
   editable: boolean;
+  title?: string;
 }) => {
   const [s, setS] = useState<PhotoSettings>(() => merge(saved));
   const [open, setOpen] = useState(false);
@@ -95,7 +100,7 @@ const ArtistPhoto = ({
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ composerId, settings: value }),
+        body: JSON.stringify({ composerId, kind, settings: value }),
       });
       const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!res.ok || !d.ok) throw new Error(d.error ?? "Save failed");
@@ -150,12 +155,12 @@ const ArtistPhoto = ({
               onClick={() => setOpen(true)}
               className="inline-flex items-center gap-2 rounded-full border border-[#F4C430]/60 bg-card/95 px-4 py-2 font-body text-xs font-semibold text-[#F4C430] shadow-xl backdrop-blur hover:bg-[#F4C430]/10"
             >
-              <SlidersHorizontal className="h-4 w-4" /> Photo settings
+              <SlidersHorizontal className="h-4 w-4" /> {title}
             </button>
           ) : (
             <div className="max-h-[70vh] w-72 overflow-y-auto rounded-xl border border-border bg-card/95 p-4 shadow-2xl backdrop-blur">
               <div className="mb-3 flex items-center justify-between">
-                <p className="font-body text-sm font-semibold text-foreground">Photo settings</p>
+                <p className="font-body text-sm font-semibold text-foreground">{title}</p>
                 <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="text-muted-foreground hover:text-foreground">
                   <X className="h-4 w-4" />
                 </button>
@@ -201,7 +206,7 @@ const ArtistPhoto = ({
                 </button>
               </div>
               <p className="mt-2 font-body text-[10px] text-muted-foreground">
-                Changes show live. Save keeps them for this composer; Reset goes back to the default look.
+                Changes show live. Save keeps them for this page only; Reset goes back to the default look.
               </p>
             </div>
           )}

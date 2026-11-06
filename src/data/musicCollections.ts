@@ -6,6 +6,7 @@ export type MusicCollection = {
   description: string;
   trackCount: number;
   image: string;
+  photoSettings?: Record<string, number> | null;
 };
 
 export const musicCollections: MusicCollection[] = [

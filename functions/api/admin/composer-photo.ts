@@ -22,9 +22,11 @@ const LIMITS: Record<string, [number, number]> = {
   glow: [0, 100], // blurred background glow strength, %
 };
 
-const ensureColumn = async (db: NonNullable<Ctx["env"]["DB"]>) => {
+const TABLES: Record<string, string> = { composer: "composers", collection: "collections", playlist: "playlists" };
+
+const ensureColumn = async (db: NonNullable<Ctx["env"]["DB"]>, table: string) => {
   try {
-    await db.prepare(`ALTER TABLE composers ADD COLUMN photo_settings TEXT`).run();
+    await db.prepare(`ALTER TABLE ${table} ADD COLUMN photo_settings TEXT`).run();
   } catch {
     // already there
   }
@@ -36,8 +38,10 @@ export const onRequestPost = async (ctx: Ctx) => {
   if (!user) return json({ error: "Not signed in" }, 401);
   if (user.role !== "admin" && user.email !== OWNER_EMAIL) return json({ error: "Admin only" }, 403);
 
-  const body = await readJson<{ composerId?: string; settings?: Record<string, unknown> | null }>(ctx.request);
+  const body = await readJson<{ composerId?: string; kind?: string; settings?: Record<string, unknown> | null }>(ctx.request);
   if (!body?.composerId) return json({ error: "composerId required" }, 400);
+  const table = TABLES[body.kind ?? "composer"];
+  if (!table) return json({ error: "Bad kind" }, 400);
 
   let clean: Record<string, number> | null = null;
   if (body.settings) {
@@ -48,10 +52,10 @@ export const onRequestPost = async (ctx: Ctx) => {
     }
   }
 
-  await ensureColumn(ctx.env.DB);
-  const res = (await ctx.env.DB.prepare(`UPDATE composers SET photo_settings = ?2 WHERE id = ?1`)
+  await ensureColumn(ctx.env.DB, table);
+  const res = (await ctx.env.DB.prepare(`UPDATE ${table} SET photo_settings = ?2 WHERE id = ?1`)
     .bind(body.composerId, clean ? JSON.stringify(clean) : null)
     .run()) as { meta?: { changes?: number } };
-  if (!res.meta?.changes) return json({ error: "Composer not found" }, 404);
+  if (!res.meta?.changes) return json({ error: "Not found" }, 404);
   return json({ ok: true, settings: clean });
 };

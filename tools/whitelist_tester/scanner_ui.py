@@ -559,8 +559,10 @@ def why_text(c, row):
 
 def match_payload(base, r):
     """One found track as the site expects it (onSite = published on the site)."""
+    st = base.site_state(r["track"])[0]
     return {"trackId": r["track"], "track": r["title"], "composer": r.get("composer", ""),
-            "onSite": base.site_state(r["track"])[0] in ("site", "dup"),
+            "onSite": st in ("site", "dup"),
+            "inBase": {"site": "site", "local": "local", "dup": "both"}.get(st, "site"),
             "regions": r["regions"], "total": r["total"], "score": r["score"]}
 
 

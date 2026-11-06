@@ -156,6 +156,12 @@ export const ensureWlScan = async (db: D1Database) => {
   } catch {
     // column exists
   }
+  try {
+    // where the scanner's base knows the track: 'site' | 'local' | 'both' (the scanner tells us)
+    await db.prepare(`ALTER TABLE wl_matches ADD COLUMN in_base TEXT`).run();
+  } catch {
+    // column exists
+  }
   ready = true;
 };
 
@@ -418,6 +424,8 @@ export interface ScanMatch {
   score: number;
   composer?: string;
   onSite?: boolean;
+  /** scanner base: 'site' | 'local' | 'both' */
+  inBase?: string;
 }
 
 /** Store the scanner's answer for one video. */
@@ -480,11 +488,11 @@ export const saveResult = async (
     await db
       .prepare(
         `INSERT INTO wl_matches (video_id, channel_id, user_id, track_id, track_title, composer_id,
-                                 regions, total_s, score, eligible, state, on_site)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+                                 regions, total_s, score, eligible, state, on_site, in_base)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
          ON CONFLICT(video_id, track_title) DO UPDATE SET
            regions = excluded.regions, total_s = excluded.total_s, score = excluded.score,
-           on_site = excluded.on_site`,
+           on_site = excluded.on_site, in_base = excluded.in_base`,
       )
       .bind(
         videoId,
@@ -499,6 +507,7 @@ export const saveResult = async (
         eligible,
         eligible ? "new" : "not_eligible",
         onSite,
+        ["site", "local", "both"].includes(String(m.inBase)) ? String(m.inBase) : null,
       )
       .run();
   }

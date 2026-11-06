@@ -1,5 +1,6 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 import Navigation from "@/components/Navigation";
+import ArtistPhoto from "@/components/ArtistPhoto";
 import Footer from "@/components/Footer";
 import { TrackRowList, TrackRowSkeletonList } from "@/components/TrackRowPlayer";
 import { useCollections, useContentReady } from "@/hooks/useContent";
@@ -70,9 +71,21 @@ const CollectionDetail = () => {
   );
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="relative min-h-screen overflow-hidden bg-background">
       <Navigation />
-      <main className="mx-auto w-full max-w-7xl px-4 pb-24 pt-24 sm:px-6 md:pt-28">
+      {/* The cover as a BACKGROUND layer, like the composer photo on the artist
+          page; the admin tunes it per collection right here (Cover settings). */}
+      {collection.image && (
+        <ArtistPhoto
+          photo={collection.image}
+          composerId={collection.id}
+          kind="collection"
+          saved={collection.photoSettings}
+          editable={admin.enabled}
+          title="Cover settings"
+        />
+      )}
+      <main className="relative z-10 mx-auto w-full max-w-7xl px-4 pb-24 pt-24 sm:px-6 md:pt-28">
         <div className="flex flex-col gap-6 md:flex-row md:items-center">
           <AdminCoverControl
             kind="collection"
