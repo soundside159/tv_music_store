@@ -48,13 +48,18 @@ export const onRequestGet = async (ctx: Ctx) => {
     }
   }
 
+  // One track by slug (the track page): an UNLISTED track is hidden from the
+  // catalog, search and collections, but opens by its direct link and sells.
+  const slug = new URL(ctx.request.url).searchParams.get("slug");
+  if (slug && /^[A-Za-z0-9._-]{1,120}$/.test(slug)) return buildTracks(ctx, includeDrafts, slug);
+
   // The public catalog comes from the edge cache (see _cache.ts); the admin
   // view (?drafts=1) always reads the database.
   if (!includeDrafts) return cachedJson(ctx, "tracks", () => buildTracks(ctx, false));
   return buildTracks(ctx, true);
 };
 
-const buildTracks = async (ctx: Ctx, includeDrafts: boolean): Promise<Response> => {
+const buildTracks = async (ctx: Ctx, includeDrafts: boolean, slug?: string): Promise<Response> => {
   if (!ctx.env.DB) return json({ error: "DB not bound. See docs/SETUP_BACKEND.md" }, 503);
 
   // Assign public codes to any track missing one (idempotent — no-op once set).
@@ -64,9 +69,11 @@ const buildTracks = async (ctx: Ctx, includeDrafts: boolean): Promise<Response> 
   // not have them yet, so degrade gracefully in two steps.
   // Admin (?drafts=1) sees EVERYTHING incl. composer uploads pending review;
   // the public catalog only gets published + approved rows.
-  const WHERE = includeDrafts
-    ? `ORDER BY created_at DESC`
-    : `WHERE status = 'published' AND moderation_status = 'approved' ORDER BY created_at DESC`;
+  const WHERE = slug
+    ? `WHERE slug = '${slug}' ${includeDrafts ? "" : "AND status IN ('published','unlisted') AND moderation_status = 'approved'"}`
+    : includeDrafts
+      ? `ORDER BY created_at DESC`
+      : `WHERE status = 'published' AND moderation_status = 'approved' ORDER BY created_at DESC`;
   let tracks: { results: TrackRow[] };
   try {
     tracks = await ctx.env.DB.prepare(

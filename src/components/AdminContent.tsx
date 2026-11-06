@@ -566,6 +566,21 @@ const AdminContent = ({ tab, editor = false }: { tab: Tab; editor?: boolean }) =
     }
   };
 
+  /** Published -> unlisted: hidden from the catalog and search, sold by the link. */
+  const unlistSelectedTracks = async () => {
+    if (selectedTrackIds.length === 0) return;
+    const n = selectedTrackIds.length;
+    const ok = await run(
+      { action: "bulk_update_tracks", trackIds: selectedTrackIds, fields: { status: "unlisted" } },
+      `${n} track${n > 1 ? "s" : ""} now link only`,
+    );
+    if (ok) {
+      setSelectedTrackIds([]);
+      setSelResetKey((k) => k + 1);
+      void reloadTracks();
+    }
+  };
+
   /** Published -> draft for the whole selection (mirror of Publish). */
   const unpublishSelectedTracks = async () => {
     if (selectedTrackIds.length === 0) return;
@@ -1160,6 +1175,17 @@ const AdminContent = ({ tab, editor = false }: { tab: Tab; editor?: boolean }) =
                   </button>
                 )}
                 {mergedTracks.some((t) => selectedTrackIds.includes(t.id) && t.status === "published") && (
+                  <button
+                    type="button"
+                    disabled={busy || aiBusy}
+                    onClick={() => void unlistSelectedTracks()}
+                    title="Hide from the catalog and search; the tracks still open and sell by their direct links"
+                    className="rounded-lg border border-sky-400/50 px-4 py-2 font-body text-sm font-semibold text-sky-300 transition-colors hover:bg-sky-400/10 disabled:opacity-50"
+                  >
+                    Link only ({selectedTrackIds.length})
+                  </button>
+                )}
+                {mergedTracks.some((t) => selectedTrackIds.includes(t.id) && t.status !== "draft") && (
                   <button
                     type="button"
                     disabled={busy || aiBusy}

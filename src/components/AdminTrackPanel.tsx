@@ -161,15 +161,22 @@ export const AdminTrackTopBar = ({
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const isDraft = track.status === "draft";
+  const isUnlisted = track.status === "unlisted";
   // Composer uploads await review; Publish approves + publishes in one go.
   const isPending = track.moderation === "pending";
 
-  const setStatus = async (status: "published" | "draft") => {
+  const setStatus = async (status: "published" | "draft" | "unlisted") => {
     setBusy(true);
     const ok = await run({ action: "bulk_update_tracks", trackIds: [track.id], fields: { status } });
     setBusy(false);
     if (ok) {
-      toast.success(status === "published" ? "Track published — it's live in the catalog" : "Track unpublished (draft)");
+      toast.success(
+        status === "published"
+          ? "Track published — it's live in the catalog"
+          : status === "unlisted"
+            ? "Link only: hidden from the catalog and search, opens by its direct link"
+            : "Track unpublished (draft)",
+      );
       onTracksChanged();
     }
   };
@@ -245,7 +252,7 @@ export const AdminTrackTopBar = ({
         ))}
       </span>
       <span className={`ml-auto flex items-center gap-2 ${editor ? "hidden" : ""}`}>
-        {isDraft ? (
+        {isDraft || isUnlisted ? (
           <button
             type="button"
             disabled={busy}
@@ -255,6 +262,17 @@ export const AdminTrackTopBar = ({
             Publish
           </button>
         ) : (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void setStatus("unlisted")}
+            title="Hide from the catalog and search; the track still opens and sells by its direct link"
+            className="rounded-lg border border-sky-400/50 px-3 py-1.5 font-body text-xs font-semibold text-sky-300 transition-colors hover:bg-sky-400/10 disabled:opacity-50"
+          >
+            Link only
+          </button>
+        )}
+        {isDraft ? null : (
           <button
             type="button"
             disabled={busy}

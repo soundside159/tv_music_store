@@ -746,7 +746,7 @@ export const onRequestPost = async (ctx: Ctx) => {
       stemsKey?: string;
       /** Removes the stems bundle reference + switches the badge off. */
       clearStems?: boolean;
-      /** draft | published — bulk publish/unpublish. */
+      /** draft | published | unlisted (link only) — bulk publish/unpublish. */
       status?: string;
       /** pending | approved | rejected — composer-upload review verdict. */
       moderationStatus?: string;
@@ -1129,7 +1129,7 @@ export const onRequestPost = async (ctx: Ctx) => {
             next.stems_manifest = null;
             next.has_stems = 0;
           }
-          if (f.status === "draft" || f.status === "published") {
+          if (f.status === "draft" || f.status === "published" || f.status === "unlisted") {
             next.status = f.status;
             // Publishing implies approval — composer uploads land as
             // moderation_status='pending' and the owner's Publish is the review.

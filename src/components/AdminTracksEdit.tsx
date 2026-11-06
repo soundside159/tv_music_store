@@ -427,7 +427,7 @@ const AdminTracksEdit = ({
       case "bpm": return t.bpm ?? "";
       case "duration": return t.duration ?? "";
       case "status":
-        return t.moderation === "pending" ? "review" : t.status === "draft" ? "draft" : "live";
+        return t.moderation === "pending" ? "review" : t.status === "draft" ? "draft" : t.status === "unlisted" ? "unlisted" : "live";
       default: return "";
     }
   };
@@ -465,7 +465,7 @@ const AdminTracksEdit = ({
     }
   };
   // Status tabs: Live / Drafts / Review (composer uploads awaiting moderation).
-  const [statusTab, setStatusTab] = useState<"live" | "drafts" | "review">("live");
+  const [statusTab, setStatusTab] = useState<"live" | "drafts" | "unlisted" | "review">("live");
   // "Edited by editor" filter: only tracks with editor changes not reviewed yet.
   const [editedOnly, setEditedOnly] = useState(false);
   const [page, setPage] = useState(1);
@@ -1339,10 +1339,11 @@ const AdminTracksEdit = ({
 
   // Three buckets: Review = composer uploads awaiting moderation, Drafts =
   // unpublished (bulk uploads etc.), Live = everything published & approved.
-  const bucketOf = (t: CatalogTrack): "live" | "drafts" | "review" =>
-    t.moderation === "pending" ? "review" : t.status === "draft" ? "drafts" : "live";
+  // Unlisted = sold by its direct link only (hidden from the catalog and search).
+  const bucketOf = (t: CatalogTrack): "live" | "drafts" | "unlisted" | "review" =>
+    t.moderation === "pending" ? "review" : t.status === "draft" ? "drafts" : t.status === "unlisted" ? "unlisted" : "live";
   const counts = useMemo(() => {
-    const c = { live: 0, drafts: 0, review: 0 };
+    const c = { live: 0, drafts: 0, unlisted: 0, review: 0 };
     for (const t of tracks) c[bucketOf(t)] += 1;
     return c;
   }, [tracks]);
@@ -2220,6 +2221,7 @@ const AdminTracksEdit = ({
             [
               ["live", "Live", counts.live],
               ["drafts", "Drafts", counts.drafts],
+              ["unlisted", "Unlisted", counts.unlisted],
               ["review", "Review", counts.review],
             ] as const
           ).map(([id, label, n]) => (
@@ -2805,6 +2807,14 @@ const AdminTracksEdit = ({
                         {t.moderation === "pending" && (
                           <span className="shrink-0 rounded border border-orange-400/60 bg-orange-400/10 px-1 py-px font-body text-[9px] font-bold uppercase tracking-wide text-orange-400">
                             Review
+                          </span>
+                        )}
+                        {t.status === "unlisted" && t.moderation !== "pending" && (
+                          <span
+                            title="Link only: hidden from the catalog and search, opens and sells by its direct link"
+                            className="shrink-0 rounded border border-sky-400/50 bg-sky-400/10 px-1 py-px font-body text-[9px] font-bold uppercase tracking-wide text-sky-300"
+                          >
+                            Link only
                           </span>
                         )}
                         {t.status === "draft" && t.moderation !== "pending" && (

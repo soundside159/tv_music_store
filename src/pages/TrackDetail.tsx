@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import Navigation from "@/components/Navigation";
 import WaveformPreview from "@/components/WaveformPreview";
 import type { CatalogTrack, TrackAudioVersion, TrackVersion } from "@/data/catalogTracks";
-import { useTracks } from "@/hooks/useTracks";
+import { useTrackBySlug, useTracks } from "@/hooks/useTracks";
 import { useSeo } from "@/hooks/useSeo";
 import { useCurrentUser } from "@/hooks/useMockData";
 import {
@@ -60,9 +60,13 @@ const TrackDetail = () => {
   // Resolve by the leading code (/track/1042-anything) so the text part can
   // change without breaking the link; fall back to an exact slug match.
   const codeParam = slug?.match(/^(\d+)/)?.[1];
-  const track =
+  const listed =
     catalogTracks.find((item) => item.slug === slug) ??
     (codeParam ? catalogTracks.find((item) => String(item.code) === codeParam) : undefined);
+  // Not in the catalog list once it has loaded: maybe an unlisted track (link only).
+  const single = useTrackBySlug(!listed && !isLoading && slug ? slug : undefined);
+  const track = listed ?? single.track ?? undefined;
+  const isLoadingAny = isLoading || single.loading;
   const [activeTab, setActiveTab] = useState<DetailTab>("versions");
   const [selectedVersions, setSelectedVersions] = useState<Record<string, TrackVersion>>({});
   const [selectedTier, setSelectedTier] = useState<LicenseTierId>("personal");
@@ -125,13 +129,13 @@ const TrackDetail = () => {
             ...(track.genre ? { genre: track.genre } : {}),
           },
         }
-      : { title: isLoading ? "Loading… | TV Music Store" : "Track not found | TV Music Store" },
+      : { title: isLoadingAny ? "Loading… | TV Music Store" : "Track not found | TV Music Store" },
   );
 
   // While /api/tracks is still loading, a direct page load (F5) briefly has no
   // track yet — show a quiet skeleton, NOT the "Track not found" screen. That
   // message is reserved for a finished load with a genuinely missing slug.
-  if (!track && isLoading) {
+  if (!track && isLoadingAny) {
     return (
       <div className="min-h-screen bg-background">
         <Navigation />

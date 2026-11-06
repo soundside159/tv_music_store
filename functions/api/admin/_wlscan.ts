@@ -592,7 +592,7 @@ export const scanCatalog = async (db: D1Database) => {
       `SELECT t.id, t.slug, t.title, t.created_at, c.display_name AS composer,
               (SELECT v.preview_src FROM track_versions v WHERE v.track_id = t.id ORDER BY v.sort ASC LIMIT 1) AS src
          FROM tracks t LEFT JOIN composers c ON c.id = t.composer_id
-        WHERE t.status = 'published'`,
+        WHERE t.status IN ('published', 'unlisted')`,
     )
     .all<{
       id: string;

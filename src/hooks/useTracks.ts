@@ -120,6 +120,36 @@ export const patchCachedTrackFacet = (
   patchCachedTracks({ [id]: { [key]: (on ? [...rest, value] : rest).join(" / ") } });
 };
 
+/** One track by its slug (or leading code), straight from the server: for a
+ *  track page whose track is not in the catalog list (an UNLISTED track that
+ *  sells by its link only). `slug` undefined = nothing to fetch. */
+export const useTrackBySlug = (slug: string | undefined) => {
+  const [track, setTrack] = useState<CatalogTrack | null>(null);
+  const [loading, setLoading] = useState(!!slug);
+  useEffect(() => {
+    if (!slug) {
+      setTrack(null);
+      setLoading(false);
+      return;
+    }
+    let alive = true;
+    setLoading(true);
+    fetch("/api/tracks?slug=" + encodeURIComponent(slug), { credentials: "include" })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
+      .then((data: { tracks?: ApiTrack[] }) => {
+        if (!alive) return;
+        const t = (data.tracks ?? []).map(mapTrack).find((x) => x.audioVersions.length > 0) ?? null;
+        setTrack(t);
+      })
+      .catch(() => alive && setTrack(null))
+      .finally(() => alive && setLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, [slug]);
+  return { track, loading };
+};
+
 export const useTracks = (opts?: { drafts?: boolean }) => {
   const wantDrafts = !!opts?.drafts;
   const key = wantDrafts ? "drafts" : "public";
