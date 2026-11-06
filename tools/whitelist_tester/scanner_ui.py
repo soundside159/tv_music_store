@@ -2043,11 +2043,17 @@ class ChannelBar(QtWidgets.QFrame):
         h.addWidget(self.btn_stop)
         self.set_progress(None)
 
-    def set_meta(self, n_videos, n_match, n_wait):
-        self.meta.setText("<span style='color:%s'>%d videos</span> &nbsp;&middot;&nbsp; "
+    def set_meta(self, n_videos, n_match, n_wait, n_done=None):
+        """n_done = scanned videos: "3/8 videos" orange until every one is scanned, then green."""
+        if n_done is None or not n_videos:
+            vids = "<span style='color:%s'>%d videos</span>" % (TEXT_GRAY, n_videos)
+        else:
+            vids = "<span style='color:%s'>%d/%d videos</span>" % ("#9fe3b0" if n_done >= n_videos else ACCENT,
+                                                                   n_done, n_videos)
+        self.meta.setText(vids + " &nbsp;&middot;&nbsp; "
                           "<span style='color:%s'>%d match</span> &nbsp;&middot;&nbsp; "
                           "<span style='color:%s'>%d waiting release</span>"
-                          % (TEXT_GRAY, n_videos, RED if n_match else TEXT_GRAY, n_match, TEXT_GRAY, n_wait))
+                          % (RED if n_match else TEXT_GRAY, n_match, TEXT_GRAY, n_wait))
 
     def set_progress(self, done_total):
         """done_total = (done, total) while this channel is being scanned, else None."""
@@ -2812,7 +2818,8 @@ class App(QtWidgets.QMainWindow):
             bar.stop.connect(self.stop_channel)
             n_match = sum(1 for v in ch["videos"] if self.matches_by_vid.get(v["videoId"]))
             n_wait = sum(1 for v in ch["videos"] if self.claim_of(v["videoId"])[0] == "wait")
-            bar.set_meta(len(ch["videos"]), n_match, n_wait)
+            n_done = sum(1 for v in ch["videos"] if self.video_state(v["videoId"]) in ("found", "clean"))
+            bar.set_meta(len(ch["videos"]), n_match, n_wait, n_done)
             self.content_lay.addWidget(bar)
             self.chan_bars[ch["id"]] = bar
             if ch["id"] in self.open_ch:
@@ -3306,7 +3313,8 @@ class App(QtWidgets.QMainWindow):
         if bar and ch:
             n_match = sum(1 for x in ch["videos"] if self.matches_by_vid.get(x["videoId"]))
             n_wait = sum(1 for x in ch["videos"] if self.claim_of(x["videoId"])[0] == "wait")
-            bar.set_meta(len(ch["videos"]), n_match, n_wait)
+            n_done = sum(1 for x in ch["videos"] if self.video_state(x["videoId"]) in ("found", "clean"))
+            bar.set_meta(len(ch["videos"]), n_match, n_wait, n_done)
         if vid in self.open_vid and vid in self.vitems_site:
             t, it = self.vitems_site[vid]
             self.add_wave_row(t, it, vid)

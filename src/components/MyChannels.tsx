@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, Crown, ShieldCheck, X } from "lucide-react";
+import { Crown, ShieldCheck, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { openPlanModal } from "@/lib/billing";
 
@@ -101,7 +101,8 @@ const MyChannels = () => {
         <div>
           <h1 className="text-2xl font-semibold text-foreground md:text-3xl">YouTube Whitelisting</h1>
           <p className="mt-1 font-body text-sm text-muted-foreground">
-            Add your YouTube channels to prevent copyright claims on our music
+            Add your channels. While your subscription is active, claims on our music in your new videos are released
+            automatically.
           </p>
         </div>
         {data && limit > 0 && (
@@ -115,11 +116,11 @@ const MyChannels = () => {
         )}
       </div>
 
-      {/* Link input - always on top */}
-      <form
-        onSubmit={add}
-        className="flex items-center gap-3 rounded-xl border border-border bg-card py-2 pl-4 pr-2"
-      >
+      {/* Link input - always on top. Plainer than a channel card: a labelled field whose
+          border lights up on hover / focus. */}
+      <form onSubmit={add} className="flex flex-col gap-1.5">
+        <span className="font-body text-xs font-semibold uppercase tracking-wide text-muted-foreground">Add a channel</span>
+        <div className="group flex items-center gap-3 rounded-lg border border-border bg-background py-1.5 pl-4 pr-1.5 transition-colors focus-within:border-[#F4C430] hover:border-[#F4C430]/70">
         <YoutubeMark />
         <input
           value={url}
@@ -143,18 +144,8 @@ const MyChannels = () => {
         >
           {full ? "Upgrade" : busy ? "Adding..." : "Add channel"}
         </button>
+        </div>
       </form>
-
-      <div className="-mt-2 flex items-start gap-3 px-1 font-body text-[13px] leading-relaxed text-muted-foreground">
-        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-400/10 text-emerald-300">
-          <Check className="h-3 w-3" />
-        </span>
-        <span>
-          While your subscription is active, our system finds every new video on your channels and gets claims on our
-          tracks released. <b className="font-semibold text-foreground">You don't need to do anything.</b>
-          <br />A claim can only be released once the video is public.
-        </span>
-      </div>
 
       {error && <p className="font-body text-xs text-red-400">{error}</p>}
       {!data && !error && <p className="font-body text-sm text-muted-foreground">Loading channels...</p>}
@@ -164,7 +155,7 @@ const MyChannels = () => {
           {data.channels.map((c, i) => (
             <div
               key={c.id}
-              className={`flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 ${c.paused ? "opacity-60" : ""}`}
+              className={`flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:bg-white/[0.03] ${c.paused ? "opacity-60" : ""}`}
             >
               <span
                 className="h-9 w-9 shrink-0 rounded-full"
@@ -185,8 +176,16 @@ const MyChannels = () => {
                   Paused · upgrade to resume
                 </button>
               ) : (
-                <span className="flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 font-body text-[11px] font-bold text-emerald-300">
-                  <ShieldCheck className="h-3 w-3" /> Protected
+                <span className="group/prot relative flex shrink-0 cursor-default items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 font-body text-[11px] font-bold text-emerald-300">
+                  <ShieldCheck className="h-3 w-3" /> Protected by our system
+                  <span
+                    role="tooltip"
+                    className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-64 rounded-lg border border-border bg-card p-3 text-left font-body text-xs font-normal leading-relaxed text-foreground opacity-0 shadow-xl transition-opacity group-hover/prot:opacity-100"
+                  >
+                    While your subscription is active, our system finds every new video on this channel and releases the
+                    claims on our music by itself. You don't need to do anything. A claim is released once the video is
+                    public, usually within a day.
+                  </span>
                 </span>
               )}
               <button
@@ -263,6 +262,7 @@ const MyChannels = () => {
         <Link to="/account?section=claims" className="font-semibold" style={{ color: GOLD }}>
           Let us know
         </Link>
+        <span className="mt-1 block text-xs text-muted-foreground/70">A claim can only be released once the video is public.</span>
       </p>
     </div>
   );
