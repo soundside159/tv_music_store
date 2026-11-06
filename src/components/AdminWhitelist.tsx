@@ -181,12 +181,7 @@ const AdminWhitelist = () => {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start gap-3">
-        <div className="min-w-0 flex-1">
-          <h2 className="font-display text-2xl font-bold text-foreground">Whitelisting</h2>
-          <p className="mt-1 font-body text-sm text-muted-foreground">
-            New matches go into each composer's Google Sheet. Composers mark Released there.
-          </p>
-        </div>
+        <h2 className="font-display text-2xl font-bold text-foreground">Whitelisting</h2>
         {/* Left of the line: find and read. Right of the line: send out. */}
         <button
           type="button"
@@ -534,9 +529,6 @@ const AdminWhitelist = () => {
               </div>
             );
           })}
-          <p className="font-body text-xs text-muted-foreground">
-            A match without a license (no plan when the video came out, track not bought) is in the "No license" block above.
-          </p>
         </>
       )}
 
