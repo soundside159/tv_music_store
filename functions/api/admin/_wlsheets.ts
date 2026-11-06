@@ -171,8 +171,20 @@ export const removeMatch = async (db: D1Database, matchId: number) => {
       }
     }
   }
-  await db.prepare(`DELETE FROM wl_matches WHERE id = ?1`).bind(matchId).run();
+  // kept as 'removed' (not deleted): the owner sees it and can send it again
+  await db
+    .prepare(`UPDATE wl_matches SET state = 'removed', sheet_date = NULL, released_at = NULL WHERE id = ?1`)
+    .bind(matchId)
+    .run();
   return { ok: true, sheetRows };
+};
+
+/** A removed match goes back to "not in sheet": the next sheets update sends it. */
+export const sendAgain = async (db: D1Database, matchId: number) => {
+  await db
+    .prepare(`UPDATE wl_matches SET state = 'new', eligible = 1 WHERE id = ?1 AND state = 'removed'`)
+    .bind(matchId)
+    .run();
 };
 
 /** Read every composer sheet; rows set to "Released" mark their match released. */

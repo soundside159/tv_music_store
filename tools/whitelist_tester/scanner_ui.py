@@ -2857,6 +2857,8 @@ class App(QtWidgets.QMainWindow):
         if "not_eligible" in states:
             mailed = any(str(m.get("license", "")).endswith("emailed") for m in ms if m["state"] == "not_eligible")
             return "noplan", "no license" + (" (offer emailed)" if mailed else ""), "#f2c14e", "#5a4420"
+        if states == {"removed"}:
+            return "removed", "removed from sheet", TEXT_GRAY, BG_INPUT
         return "other", ", ".join(sorted(states)), TEXT_GRAY, BG_INPUT
 
     def video_state(self, vid):
@@ -3024,17 +3026,32 @@ class App(QtWidgets.QMainWindow):
                             lambda x=mm: self.email_customer(x))
                 m.addAction("Release \"%s\" anyway (no license)" % mm.get("track", ""),
                             lambda x=mm: self.force_match(x))
-            m.addAction("Remove match from the site and the composer's sheet", lambda: self.remove_match(vid))
+            if any(mm.get("state") == "removed" and mm.get("id") for mm in ms):
+                m.addAction("Send to the composer's sheet again", lambda: self.send_again(vid))
+            if any(mm.get("state") != "removed" for mm in ms):
+                m.addAction("Remove match from the composer's sheet", lambda: self.remove_match(vid))
         if v.get("note") == "solo" or str(v.get("channelId", "")).startswith(("wch_solo_", "wch_csolo_")):
             m.addSeparator()
             m.addAction("Remove this solo video", lambda: self.remove_solo(vid))
         m.exec(t.viewport().mapToGlobal(pos))
 
+    def send_again(self, vid):
+        ids = [mm["id"] for mm in self.matches_by_vid.get(vid) or [] if mm.get("state") == "removed" and mm.get("id")]
+
+        def go():
+            try:
+                for mid in ids:
+                    api(self.settings, "POST", "", {"action": "match_again", "matchId": mid}, timeout=60)
+                self.log("Send again: %d match(es) back in the queue for the sheet." % len(ids))
+            except Exception as e:
+                self.log("Send again failed: %s" % e)
+            self.load_overview()
+        self.bg(go)
+
     def remove_match(self, vid):
         title = (self.vid_rows.get(vid) or {}).get("title") or vid
-        if not ask_yes(self, "Remove match", "Remove the match of \"%s\" from the site and delete its row from "
-                       "the composer's sheet? The video stays, the track just will not be counted as found." % title,
-                       "Remove"):
+        if not ask_yes(self, "Remove match", "Take the match of \"%s\" out of the composer's sheet? It stays here "
+                       "as \"removed from sheet\" and can be sent again." % title, "Remove"):
             return
 
         def go():
@@ -3252,6 +3269,16 @@ class App(QtWidgets.QMainWindow):
                     return ch
         return None
 
+    def update_bar_meta(self, chid):
+        """The "scanned/total videos - matches - waiting" line of one channel bar."""
+        bar = self.chan_bars.get(chid)
+        ch = self.find_channel(chid) if chid else None
+        if bar and ch:
+            n_match = sum(1 for x in ch["videos"] if self.matches_by_vid.get(x["videoId"]))
+            n_wait = sum(1 for x in ch["videos"] if self.claim_of(x["videoId"])[0] == "wait")
+            n_done = sum(1 for x in ch["videos"] if self.video_state(x["videoId"]) in ("found", "clean"))
+            bar.set_meta(len(ch["videos"]), n_match, n_wait, n_done)
+
     def update_scan_marks(self):
         """Dots and counters for whatever is being scanned now (cheap, no rebuild)."""
         if not hasattr(self, "chan_bars"):
@@ -3274,6 +3301,8 @@ class App(QtWidgets.QMainWindow):
             it.dot.set(ACCENT if on else None)
         for vid in list(self.vitems_site):
             self.fill_video_item(vid)
+        for chid, bar in self.chan_bars.items():
+            self.update_bar_meta(chid)
         left = len(self.queue) + (1 if self.checking else 0)
         total = len(self.job_src) if self.running else 0
         if self.running:
@@ -3307,14 +3336,7 @@ class App(QtWidgets.QMainWindow):
             self.matches_by_vid.pop(vid, None)
         self.job_src.pop(vid, None)
         self.fill_video_item(vid)
-        chid = (v or {}).get("channelId")
-        bar = self.chan_bars.get(chid)
-        ch = self.find_channel(chid) if chid else None
-        if bar and ch:
-            n_match = sum(1 for x in ch["videos"] if self.matches_by_vid.get(x["videoId"]))
-            n_wait = sum(1 for x in ch["videos"] if self.claim_of(x["videoId"])[0] == "wait")
-            n_done = sum(1 for x in ch["videos"] if self.video_state(x["videoId"]) in ("found", "clean"))
-            bar.set_meta(len(ch["videos"]), n_match, n_wait, n_done)
+        self.update_bar_meta((v or {}).get("channelId"))
         if vid in self.open_vid and vid in self.vitems_site:
             t, it = self.vitems_site[vid]
             self.add_wave_row(t, it, vid)

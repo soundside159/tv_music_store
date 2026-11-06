@@ -29,7 +29,7 @@ interface Match {
   score: number;
   eligible: boolean;
   onSite: boolean;
-  state: "new" | "in_sheet" | "released" | "not_eligible";
+  state: "new" | "in_sheet" | "released" | "not_eligible" | "removed";
   license: string; // plan | track | manual | custom | none | none:emailed
   userId: string;
   trackSlug: string;
@@ -118,6 +118,7 @@ const AdminWhitelist = () => {
   const [busy, setBusy] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [showReleased, setShowReleased] = useState(false);
+  const [showRemoved, setShowRemoved] = useState(false);
   const [open, setOpen] = useState<Record<string, boolean>>({});
 
   const load = useCallback(() => {
@@ -279,6 +280,10 @@ const AdminWhitelist = () => {
               <input type="checkbox" checked={showReleased} onChange={(e) => setShowReleased(e.target.checked)} className="accent-[#F4C430]" />
               Show released videos too
             </label>
+            <label className="flex items-center gap-2 font-body text-sm text-muted-foreground">
+              <input type="checkbox" checked={showRemoved} onChange={(e) => setShowRemoved(e.target.checked)} className="accent-[#F4C430]" />
+              Show removed too
+            </label>
           </div>
 
           {unlicensed.length > 0 && (
@@ -366,9 +371,11 @@ const AdminWhitelist = () => {
             const waiting = mine.filter((m) => m.state === "in_sheet");
             const fresh = mine.filter((m) => m.state === "new");
             const released = mine.filter((m) => m.state === "released");
+            const removed = mine.filter((m) => m.state === "removed");
             const oldest = waiting.reduce((a, m) => Math.max(a, daysSince(m.sheetDate) ?? 0), 0);
             const rows = mine
               .filter((m) => showReleased || m.state !== "released")
+              .filter((m) => showRemoved || m.state !== "removed")
               .filter(matchHit)
               .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
             const isOpen = needle ? rows.length > 0 : !!open[c.id];
@@ -396,6 +403,11 @@ const AdminWhitelist = () => {
                   <span className="font-body text-xs text-muted-foreground">
                     <b className="mr-1 text-sm text-emerald-300">{released.length}</b>released
                   </span>
+                  {removed.length > 0 && (
+                    <span className="font-body text-xs text-muted-foreground">
+                      <b className="mr-1 text-sm text-muted-foreground">{removed.length}</b>removed
+                    </span>
+                  )}
                   <span className="font-body text-xs text-muted-foreground">
                     {waiting.length ? (
                       <>
@@ -508,18 +520,33 @@ const AdminWhitelist = () => {
                             )}
                             {m.state === "in_sheet" && <span className="text-red-400">Waiting</span>}
                             {m.state === "released" && <span className="text-emerald-300">✓ Released {shortDate(m.releasedAt)}</span>}
+                            {m.state === "removed" && (
+                              <span className="whitespace-nowrap text-muted-foreground">
+                                Removed from sheet
+                                <button
+                                  type="button"
+                                  title="Back to 'not in sheet': the next sheets update sends it again"
+                                  className="ml-2 text-[11px] text-[#F4C430] underline-offset-2 hover:underline"
+                                  onClick={() => void act(`again${m.id}`, { action: "match_again", matchId: m.id }, () => "Back in the queue for the sheet")}
+                                >
+                                  Send again
+                                </button>
+                              </span>
+                            )}
+                            {m.state !== "removed" && (
                             <button
                               type="button"
-                              title="Added by mistake? Removes this match from the site and from the composer's sheet."
+                              title="Added by mistake? Takes the row out of the composer's sheet; the match stays here as removed."
                               className="mt-1 block text-[11px] text-muted-foreground underline-offset-2 hover:text-red-400 hover:underline"
                               onClick={() => {
-                                if (!window.confirm("Remove this match from the site and from the composer's sheet?")) return;
+                                if (!window.confirm("Remove this match from the composer's sheet?")) return;
                                 void act("remove", { action: "match_remove", matchId: m.id }, (d) =>
                                   `Removed (${d.sheetRows ?? 0} sheet row(s))`);
                               }}
                             >
                               Remove
                             </button>
+                            )}
                           </div>
                         </div>
                       );

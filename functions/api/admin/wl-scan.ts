@@ -22,7 +22,7 @@ import {
   takeQueue,
   type ScanMatch,
 } from "./_wlscan";
-import { emailComposers, getSheetsConfig, removeMatch, setSheetsConfig, sheetUrl, syncSheets, updateSheets } from "./_wlsheets";
+import { emailComposers, getSheetsConfig, removeMatch, sendAgain, setSheetsConfig, sheetUrl, syncSheets, updateSheets } from "./_wlsheets";
 
 // /api/admin/wl-scan - whitelist auto-scanning (see _wlscan.ts for the chain).
 // Used by the admin page (session) and the desktop scanner (x-admin-token).
@@ -312,11 +312,17 @@ export const onRequestPost = async (ctx: Ctx) => {
       const r = await (chId ? q.bind(chId) : q).run();
       let cleared = 0;
       if (body.clearMatches) {
-        const m = db.prepare(`DELETE FROM wl_matches WHERE state IN ('new','in_sheet','not_eligible') ${where}`);
+        const m = db.prepare(`DELETE FROM wl_matches WHERE state IN ('new','in_sheet','not_eligible','removed') ${where}`);
         const rm = await (chId ? m.bind(chId) : m).run();
         cleared = (rm as { meta?: { changes?: number } }).meta?.changes ?? 0;
       }
       return json({ ok: true, requeued: (r as { meta?: { changes?: number } }).meta?.changes ?? 0, cleared });
+    }
+    case "match_again": {
+      const id = Number(body.matchId);
+      if (!Number.isFinite(id)) return json({ error: "matchId" }, 400);
+      await sendAgain(db, id);
+      return json({ ok: true });
     }
     case "match_force": {
       // the owner releases a claim that no license covers
