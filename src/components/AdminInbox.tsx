@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Archive, Mail, PenSquare, RefreshCw, Search, Send, Star, Trash2, User } from "lucide-react";
+import { Archive, ArrowLeft, Mail, PenSquare, RefreshCw, Search, Send, Star, Trash2, User } from "lucide-react";
 import { toast } from "sonner";
 import { refreshUnreadMail } from "@/hooks/useUnreadMail";
 
@@ -288,7 +288,11 @@ const AdminInbox = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => v
           not stretch the conversation column past the card (it did). */}
       <div className="grid gap-0 md:grid-cols-[20rem_minmax(0,1fr)]">
         {/* Thread list */}
-        <div className="min-w-0 max-h-[70vh] overflow-y-auto border-b border-border md:border-b-0 md:border-r">
+        <div
+          className={`min-w-0 max-h-[70vh] overflow-y-auto border-b border-border md:border-b-0 md:border-r ${
+            activeId || composing ? "hidden md:block" : ""
+          }`}
+        >
           {loading ? (
             <p className="px-4 py-6 font-body text-sm text-muted-foreground">Loading…</p>
           ) : threads.length === 0 ? (
@@ -367,7 +371,19 @@ const AdminInbox = ({ onOpenCustomer }: { onOpenCustomer?: (userId: string) => v
         </div>
 
         {/* Conversation / compose */}
-        <div className="flex min-h-[50vh] min-w-0 flex-col">
+        <div className={`flex min-h-[50vh] min-w-0 flex-col ${activeId || composing ? "" : "hidden md:flex"}`}>
+          {(activeId || composing) && (
+            <button
+              type="button"
+              onClick={() => {
+                setComposing(false);
+                setActiveId(null);
+              }}
+              className="flex items-center gap-1.5 border-b border-border px-4 py-2 font-body text-xs text-muted-foreground md:hidden"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> Back to inbox
+            </button>
+          )}
           {composing ? (
             <div className="flex flex-col gap-2 p-4">
               <h3 className="flex items-center gap-2 font-body text-sm font-semibold text-foreground">

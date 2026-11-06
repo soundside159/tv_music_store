@@ -96,7 +96,7 @@ const PlaylistDetail = () => {
       <main className="relative z-10 mx-auto w-full max-w-7xl px-4 pb-24 pt-24 sm:px-6 md:pt-28">
         <div className="flex flex-col gap-6 md:flex-row md:items-center">
           {/* Parallelogram cover — same skew language as the playlist cards. */}
-          <div className="ml-2 shrink-0">
+          <div className={`ml-2 shrink-0 ${playlist.image ? "hidden md:block" : ""}`}>
             <AdminCoverControl
               kind="playlist"
               id={playlist.id}

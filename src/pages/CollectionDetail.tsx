@@ -91,7 +91,7 @@ const CollectionDetail = () => {
             kind="collection"
             id={collection.id}
             admin={admin}
-            className="h-40 w-40 shrink-0 overflow-hidden rounded-xl border border-border"
+            className={`h-40 w-40 shrink-0 overflow-hidden rounded-xl border border-border ${collection.image ? "hidden md:block" : ""}`}
           >
             {collection.image ? (
               <img src={collection.image} alt={collection.shortTitle} className="h-full w-full object-cover" />
