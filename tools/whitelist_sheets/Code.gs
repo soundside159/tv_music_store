@@ -51,6 +51,29 @@ function sheetOf(id) {
     for (var d = head.length - 1; d >= HEADER.length; d--) {
       if (DROP_HEADERS[String(head[d] || '')]) sh.deleteColumn(d + 1);
     }
+    // older rows said 'Release': now 'Action needed' (the dropdown and the colours follow)
+    var lastRowM = sh.getLastRow();
+    if (lastRowM >= 2) {
+      var actRange = sh.getRange(2, COL_ACTION, lastRowM - 1, 1);
+      var acts = actRange.getValues();
+      var fix = false;
+      for (var a = 0; a < acts.length; a++) {
+        if (String(acts[a][0]) === 'Release') { acts[a][0] = 'Action needed'; fix = true; }
+      }
+      if (fix) {
+        actRange.setValues(acts);
+        var ruleM = SpreadsheetApp.newDataValidation().requireValueInList(['Action needed', 'Released'], true).build();
+        var refs = sh.getRange(2, COL_REF, lastRowM - 1, 1).getValues();
+        for (var b2 = 0; b2 < refs.length; b2++) {
+          if (String(refs[b2][0] || '').indexOf('TVMS-') === 0) sh.getRange(b2 + 2, COL_ACTION).setDataValidation(ruleM);
+        }
+        var colM = sh.getRange('G2:G');
+        sh.setConditionalFormatRules([
+          SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Released').setBackground('#e6f4ea').setFontColor('#137333').setRanges([colM]).build(),
+          SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Action needed').setBackground('#fce8e6').setFontColor('#c5221f').setRanges([colM]).build()
+        ]);
+      }
+    }
     // a sheet made with fewer columns: add the missing headers on the right
     for (var k = 0; k < HEADER.length; k++) {
       if (!String(head[k] || '')) sh.getRange(1, k + 1).setValue(HEADER[k]).setFontWeight('bold').setBackground('#f1f3f4');
@@ -67,7 +90,7 @@ function sheetOf(id) {
     var col = sh.getRange('G2:G');
     sh.setConditionalFormatRules([
       SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Released').setBackground('#e6f4ea').setFontColor('#137333').setRanges([col]).build(),
-      SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Release').setBackground('#fce8e6').setFontColor('#c5221f').setRanges([col]).build()
+      SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Action needed').setBackground('#fce8e6').setFontColor('#c5221f').setRanges([col]).build()
     ]);
   }
   return sh;
@@ -101,7 +124,7 @@ function doPost(e) {
       }
       var start = sh.getLastRow() + 1;
       sh.getRange(start, 1, rows.length, HEADER.length).setValues(rows).setFontWeight('normal').setBackground(null);
-      var rule = SpreadsheetApp.newDataValidation().requireValueInList(['Release', 'Released'], true).build();
+      var rule = SpreadsheetApp.newDataValidation().requireValueInList(['Action needed', 'Released'], true).build();
       sh.getRange(start, COL_ACTION, rows.length, 1).setDataValidation(rule);
       sh.getRange(start, COL_REF, rows.length, 1).setFontColor('#9aa0a6');
       return out({ ok: true, added: rows.length });

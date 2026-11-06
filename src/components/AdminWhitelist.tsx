@@ -499,8 +499,8 @@ const AdminWhitelist = () => {
                           </div>
                           <div className="text-xs">
                             {m.state === "new" && (
-                              <span className="text-muted-foreground">
-                                Not in sheet yet
+                              <span className="whitespace-nowrap text-muted-foreground">
+                                Not in sheet
                                 <button
                                   type="button"
                                   title="Put just this match into the composer's sheet"

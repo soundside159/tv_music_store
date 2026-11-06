@@ -132,7 +132,7 @@ export const updateSheets = async (db: D1Database, onlyMatchId?: number) => {
           r.track_title,
           regions.map(([a, b]) => `${fmtTime(a)} - ${fmtTime(b)}`).join(", "),
           (r.published_at ?? "").slice(0, 10),
-          "Release",
+          "Action needed",
           "",
           `TVMS-${r.id}`,
         ];

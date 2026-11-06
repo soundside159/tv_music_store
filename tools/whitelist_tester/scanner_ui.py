@@ -933,6 +933,8 @@ QPushButton#ghost { background: transparent; border: 1px solid #4A5057; color: #
 QPushButton#ghost:hover { border-color: #E67E22; color: #E67E22; }
 QPushButton#ghost:checked { border-color: #E67E22; color: #E67E22; }
 QPushButton#small { padding: 2px 8px; font-size: 10px; min-height: 12px; }
+QPushButton#smallstop { padding: 2px 8px; font-size: 10px; min-height: 12px; border: 1px solid #8a9299; color: #d8dde1; }
+QPushButton#smallstop:hover { border-color: #ff6b6b; color: #ff6b6b; }
 QPushButton#chev { background: transparent; border: none; padding: 0; min-width: 14px; max-width: 14px; }
 
 QCheckBox { font-size: 11px; spacing: 7px; color: #d8dde1; }
@@ -958,8 +960,11 @@ QSpinBox:focus, QDoubleSpinBox:focus { border-color: #E67E22; }
 QComboBox { background: #323b42; border: 1px solid #4A5057; border-radius: 4px; padding: 4px 9px; font-size: 11px; }
 QComboBox:hover { border-color: #E67E22; }
 QComboBox::drop-down { border: none; width: 18px; }
-QComboBox QAbstractItemView { background: #252E33; border: 1px solid #4A5057; selection-background-color: #323b42;
-                              selection-color: #E67E22; outline: none; }
+QComboBox QAbstractItemView { background: #252E33; border: 1px solid #12181D; border-radius: 6px; padding: 5px;
+                              color: #d8dde1; outline: 0; font-size: 11px; }
+QComboBox QAbstractItemView::item { min-height: 26px; padding: 0 10px; border-radius: 4px; }
+QComboBox QAbstractItemView::item:hover { background: #323b42; color: #ffffff; }
+QComboBox QAbstractItemView::item:selected { background: #3a2b20; color: #E67E22; }
 
 QTabWidget::pane { border: 1px solid #12181D; border-radius: 4px; background: #2d373e; top: -1px; }
 QTabBar::tab { background: transparent; color: #8a9299; padding: 6px 12px; font-size: 11px; font-weight: 600;
@@ -1198,6 +1203,11 @@ class KeepColors(QtWidgets.QStyledItemDelegate):
 
 class CleanStyle(QtWidgets.QProxyStyle):
     """Fusion look on every Windows version, without the dotted focus frames."""
+
+    def styleHint(self, hint, opt=None, w=None, ret=None):
+        if hint == QtWidgets.QStyle.StyleHint.SH_ComboBox_Popup:
+            return 0  # a drop-down list under the box, not a popup over it
+        return super().styleHint(hint, opt, w, ret)
 
     def drawPrimitive(self, el, opt, p, w=None):
         if el == QtWidgets.QStyle.PrimitiveElement.PE_FrameFocusRect:
@@ -1783,6 +1793,78 @@ class Chevron(QtWidgets.QPushButton):
         p.end()
 
 
+class HandCells(QtCore.QObject):
+    """Pointing hand over the clickable cells of a tree: pred(item, column) says which."""
+
+    def __init__(self, tree, pred):
+        super().__init__(tree)
+        self.tree = tree
+        self.pred = pred
+        tree.setMouseTracking(True)
+        tree.viewport().installEventFilter(self)
+
+    def eventFilter(self, obj, e):
+        if e.type() == QtCore.QEvent.Type.MouseMove:
+            pos = e.position().toPoint()
+            it = self.tree.itemAt(pos)
+            col = self.tree.columnAt(pos.x())
+            hand = it is not None and col >= 0 and bool(self.pred(it, col))
+            if hand:
+                obj.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+            else:
+                obj.unsetCursor()
+        elif e.type() == QtCore.QEvent.Type.Leave:
+            obj.unsetCursor()
+        return False
+
+
+class Spinner(QtWidgets.QWidget):
+    """A thin orange arc that turns while something loads; fades in and out."""
+
+    def __init__(self, size=16, width=2.0, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(size, size)
+        self._w = width
+        self._ang = 0
+        self._op = 0.0
+        self._on = False
+        self._tm = QtCore.QTimer(self)
+        self._tm.setInterval(16)
+        self._tm.timeout.connect(self._step)
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+    def start(self):
+        if not self._on:
+            self._on = True
+            self._tm.start()
+
+    def stop(self):
+        self._on = False  # keeps turning while it fades out
+
+    def _step(self):
+        self._ang = (self._ang + 7) % 360
+        self._op = min(1.0, self._op + 0.08) if self._on else max(0.0, self._op - 0.06)
+        if not self._on and self._op <= 0.0:
+            self._tm.stop()
+        self.update()
+
+    def paintEvent(self, _e):
+        if self._op <= 0.0:
+            return
+        p = QtGui.QPainter(self)
+        p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
+        p.setOpacity(self._op)
+        r = QtCore.QRectF(self._w, self._w, self.width() - 2 * self._w, self.height() - 2 * self._w)
+        pen = QtGui.QPen(QtGui.QColor(BORDER), self._w)
+        p.setPen(pen)
+        p.drawEllipse(r)
+        pen = QtGui.QPen(QtGui.QColor(ACCENT), self._w)
+        pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
+        p.setPen(pen)
+        p.drawArc(r, -self._ang * 16, 100 * 16)
+        p.end()
+
+
 class Dot(QtWidgets.QWidget):
     """Status dot (scanning = glowing accent)."""
 
@@ -2070,10 +2152,13 @@ class App(QtWidgets.QMainWindow):
             hl.addWidget(b)
             self.navs.append(b)
         hl.addStretch(1)
+        self.hdr_spin = Spinner(14, 1.8)
+        hl.addWidget(self.hdr_spin)
         self.hdr_sub = QtWidgets.QLabel("")
         self.hdr_sub.setObjectName("hdrsub")
         hl.addWidget(self.hdr_sub)
         hl.addSpacing(10)
+        self._jobs = 0
         for kind, fn, hov in (("minimize", self.showMinimized, TEXT_WHITE), ("maximize", self.toggle_max, TEXT_WHITE),
                               ("x", self.close, "#ff3c3c")):
             b = Glyph(kind, hover_color=hov, size=18)
@@ -2348,7 +2433,18 @@ class App(QtWidgets.QMainWindow):
                 self.log("ERROR: %s" % e)
                 self.log(traceback.format_exc().splitlines()[-1])
                 self.stage("Error: %s" % e, 0)
+            finally:
+                self.ui(lambda: self._job(-1))
+        self._job(1)
         threading.Thread(target=run, daemon=True).start()
+
+    def _job(self, d):
+        """Count of background jobs; the header spinner turns while there is one."""
+        self._jobs = max(0, self._jobs + d)
+        if self._jobs:
+            self.hdr_spin.start()
+        else:
+            self.hdr_spin.stop()
 
     # ---- start ---------------------------------------------------------------
     def prepare(self):
@@ -2357,6 +2453,8 @@ class App(QtWidgets.QMainWindow):
             self.log("Track base loaded: %d tracks." % len(self.base.meta))
         else:
             self.log("No track base yet.")
+        # the customer list first (quick), the track base update after it (can take a while)
+        self.load_overview()
         if self.settings["token"]:
             try:
                 n = self.base.update(self.settings, self.log, self.stage)
@@ -2368,7 +2466,9 @@ class App(QtWidgets.QMainWindow):
                 self.stage("Site not reachable", 0)
         else:
             self.stage("Enter the admin token in Settings", 0)
-        self.load_overview()
+        # same as pressing the refresh circles once: the site looks for new videos, then the list reloads
+        if self.settings["token"]:
+            self.reload_site(True)
         self.ui(self.refresh_status)
 
     # ---- Scanner page --------------------------------------------------------
@@ -2622,6 +2722,19 @@ class App(QtWidgets.QMainWindow):
         self.vitems_site = {}
         c = self.cust_by_key(self.sel_key)
         if not c:
+            if self.overview is None and self.settings.get("token"):
+                box = QtWidgets.QWidget()
+                bl = QtWidgets.QVBoxLayout(box)
+                bl.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+                bl.setSpacing(12)
+                sp = Spinner(34, 2.5)
+                sp.start()
+                bl.addWidget(sp, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+                e = label("Loading customers from the site...", "empty")
+                e.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+                bl.addWidget(e)
+                self.content_lay.addWidget(box, 1)
+                return
             e = label("No customers loaded yet.\n\nPress the round arrow next to Customers, "
                       "or enter the admin token in Settings.", "empty")
             e.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
@@ -2780,6 +2893,7 @@ class App(QtWidgets.QMainWindow):
         t.itemClicked.connect(lambda it, col, tt=t: self.on_video_click(tt, it, col))
         t.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
         t.customContextMenuRequested.connect(lambda pos, tt=t: self.video_menu(tt, pos))
+        HandCells(t, lambda it, col: bool(it.data(0, 256)) and (col == 0 or (col == 5 and self.sheet_urls(it.data(0, 256)))))
         self.vtables[ch["id"]] = t
         for v in ch["videos"]:
             vid = v["videoId"]
@@ -2845,18 +2959,35 @@ class App(QtWidgets.QMainWindow):
         it.setFont(4, f)
         ck, ct, cfg, cbg = self.claim_of(vid)
         it.setText(5, ct)
+        it.setToolTip(5, "Click: open the composer's sheet" if self.sheet_urls(vid) else "")
         it.setForeground(5, QtGui.QBrush(QtGui.QColor(cfg)))
         b = t.itemWidget(it, 6)
         if b is not None:
             b.setText("Stop" if key in ("run", "queue") else "Scan")
-            b.setObjectName("stop" if key in ("run", "queue") else "small")
+            b.setObjectName("smallstop" if key in ("run", "queue") else "small")
             b.style().unpolish(b)
             b.style().polish(b)
+
+    def sheet_urls(self, vid):
+        """Google Sheets of the composers whose tracks were found in this video (claims in a sheet)."""
+        comps = {c["id"]: c.get("sheetUrl") for c in (self.overview or {}).get("composers") or []}
+        urls = []
+        for m in self.matches_by_vid.get(vid) or []:
+            u = comps.get(m.get("composerId"))
+            if m.get("state") in ("in_sheet", "released") and u and u not in urls:
+                urls.append(u)
+        return urls
 
     def on_video_click(self, t, it, col):
         vid = it.data(0, 256)
         if not vid:
             return
+        if col == 5:  # the Claim cell: opens the composer's sheet with this claim
+            urls = self.sheet_urls(vid)
+            if urls:
+                for u in urls:
+                    QtGui.QDesktopServices.openUrl(QtCore.QUrl(u))
+                return
         if vid in self.open_vid:
             self.open_vid.discard(vid)
             it.takeChildren()
@@ -3418,6 +3549,9 @@ class App(QtWidgets.QMainWindow):
         t.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
         t.customContextMenuRequested.connect(self.track_menu)
         t.itemDoubleClicked.connect(lambda it, _c: self.open_track(it.data(0, 256)))
+        # the last column is a text "button": no widget per row, so 600 rows fill instantly
+        t.itemClicked.connect(lambda it, c: c == 6 and self.recheck_track(it.data(0, 256)))
+        HandCells(t, lambda it, col: col in (0, 6))
         self.tr_table = t
         wl.addWidget(t)
         l.addWidget(wrap, 1)
@@ -3442,16 +3576,22 @@ class App(QtWidgets.QMainWindow):
         t = getattr(self, "tr_table", None)
         if t is None:
             return
+        t.setUpdatesEnabled(False)
         t.clear()
         q = self.tr_search.text().strip().lower()
         want = self.tr_where.currentIndex()  # 0 all, 1 site, 2 local, 3 both
         stats = self.track_stats()
         look = {"site": ("Site", "#9fe3b0"), "local": ("Folder only", "#f2c14e"), "dup": ("Site + folder", TEXT_ROW)}
+        # where each track lives, computed once for the whole base (not per track)
+        site_titles = {norm_title(m.get("title", "")) for m in self.base.meta.values() if m.get("source", "site") == "site"}
+        local_titles = {norm_title(m.get("title", "")) for m in self.base.meta.values() if m.get("source") == "local"}
         rows = []
         for key, m in self.base.meta.items():
-            state, _url = self.base.site_state(key)
-            if state == "gone":
-                continue
+            nt = norm_title(m.get("title", ""))
+            if m.get("source") == "local":
+                state = "dup" if nt in site_titles else "local"
+            else:
+                state = "dup" if nt in local_titles else "site"
             if (want == 1 and state != "site") or (want == 2 and state != "local") or (want == 3 and state != "dup"):
                 continue
             if q and q not in (m.get("title", "") + " " + m.get("composer", "")).lower():
@@ -3461,6 +3601,7 @@ class App(QtWidgets.QMainWindow):
         n_site = sum(1 for r in rows if r[4] == "site")
         n_local = sum(1 for r in rows if r[4] == "local")
         n_dup = sum(1 for r in rows if r[4] == "dup")
+        items = []
         for composer, title, key, m, state in rows:
             it = QtWidgets.QTreeWidgetItem(["", "", "", "", "", "", ""])
             it.setSizeHint(0, QtCore.QSize(0, 30))
@@ -3480,12 +3621,12 @@ class App(QtWidgets.QMainWindow):
             for c in (1, 3, 4, 5):
                 it.setTextAlignment(c, QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter)
             it.setToolTip(0, "%s\n%s\nDouble-click: open" % (title, m.get("path", "")))
-            t.addTopLevelItem(it)
-            b = QtWidgets.QPushButton("Re-check")
-            b.setObjectName("small")
-            b.setToolTip("Look for this track in every video already scanned (no download)")
-            b.clicked.connect(lambda _, k=key: self.recheck_track(k))
-            t.setItemWidget(it, 6, b)
+            it.setText(6, "Re-check")
+            it.setForeground(6, QtGui.QBrush(QtGui.QColor(ACCENT)))
+            it.setToolTip(6, "Look for this track in every video already scanned (no download)")
+            items.append(it)
+        t.addTopLevelItems(items)
+        t.setUpdatesEnabled(True)
         self.tr_count.setText("%d tracks \u00b7 %d on the site \u00b7 %d folder only \u00b7 %d in both"
                               % (len(rows), n_site, n_local, n_dup))
 
