@@ -97,6 +97,32 @@ export const onRequestGet = async (ctx: Ctx) => {
     .all<{ channel_id: string; n: number }>();
   const chk = new Map(checked.results.map((r) => [r.channel_id, r.n]));
 
+  const sheetsCfg = await getSheetsConfig(db);
+  // Admin page only (not the scanner): read "Released" back from the composer
+  // sheets, at most once in 5 minutes, so the page shows the real state.
+  let syncedAt: string | null = null;
+  if (!a.scanner && sheetsCfg.scriptUrl && sheetsCfg.token && url.searchParams.get("nosync") !== "1") {
+    const SYNC_KEY = "wl_sheets_synced";
+    try {
+      const r = await db.prepare(`SELECT value FROM site_config WHERE key = ?1`).bind(SYNC_KEY).first<{ value: string }>();
+      syncedAt = r?.value ?? null;
+    } catch {
+      // none yet
+    }
+    const age = syncedAt ? Date.now() - new Date(syncedAt).getTime() : Infinity;
+    if (age > 5 * 60 * 1000) {
+      try {
+        await syncSheets(db);
+        syncedAt = new Date().toISOString();
+        await db
+          .prepare(`INSERT INTO site_config (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value = excluded.value`)
+          .bind(SYNC_KEY, syncedAt)
+          .run();
+      } catch {
+        // the sheets did not answer: show what we have
+      }
+    }
+  }
   const matches = await db
     .prepare(
       `SELECT m.id, m.video_id, m.track_title, m.composer_id, m.regions, m.total_s, m.score,
@@ -147,7 +173,6 @@ export const onRequestGet = async (ctx: Ctx) => {
     // none yet
   }
 
-  const sheetsCfg = await getSheetsConfig(db);
   const composers = await db
     .prepare(
       `SELECT c.id, c.display_name AS name, u.email AS email FROM composers c
@@ -166,6 +191,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       sheetUrl: sheetsCfg.sheets[c.id] ? sheetUrl(sheetsCfg.sheets[c.id]) : "",
     })),
     sheetsConnected: !!(sheetsCfg.scriptUrl && sheetsCfg.token),
+    sheetsSyncedAt: syncedAt,
     scriptUrl: sheetsCfg.scriptUrl,
     scanner: { lastSeen: seen?.at ?? null, host: seen?.info ?? null, queue: q?.queue ?? 0, week: q?.week ?? 0, errors: q?.errors ?? 0 },
     channels: channels.map((c) => ({
@@ -341,7 +367,14 @@ export const onRequestPost = async (ctx: Ctx) => {
     case "email_composers": {
       try {
         if (body.action === "sheets_update") return json({ ok: true, ...(await updateSheets(db)) });
-        if (body.action === "sheets_sync") return json({ ok: true, ...(await syncSheets(db)) });
+        if (body.action === "sheets_sync") {
+          const r = await syncSheets(db);
+          await db
+            .prepare(`INSERT INTO site_config (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value = excluded.value`)
+            .bind("wl_sheets_synced", new Date().toISOString())
+            .run();
+          return json({ ok: true, ...r });
+        }
         return json({ ok: true, ...(await emailComposers(ctx.env as Env)) });
       } catch (e) {
         return json({ error: e instanceof Error ? e.message : String(e) }, 502);

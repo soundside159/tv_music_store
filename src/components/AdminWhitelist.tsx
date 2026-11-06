@@ -196,6 +196,18 @@ const AdminWhitelist = () => {
         <button
           type="button"
           disabled={busy !== null}
+          title="Read the composers' sheets now (the page does this by itself every 5 minutes)"
+          onClick={() =>
+            void act("sync", { action: "sheets_sync" }, (d) => `${d.released ?? 0} newly released`)
+          }
+          className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 font-body text-xs font-semibold text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430] disabled:opacity-40"
+        >
+          {busy === "sync" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+          Sync sheets
+        </button>
+        <button
+          type="button"
+          disabled={busy !== null}
           onClick={() =>
             void act("email", { action: "email_composers" }, (d) => {
               const sent = (d.sent as string[]) ?? [];
