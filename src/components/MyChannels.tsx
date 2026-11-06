@@ -184,7 +184,7 @@ const MyChannels = () => {
                   >
                     While your subscription is active, our system finds every new video on this channel and releases the
                     claims on our music by itself. You don't need to do anything. A claim is released once the video is
-                    public, usually within a day.
+                    public, usually within one working day.
                   </span>
                 </span>
               )}
@@ -198,15 +198,6 @@ const MyChannels = () => {
               </button>
             </div>
           ))}
-          {limit > 0 &&
-            Array.from({ length: Math.max(0, limit - used) }).slice(0, 3).map((_, i) => (
-              <div
-                key={`free-${i}`}
-                className="flex items-center justify-center rounded-xl border border-dashed border-border py-4 font-body text-sm text-muted-foreground/70"
-              >
-                + Free slot
-              </div>
-            ))}
         </div>
       )}
 
@@ -262,7 +253,7 @@ const MyChannels = () => {
         <Link to="/account?section=claims" className="font-semibold" style={{ color: GOLD }}>
           Let us know
         </Link>
-        <span className="mt-1 block text-xs text-muted-foreground/70">A claim can only be released once the video is public.</span>
+        <span className="mt-1 block text-xs text-muted-foreground/70">A claim can only be released once the video is public, usually within one working day.</span>
       </p>
     </div>
   );
