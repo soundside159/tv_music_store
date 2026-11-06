@@ -65,6 +65,8 @@ interface Overview {
   scanner: { lastSeen: string | null; host: string | null; queue: number; week: number; errors: number };
   channels: Channel[];
   matches: Match[];
+  customLists?: string[];
+  videos?: { videoId: string; channelId: string; title: string; publishedAt: string; status: string; found: number }[];
 }
 
 const GOLD = "#F4C430";
@@ -230,7 +232,7 @@ const AdminWhitelist = () => {
           [
             ["composers", "Composers"],
             ["channels", `Channels · ${data.channels.filter((c) => !c.group).length}`],
-            ["custom", `Custom · ${data.channels.filter((c) => c.group).length}`],
+            ["custom", `Custom · ${(data.customLists ?? [...new Set(data.channels.filter((c) => c.group).map((c) => c.group))]).length}`],
             ["scanner", "Scanner"],
           ] as const
         ).map(([id, label]) => (
@@ -526,170 +528,219 @@ const ChannelsTab = ({ data, reload }: { data: Overview; reload: () => void }) =
 // Owner's own channel lists ("Pixabay", ...). Found tracks go into the
 // composers' sheets like customer videos, marked "[Pixabay] Channel".
 const CustomTab = ({ data, reload }: { data: Overview; reload: () => void }) => {
-  const groups = useMemo(() => {
-    const g = new Map<string, Channel[]>();
-    for (const c of data.channels) if (c.group) g.set(c.group, [...(g.get(c.group) ?? []), c]);
-    return [...g.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  // A list is a folder: create it by name, then drop channel or video links into it.
+  const lists = useMemo(() => {
+    const names = new Set<string>(data.customLists ?? []);
+    for (const c of data.channels) if (c.group) names.add(c.group);
+    return [...names].sort((a, b) => a.localeCompare(b));
   }, [data]);
-  const [group, setGroup] = useState("");
-  const [url, setUrl] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [links, setLinks] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
 
-  const add = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!group.trim() || !url.trim()) {
-      toast.error("Enter a list name and a channel link");
-      return;
-    }
-    setBusy(true);
+  const run = async (key: string, body: Record<string, unknown>, ok: (d: Record<string, unknown>) => string) => {
+    setBusy(key);
     try {
-      const d = await post({ action: "custom_add", group: group.trim(), url: url.trim() });
-      toast.success(`${String(d.title || "Channel")} added to ${group.trim()}`);
-      setUrl("");
+      const d = await post(body);
+      toast.success(ok(d));
       reload();
+      return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed");
+      return false;
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   };
-  const remove = async (c: Channel) => {
-    if (!window.confirm(`Remove "${c.title || c.url}" from ${c.group}? Videos found so far stay in the sheets.`)) return;
-    try {
-      await post({ action: "custom_remove", channelId: c.id });
-      toast.success("Channel removed");
-      reload();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed");
-    }
+
+  const createList = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newName.trim()) return;
+    if (await run("new", { action: "custom_list_add", name: newName.trim() }, () => `List "${newName.trim()}" created`)) setNewName("");
   };
-  const setFrom = async (id: string, date: string | null) => {
-    try {
-      await post({ action: "check_from", channelId: id, date });
-      toast.success(date ? `Videos from ${date} will be checked` : "Back to the default date");
-      reload();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed");
-    }
+  const addLink = async (g: string) => {
+    const url = (links[g] ?? "").trim();
+    if (!url) return;
+    const ok = await run("link:" + g, { action: "custom_link", group: g, url }, (d) =>
+      d.video ? `Video "${String(d.title || "")}" added to ${g}` : `Channel "${String(d.title || "")}" added to ${g}`);
+    if (ok) setLinks((l) => ({ ...l, [g]: "" }));
   };
 
   return (
     <div className="space-y-4">
-      <form onSubmit={add} className="rounded-2xl border border-border bg-card px-5 py-4">
-        <h3 className="font-body text-sm font-semibold text-foreground">Add a channel to your own list</h3>
+      <form onSubmit={createList} className="rounded-2xl border border-border bg-card px-5 py-4">
+        <h3 className="font-body text-sm font-semibold text-foreground">Your own lists</h3>
         <p className="mt-1 max-w-2xl font-body text-xs text-muted-foreground">
-          For channels other stocks ask you to whitelist. No customer or plan needed: claims on our tracks are always
-          released. New videos are checked from the day you add the channel (change the date below for older ones).
+          For channels and videos other stocks ask you to whitelist. No customer or plan needed: claims on our tracks are
+          always released. Create a list, then paste channel or video links into it.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <input
-            value={group}
-            onChange={(e) => setGroup(e.target.value)}
-            list="wl-custom-groups"
-            placeholder="List name, e.g. Pixabay"
-            className="h-9 w-56 rounded-lg border border-border bg-background px-3 font-body text-sm text-foreground"
-          />
-          <datalist id="wl-custom-groups">
-            {groups.map(([g]) => (
-              <option key={g} value={g} />
-            ))}
-          </datalist>
-          <input
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="YouTube channel link (youtube.com/@name)"
-            className="h-9 min-w-[260px] flex-1 rounded-lg border border-border bg-background px-3 font-body text-sm text-foreground"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="New list name, e.g. Pixabay"
+            className="h-9 w-64 rounded-lg border border-border bg-background px-3 font-body text-sm text-foreground"
           />
           <button
             type="submit"
-            disabled={busy}
+            disabled={busy !== null || !newName.trim()}
             className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 font-body text-xs font-bold text-black disabled:opacity-40"
             style={{ background: GOLD }}
           >
-            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-            Add channel
+            {busy === "new" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+            Create list
           </button>
         </div>
-        {groups.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {groups.map(([g]) => (
-              <button
-                key={g}
-                type="button"
-                onClick={() => setGroup(g)}
-                className={`rounded-full border px-2.5 py-0.5 font-body text-[11px] ${
-                  group === g ? "border-[#F4C430] text-[#F4C430]" : "border-border text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {g}
-              </button>
-            ))}
-          </div>
-        )}
       </form>
 
-      {groups.length === 0 && <p className="font-body text-sm text-muted-foreground">No custom lists yet.</p>}
+      {lists.length === 0 && <p className="font-body text-sm text-muted-foreground">No lists yet.</p>}
 
-      {groups.map(([g, list], gi) => (
-        <div key={g} className="overflow-hidden rounded-2xl border border-border bg-card">
-          <div className="h-[3px]" style={{ background: PALETTE[(gi + 2) % PALETTE.length] }} />
-          <div className="flex flex-wrap items-center gap-3 px-4 pt-3 font-body text-xs text-muted-foreground">
-            <b className="text-base text-foreground">{g}</b>
-            {list.length} channel{list.length === 1 ? "" : "s"}
-          </div>
-          <div className="px-4 pb-2">
-            <div className="hidden grid-cols-[1.6fr_1fr_0.6fr_0.7fr_0.6fr_32px] gap-3 py-2 font-body text-[11px] uppercase tracking-wide text-muted-foreground md:grid">
-              <div>Channel</div>
-              <div>Check videos from</div>
-              <div>Checked</div>
-              <div>Not released</div>
-              <div>Released</div>
-              <div />
-            </div>
-            {list.map((c) => (
-              <div
-                key={c.id}
-                className="grid grid-cols-1 items-center gap-3 border-t border-border/40 py-2 font-body text-[13px] md:grid-cols-[1.6fr_1fr_0.6fr_0.7fr_0.6fr_32px]"
+      {lists.map((g, gi) => {
+        const chans = data.channels.filter((c) => c.group === g && c.url !== "solo");
+        const soloCh = data.channels.find((c) => c.group === g && c.url === "solo");
+        const vids = soloCh ? (data.videos ?? []).filter((v) => v.channelId === soloCh.id) : [];
+        const key = "link:" + g;
+        return (
+          <div key={g} className="overflow-hidden rounded-2xl border border-border bg-card">
+            <div className="h-[3px]" style={{ background: PALETTE[(gi + 2) % PALETTE.length] }} />
+            <div className="flex flex-wrap items-center gap-3 px-4 pt-3 font-body text-xs text-muted-foreground">
+              <b className="text-base text-foreground">{g}</b>
+              {chans.length} channel{chans.length === 1 ? "" : "s"} · {vids.length} video{vids.length === 1 ? "" : "s"}
+              <button
+                type="button"
+                onClick={() => {
+                  if (!window.confirm(`Remove the list "${g}" with its channels and videos? Videos found so far stay in the sheets.`)) return;
+                  void run("rm:" + g, { action: "custom_list_remove", name: g }, () => `List "${g}" removed`);
+                }}
+                className="ml-auto text-[11px] text-muted-foreground hover:text-red-400"
               >
-                <div className="min-w-0">
-                  <a href={c.url} target="_blank" rel="noreferrer" className="block truncate font-semibold text-foreground hover:text-[#F4C430]">
-                    {c.title || c.url}
-                  </a>
-                  <span className="block truncate text-[11px] text-muted-foreground">
-                    {c.url.replace(/^https?:\/\/(www\.)?/, "")} · added {shortDate(c.addedAt)}
-                  </span>
+                Remove list
+              </button>
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void addLink(g);
+              }}
+              className="flex flex-wrap gap-2 px-4 pt-3"
+            >
+              <input
+                value={links[g] ?? ""}
+                onChange={(e) => setLinks((l) => ({ ...l, [g]: e.target.value }))}
+                placeholder="Paste a YouTube channel or video link"
+                className="h-9 min-w-[280px] flex-1 rounded-lg border border-border bg-background px-3 font-body text-sm text-foreground"
+              />
+              <button
+                type="submit"
+                disabled={busy !== null || !(links[g] ?? "").trim()}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-4 py-2 font-body text-xs font-semibold text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430] disabled:opacity-40"
+              >
+                {busy === key ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                Add
+              </button>
+            </form>
+            <div className="px-4 pb-3">
+              {chans.length > 0 && (
+                <div className="hidden grid-cols-[1.6fr_1fr_0.6fr_0.7fr_0.6fr_32px] gap-3 py-2 font-body text-[11px] uppercase tracking-wide text-muted-foreground md:grid">
+                  <div>Channel</div>
+                  <div>Check videos from</div>
+                  <div>Checked</div>
+                  <div>Not released</div>
+                  <div>Released</div>
+                  <div />
                 </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="date"
-                    defaultValue={c.checkFrom}
-                    onBlur={(e) => {
-                      if (e.target.value && e.target.value !== c.checkFrom) void setFrom(c.id, e.target.value);
-                    }}
-                    className="h-8 rounded-lg border border-border bg-background px-2 font-body text-xs text-foreground"
-                  />
-                  {c.checkFromCustom && (
-                    <button type="button" onClick={() => void setFrom(c.id, null)} className="text-[11px] text-muted-foreground hover:text-foreground">
-                      reset
-                    </button>
-                  )}
-                </div>
-                <div>{c.checked}</div>
-                <div className={`text-base font-bold ${c.waiting ? "text-red-400" : "text-foreground"}`}>{c.waiting}</div>
-                <div className="text-base font-bold text-emerald-300">{c.released}</div>
-                <button
-                  type="button"
-                  onClick={() => void remove(c)}
-                  aria-label="Remove channel"
-                  className="rounded-md p-1 text-muted-foreground transition-colors hover:text-red-400"
+              )}
+              {chans.map((c) => (
+                <div
+                  key={c.id}
+                  className="grid grid-cols-1 items-center gap-3 border-t border-border/40 py-2 font-body text-[13px] md:grid-cols-[1.6fr_1fr_0.6fr_0.7fr_0.6fr_32px]"
                 >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            ))}
+                  <div className="min-w-0">
+                    <a href={c.url} target="_blank" rel="noreferrer" className="block truncate font-semibold text-foreground hover:text-[#F4C430]">
+                      {c.title || c.url}
+                    </a>
+                    <span className="block truncate text-[11px] text-muted-foreground">
+                      {c.url.replace(/^https?:\/\/(www\.)?/, "")} · added {shortDate(c.addedAt)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      defaultValue={c.checkFrom}
+                      onBlur={(e) => {
+                        if (e.target.value && e.target.value !== c.checkFrom)
+                          void run("from", { action: "check_from", channelId: c.id, date: e.target.value }, () => `Videos from ${e.target.value} will be checked`);
+                      }}
+                      className="h-8 rounded-lg border border-border bg-background px-2 font-body text-xs text-foreground"
+                    />
+                    {c.checkFromCustom && (
+                      <button
+                        type="button"
+                        onClick={() => void run("from", { action: "check_from", channelId: c.id, date: null }, () => "Back to the default date")}
+                        className="text-[11px] text-muted-foreground hover:text-foreground"
+                      >
+                        reset
+                      </button>
+                    )}
+                  </div>
+                  <div>{c.checked}</div>
+                  <div className={`text-base font-bold ${c.waiting ? "text-red-400" : "text-foreground"}`}>{c.waiting}</div>
+                  <div className="text-base font-bold text-emerald-300">{c.released}</div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!window.confirm(`Remove "${c.title || c.url}" from ${g}? Videos found so far stay in the sheets.`)) return;
+                      void run("rmc", { action: "custom_remove", channelId: c.id }, () => "Channel removed");
+                    }}
+                    aria-label="Remove channel"
+                    className="rounded-md p-1 text-muted-foreground transition-colors hover:text-red-400"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+              {vids.length > 0 && (
+                <div className="mt-2 hidden grid-cols-[2fr_0.8fr_0.8fr_32px] gap-3 py-2 font-body text-[11px] uppercase tracking-wide text-muted-foreground md:grid">
+                  <div>Video</div>
+                  <div>Published</div>
+                  <div>Status</div>
+                  <div />
+                </div>
+              )}
+              {vids.map((v) => (
+                <div
+                  key={v.videoId}
+                  className="grid grid-cols-1 items-center gap-3 border-t border-border/40 py-2 font-body text-[13px] md:grid-cols-[2fr_0.8fr_0.8fr_32px]"
+                >
+                  <a
+                    href={`https://www.youtube.com/watch?v=${v.videoId}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block truncate font-semibold text-foreground hover:text-[#F4C430]"
+                  >
+                    {v.title || v.videoId}
+                  </a>
+                  <div className="text-muted-foreground">{shortDate(v.publishedAt)}</div>
+                  <div className={v.status === "done" ? (v.found ? "text-red-400" : "text-emerald-300") : "text-muted-foreground"}>
+                    {v.status === "done" ? (v.found ? `${v.found} match` : "clean") : v.status === "error" ? "error" : "in queue"}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!window.confirm(`Remove "${v.title || v.videoId}" from ${g}?`)) return;
+                      void run("rmv", { action: "solo_remove", videoId: v.videoId }, () => "Video removed");
+                    }}
+                    aria-label="Remove video"
+                    className="rounded-md p-1 text-muted-foreground transition-colors hover:text-red-400"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 };

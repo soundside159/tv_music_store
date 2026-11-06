@@ -3,6 +3,10 @@ import { adminTokenOk, getSessionUser, json, OWNER_EMAIL, readJson, type Ctx, ty
 import {
   addCustomChannel,
   addManualVideo,
+  addToCustomList,
+  createCustomList,
+  customLists,
+  removeCustomList,
   addSoloVideo,
   removeSoloVideo,
   allChannels,
@@ -97,6 +101,7 @@ export const onRequestGet = async (ctx: Ctx) => {
     .all<{ channel_id: string; n: number }>();
   const chk = new Map(checked.results.map((r) => [r.channel_id, r.n]));
 
+  const lists = await customLists(db);
   const sheetsCfg = await getSheetsConfig(db);
   // Admin page only (not the scanner): read "Released" back from the composer
   // sheets, at most once in 5 minutes, so the page shows the real state.
@@ -190,6 +195,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       sheetId: sheetsCfg.sheets[c.id] ?? "",
       sheetUrl: sheetsCfg.sheets[c.id] ? sheetUrl(sheetsCfg.sheets[c.id]) : "",
     })),
+    customLists: lists,
     sheetsConnected: !!(sheetsCfg.scriptUrl && sheetsCfg.token),
     sheetsSyncedAt: syncedAt,
     scriptUrl: sheetsCfg.scriptUrl,
@@ -400,6 +406,17 @@ export const onRequestPost = async (ctx: Ctx) => {
     }
     case "custom_add": {
       const r = await addCustomChannel(ctx.env as Env, String(body.group ?? ""), String(body.url ?? ""));
+      return "error" in r && r.error ? json(r, 400) : json(r);
+    }
+    case "custom_list_add": {
+      const r = await createCustomList(db, String(body.name ?? ""));
+      return "error" in r && r.error ? json(r, 400) : json(r);
+    }
+    case "custom_list_remove":
+      return json(await removeCustomList(db, String(body.name ?? "")));
+    case "custom_link": {
+      // a channel or a video link into a list
+      const r = await addToCustomList(ctx.env as Env, String(body.group ?? ""), String(body.url ?? ""));
       return "error" in r && r.error ? json(r, 400) : json(r);
     }
     case "custom_remove":

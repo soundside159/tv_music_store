@@ -1912,6 +1912,8 @@ class ChannelBar(QtWidgets.QFrame):
         self.chev.clicked.connect(lambda: self.toggled.emit(self.ch["id"], not self.chev.open_))
         h.addWidget(self.chev)
         t = QtWidgets.QLabel(ch.get("title") or ch.get("url") or "Channel")
+        if ch.get("url") == "solo":
+            t.setText("Single videos")
         t.setObjectName("title")
         t.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
         t.mousePressEvent = lambda e: self.toggled.emit(self.ch["id"], not self.chev.open_)
@@ -2480,6 +2482,8 @@ class App(QtWidgets.QMainWindow):
         users = {u["id"]: u for u in d.get("users") or []}
         for u in users.values():
             groups.setdefault("user:" + u["id"], [])  # every customer, channels or not
+        for name in d.get("customLists") or []:
+            groups.setdefault("custom:" + name, [])  # a list can be empty
         for c in chans:
             key = ("custom:" + c["group"]) if c.get("group") else ("user:" + c["userId"])
             groups.setdefault(key, []).append(c)
@@ -2611,12 +2615,19 @@ class App(QtWidgets.QMainWindow):
         head = QtWidgets.QHBoxLayout()
         head.setSpacing(10)
         head.addWidget(label(c["name"], "h1"))
-        plan = {"max": "MAX plan", "pro": "PRO plan", "custom": "Custom list"}.get(c["plan"], "No plan")
+        plan = {"max": "MAX plan", "pro": "PRO plan", "custom": "Your own list"}.get(c["plan"], "No plan")
         info = "%s  \u00b7  %d channel%s" % (plan, len(chans), "" if len(chans) == 1 else "s")
         if c.get("registered"):
             info += "  \u00b7  registered %s" % c["registered"]
         head.addWidget(label(info, "warm"))
         head.addStretch(1)
+        if c["kind"] == "custom":
+            bl = AnimatedButton("+ Add channel or video")
+            bl.clicked.connect(lambda: self.add_custom_link(c["name"]))
+            head.addWidget(bl)
+            br = AnimatedButton("Remove list", accent="#ff3c3c")
+            br.clicked.connect(lambda: self.remove_custom_list(c["name"]))
+            head.addWidget(br)
         self.new_lbl = label("", "muted")
         self.new_lbl.setWordWrap(False)
         head.addWidget(self.new_lbl)
@@ -2632,7 +2643,8 @@ class App(QtWidgets.QMainWindow):
         tabs = QtWidgets.QHBoxLayout()
         tabs.setSpacing(16)
         for key, text, n in (("channels", "Channels", len(chans)),
-                             ("solo", "Solo videos", sum(len(ch["videos"]) for ch in solo))):
+                             ("solo", "Videos" if c["kind"] == "custom" else "Solo videos",
+                              sum(len(ch["videos"]) for ch in solo))):
             tb = QtWidgets.QPushButton("%s  %d" % (text, n))
             tb.setObjectName("tab")
             tb.setCheckable(True)
@@ -2654,8 +2666,11 @@ class App(QtWidgets.QMainWindow):
 
         lst = chans if self.sel_tab == "channels" else solo
         if not lst:
-            e = label("No channels on this customer's whitelist." if self.sel_tab == "channels"
-                      else "No solo videos. Press + Add solo video to add one.", "empty")
+            if c["kind"] == "custom":
+                e = label("Empty. Press + Add channel or video and paste a YouTube link.", "empty")
+            else:
+                e = label("No channels on this customer's whitelist." if self.sel_tab == "channels"
+                          else "No solo videos. Press + Add solo video to add one.", "empty")
             e.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
             self.content_lay.addWidget(e)
         for ch in lst:
@@ -2846,7 +2861,7 @@ class App(QtWidgets.QMainWindow):
         if self.matches_by_vid.get(vid):
             m.addSeparator()
             m.addAction("Remove match from the site and the composer's sheet", lambda: self.remove_match(vid))
-        if v.get("note") == "solo" or str(v.get("channelId", "")).startswith("wch_solo_"):
+        if v.get("note") == "solo" or str(v.get("channelId", "")).startswith(("wch_solo_", "wch_csolo_")):
             m.addSeparator()
             m.addAction("Remove this solo video", lambda: self.remove_solo(vid))
         m.exec(t.viewport().mapToGlobal(pos))
@@ -3106,18 +3121,41 @@ class App(QtWidgets.QMainWindow):
         self.load_overview()
 
     def add_custom(self):
-        group = ask_text(self, "Custom list", "List name, for example Pixabay",
-                         "Your own channel to watch, outside the customers' whitelists.")
+        group = ask_text(self, "New list", "List name, for example Pixabay",
+                         "Your own list of channels and videos to watch, outside the customers' whitelists. "
+                         "Add links to it after it is created.")
         if not group:
             return
-        url = ask_text(self, "Custom list: " + group, "YouTube channel link")
+
+        def go():
+            r = api(self.settings, "POST", "", {"action": "custom_list_add", "name": group.strip()}, timeout=60)
+            self.log("New list: %s" % (r.get("error") or ("created " + (r.get("name") or group))))
+            self.sel_key = "custom:" + (r.get("name") or group.strip())
+            self.load_overview()
+        self.bg(go)
+
+    def add_custom_link(self, group):
+        url = ask_text(self, "Add to " + group, "YouTube channel or video link",
+                       "A channel link adds the channel (new videos are checked from today). "
+                       "A video link adds just that video.")
         if not url:
             return
 
         def go():
-            r = api(self.settings, "POST", "", {"action": "custom_add", "group": group.strip(), "url": url.strip()},
+            r = api(self.settings, "POST", "", {"action": "custom_link", "group": group, "url": url.strip()},
                     timeout=90)
-            self.log("Custom add: %s" % (r.get("error") or ("added " + (r.get("title") or url))))
+            self.log("Add to %s: %s" % (group, r.get("error") or ("added " + (r.get("title") or url))))
+            self.load_overview()
+        self.bg(go)
+
+    def remove_custom_list(self, group):
+        if not ask_yes(self, "Remove list", "Remove the list \"%s\" with its channels and videos? "
+                       "Videos found so far stay in the sheets." % group, "Remove"):
+            return
+
+        def go():
+            r = api(self.settings, "POST", "", {"action": "custom_list_remove", "name": group}, timeout=90)
+            self.log("Remove list %s: %s" % (group, r.get("error") or "ok"))
             self.load_overview()
         self.bg(go)
 

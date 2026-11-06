@@ -60,7 +60,9 @@ export const addSoloVideo = async (env: Env, userId: string, videoId: string) =>
   const sn = data.items?.[0]?.snippet;
   if (!sn) return { error: "YouTube does not show this video (private or wrong link)." };
   const dup = await db.prepare(`SELECT channel_id FROM wl_videos WHERE video_id = ?1`).bind(videoId).first<{ channel_id: string }>();
-  if (dup && !dup.channel_id.startsWith("wch_solo_")) return { error: "This video is already covered by a whitelisted channel." };
+  if (dup && !dup.channel_id.startsWith("wch_solo_") && !dup.channel_id.startsWith("wch_csolo_")) {
+    return { error: "This video is already covered by a whitelisted channel." };
+  }
   const chId = await ensureSoloChannel(db, userId);
   await db
     .prepare(
@@ -76,7 +78,7 @@ export const addSoloVideo = async (env: Env, userId: string, videoId: string) =>
 export const removeSoloVideo = async (db: D1Database, videoId: string) => {
   await ensureWlScan(db);
   const r = await db
-    .prepare(`DELETE FROM wl_videos WHERE video_id = ?1 AND channel_id LIKE 'wch_solo_%'`)
+    .prepare(`DELETE FROM wl_videos WHERE video_id = ?1 AND (channel_id LIKE 'wch_solo_%' OR channel_id LIKE 'wch_csolo_%')`)
     .bind(videoId)
     .run();
   return { ok: !!(r as { meta?: { changes?: number } }).meta?.changes };
@@ -98,6 +100,14 @@ export const ensureWlScan = async (db: D1Database) => {
       // column exists
     }
   }
+  await db
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS wl_custom_lists (
+         name       TEXT PRIMARY KEY,
+         created_at TEXT NOT NULL DEFAULT (datetime('now'))
+       )`,
+    )
+    .run();
   await db
     .prepare(
       `CREATE TABLE IF NOT EXISTS wl_videos (
@@ -620,6 +630,7 @@ export const addCustomChannel = async (env: Env, group: string, url: string) => 
     }
   }
   const id = newId("wch");
+  await db.prepare(`INSERT OR IGNORE INTO wl_custom_lists (name) VALUES (?1)`).bind(name).run();
   await db
     .prepare(
       `INSERT INTO wl_channels (id, user_id, channel_url, channel_ref, yt_title, yt_uploads, custom_group)
@@ -628,6 +639,76 @@ export const addCustomChannel = async (env: Env, group: string, url: string) => 
     .bind(id, CUSTOM_USER, full, title || null, uploads, name)
     .run();
   return { ok: true, id, title };
+};
+
+/** Custom lists live on their own, so an empty list can exist. */
+export const customLists = async (db: D1Database): Promise<string[]> => {
+  await ensureWlScan(db);
+  const a = await db.prepare(`SELECT name FROM wl_custom_lists ORDER BY name`).all<{ name: string }>();
+  const b = await db
+    .prepare(`SELECT DISTINCT custom_group AS name FROM wl_channels WHERE custom_group IS NOT NULL`)
+    .all<{ name: string }>();
+  const names = new Set<string>([...a.results.map((r) => r.name), ...b.results.map((r) => r.name)]);
+  return [...names].sort((x, y) => x.localeCompare(y));
+};
+
+export const createCustomList = async (db: D1Database, name: string) => {
+  await ensureWlScan(db);
+  const n = name.trim().slice(0, 60);
+  if (!n) return { error: "Enter a list name." };
+  await db.prepare(`INSERT OR IGNORE INTO wl_custom_lists (name) VALUES (?1)`).bind(n).run();
+  return { ok: true, name: n };
+};
+
+/** Remove a whole list: its channels, their queued videos; found matches stay as history. */
+export const removeCustomList = async (db: D1Database, name: string) => {
+  await ensureWlScan(db);
+  const chans = await db.prepare(`SELECT id FROM wl_channels WHERE custom_group = ?1`).bind(name).all<{ id: string }>();
+  for (const c of chans.results) await removeCustomChannel(db, c.id);
+  await db.prepare(`DELETE FROM wl_custom_lists WHERE name = ?1`).bind(name).run();
+  return { ok: true, removed: chans.results.length };
+};
+
+/** The pseudo channel that holds a list's single videos (like a customer's Solo videos). */
+export const ensureCustomSoloChannel = async (db: D1Database, group: string) => {
+  const id = "wch_csolo_" + group.toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(0, 40);
+  await db
+    .prepare(
+      `INSERT OR IGNORE INTO wl_channels (id, user_id, channel_url, channel_ref, yt_title, yt_uploads, custom_group)
+       VALUES (?1, ?2, ?3, NULL, 'Videos', NULL, ?4)`,
+    )
+    .bind(id, CUSTOM_USER, SOLO_URL, group)
+    .run();
+  return id;
+};
+
+/** One link into a list: a channel link adds a channel, a video link adds a single video. */
+export const addToCustomList = async (env: Env, group: string, link: string) => {
+  const db = env.DB;
+  await ensureWlScan(db);
+  const name = group.trim().slice(0, 60);
+  if (!name) return { error: "Pick a list first." };
+  const vid = /(?:v=|youtu\.be\/|\/shorts\/|\/live\/)([A-Za-z0-9_-]{11})/.exec(link.trim());
+  if (!vid) return addCustomChannel(env, name, link);
+  if (!env.YOUTUBE_API_KEY) return { error: "YOUTUBE_API_KEY is not set" };
+  await createCustomList(db, name);
+  void bumpUsage(db, "youtube", 1);
+  const res = await fetch(`${YT}/videos?part=snippet&id=${encodeURIComponent(vid[1])}&key=${env.YOUTUBE_API_KEY}`);
+  const data = (await res.json().catch(() => ({}))) as {
+    items?: { snippet?: { title?: string; publishedAt?: string; channelTitle?: string } }[];
+  };
+  const sn = data.items?.[0]?.snippet;
+  if (!sn) return { error: "YouTube does not show this video (private or wrong link)." };
+  const chId = await ensureCustomSoloChannel(db, name);
+  await db
+    .prepare(
+      `INSERT INTO wl_videos (video_id, channel_id, user_id, title, published_at, status, note)
+       VALUES (?1, ?2, ?3, ?4, ?5, 'queued', 'solo')
+       ON CONFLICT(video_id) DO UPDATE SET channel_id = ?2, user_id = ?3, note = 'solo', status = 'queued'`,
+    )
+    .bind(vid[1], chId, CUSTOM_USER, sn.title ?? "", sn.publishedAt ?? "")
+    .run();
+  return { ok: true, video: true, title: sn.title ?? "", channelTitle: sn.channelTitle ?? "" };
 };
 
 /** Remove a Custom channel. Its found matches stay (history); videos not
