@@ -6,6 +6,12 @@ import { defaultVocabularies, type Vocabularies } from "@/lib/tagOptions";
 import { hydrateLicensePrices, type LicenseTierId } from "@/lib/licenses";
 import { applyGuideSchedule } from "@/content/guides";
 import { useCurrentUser } from "@/hooks/useMockData";
+import { currentSessionRole } from "@/hooks/useAuth";
+
+const isStaffSession = () => {
+  const role = currentSessionRole();
+  return role === "admin" || role === "editor";
+}
 
 // Customers only see collections / playlists with at least this many tracks:
 // empty or half-filled ones looked abandoned ("0 tracks"). Admin and Editor
@@ -120,8 +126,10 @@ export const useContentReady = (): boolean => {
 // just-created item so its page finds it.
 const contentListeners = new Set<() => void>();
 
+// Called after an admin edit: staff bypass the shared edge cache (?fresh=1,
+// checked on the server), otherwise the change shows only after ~3 minutes.
 export const refreshContent = (): Promise<void> =>
-  fetch("/api/content")
+  fetch(isStaffSession() ? "/api/content?fresh=1" : "/api/content", { credentials: "include" })
     .then((res) => (res.ok ? (res.json() as Promise<ApiContent>) : null))
     .then((data) => {
       if (data) {

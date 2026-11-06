@@ -1,11 +1,26 @@
-import { getLicensePrices, getVocabularies, json, type Ctx } from "./_utils";
+import { getLicensePrices, getSessionUser, getVocabularies, json, OWNER_EMAIL, type Ctx } from "./_utils";
 import { cachedJson } from "./_cache";
 
 // Public storefront content: collections, playlists and the homepage trending
 // list — everything the owner edits in Admin -> Content.
 
 // Served from the edge cache (see _cache.ts) — rebuilt after any admin write.
-export const onRequestGet = async (ctx: Ctx) => cachedJson(ctx, "content", () => buildContent(ctx));
+// Staff right after an edit ask for ?fresh=1: while editing, the shared cache
+// key is a 3-minute time bucket, so a saved cover/title stayed invisible to
+// the editor for up to 3 minutes ("Cover updated" but nothing changed).
+// Staff only, so visitors still never hit D1 for this.
+export const onRequestGet = async (ctx: Ctx) => {
+  if (new URL(ctx.request.url).searchParams.get("fresh") === "1") {
+    const user = await getSessionUser(ctx).catch(() => null);
+    if (user && (user.role === "admin" || user.role === "editor" || user.email === OWNER_EMAIL)) {
+      const res = await buildContent(ctx);
+      const headers = new Headers(res.headers);
+      headers.set("cache-control", "no-store");
+      return new Response(res.body, { status: res.status, headers });
+    }
+  }
+  return cachedJson(ctx, "content", () => buildContent(ctx));
+};
 
 const buildContent = async (ctx: Ctx): Promise<Response> => {
   if (!ctx.env.DB) return json({ error: "DB not bound" }, 503);
