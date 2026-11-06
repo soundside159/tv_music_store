@@ -252,7 +252,7 @@ export const AdminTrackTopBar = ({
         ))}
       </span>
       <span className={`ml-auto flex items-center gap-2 ${editor ? "hidden" : ""}`}>
-        {isDraft || isUnlisted ? (
+        {isDraft ? (
           <button
             type="button"
             disabled={busy}
@@ -260,6 +260,16 @@ export const AdminTrackTopBar = ({
             className="rounded-lg bg-[#F4C430] px-4 py-1.5 font-body text-xs font-bold text-background transition-colors hover:bg-[#F4C430]/85 disabled:opacity-50"
           >
             Publish
+          </button>
+        ) : isUnlisted ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void setStatus("published")}
+            title="Back to the catalog and search"
+            className="rounded-lg bg-sky-500 px-4 py-1.5 font-body text-xs font-bold text-background transition-colors hover:bg-sky-400 disabled:opacity-50"
+          >
+            Unlink to publish
           </button>
         ) : (
           <button
