@@ -67,13 +67,14 @@ function sheetOf(id) {
         for (var b2 = 0; b2 < refs.length; b2++) {
           if (String(refs[b2][0] || '').indexOf('TVMS-') === 0) sh.getRange(b2 + 2, COL_ACTION).setDataValidation(ruleM);
         }
-        var colM = sh.getRange('G2:G');
-        sh.setConditionalFormatRules([
-          SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Released').setBackground('#e6f4ea').setFontColor('#137333').setRanges([colM]).build(),
-          SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Action needed').setBackground('#fce8e6').setFontColor('#c5221f').setRanges([colM]).build()
-        ]);
       }
     }
+    // the colours of the Action column: red = Action needed, green = Released (older sheets coloured 'Release')
+    var colM = sh.getRange('G2:G');
+    sh.setConditionalFormatRules([
+      SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Released').setBackground('#e6f4ea').setFontColor('#137333').setRanges([colM]).build(),
+      SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Action needed').setBackground('#fce8e6').setFontColor('#c5221f').setRanges([colM]).build()
+    ]);
     // a sheet made with fewer columns: add the missing headers on the right
     for (var k = 0; k < HEADER.length; k++) {
       if (!String(head[k] || '')) sh.getRange(1, k + 1).setValue(HEADER[k]).setFontWeight('bold').setBackground('#f1f3f4');
