@@ -1,4 +1,5 @@
-import { getSessionUser, json, OWNER_EMAIL, readJson, type Ctx } from "./_utils";
+import { getSessionUser, json, OWNER_EMAIL, readJson, type Ctx, type Env } from "./_utils";
+import { addSoloVideo } from "./admin/_wlscan";
 
 // Content ID claim requests.
 //
@@ -247,6 +248,7 @@ export const onRequestPost = async (ctx: Ctx) => {
         [existing.details, details].filter(Boolean).join("\n").slice(0, 2000) || null,
       )
       .run();
+    await queueForScanner(ctx, user.id, videoId);
     return json({ ok: true, duplicate: true });
   }
 
@@ -271,7 +273,18 @@ export const onRequestPost = async (ctx: Ctx) => {
     )
     .run();
 
+  await queueForScanner(ctx, user.id, videoId);
   return json({ ok: true });
+};
+
+/** The scanner checks the video like a solo video of this customer (Admin ->
+ *  Whitelisting -> Channels / videos); a failure here must not fail the ticket. */
+const queueForScanner = async (ctx: Ctx, userId: string, videoId: string) => {
+  try {
+    await addSoloVideo(ctx.env as Env, userId, videoId);
+  } catch {
+    // the ticket is saved anyway; the owner can add the video by hand
+  }
 };
 
 interface ClaimRow {

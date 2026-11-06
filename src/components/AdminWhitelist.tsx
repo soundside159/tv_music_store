@@ -175,7 +175,7 @@ const AdminWhitelist = () => {
   const unlicensed = data.matches
     .filter((m) => m.state === "not_eligible")
     .filter(matchHit)
-    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    .sort((a, b) => (a.email || "").localeCompare(b.email || "") || (a.createdAt < b.createdAt ? 1 : -1));
 
   const scannerOnline = data.scanner.lastSeen && Date.now() - new Date(data.scanner.lastSeen).getTime() < 10 * 60000;
 
@@ -285,82 +285,6 @@ const AdminWhitelist = () => {
               Show removed too
             </label>
           </div>
-
-          {unlicensed.length > 0 && (
-            <div className="overflow-hidden rounded-2xl border border-red-400/40 bg-card">
-              <div className="flex flex-wrap items-center gap-3 px-4 py-3">
-                <span className="font-display text-base font-bold text-foreground">No license</span>
-                <span className="font-body text-xs text-muted-foreground">
-                  {unlicensed.length} match{unlicensed.length === 1 ? "" : "es"}: our track found, but the customer had no plan when the
-                  video came out and did not buy the track. Checked again every sync, so a purchase frees the claim by itself.
-                </span>
-              </div>
-              <div className="border-t border-border/60 px-4 pb-2">
-                {unlicensed.map((m) => (
-                  <div
-                    key={m.id}
-                    className="grid grid-cols-[80px_1fr] items-center gap-3 border-t border-border/40 py-2.5 font-body text-[13px] md:grid-cols-[80px_1.5fr_1.1fr_1fr_190px]"
-                  >
-                    <a href={`https://www.youtube.com/watch?v=${m.videoId}`} target="_blank" rel="noreferrer">
-                      <img src={`https://i.ytimg.com/vi/${m.videoId}/mqdefault.jpg`} alt="" loading="lazy" className="h-[45px] w-[80px] rounded-md object-cover" />
-                    </a>
-                    <div className="min-w-0">
-                      <a href={`https://www.youtube.com/watch?v=${m.videoId}`} target="_blank" rel="noreferrer" className="block truncate font-semibold text-foreground hover:text-[#F4C430]">
-                        {m.videoTitle || m.videoId}
-                      </a>
-                      <span className="block truncate text-[11px] text-muted-foreground">
-                        {m.channelTitle} · {shortDate(m.publishedAt)}
-                      </span>
-                    </div>
-                    <div className="min-w-0">
-                      <span className="block truncate text-foreground">{m.track}</span>
-                      <span className="block truncate text-[11px] text-muted-foreground">{m.composer}</span>
-                    </div>
-                    <div className="min-w-0">
-                      <span className="block truncate text-foreground">{m.email || "no email"}</span>
-                      <span className="block text-[11px] text-muted-foreground">
-                        {m.license === "none:emailed" ? "Offer emailed" : "Not emailed yet"} · found {shortDate(m.createdAt)}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
-                      <button
-                        type="button"
-                        title="Email the customer: the track was found, the claim is released once the track is licensed"
-                        className="text-[#F4C430] underline-offset-2 hover:underline"
-                        onClick={() => {
-                          if (!window.confirm(`Email ${m.email || "the customer"} about "${m.track}"?`)) return;
-                          void act(`mail${m.id}`, { action: "email_customer", matchId: m.id }, (d) => `Sent to ${String(d.to ?? "")}`);
-                        }}
-                      >
-                        Email customer
-                      </button>
-                      <button
-                        type="button"
-                        title="Release the claim anyway (goes to the composer's sheet)"
-                        className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                        onClick={() => {
-                          if (!window.confirm("Release this claim without a license?")) return;
-                          void act(`force${m.id}`, { action: "match_force", matchId: m.id }, () => "Marked for release");
-                        }}
-                      >
-                        Release anyway
-                      </button>
-                      <button
-                        type="button"
-                        className="text-muted-foreground underline-offset-2 hover:text-red-400 hover:underline"
-                        onClick={() => {
-                          if (!window.confirm("Remove this match?")) return;
-                          void act(`rm${m.id}`, { action: "match_remove", matchId: m.id }, () => "Removed");
-                        }}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
           {composerList.length === 0 && (
             <p className="font-body text-sm text-muted-foreground">No matches yet. The desktop scanner adds them as it checks new videos.</p>
@@ -556,6 +480,81 @@ const AdminWhitelist = () => {
               </div>
             );
           })}
+          {unlicensed.length > 0 && (
+            <div className="overflow-hidden rounded-2xl border border-red-400/40 bg-card">
+              <div className="flex flex-wrap items-center gap-3 px-4 py-3">
+                <span className="font-display text-base font-bold text-foreground">No license</span>
+                <span className="font-body text-xs text-muted-foreground">
+                  {unlicensed.length} match{unlicensed.length === 1 ? "" : "es"}: our track found, but the customer had no plan when the
+                  video came out and did not buy the track. Checked again every sync, so a purchase frees the claim by itself.
+                </span>
+              </div>
+              <div className="border-t border-border/60 px-4 pb-2">
+                {unlicensed.map((m) => (
+                  <div
+                    key={m.id}
+                    className="grid grid-cols-[80px_1fr] items-center gap-3 border-t border-border/40 py-2.5 font-body text-[13px] md:grid-cols-[80px_1.5fr_1.1fr_1fr_190px]"
+                  >
+                    <a href={`https://www.youtube.com/watch?v=${m.videoId}`} target="_blank" rel="noreferrer">
+                      <img src={`https://i.ytimg.com/vi/${m.videoId}/mqdefault.jpg`} alt="" loading="lazy" className="h-[45px] w-[80px] rounded-md object-cover" />
+                    </a>
+                    <div className="min-w-0">
+                      <a href={`https://www.youtube.com/watch?v=${m.videoId}`} target="_blank" rel="noreferrer" className="block truncate font-semibold text-foreground hover:text-[#F4C430]">
+                        {m.videoTitle || m.videoId}
+                      </a>
+                      <span className="block truncate text-[11px] text-muted-foreground">
+                        {m.channelTitle} · {shortDate(m.publishedAt)}
+                      </span>
+                    </div>
+                    <div className="min-w-0">
+                      <span className="block truncate text-foreground">{m.track}</span>
+                      <span className="block truncate text-[11px] text-muted-foreground">{m.composer}</span>
+                    </div>
+                    <div className="min-w-0">
+                      <span className="block truncate text-foreground">{m.email || "no email"}</span>
+                      <span className="block text-[11px] text-muted-foreground">
+                        {m.license === "none:emailed" ? "Offer emailed" : "Not emailed yet"} · found {shortDate(m.createdAt)}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+                      <button
+                        type="button"
+                        title="Email the customer: the track was found, the claim is released once the track is licensed"
+                        className="text-[#F4C430] underline-offset-2 hover:underline"
+                        onClick={() => {
+                          if (!window.confirm(`Email ${m.email || "the customer"} about "${m.track}"?`)) return;
+                          void act(`mail${m.id}`, { action: "email_customer", matchId: m.id }, (d) => `Sent to ${String(d.to ?? "")}`);
+                        }}
+                      >
+                        Email customer
+                      </button>
+                      <button
+                        type="button"
+                        title="Release the claim anyway (goes to the composer's sheet)"
+                        className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                        onClick={() => {
+                          if (!window.confirm("Release this claim without a license?")) return;
+                          void act(`force${m.id}`, { action: "match_force", matchId: m.id }, () => "Marked for release");
+                        }}
+                      >
+                        Release anyway
+                      </button>
+                      <button
+                        type="button"
+                        className="text-muted-foreground underline-offset-2 hover:text-red-400 hover:underline"
+                        onClick={() => {
+                          if (!window.confirm("Remove this match?")) return;
+                          void act(`rm${m.id}`, { action: "match_remove", matchId: m.id }, () => "Removed");
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
 
