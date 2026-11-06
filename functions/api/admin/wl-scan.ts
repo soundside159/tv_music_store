@@ -1,5 +1,5 @@
 import { cachedValue } from "../_cache";
-import { adminTokenOk, getSessionUser, json, OWNER_EMAIL, readJson, type Ctx, type Env } from "../_utils";
+import { adminTokenOk, getSessionUser, json, OWNER_EMAIL, readJson, sendEmail, type Ctx, type Env } from "../_utils";
 import {
   addCustomChannel,
   addManualVideo,
@@ -13,6 +13,8 @@ import {
   channelStates,
   checkFromOf,
   ensureWlScan,
+  forceMatch,
+  recheckLicenses,
   refreshChannels,
   removeCustomChannel,
   saveResult,
@@ -117,6 +119,7 @@ export const onRequestGet = async (ctx: Ctx) => {
     const age = syncedAt ? Date.now() - new Date(syncedAt).getTime() : Infinity;
     if (age > 5 * 60 * 1000) {
       try {
+        await recheckLicenses(db); // a customer may have bought the track / a plan since the scan
         await syncSheets(db);
         syncedAt = new Date().toISOString();
         await db
@@ -131,13 +134,14 @@ export const onRequestGet = async (ctx: Ctx) => {
   const matches = await db
     .prepare(
       `SELECT m.id, m.video_id, m.track_title, m.composer_id, m.regions, m.total_s, m.score,
-              m.eligible, m.state, m.sheet_date, m.released_at, m.created_at, m.on_site,
-              v.title AS video_title, v.published_at, w.yt_title AS channel_title, w.id AS channel_id,
+              m.eligible, m.state, m.sheet_date, m.released_at, m.created_at, m.on_site, m.license, m.user_id,
+              t.slug AS track_slug, v.title AS video_title, v.published_at, w.yt_title AS channel_title, w.id AS channel_id,
               u.email AS email, c.display_name AS composer
          FROM wl_matches m
          LEFT JOIN wl_videos v ON v.video_id = m.video_id
          LEFT JOIN wl_channels w ON w.id = m.channel_id
          LEFT JOIN users u ON u.id = m.user_id
+         LEFT JOIN tracks t ON t.id = m.track_id
          LEFT JOIN composers c ON c.id = m.composer_id
         ORDER BY m.created_at DESC LIMIT 2000`,
     )
@@ -255,6 +259,9 @@ export const onRequestGet = async (ctx: Ctx) => {
       total: m.total_s,
       score: m.score,
       eligible: !!m.eligible,
+      license: m.license ?? (m.eligible ? "plan" : "none"),
+      userId: m.user_id,
+      trackSlug: m.track_slug ?? "",
       onSite: m.on_site === undefined || m.on_site === null ? true : !!m.on_site,
       state: m.state,
       sheetDate: m.sheet_date,
@@ -310,6 +317,52 @@ export const onRequestPost = async (ctx: Ctx) => {
         cleared = (rm as { meta?: { changes?: number } }).meta?.changes ?? 0;
       }
       return json({ ok: true, requeued: (r as { meta?: { changes?: number } }).meta?.changes ?? 0, cleared });
+    }
+    case "match_force": {
+      // the owner releases a claim that no license covers
+      const id = Number(body.matchId);
+      if (!Number.isFinite(id)) return json({ error: "matchId" }, 400);
+      await forceMatch(db, id);
+      return json({ ok: true });
+    }
+    case "licenses_recheck":
+      return json({ ok: true, freed: await recheckLicenses(db) });
+    case "email_customer": {
+      // tell a customer that his video uses our track without a license
+      const id = Number(body.matchId);
+      if (!Number.isFinite(id)) return json({ error: "matchId" }, 400);
+      const m = await db
+        .prepare(
+          `SELECT m.id, m.track_title, m.state, u.email, u.name, t.slug, v.title AS video_title, m.video_id
+             FROM wl_matches m
+             LEFT JOIN users u ON u.id = m.user_id
+             LEFT JOIN tracks t ON t.id = m.track_id
+             LEFT JOIN wl_videos v ON v.video_id = m.video_id
+            WHERE m.id = ?1`,
+        )
+        .bind(id)
+        .first<{ id: number; track_title: string; state: string; email: string | null; name: string | null;
+                 slug: string | null; video_title: string | null; video_id: string }>();
+      if (!m) return json({ error: "unknown match" }, 404);
+      if (!m.email) return json({ error: "the customer has no email" }, 400);
+      const site = new URL(ctx.request.url).origin;
+      const trackUrl = m.slug ? `${site}/track/${m.slug}` : site;
+      const videoUrl = `https://www.youtube.com/watch?v=${m.video_id}`;
+      const subject = `Your video "${m.video_title || m.video_id}" and the track "${m.track_title}"`;
+      const html = `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.55;color:#1a1a1a;max-width:560px">
+<p>Hi ${m.name || "there"},</p>
+<p>Thank you for sending us your video. We checked it and found our track <b>${m.track_title}</b> in
+<a href="${videoUrl}">${m.video_title || "your video"}</a>.</p>
+<p>We could not find a license for this track on your account, so we are not able to release the Content ID claim yet.
+As soon as the track is licensed, the claim is released, usually within a day:</p>
+<p><a href="${trackUrl}" style="display:inline-block;background:#111;color:#F4C430;font-weight:bold;padding:10px 16px;border-radius:9px;text-decoration:none">License this track</a></p>
+<p>A subscription covers every track in the store and all your future videos, so if you use our music regularly it may be the easier option.</p>
+<p>If you already have a license for this track under another account or email, just reply to this message and we will sort it out.</p>
+<p>Best regards,<br>TV Music Store</p></div>`;
+      const ok = await sendEmail(ctx.env as Env, m.email, subject, html);
+      if (!ok) return json({ error: "email failed" }, 502);
+      await db.prepare(`UPDATE wl_matches SET license = 'none:emailed' WHERE id = ?1 AND state = 'not_eligible'`).bind(id).run();
+      return json({ ok: true, to: m.email });
     }
     case "match_remove": {
       // one match id, or every match of a video
@@ -373,9 +426,13 @@ export const onRequestPost = async (ctx: Ctx) => {
     case "sheets_sync":
     case "email_composers": {
       try {
-        if (body.action === "sheets_update") return json({ ok: true, ...(await updateSheets(db)) });
+        if (body.action === "sheets_update") {
+          const one = body.matchId !== undefined ? Number(body.matchId) : undefined;
+          return json({ ok: true, ...(await updateSheets(db, Number.isFinite(one) ? one : undefined)) });
+        }
         if (body.action === "sheets_sync") {
-          const r = await syncSheets(db);
+          const freed = await recheckLicenses(db);
+          const r = { freed, ...(await syncSheets(db)) };
           await db
             .prepare(`INSERT INTO site_config (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value = excluded.value`)
             .bind("wl_sheets_synced", new Date().toISOString())

@@ -151,6 +151,13 @@ export const ensureWlScan = async (db: D1Database) => {
     .run();
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_wl_matches_state ON wl_matches(state)`).run();
   try {
+    // why the claim may be released: plan (subscription on the publish date), track (the
+    // customer bought this track), manual / custom (the owner's decision), none
+    await db.prepare(`ALTER TABLE wl_matches ADD COLUMN license TEXT`).run();
+  } catch {
+    /* already there */
+  }
+  try {
     // 0 = the track is only in the owner's "unreleased" folder (not on the site yet)
     await db.prepare(`ALTER TABLE wl_matches ADD COLUMN on_site INTEGER NOT NULL DEFAULT 1`).run();
   } catch {
@@ -222,6 +229,55 @@ export const paidOn = async (db: D1Database, userId: string, isoDate: string): P
     // table missing - fall through
   }
   return (await currentPlan(db, userId)) !== "free";
+};
+
+/** Did the user buy a single-track license for this track (an unrefunded order)? */
+export const boughtTrack = async (db: D1Database, userId: string, trackId: string): Promise<boolean> => {
+  try {
+    const r = await db
+      .prepare(
+        `SELECT 1 AS x FROM sync_orders
+          WHERE user_id = ?1 AND track_id = ?2 AND COALESCE(status, 'active') != 'refunded' LIMIT 1`,
+      )
+      .bind(userId, trackId)
+      .first<{ x: number }>();
+    return !!r;
+  } catch {
+    return false;
+  }
+};
+
+/** Matches found without a license: the customer may have bought the track or a plan
+ *  since the scan. Re-checks every one of them and frees those that are covered now.
+ *  Returns how many became eligible. */
+export const recheckLicenses = async (db: D1Database): Promise<number> => {
+  const rows = await db
+    .prepare(
+      `SELECT m.id, m.user_id, m.track_id, v.published_at
+         FROM wl_matches m LEFT JOIN wl_videos v ON v.video_id = m.video_id
+        WHERE m.state = 'not_eligible'`,
+    )
+    .all<{ id: number; user_id: string; track_id: string | null; published_at: string | null }>();
+  let freed = 0;
+  for (const r of rows.results) {
+    const license = (await paidOn(db, r.user_id, r.published_at || "")) ? "plan"
+      : r.track_id && (await boughtTrack(db, r.user_id, r.track_id)) ? "track" : "";
+    if (!license) continue;
+    await db
+      .prepare(`UPDATE wl_matches SET eligible = 1, state = 'new', license = ?2 WHERE id = ?1`)
+      .bind(r.id, license)
+      .run();
+    freed++;
+  }
+  return freed;
+};
+
+/** The owner releases a claim although no license covers it (his decision). */
+export const forceMatch = async (db: D1Database, matchId: number): Promise<void> => {
+  await db
+    .prepare(`UPDATE wl_matches SET eligible = 1, state = 'new', license = 'manual' WHERE id = ?1 AND state = 'not_eligible'`)
+    .bind(matchId)
+    .run();
 };
 
 export interface ChannelRow {
@@ -462,8 +518,8 @@ export const saveResult = async (
   // A video the owner added by hand (an old video of a customer he brought in)
   // is released whatever the date: that was his decision.
   // Channels of the owner's Custom lists are always released.
-  const eligible =
-    v.custom_group || v.note === "manual" || (await paidOn(db, v.user_id, v.published_at)) ? 1 : 0;
+  const videoLicense = v.custom_group ? "custom" : v.note === "manual" ? "manual"
+    : (await paidOn(db, v.user_id, v.published_at)) ? "plan" : "";
   for (const m of matches) {
     const local = !m.trackId || m.trackId.startsWith("local:");
     const t = !local
@@ -485,14 +541,20 @@ export const saveResult = async (
       composerId = c?.id ?? null;
     }
     const onSite = m.onSite === false ? 0 : t ? 1 : 0;
+    // no subscription: a bought single-track license still covers this track
+    const license = videoLicense || (t && (await boughtTrack(db, v.user_id, t.id)) ? "track" : "none");
+    const eligible = license === "none" ? 0 : 1;
     await db
       .prepare(
         `INSERT INTO wl_matches (video_id, channel_id, user_id, track_id, track_title, composer_id,
-                                 regions, total_s, score, eligible, state, on_site, in_base)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+                                 regions, total_s, score, eligible, state, on_site, in_base, license)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
          ON CONFLICT(video_id, track_title) DO UPDATE SET
            regions = excluded.regions, total_s = excluded.total_s, score = excluded.score,
-           on_site = excluded.on_site, in_base = excluded.in_base`,
+           on_site = excluded.on_site, in_base = excluded.in_base,
+           license = CASE WHEN wl_matches.state = 'not_eligible' THEN excluded.license ELSE wl_matches.license END,
+           eligible = CASE WHEN wl_matches.state = 'not_eligible' THEN excluded.eligible ELSE wl_matches.eligible END,
+           state = CASE WHEN wl_matches.state = 'not_eligible' THEN excluded.state ELSE wl_matches.state END`,
       )
       .bind(
         videoId,
@@ -508,6 +570,7 @@ export const saveResult = async (
         eligible ? "new" : "not_eligible",
         onSite,
         ["site", "local", "both"].includes(String(m.inBase)) ? String(m.inBase) : null,
+        license,
       )
       .run();
   }

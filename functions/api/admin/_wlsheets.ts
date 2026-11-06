@@ -73,19 +73,19 @@ const todayUk = () => {
 };
 
 /** Append every new eligible match to its composer's sheet. */
-export const updateSheets = async (db: D1Database) => {
+export const updateSheets = async (db: D1Database, onlyMatchId?: number) => {
   await ensureWlScan(db);
   const c = await getSheetsConfig(db);
-  const rows = await db
-    .prepare(
-      `SELECT m.id, m.composer_id, m.track_title, m.regions, m.video_id, m.on_site, m.in_base,
-              v.title AS video_title, v.published_at, w.yt_title AS channel_title, w.custom_group
-         FROM wl_matches m
-         LEFT JOIN wl_videos v ON v.video_id = m.video_id
-         LEFT JOIN wl_channels w ON w.id = m.channel_id
-        WHERE m.state = 'new' AND m.eligible = 1
-        ORDER BY m.created_at`,
-    )
+  const q = db.prepare(
+    `SELECT m.id, m.composer_id, m.track_title, m.regions, m.video_id, m.on_site, m.in_base,
+            v.title AS video_title, v.published_at, w.yt_title AS channel_title, w.custom_group
+       FROM wl_matches m
+       LEFT JOIN wl_videos v ON v.video_id = m.video_id
+       LEFT JOIN wl_channels w ON w.id = m.channel_id
+      WHERE m.state = 'new' AND m.eligible = 1 ${onlyMatchId ? "AND m.id = ?1" : ""}
+      ORDER BY m.created_at`,
+  );
+  const rows = await (onlyMatchId ? q.bind(onlyMatchId) : q)
     .all<{
       id: number;
       composer_id: string | null;
@@ -135,8 +135,6 @@ export const updateSheets = async (db: D1Database) => {
           "Release",
           "",
           `TVMS-${r.id}`,
-          r.on_site === 0 ? "No" : "Yes",
-          r.in_base === "local" ? "Local only" : r.in_base === "both" ? "Site + local" : r.in_base === "site" ? "Site" : "",
         ];
       }),
     });

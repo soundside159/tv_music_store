@@ -1892,6 +1892,9 @@ def tag_label(text, fg, bg):
     return l
 
 
+SCAN_ALL = [False]  # menu: the channel Scan button scans every video again (else only new ones)
+
+
 class ChannelBar(QtWidgets.QFrame):
     """The channel strip: chevron, title, state, Copy link, counts, scan progress, Scan / Stop."""
     toggled = QtCore.pyqtSignal(str, bool)
@@ -1946,8 +1949,10 @@ class ChannelBar(QtWidgets.QFrame):
         self.pbar.setTextVisible(False)
         self.pbar.setRange(0, 1000)
         h.addWidget(self.pbar)
-        self.btn_scan = QtWidgets.QPushButton("Scan")
+        self.btn_scan = QtWidgets.QPushButton("Scan all" if SCAN_ALL[0] else "Scan")
         self.btn_scan.setObjectName("scan")
+        self.btn_scan.setToolTip("Scan every video of the channel again" if SCAN_ALL[0]
+                                 else "Scan the videos that were not scanned yet")
         self.btn_scan.clicked.connect(lambda: self.scan.emit(self.ch["id"]))
         h.addWidget(self.btn_scan)
         self.btn_stop = QtWidgets.QPushButton("Stop")
@@ -2056,7 +2061,7 @@ class App(QtWidgets.QMainWindow):
         hl.addWidget(sep)
         self.pages = QtWidgets.QStackedWidget()
         self.navs = []
-        for i, name in enumerate(["Scanner", "Manual check", "Settings"]):
+        for i, name in enumerate(["Scanner", "Tracks", "Manual check", "Settings"]):
             b = QtWidgets.QPushButton(name)
             b.setObjectName("mode")
             b.setCheckable(True)
@@ -2117,9 +2122,11 @@ class App(QtWidgets.QMainWindow):
             pass
 
         self.pages.addWidget(self.page_scanner())
+        self.pages.addWidget(self.page_tracks())
         self.pages.addWidget(self.page_check())
         self.pages.addWidget(self.page_settings())
-        self.goto(0 if self.settings["token"] else 2)
+        SCAN_ALL[0] = bool(self.settings.get("scan_all"))
+        self.goto(0 if self.settings["token"] else 3)
 
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self.tick)
@@ -2221,7 +2228,12 @@ class App(QtWidgets.QMainWindow):
         a.setCheckable(True)
         a.setChecked(bool(self.settings.get("only_with_channels")))
         a.toggled.connect(self.set_only_with_channels)
+        a = m.addAction("Scan all videos (the channel Scan button scans everything again)")
+        a.setCheckable(True)
+        a.setChecked(SCAN_ALL[0])
+        a.toggled.connect(self.set_scan_all)
         m.addSeparator()
+        m.addAction("Sync sheets (read what the composers released)", lambda: self.bg(self.sync_sheets))
         m.addAction("Open session log", lambda: QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(SESSION_LOG)))
         m.addAction("Open storage folder", lambda: QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(STORE)))
         m.addSeparator()
@@ -2297,6 +2309,8 @@ class App(QtWidgets.QMainWindow):
         self.pages.setCurrentIndex(k)
         for i, b in enumerate(self.navs):
             b.setChecked(i == k)
+        if k == 1:
+            self.rebuild_tracks()
 
     def log(self, msg):
         self.sig.log.emit(msg)
@@ -2474,6 +2488,7 @@ class App(QtWidgets.QMainWindow):
         self.stage("Ready", 1)
 
     def build_model(self):
+        QtCore.QTimer.singleShot(0, self.rebuild_tracks)
         d = self.overview or {}
         chans = d.get("channels") or []
         self.vid_rows = {v["videoId"]: v for v in d.get("videos") or []}
@@ -2720,7 +2735,8 @@ class App(QtWidgets.QMainWindow):
         if states == {"released"}:
             return "rel", "released", "#9fe3b0", "#2e4d35"
         if "not_eligible" in states:
-            return "noplan", "no plan when published", "#f2c14e", "#5a4420"
+            mailed = any(str(m.get("license", "")).endswith("emailed") for m in ms if m["state"] == "not_eligible")
+            return "noplan", "no license" + (" (offer emailed)" if mailed else ""), "#f2c14e", "#5a4420"
         return "other", ", ".join(sorted(states)), TEXT_GRAY, BG_INPUT
 
     def video_state(self, vid):
@@ -2860,8 +2876,16 @@ class App(QtWidgets.QMainWindow):
             QtCore.QUrl("https://www.youtube.com/watch?v=" + vid)))
         m.addAction("Copy video link", lambda: QtWidgets.QApplication.clipboard().setText(
             "https://www.youtube.com/watch?v=" + vid))
-        if self.matches_by_vid.get(vid):
+        ms = self.matches_by_vid.get(vid) or []
+        if ms:
             m.addSeparator()
+            for mm in ms:
+                if mm.get("state") != "not_eligible" or not mm.get("id"):
+                    continue
+                m.addAction("Email the customer about \"%s\" (no license)" % mm.get("track", ""),
+                            lambda x=mm: self.email_customer(x))
+                m.addAction("Release \"%s\" anyway (no license)" % mm.get("track", ""),
+                            lambda x=mm: self.force_match(x))
             m.addAction("Remove match from the site and the composer's sheet", lambda: self.remove_match(vid))
         if v.get("note") == "solo" or str(v.get("channelId", "")).startswith(("wch_solo_", "wch_csolo_")):
             m.addSeparator()
@@ -2882,6 +2906,35 @@ class App(QtWidgets.QMainWindow):
                                                 % (r.get("removed", 0), r.get("sheetRows", 0))))
             except Exception as e:
                 self.log("Remove match failed: %s" % e)
+            self.load_overview()
+        self.bg(go)
+
+    def email_customer(self, mm):
+        if not ask_yes(self, "Email customer", "Send %s an email: our track \"%s\" was found in the video, "
+                       "the claim is released once the track is licensed?" % (mm.get("email") or "the customer",
+                                                                              mm.get("track", "")), "Send"):
+            return
+
+        def go():
+            try:
+                r = api(self.settings, "POST", "", {"action": "email_customer", "matchId": mm["id"]}, timeout=60)
+                self.log("Email customer: %s" % (r.get("error") or "sent to %s" % r.get("to", "")))
+            except Exception as e:
+                self.log("Email customer failed: %s" % e)
+            self.load_overview()
+        self.bg(go)
+
+    def force_match(self, mm):
+        if not ask_yes(self, "Release anyway", "Release the claim for \"%s\" without a license? It goes to the "
+                       "composer's sheet like any other match." % mm.get("track", ""), "Release"):
+            return
+
+        def go():
+            try:
+                r = api(self.settings, "POST", "", {"action": "match_force", "matchId": mm["id"]}, timeout=60)
+                self.log("Release anyway: %s" % (r.get("error") or "ok"))
+            except Exception as e:
+                self.log("Release anyway failed: %s" % e)
             self.load_overview()
         self.bg(go)
 
@@ -3003,14 +3056,42 @@ class App(QtWidgets.QMainWindow):
         ch = self.find_channel(chid)
         if not ch:
             return
-        todo = [v["videoId"] for v in ch["videos"] if self.video_state(v["videoId"]) in ("none", "err")]
-        if not todo:
-            if not ask_yes(self, "Scan again", "All %d videos of \"%s\" are scanned. Scan them all again?"
-                           % (len(ch["videos"]), ch.get("title") or "this channel"), "Scan again"):
+        if SCAN_ALL[0]:
+            todo = [v["videoId"] for v in ch["videos"] if self.video_state(v["videoId"]) not in ("run", "queue")]
+        else:
+            todo = [v["videoId"] for v in ch["videos"] if self.video_state(v["videoId"]) in ("none", "err")]
+            if not todo:
+                say(self, "Nothing new", "All %d videos of \"%s\" are scanned already.\n"
+                    "Menu > \"Scan all videos\" makes the Scan button scan them again."
+                    % (len(ch["videos"]), ch.get("title") or "this channel"))
                 return
-            todo = [v["videoId"] for v in ch["videos"]]
         self.channel_total[chid] = 0
         self.enqueue_site(todo, chid)
+
+    def set_scan_all(self, on):
+        SCAN_ALL[0] = bool(on)
+        self.settings["scan_all"] = bool(on)
+        save_settings(self.settings)
+        for bar in self.chan_bars.values():
+            bar.btn_scan.setText("Scan all" if on else "Scan")
+            bar.btn_scan.setToolTip("Scan every video of the channel again" if on
+                                    else "Scan the videos that were not scanned yet")
+
+    def sync_sheets(self):
+        """Read the composers' sheets now (which claims they set to Released)."""
+        self.stage("Reading the composers' sheets...")
+        try:
+            r = api(self.settings, "POST", "", {"action": "sheets_sync"}, timeout=170)
+            if r.get("error"):
+                self.log("Sheets sync: %s" % r["error"])
+                self.stage("Sheets sync: %s" % r["error"], 0)
+            else:
+                self.log("Sheets synced: %s" % {k: v for k, v in r.items() if k != "ok"})
+                self.stage("Sheets synced", 1)
+        except Exception as e:
+            self.log("Sheets sync failed: %s" % e)
+            self.stage("Sheets sync failed", 0)
+        self.load_overview()
 
     def stop_channel(self, chid):
         self.drop_jobs([vid for vid, c in self.job_src.items() if c == chid])
@@ -3194,7 +3275,7 @@ class App(QtWidgets.QMainWindow):
     # ---- Smart Scan: look for new videos, scan everything unscanned, repeat ----
     def toggle(self):
         if not self.settings["token"]:
-            self.goto(2)
+            self.goto(3)
             return
         self.running = not self.running
         if self.running:
@@ -3242,13 +3323,21 @@ class App(QtWidgets.QMainWindow):
     def recheck_fresh(self):
         """New tracks on the site: look for them in videos already checked that
         were published after the track appeared (stored fingerprints, no download)."""
-        import hash_table
         fresh, self.base.fresh = self.base.fresh, []
-        if not fresh or not os.path.isdir(PRINTS):
+        if not fresh:
             return
-        since = min((self.base.meta[t].get("addedAt") or "0000") for t, _ in fresh)
+        since = min((self.base.meta[t].get("addedAt") or "0000") for t, _ in fresh if t in self.base.meta)
+        self.recheck_tracks(fresh, since)
+
+    def recheck_tracks(self, pairs, since=""):
+        """Look for the given tracks [(key, hashes)] in every video already scanned
+        (stored fingerprints, no download); videos published before `since` are skipped."""
+        import hash_table
+        if not pairs or not os.path.isdir(PRINTS):
+            self.log("Re-check: no scanned videos stored yet.")
+            return
         small = hash_table.HashTable(hashbits=20, depth=100, maxtime=65536)
-        for tid, hashes in fresh:
+        for tid, hashes in pairs:
             small.store(tid, hashes)
         files = [f for f in os.listdir(PRINTS) if f.endswith(".npz")]
         hits = 0
@@ -3268,7 +3357,201 @@ class App(QtWidgets.QMainWindow):
                                             "matches": [match_payload(self.base, r) for r in rows]})
             hits += 1
             self.log("Re-check: %s found in %s" % (", ".join(r["title"] for r in rows), vid))
-        self.log("Re-check for new track(s) done: %d video(s) with them." % hits)
+        self.log("Re-check for %s done: %d video(s) with them." % (", ".join(self.base.title(t) for t, _ in pairs), hits))
+        self.stage("Re-check done: %d video(s)" % hits, 1)
+        self.load_overview()
+
+    # ---- Tracks page: everything the scanner is looking for ------------------
+    def page_tracks(self):
+        w = QtWidgets.QWidget()
+        l = QtWidgets.QVBoxLayout(w)
+        l.setContentsMargins(12, 10, 22, 12)
+        l.setSpacing(8)
+        top = QtWidgets.QHBoxLayout()
+        top.setSpacing(10)
+        self.tr_search = FnLineEdit("Search track or composer")
+        self.tr_search.setClearButtonEnabled(True)
+        self.tr_search.setFixedWidth(260)
+        self.tr_search.textChanged.connect(lambda _t: self.rebuild_tracks())
+        top.addWidget(self.tr_search)
+        self.tr_where = QtWidgets.QComboBox()
+        self.tr_where.addItems(["All tracks", "On the site", "Only in the unreleased folder", "Site + folder"])
+        self.tr_where.currentIndexChanged.connect(lambda _i: self.rebuild_tracks())
+        top.addWidget(self.tr_where)
+        top.addStretch(1)
+        self.tr_count = QtWidgets.QLabel("")
+        self.tr_count.setObjectName("muted")
+        top.addWidget(self.tr_count)
+        b = AnimatedButton("Update base")
+        b.setToolTip("Read the site catalogue and the unreleased folder again")
+        b.clicked.connect(lambda: self.bg(lambda: (self._update_base(), self.ui(self.rebuild_tracks))))
+        top.addWidget(b)
+        b = AnimatedButton("Open unreleased folder")
+        b.clicked.connect(lambda: (os.makedirs(UNRELEASED, exist_ok=True),
+                                   QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(UNRELEASED))))
+        top.addWidget(b)
+        l.addLayout(top)
+        note = QtWidgets.QLabel("Site = published on TV Music Store (the base follows the site). Folder = a file in the "
+                                "unreleased folder on this PC, found in videos but not on the site yet. "
+                                "Right-click a track for more.")
+        note.setObjectName("warm")
+        note.setWordWrap(True)
+        l.addWidget(note)
+        wrap = QtWidgets.QFrame()
+        wrap.setObjectName("vwrap")
+        wl = QtWidgets.QVBoxLayout(wrap)
+        wl.setContentsMargins(0, 2, 0, 6)
+        t = QtWidgets.QTreeWidget()
+        t.setObjectName("vtable")
+        t.setHeaderLabels(["Track", "Composer", "Where", "Added", "Found in videos", "Waiting release", ""])
+        t.setRootIsDecorated(False)
+        t.setIndentation(0)
+        t.setItemDelegate(KeepColors(t))
+        t.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.SingleSelection)
+        t.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        hd = t.header()
+        hd.setStretchLastSection(False)
+        hd.setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeMode.Stretch)
+        for i, wdt in enumerate([0, 150, 110, 90, 110, 110, 90]):
+            if i:
+                t.setColumnWidth(i, wdt)
+        t.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
+        t.customContextMenuRequested.connect(self.track_menu)
+        t.itemDoubleClicked.connect(lambda it, _c: self.open_track(it.data(0, 256)))
+        self.tr_table = t
+        wl.addWidget(t)
+        l.addWidget(wrap, 1)
+        self.tr_slider = FnSlider(t)
+        return w
+
+    def track_stats(self):
+        """track title (normalised) -> (videos with a match, waiting release)."""
+        st = {}
+        for rows in self.matches_by_vid.values():
+            seen = set()
+            for m in rows:
+                k = norm_title(m.get("track") or "")
+                if k in seen:
+                    continue
+                seen.add(k)
+                n, wtg = st.get(k, (0, 0))
+                st[k] = (n + 1, wtg + (1 if m.get("state") == "new" else 0))
+        return st
+
+    def rebuild_tracks(self):
+        t = getattr(self, "tr_table", None)
+        if t is None:
+            return
+        t.clear()
+        q = self.tr_search.text().strip().lower()
+        want = self.tr_where.currentIndex()  # 0 all, 1 site, 2 local, 3 both
+        stats = self.track_stats()
+        look = {"site": ("Site", "#9fe3b0"), "local": ("Folder only", "#f2c14e"), "dup": ("Site + folder", TEXT_ROW)}
+        rows = []
+        for key, m in self.base.meta.items():
+            state, _url = self.base.site_state(key)
+            if state == "gone":
+                continue
+            if (want == 1 and state != "site") or (want == 2 and state != "local") or (want == 3 and state != "dup"):
+                continue
+            if q and q not in (m.get("title", "") + " " + m.get("composer", "")).lower():
+                continue
+            rows.append((m.get("composer", ""), m.get("title", ""), key, m, state))
+        rows.sort(key=lambda r: (r[0].lower(), r[1].lower()))
+        n_site = sum(1 for r in rows if r[4] == "site")
+        n_local = sum(1 for r in rows if r[4] == "local")
+        n_dup = sum(1 for r in rows if r[4] == "dup")
+        for composer, title, key, m, state in rows:
+            it = QtWidgets.QTreeWidgetItem(["", "", "", "", "", "", ""])
+            it.setSizeHint(0, QtCore.QSize(0, 30))
+            it.setData(0, 256, key)
+            it.setText(0, "  " + title)
+            it.setText(1, composer)
+            word, col = look[state]
+            it.setText(2, word)
+            it.setForeground(2, QtGui.QBrush(QtGui.QColor(col)))
+            it.setText(3, (m.get("addedAt") or "")[:10])
+            it.setForeground(3, QtGui.QBrush(QtGui.QColor(TEXT_GRAY)))
+            n, wtg = stats.get(norm_title(title), (0, 0))
+            it.setText(4, str(n) if n else "")
+            it.setForeground(4, QtGui.QBrush(QtGui.QColor(RED if n else TEXT_GRAY)))
+            it.setText(5, str(wtg) if wtg else "")
+            it.setForeground(5, QtGui.QBrush(QtGui.QColor(ACCENT if wtg else TEXT_GRAY)))
+            for c in (1, 3, 4, 5):
+                it.setTextAlignment(c, QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter)
+            it.setToolTip(0, "%s\n%s\nDouble-click: open" % (title, m.get("path", "")))
+            t.addTopLevelItem(it)
+            b = QtWidgets.QPushButton("Re-check")
+            b.setObjectName("small")
+            b.setToolTip("Look for this track in every video already scanned (no download)")
+            b.clicked.connect(lambda _, k=key: self.recheck_track(k))
+            t.setItemWidget(it, 6, b)
+        self.tr_count.setText("%d tracks \u00b7 %d on the site \u00b7 %d folder only \u00b7 %d in both"
+                              % (len(rows), n_site, n_local, n_dup))
+
+    def open_track(self, key):
+        m = self.base.meta.get(key)
+        if not m:
+            return
+        if m.get("source") == "local":
+            QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(os.path.dirname(m["path"])))
+        else:
+            QtGui.QDesktopServices.openUrl(QtCore.QUrl(self.base.url(m)))
+
+    def track_menu(self, pos):
+        it = self.tr_table.itemAt(pos)
+        if it is None:
+            return
+        key = it.data(0, 256)
+        m = self.base.meta.get(key)
+        if not m:
+            return
+        local = m.get("source") == "local"
+        menu = QtWidgets.QMenu(self)
+        menu.addAction("Open the folder with the file" if local else "Open on the site", lambda: self.open_track(key))
+        menu.addAction("Copy title", lambda: QtWidgets.QApplication.clipboard().setText(m.get("title", "")))
+        menu.addSeparator()
+        menu.addAction("Re-check scanned videos for this track", lambda: self.recheck_track(key))
+        if local:
+            menu.addSeparator()
+            menu.addAction("Delete from the base and the unreleased folder", lambda: self.delete_local_track(key))
+        menu.exec(self.tr_table.viewport().mapToGlobal(pos))
+
+    def recheck_track(self, key):
+        m = self.base.meta.get(key)
+        if not m:
+            return
+        if self.loop_on or self.busy:
+            say(self, "Busy", "Wait for the running scan to finish, then re-check.")
+            return
+
+        def go():
+            try:
+                self.stage("Reading %s..." % m["title"])
+                hashes = fp.hashes_of(fp.load_mono(m["path"]), fp.DB_DENSITY, 1)
+                self.recheck_tracks([(key, hashes)], "")
+            except Exception as e:
+                self.log("Re-check failed: %s" % e)
+                self.stage("Re-check failed", 0)
+        self.bg(go)
+
+    def delete_local_track(self, key):
+        m = self.base.meta.get(key)
+        if not m or m.get("source") != "local":
+            return
+        if not ask_yes(self, "Delete track", "Delete \"%s\" from the unreleased folder and the base?\n"
+                       "Matches already found stay on the site." % m["title"], "Delete"):
+            return
+
+        def go():
+            try:
+                os.remove(m["path"])
+            except OSError as e:
+                self.log("Could not delete the file: %s" % e)
+                return
+            self._update_base()
+            self.ui(self.rebuild_tracks)
+        self.bg(go)
 
     # ---- Check a video page --------------------------------------------------
     # Left: the channel's videos (as many as you like, Ctrl/Shift to pick

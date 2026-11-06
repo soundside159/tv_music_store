@@ -13,13 +13,12 @@
  */
 var TOKEN = 'CHANGE_ME';
 
-// Column names as the composer sees them. 'Match ID' is the site's reference
-// (do not edit); 'Track uploaded to the site' answers whether the track the
-// scanner found is already published on TV Music Store (No = upload it).
+// Column names as the composer sees them. 'Match ID' is the site's reference (do not edit).
 var HEADER = ['Channel', 'Video link', 'Video title', 'Track found', 'Where in video',
-              'Video published', 'Action', 'Your notes', 'Match ID (do not edit)', 'Track uploaded to the site',
-              'Track in the scanner base'];
-var OLD_HEADERS = { 'Ref': 'Match ID (do not edit)', 'On TV Music Store': 'Track uploaded to the site' };
+              'Video published', 'Action', 'Your notes', 'Match ID (do not edit)'];
+var OLD_HEADERS = { 'Ref': 'Match ID (do not edit)' };
+// columns of older sheets that are not used any more (the owner sees this in the scanner)
+var DROP_HEADERS = { 'On TV Music Store': 1, 'Track uploaded to the site': 1, 'Track in the scanner base': 1 };
 var COL_ACTION = 7;  // 1-based
 var COL_REF = 9;
 
@@ -40,13 +39,18 @@ function sheetOf(id) {
   var sh = SpreadsheetApp.openById(id).getSheets()[0];
   if (sh.getLastRow() > 0) {
     // an older sheet: rename the columns in place, the rows stay
-    var head = sh.getRange(1, 1, 1, HEADER.length).getValues()[0];
+    var width = Math.max(HEADER.length, sh.getLastColumn());
+    var head = sh.getRange(1, 1, 1, width).getValues()[0];
     var changed = false;
     for (var i = 0; i < head.length; i++) {
       var h = String(head[i] || '');
       if (OLD_HEADERS[h]) { head[i] = OLD_HEADERS[h]; changed = true; }
     }
-    if (changed) sh.getRange(1, 1, 1, HEADER.length).setValues([head]);
+    if (changed) sh.getRange(1, 1, 1, width).setValues([head]);
+    // columns we no longer write: delete them (right to left)
+    for (var d = head.length - 1; d >= HEADER.length; d--) {
+      if (DROP_HEADERS[String(head[d] || '')]) sh.deleteColumn(d + 1);
+    }
     // a sheet made with fewer columns: add the missing headers on the right
     for (var k = 0; k < HEADER.length; k++) {
       if (!String(head[k] || '')) sh.getRange(1, k + 1).setValue(HEADER[k]).setFontWeight('bold').setBackground('#f1f3f4');
@@ -58,18 +62,12 @@ function sheetOf(id) {
     sh.setFrozenRows(1);
     sh.setColumnWidth(1, 160); sh.setColumnWidth(2, 260); sh.setColumnWidth(3, 260);
     sh.setColumnWidth(4, 200); sh.setColumnWidth(5, 170); sh.setColumnWidth(6, 110);
-    sh.setColumnWidth(7, 110); sh.setColumnWidth(8, 220); sh.setColumnWidth(9, 90); sh.setColumnWidth(10, 130);
-    sh.setColumnWidth(11, 140);
+    sh.setColumnWidth(7, 110); sh.setColumnWidth(8, 220); sh.setColumnWidth(9, 90);
     // Released = green, Release = red (conditional formatting on the Action column)
-    // Track uploaded to the site: "No" = the track still has to be uploaded to the site (red)
     var col = sh.getRange('G2:G');
-    var site = sh.getRange('J2:J');
     sh.setConditionalFormatRules([
       SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Released').setBackground('#e6f4ea').setFontColor('#137333').setRanges([col]).build(),
-      SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Release').setBackground('#fce8e6').setFontColor('#c5221f').setRanges([col]).build(),
-      SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('No').setBackground('#fce8e6').setFontColor('#c5221f').setRanges([site]).build(),
-      SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Not yet').setBackground('#fce8e6').setFontColor('#c5221f').setRanges([site]).build(),
-      SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Yes').setFontColor('#137333').setRanges([site]).build()
+      SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Release').setBackground('#fce8e6').setFontColor('#c5221f').setRanges([col]).build()
     ]);
   }
   return sh;

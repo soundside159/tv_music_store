@@ -30,6 +30,9 @@ interface Match {
   eligible: boolean;
   onSite: boolean;
   state: "new" | "in_sheet" | "released" | "not_eligible";
+  license: string; // plan | track | manual | custom | none | none:emailed
+  userId: string;
+  trackSlug: string;
   sheetDate: string | null;
   releasedAt: string | null;
   createdAt: string;
@@ -168,6 +171,10 @@ const AdminWhitelist = () => {
     m.track.toLowerCase().includes(needle);
   const eligible = data.matches.filter((m) => m.state !== "not_eligible");
   const newCount = eligible.filter((m) => m.state === "new").length;
+  const unlicensed = data.matches
+    .filter((m) => m.state === "not_eligible")
+    .filter(matchHit)
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 
   const scannerOnline = data.scanner.lastSeen && Date.now() - new Date(data.scanner.lastSeen).getTime() < 10 * 60000;
 
@@ -180,6 +187,30 @@ const AdminWhitelist = () => {
             New matches go into each composer's Google Sheet. Composers mark Released there.
           </p>
         </div>
+        {/* Left of the line: find and read. Right of the line: send out. */}
+        <button
+          type="button"
+          disabled={busy !== null}
+          title="Walk every customer channel on YouTube for new videos now (Smart Scan does this by itself)"
+          onClick={() =>
+            void act("refresh", { action: "refresh", force: true }, (d) => `${d.queued ?? 0} new video(s) queued from ${d.channels ?? 0} channel(s)`)
+          }
+          className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 font-body text-xs font-semibold text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430] disabled:opacity-40"
+        >
+          {busy === "refresh" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+          Look for new videos
+        </button>
+        <button
+          type="button"
+          disabled={busy !== null}
+          title="Read the composers' sheets now (the page does this by itself every 5 minutes)"
+          onClick={() => void act("sync", { action: "sheets_sync" }, (d) => `${d.released ?? 0} newly released`)}
+          className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 font-body text-xs font-semibold text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430] disabled:opacity-40"
+        >
+          {busy === "sync" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+          Sync sheets
+        </button>
+        <span aria-hidden="true" className="mx-1 hidden h-6 w-px self-center bg-border md:block" />
         <button
           type="button"
           disabled={busy !== null || newCount === 0}
@@ -194,18 +225,6 @@ const AdminWhitelist = () => {
         >
           {busy === "sheets" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
           Update composer sheets{newCount ? ` · ${newCount} new` : ""}
-        </button>
-        <button
-          type="button"
-          disabled={busy !== null}
-          title="Read the composers' sheets now (the page does this by itself every 5 minutes)"
-          onClick={() =>
-            void act("sync", { action: "sheets_sync" }, (d) => `${d.released ?? 0} newly released`)
-          }
-          className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 font-body text-xs font-semibold text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430] disabled:opacity-40"
-        >
-          {busy === "sync" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-          Sync sheets
         </button>
         <button
           type="button"
@@ -266,6 +285,82 @@ const AdminWhitelist = () => {
               Show released videos too
             </label>
           </div>
+
+          {unlicensed.length > 0 && (
+            <div className="overflow-hidden rounded-2xl border border-red-400/40 bg-card">
+              <div className="flex flex-wrap items-center gap-3 px-4 py-3">
+                <span className="font-display text-base font-bold text-foreground">No license</span>
+                <span className="font-body text-xs text-muted-foreground">
+                  {unlicensed.length} match{unlicensed.length === 1 ? "" : "es"}: our track found, but the customer had no plan when the
+                  video came out and did not buy the track. Checked again every sync, so a purchase frees the claim by itself.
+                </span>
+              </div>
+              <div className="border-t border-border/60 px-4 pb-2">
+                {unlicensed.map((m) => (
+                  <div
+                    key={m.id}
+                    className="grid grid-cols-[80px_1fr] items-center gap-3 border-t border-border/40 py-2.5 font-body text-[13px] md:grid-cols-[80px_1.5fr_1.1fr_1fr_190px]"
+                  >
+                    <a href={`https://www.youtube.com/watch?v=${m.videoId}`} target="_blank" rel="noreferrer">
+                      <img src={`https://i.ytimg.com/vi/${m.videoId}/mqdefault.jpg`} alt="" loading="lazy" className="h-[45px] w-[80px] rounded-md object-cover" />
+                    </a>
+                    <div className="min-w-0">
+                      <a href={`https://www.youtube.com/watch?v=${m.videoId}`} target="_blank" rel="noreferrer" className="block truncate font-semibold text-foreground hover:text-[#F4C430]">
+                        {m.videoTitle || m.videoId}
+                      </a>
+                      <span className="block truncate text-[11px] text-muted-foreground">
+                        {m.channelTitle} · {shortDate(m.publishedAt)}
+                      </span>
+                    </div>
+                    <div className="min-w-0">
+                      <span className="block truncate text-foreground">{m.track}</span>
+                      <span className="block truncate text-[11px] text-muted-foreground">{m.composer}</span>
+                    </div>
+                    <div className="min-w-0">
+                      <span className="block truncate text-foreground">{m.email || "no email"}</span>
+                      <span className="block text-[11px] text-muted-foreground">
+                        {m.license === "none:emailed" ? "Offer emailed" : "Not emailed yet"} · found {shortDate(m.createdAt)}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+                      <button
+                        type="button"
+                        title="Email the customer: the track was found, the claim is released once the track is licensed"
+                        className="text-[#F4C430] underline-offset-2 hover:underline"
+                        onClick={() => {
+                          if (!window.confirm(`Email ${m.email || "the customer"} about "${m.track}"?`)) return;
+                          void act(`mail${m.id}`, { action: "email_customer", matchId: m.id }, (d) => `Sent to ${String(d.to ?? "")}`);
+                        }}
+                      >
+                        Email customer
+                      </button>
+                      <button
+                        type="button"
+                        title="Release the claim anyway (goes to the composer's sheet)"
+                        className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                        onClick={() => {
+                          if (!window.confirm("Release this claim without a license?")) return;
+                          void act(`force${m.id}`, { action: "match_force", matchId: m.id }, () => "Marked for release");
+                        }}
+                      >
+                        Release anyway
+                      </button>
+                      <button
+                        type="button"
+                        className="text-muted-foreground underline-offset-2 hover:text-red-400 hover:underline"
+                        onClick={() => {
+                          if (!window.confirm("Remove this match?")) return;
+                          void act(`rm${m.id}`, { action: "match_remove", matchId: m.id }, () => "Removed");
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {composerList.length === 0 && (
             <p className="font-body text-sm text-muted-foreground">No matches yet. The desktop scanner adds them as it checks new videos.</p>
@@ -391,7 +486,10 @@ const AdminWhitelist = () => {
                               <Pill ok>Custom · {ch.group}</Pill>
                             ) : (
                               <>
-                                <Pill ok>{(ch?.plan ?? "paid").replace(/^./, (x) => x.toUpperCase())} · when published</Pill>
+                                <Pill ok>
+                                  {m.license === "track" ? "Bought the track" : m.license === "manual" ? "Released by you"
+                                    : `${(ch?.plan ?? "paid").replace(/^./, (x) => x.toUpperCase())} · when published`}
+                                </Pill>
                                 <span className="block truncate text-[11px] text-muted-foreground">{m.email}</span>
                               </>
                             )}
@@ -400,7 +498,19 @@ const AdminWhitelist = () => {
                             {d !== null ? d : "-"}
                           </div>
                           <div className="text-xs">
-                            {m.state === "new" && <span className="text-muted-foreground">Not in sheet yet</span>}
+                            {m.state === "new" && (
+                              <span className="text-muted-foreground">
+                                Not in sheet yet
+                                <button
+                                  type="button"
+                                  title="Put just this match into the composer's sheet"
+                                  className="ml-2 text-[11px] text-[#F4C430] underline-offset-2 hover:underline"
+                                  onClick={() => void act("send1", { action: "sheets_update", matchId: m.id }, () => "Sent to the sheet")}
+                                >
+                                  Send now
+                                </button>
+                              </span>
+                            )}
                             {m.state === "in_sheet" && <span className="text-red-400">Waiting</span>}
                             {m.state === "released" && <span className="text-emerald-300">✓ Released {shortDate(m.releasedAt)}</span>}
                             <button
@@ -425,7 +535,7 @@ const AdminWhitelist = () => {
             );
           })}
           <p className="font-body text-xs text-muted-foreground">
-            Videos published while the customer had no paid plan are not listed here. They are in Channels → "No active plan".
+            A match without a license (no plan when the video came out, track not bought) is in the "No license" block above.
           </p>
         </>
       )}
@@ -442,9 +552,36 @@ const AdminWhitelist = () => {
 const ChannelsTab = ({ data, reload }: { data: Overview; reload: () => void }) => {
   const groups = useMemo(() => {
     const g = new Map<string, Channel[]>();
-    for (const c of data.channels) if (!c.group) g.set(c.userId, [...(g.get(c.userId) ?? []), c]);
+    for (const c of data.channels) if (!c.group && c.url !== "solo") g.set(c.userId, [...(g.get(c.userId) ?? []), c]);
     return [...g.values()];
   }, [data]);
+  // A customer wrote "please release this video": one video without a channel.
+  const addSolo = async (userId: string) => {
+    const url = window.prompt("YouTube video link the customer sent:");
+    if (!url) return;
+    const m = /(?:v=|youtu\.be\/|\/shorts\/|\/live\/)([A-Za-z0-9_-]{11})/.exec(url.trim());
+    if (!m) {
+      toast.error("That does not look like a YouTube video link");
+      return;
+    }
+    try {
+      const d = await post({ action: "solo_add", userId, videoId: m[1] });
+      toast.success(`"${String(d.title || m[1])}" added, it is in the scan queue`);
+      reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed");
+    }
+  };
+  const removeSolo = async (videoId: string, title: string) => {
+    if (!window.confirm(`Remove "${title}"?`)) return;
+    try {
+      await post({ action: "solo_remove", videoId });
+      toast.success("Video removed");
+      reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed");
+    }
+  };
   const setFrom = async (id: string, date: string | null) => {
     try {
       await post({ action: "check_from", channelId: id, date });
@@ -475,6 +612,14 @@ const ChannelsTab = ({ data, reload }: { data: Overview; reload: () => void }) =
               <b className="text-[13px] text-foreground">{first.email || first.userId}</b>
               {list.length} channel{list.length === 1 ? "" : "s"} · {noplan ? "no active plan" : first.plan.toUpperCase()}
               {noplan && lead > 0 && <span style={{ color: GOLD }}>{lead} claims could be released → send offer</span>}
+              <button
+                type="button"
+                onClick={() => void addSolo(first.userId)}
+                title="The customer sent one video link without a channel"
+                className="ml-auto inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-semibold text-foreground hover:border-[#F4C430] hover:text-[#F4C430]"
+              >
+                <Plus className="h-3 w-3" /> Add a video
+              </button>
             </div>
             {list.map((c) => (
               <div
@@ -518,6 +663,30 @@ const ChannelsTab = ({ data, reload }: { data: Overview; reload: () => void }) =
                 <div className="text-base font-bold text-emerald-300">{c.released}</div>
               </div>
             ))}
+            {(() => {
+              const soloCh = data.channels.find((c) => c.userId === first.userId && c.url === "solo");
+              const vids = soloCh ? (data.videos ?? []).filter((v) => v.channelId === soloCh.id) : [];
+              if (!vids.length) return null;
+              return (
+                <div className="mt-1 border-t border-border/40 pt-1">
+                  <div className="py-1 font-body text-[11px] uppercase tracking-wide text-muted-foreground">Single videos</div>
+                  {vids.map((v) => (
+                    <div key={v.videoId} className="grid grid-cols-1 items-center gap-3 py-1.5 font-body text-[13px] md:grid-cols-[2fr_0.8fr_0.8fr_32px]">
+                      <a href={`https://www.youtube.com/watch?v=${v.videoId}`} target="_blank" rel="noreferrer" className="block truncate font-semibold text-foreground hover:text-[#F4C430]">
+                        {v.title || v.videoId}
+                      </a>
+                      <div className="text-muted-foreground">{shortDate(v.publishedAt)}</div>
+                      <div className={v.status === "done" ? (v.found ? "text-red-400" : "text-emerald-300") : "text-muted-foreground"}>
+                        {v.status === "done" ? (v.found ? `${v.found} match` : "clean") : v.status === "error" ? "error" : "in queue"}
+                      </div>
+                      <button type="button" onClick={() => void removeSolo(v.videoId, v.title || v.videoId)} aria-label="Remove video" className="rounded-md p-1 text-muted-foreground hover:text-red-400">
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         );
       })}
@@ -780,17 +949,7 @@ const ScannerTab = ({
             <b className="block text-xl text-foreground">{s.week}</b>
             <small className="text-[11px] text-muted-foreground">videos checked this week</small>
           </div>
-          <button
-            type="button"
-            disabled={busy !== null}
-            onClick={() =>
-              void act("refresh", { action: "refresh", force: true }, (d) => `${d.queued ?? 0} new video(s) queued from ${d.channels ?? 0} channel(s)`)
-            }
-            className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-foreground hover:border-[#F4C430] hover:text-[#F4C430] disabled:opacity-40"
-          >
-            {busy === "refresh" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-            Look for new videos now
-          </button>
+
         </div>
       </div>
 
