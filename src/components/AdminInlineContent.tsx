@@ -584,8 +584,24 @@ export const AdminCoverControl = ({
     }
   };
 
+  // Dropping a picture on the cover (e.g. dragged out of the ChatGPT tab)
+  // uploads it like the upload button.
+  const onDrop = (e: DragEvent<HTMLDivElement>) => {
+    const pic = Array.from(e.dataTransfer.files).find((f) => f.type.startsWith("image/"));
+    if (!pic) return;
+    e.preventDefault();
+    setUrlOpen(false);
+    void onFile(pic);
+  };
+
   return (
-    <div className={`group/cover relative ${className}`}>
+    <div
+      className={`group/cover relative ${className}`}
+      onDragOver={(e) => {
+        if (Array.from(e.dataTransfer.types).includes("Files")) e.preventDefault();
+      }}
+      onDrop={onDrop}
+    >
       {children}
       <div
         className={`absolute inset-0 z-10 flex items-center justify-center gap-2 bg-background/70 transition-opacity ${
@@ -637,8 +653,23 @@ export const AdminCoverControl = ({
               spellCheck={false}
               onChange={(e) => setCoverUrl(e.target.value)}
               onPaste={(e) => {
+                // A copied PICTURE (ChatGPT: right-click > Copy image) arrives as a
+                // file: upload it straight away, same path as the upload button.
+                const pic = Array.from(e.clipboardData.files).find((f) => f.type.startsWith("image/"));
+                if (pic) {
+                  e.preventDefault();
+                  setUrlOpen(false);
+                  setCoverUrl("");
+                  void onFile(pic);
+                  return;
+                }
                 // Paste IS the command, same as on the track page.
                 const text = e.clipboardData.getData("text").trim();
+                if (text.startsWith("blob:")) {
+                  e.preventDefault();
+                  toast.error("That blob: link only lives inside the ChatGPT tab. Right-click the picture there, Copy image, then paste it here.");
+                  return;
+                }
                 if (!text) return;
                 e.preventDefault();
                 setCoverUrl(text);
@@ -648,7 +679,7 @@ export const AdminCoverControl = ({
                 if (e.key === "Enter") void loadFromUrl();
                 if (e.key === "Escape") setUrlOpen(false);
               }}
-              placeholder="Paste image link (png, jpg, webp)"
+              placeholder="Paste image or image link"
               className="rounded-lg border border-border bg-background px-2.5 py-1.5 font-body text-xs text-foreground focus:border-[#F4C430] focus:outline-none"
             />
             <div className="flex items-center justify-center gap-2">

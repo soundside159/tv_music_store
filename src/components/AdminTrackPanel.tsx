@@ -629,7 +629,7 @@ export const AdminTrackCoverOverlay = ({
             onClick={(e) => e.stopPropagation()}
           >
             <p className="mb-1.5 font-body text-[11px] text-muted-foreground">
-              Direct link to an image (png, jpg, webp)
+              Paste a copied image, or a direct link to one (png, jpg, webp)
             </p>
             <div className="flex gap-1.5">
               <input
@@ -639,8 +639,23 @@ export const AdminTrackCoverOverlay = ({
                 autoFocus
                 spellCheck={false}
                 onPaste={(e) => {
+                  // A copied PICTURE (ChatGPT: right-click > Copy image) arrives
+                  // as a file: upload it like the upload button.
+                  const pic = Array.from(e.clipboardData.files).find((f) => f.type.startsWith("image/"));
+                  if (pic) {
+                    e.preventDefault();
+                    setUrlOpen(false);
+                    setCoverUrl("");
+                    void onFile(pic);
+                    return;
+                  }
                   // Paste IS the command here too.
                   const text = e.clipboardData.getData("text").trim();
+                  if (text.startsWith("blob:")) {
+                    e.preventDefault();
+                    toast.error("That blob: link only lives inside the ChatGPT tab. Right-click the picture there, Copy image, then paste it here.");
+                    return;
+                  }
                   if (!text) return;
                   e.preventDefault();
                   setCoverUrl(text);
