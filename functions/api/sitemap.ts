@@ -57,15 +57,45 @@ export const onRequestGet = async (ctx: Ctx) => {
     // Tag pages — from the live (admin-editable) vocabularies.
     try {
       const vocab = await getVocabularies(db);
+      // Only tags with real music behind them: a near-empty tag page is thin
+      // content (served noindex by functions/_middleware.ts, same threshold).
+      const MIN_TAG_TRACKS = 3;
+      const tagRows = await db
+        .prepare(
+          `SELECT use_case, genre, mood FROM tracks
+            WHERE status = 'published' AND moderation_status = 'approved'`,
+        )
+        .all<{ use_case: string | null; genre: string | null; mood: string | null }>();
+      const counts: Record<string, Map<string, number>> = {
+        themes: new Map(),
+        genres: new Map(),
+        moods: new Map(),
+      };
+      const bump = (group: string, raw: string | null) => {
+        for (const v of (raw ?? "").split("/")) {
+          const slug = slugify(v);
+          if (slug) counts[group].set(slug, (counts[group].get(slug) ?? 0) + 1);
+        }
+      };
+      for (const t of tagRows.results) {
+        bump("themes", t.use_case);
+        bump("genres", t.genre);
+        bump("moods", t.mood);
+      }
       const groups: [string, string[]][] = [
         ["themes", vocab.useCase],
         ["genres", vocab.genre],
         ["moods", vocab.mood],
       ];
       for (const [group, values] of groups) {
+        const seen = new Set<string>();
         for (const value of values) {
           const slug = slugify(value);
-          if (slug) lines.push(url(`/discover/${group}/${slug}`, "weekly", "0.8"));
+          if (!slug || seen.has(slug)) continue;
+          seen.add(slug);
+          if ((counts[group].get(slug) ?? 0) >= MIN_TAG_TRACKS) {
+            lines.push(url(`/discover/${group}/${slug}`, "weekly", "0.8"));
+          }
         }
       }
     } catch {

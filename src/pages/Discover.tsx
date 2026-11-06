@@ -136,7 +136,7 @@ const DiscoverTag = ({ group, slug }: { group: DiscoverGroup; slug: string }) =>
   const title = `${label} Music — Royalty-Free ${label} Tracks | TV Music Store`;
   const description = `Download royalty-free ${label.toLowerCase()} music for video, ads, film, games and social. ${
     exact.length > 0 ? `${exact.length} ${label.toLowerCase()} track${exact.length === 1 ? "" : "s"} — ` : ""
-  }MP3, WAV and stems, cleared for YouTube and commercial use.`;
+  }MP3 on every plan, WAV and stems with Max.`;
 
   useSeo({
     title,
@@ -178,7 +178,7 @@ const DiscoverTag = ({ group, slug }: { group: DiscoverGroup; slug: string }) =>
         </h1>
         <p className="mt-3 max-w-2xl font-body text-sm leading-6 text-white/55">
           Royalty-free {label.toLowerCase()} tracks for video, advertising, film, games and social
-          media — cleared for YouTube and commercial use, in MP3, WAV and stems.
+          media. MP3 on every plan; WAV, stems and commercial use with Max or a one-time license.
         </p>
 
         <div className="mt-8">

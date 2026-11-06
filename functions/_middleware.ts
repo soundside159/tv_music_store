@@ -83,7 +83,14 @@ interface Seo {
   jsonLd?: Record<string, unknown>;
   /** Real markup dropped into #root — what a JS-less crawler reads. */
   body: string;
+  /** Thin page (e.g. a tag with almost no tracks): served, but kept out of the index. */
+  noindex?: boolean;
 }
+
+/** A /discover tag page with fewer tracks than this is noindex and left out of the sitemap. */
+const MIN_TAG_TRACKS = 3;
+/** Same rule as the site (useContent MIN_PUBLIC_TRACKS): half-empty lists are not shown. */
+const MIN_LIST_TRACKS = 5;
 
 const esc = (value: string) =>
   value
@@ -215,8 +222,13 @@ const tracksByFacet = async (
   column: "use_case" | "genre" | "mood",
   slug: string,
 ): Promise<TrackRow[]> => {
+  // Was "newest 300 tracks, then filter": with ~700 tracks every tag whose
+  // music is older looked empty to crawlers (Orchestral, Dubstep). Now a loose
+  // LIKE narrows the WHOLE catalogue, the exact slug match below decides.
+  const like = `%${slug.split("-").filter((w) => w && w !== "and").join("%")}%`;
   const rows = await db
-    .prepare(`${TRACK_SELECT} WHERE ${PUBLISHED} ORDER BY t.created_at DESC LIMIT 300`)
+    .prepare(`${TRACK_SELECT} WHERE ${PUBLISHED} AND t.${column} LIKE ?1 ORDER BY t.created_at DESC`)
+    .bind(like)
     .all<TrackRow>();
   return rows.results.filter((t) =>
     splitValues(t[column]).some((value) => slugify(value) === slug),
@@ -233,7 +245,7 @@ const STATIC_PAGES: Record<string, { title: string; description: string; heading
   "/catalog": {
     title: "Music Library — Royalty-Free Cinematic & Production Music | TV Music Store",
     description:
-      "Browse the full TV Music Store library: cinematic, trailer, corporate, documentary and game music. Filter by use case, genre and mood. MP3, WAV and stems, cleared for YouTube and commercial use.",
+      "Browse the full TV Music Store library: cinematic, trailer, corporate, documentary and game music. Filter by use case, genre and mood. MP3 on every plan, WAV and stems with Max.",
     heading: "Premium Music Library",
   },
   "/collections": {
@@ -249,7 +261,7 @@ const STATIC_PAGES: Record<string, { title: string; description: string; heading
   "/pricing": {
     title: "Pricing — Royalty-Free Music Subscriptions | TV Music Store",
     description:
-      "Free, Pro and Max plans: unlimited downloads, WAV and stems, and commercial licensing. Or license a single track one-time.",
+      "Free: 3 MP3 downloads a month. Pro: unlimited MP3 and channel whitelist for 3 YouTube channels. Max: WAV, stems, commercial use and 10 channels. Or license a single track one-time.",
     heading: "Pricing",
   },
   "/licensing": {
@@ -323,11 +335,11 @@ const buildSeo = async (env: Env, url: URL): Promise<Seo | typeof NOT_FOUND | nu
       title:
         "TV Music Store — Royalty-Free Cinematic Music Licensing for YouTube, Ads & Film",
       description:
-        "Royalty-free cinematic and production music for YouTube, ads, films, trailers and games. Subscriptions with WAV, stems and commercial licensing, plus one-time track licenses.",
+        "Royalty-free cinematic and production music for YouTube, ads, films, trailers and games. Subscriptions from free to Max (WAV, stems, commercial use), plus one-time track licenses.",
       path: "/",
       body: shell(
         "Royalty-Free Cinematic Music",
-        "Music for YouTube, advertising, film, trailers and games — licensed for commercial use, in MP3, WAV and stems.",
+        "Music for YouTube, advertising, film, trailers and games. MP3 on every plan; WAV, stems and commercial use with Max or a one-time license.",
         trackLinks(rows.results),
       ),
     };
@@ -342,6 +354,30 @@ const buildSeo = async (env: Env, url: URL): Promise<Seo | typeof NOT_FOUND | nu
         .prepare(`${TRACK_SELECT} WHERE ${PUBLISHED} ORDER BY t.created_at DESC LIMIT 60`)
         .all<TrackRow>();
       links = trackLinks(rows.results);
+    }
+    if ((path === "/collections" || path === "/playlists") && db) {
+      const kind = path === "/collections" ? "collection" : "playlist";
+      const table = kind === "collection" ? "collections" : "playlists";
+      const joinTable = kind === "collection" ? "collection_tracks" : "playlist_tracks";
+      const joinKey = kind === "collection" ? "collection_id" : "playlist_id";
+      const lists = await db
+        .prepare(
+          `SELECT l.id, l.title, l.description, COUNT(t.id) AS n
+             FROM ${table} l
+             JOIN ${joinTable} j ON j.${joinKey} = l.id
+             JOIN tracks t ON t.id = j.track_id
+            WHERE ${PUBLISHED}
+            GROUP BY l.id
+           HAVING n >= ${MIN_LIST_TRACKS}
+            ORDER BY l.sort, l.title`,
+        )
+        .all<{ id: string; title: string; description: string | null; n: number }>();
+      links = linkList(
+        lists.results.map((l) => ({
+          href: `/${kind}/${l.id}`,
+          label: `${l.title} (${l.n} tracks)${l.description?.trim() ? `: ${l.description.trim()}` : ""}`,
+        })),
+      );
     }
     return {
       title: staticPage.title,
@@ -554,11 +590,12 @@ const buildSeo = async (env: Env, url: URL): Promise<Seo | typeof NOT_FOUND | nu
       slug.replace(/-/g, " ");
     const description = `Download royalty-free ${label.toLowerCase()} music for video, ads, film, games and social.${
       rows.length > 0 ? ` ${rows.length} track${rows.length === 1 ? "" : "s"} —` : ""
-    } MP3, WAV and stems, cleared for YouTube and commercial use.`;
+    } MP3 on every plan, WAV and stems with Max.`;
     return {
       title: `${label} Music — Royalty-Free ${label} Tracks | TV Music Store`,
       description,
       path,
+      noindex: rows.length < MIN_TAG_TRACKS,
       jsonLd: {
         "@context": "https://schema.org",
         "@type": "CollectionPage",
@@ -787,6 +824,11 @@ export const onRequest = async (ctx: MiddlewareCtx): Promise<Response> => {
     .on('meta[name="description"]', {
       element(el) {
         el.setAttribute("content", seo!.description);
+      },
+    })
+    .on('meta[name="robots"]', {
+      element(el) {
+        if (seo!.noindex) el.setAttribute("content", "noindex, follow");
       },
     })
     .on('meta[property="og:title"], meta[name="twitter:title"]', {

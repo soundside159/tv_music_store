@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import type { DragEvent, ReactNode } from "react";
-import { Check, GripVertical, ImageUp, Pencil, Plus, Sparkles, Tags, Trash2, X } from "lucide-react";
+import { Check, GripVertical, ImageUp, Link2, Pencil, Plus, Sparkles, Tags, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { useCurrentUser } from "@/hooks/useMockData";
 import { useTracks } from "@/hooks/useTracks";
@@ -457,6 +457,10 @@ export const AdminCoverControl = ({
   const [genOpen, setGenOpen] = useState(false);
   const [genHint, setGenHint] = useState("");
   const [genBusy, setGenBusy] = useState(false);
+  // "Paste a direct image link" (same as the track page): the server copies the
+  // picture into our R2 via /api/admin/fetch-image, never hot-linked.
+  const [urlOpen, setUrlOpen] = useState(false);
+  const [coverUrl, setCoverUrl] = useState("");
 
   const item = itemsOf(admin.data, kind).find((x) => x.id === id);
   // ALWAYS render the sized wrapper — returning bare children while the admin
@@ -515,6 +519,41 @@ export const AdminCoverControl = ({
     }
   };
 
+  const loadFromUrl = async (explicit?: string) => {
+    // On paste the state has not committed yet, so the value comes in directly.
+    const url = (explicit ?? coverUrl).trim();
+    if (!url || busy) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/fetch-image", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const d = (await res.json().catch(() => ({}))) as { path?: string; error?: string };
+      if (!res.ok || !d.path) throw new Error(d.error ?? "Could not load that link");
+      // Now on our own domain, so canvas may read it: collections get the brand
+      // stamp exactly like an uploaded or AI cover; playlists stay clean.
+      let image = d.path;
+      try {
+        const raw = await (await fetch(d.path)).blob();
+        image = (await brandIfCollection(raw, "url-cover")) ?? d.path;
+      } catch {
+        // could not re-read our own copy - save it as it came
+      }
+      if (await setImage(image)) {
+        toast.success("Cover loaded from link");
+        setUrlOpen(false);
+        setCoverUrl("");
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not load that link");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const onFile = async (file: File) => {
     setBusy(true);
     try {
@@ -550,7 +589,7 @@ export const AdminCoverControl = ({
       {children}
       <div
         className={`absolute inset-0 z-10 flex items-center justify-center gap-2 bg-background/70 transition-opacity ${
-          busy || genOpen ? "opacity-100" : "opacity-0 group-hover/cover:opacity-100"
+          busy || genOpen || urlOpen ? "opacity-100" : "opacity-0 group-hover/cover:opacity-100"
         }`}
       >
         {genBusy ? (
@@ -590,6 +629,47 @@ export const AdminCoverControl = ({
               </button>
             </div>
           </div>
+        ) : urlOpen ? (
+          <div className="flex w-[90%] max-w-[13rem] flex-col items-stretch gap-2">
+            <input
+              autoFocus
+              value={coverUrl}
+              spellCheck={false}
+              onChange={(e) => setCoverUrl(e.target.value)}
+              onPaste={(e) => {
+                // Paste IS the command, same as on the track page.
+                const text = e.clipboardData.getData("text").trim();
+                if (!text) return;
+                e.preventDefault();
+                setCoverUrl(text);
+                void loadFromUrl(text);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void loadFromUrl();
+                if (e.key === "Escape") setUrlOpen(false);
+              }}
+              placeholder="Paste image link (png, jpg, webp)"
+              className="rounded-lg border border-border bg-background px-2.5 py-1.5 font-body text-xs text-foreground focus:border-[#F4C430] focus:outline-none"
+            />
+            <div className="flex items-center justify-center gap-2">
+              <button
+                type="button"
+                disabled={busy || coverUrl.trim() === ""}
+                onClick={() => void loadFromUrl()}
+                className="rounded-lg bg-[#F4C430] px-3 py-1.5 font-body text-xs font-semibold text-background transition-colors hover:bg-[#F4C430]/85 disabled:opacity-50"
+              >
+                {busy ? "Loading..." : "Load"}
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setUrlOpen(false)}
+                className="rounded-lg border border-border px-3 py-1.5 font-body text-xs text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430] disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         ) : (
           <>
             <button
@@ -609,6 +689,15 @@ export const AdminCoverControl = ({
               className="flex h-9 w-9 items-center justify-center rounded-full border border-[#F4C430]/60 bg-card text-[#F4C430] transition-colors hover:bg-[#F4C430] hover:text-background disabled:opacity-50"
             >
               <Sparkles className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setUrlOpen(true)}
+              title="Paste a direct link to an image"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-[#F4C430]/60 bg-card text-[#F4C430] transition-colors hover:bg-[#F4C430] hover:text-background disabled:opacity-50"
+            >
+              <Link2 className="h-4 w-4" />
             </button>
             {item.image && (
               <button

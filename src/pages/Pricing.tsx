@@ -28,7 +28,7 @@ const faq: { q: string; a: string }[] = [
   },
   {
     q: "What if I get a copyright claim?",
-    a: "Every track in the catalog is Content ID registered by its composer, so a claim can appear — it is not a strike and it does not hurt your channel. Paste the video link in your account (Copyright Claims), tell us which track it is, and we send it for release within one business day, on any plan including Free.",
+    a: "Every track in the catalog is Content ID registered by its composer, so a claim can appear — it is not a strike and it does not hurt your channel. Paste the video link in your account (Copyright Claims), tell us which track it is, and we send it for release within one business day, on any plan including Free. On Pro (3 channels) and Max (10 channels) you can add your YouTube channels to the whitelist: we check your new videos for our tracks and send the claims for release automatically, so you don't have to report each video.",
   },
   {
     q: "What formats do I get?",
@@ -53,6 +53,7 @@ const compareRows: CompareRow[] = [
   { label: "Paid ads & sponsored content", values: { free: false, pro: false, max: true } },
   { label: "Client & commercial work", values: { free: false, pro: false, max: true } },
   { label: "Claims sent for release in 1 business day", values: { free: true, pro: true, max: true } },
+  { label: "Channel whitelist: new videos checked automatically", values: { free: false, pro: "3 channels", max: "10 channels" } },
   { label: "Priority support", values: { free: false, pro: false, max: true } },
 ];
 
@@ -211,7 +212,7 @@ const Pricing = () => {
   useSeo({
     title: "Plans & Pricing — Royalty-Free Music Subscription | TV Music Store",
     description:
-      "Simple royalty-free music pricing: Pro $7/mo and Max $15/mo (billed annually) with unlimited downloads, WAV + stems and commercial licensing. Plus one-time track licenses from $15.",
+      "Royalty-free music pricing: Free with 3 downloads a month, Pro $7/mo with unlimited MP3 and channel whitelist for 3 YouTube channels, Max $15/mo (billed annually) with WAV, stems, commercial use and 10 channels. Plus one-time track licenses from $15.",
     path: "/pricing",
     // The pricing FAQ as FAQPage schema — the block AI answer engines quote
     // when someone asks what a royalty-free subscription costs or covers.
