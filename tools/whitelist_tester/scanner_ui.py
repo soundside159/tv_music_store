@@ -1218,6 +1218,412 @@ def dark_palette():
     return pal
 
 
+# ---- widgets ported from the Script Manager: hover-animated button, focus-
+# animated line edit, frameless dialogs with fade-in, the black slider ----
+def _lerp(c1, c2, t):
+    return QtGui.QColor(int(c1.red() + (c2.red() - c1.red()) * t),
+                        int(c1.green() + (c2.green() - c1.green()) * t),
+                        int(c1.blue() + (c2.blue() - c1.blue()) * t),
+                        int(c1.alpha() + (c2.alpha() - c1.alpha()) * t))
+
+
+def _ease():
+    return QtCore.QEasingCurve.Type.OutExpo
+
+
+class AnimatedButton(QtWidgets.QPushButton):
+    """Transparent, warm text, 1px border; hover fades to an orange fill with white text."""
+
+    def __init__(self, text="", parent=None, accent=None):
+        super().__init__(text, parent)
+        self._p = 0.0
+        self._accent = accent or ACCENT
+        self._anim = QtCore.QVariantAnimation(self)
+        self._anim.setDuration(180)
+        self._anim.setEasingCurve(QtCore.QEasingCurve.Type.OutCubic)
+        self._anim.valueChanged.connect(self._style)
+        self.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+        self.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+        self.setFixedHeight(26)
+        self._style(0.0)
+
+    def _style(self, p):
+        self._p = float(p)
+        bg = _lerp(QtGui.QColor(45, 55, 62, 0), QtGui.QColor(self._accent), self._p)
+        bd = _lerp(QtGui.QColor(BORDER), QtGui.QColor(self._accent), self._p)
+        tx = _lerp(QtGui.QColor(TEXT_WARM), QtGui.QColor("#ffffff"), self._p)
+        self.setStyleSheet(
+            "QPushButton { background-color: rgba(%d,%d,%d,%d); color: %s; border: 1px solid %s; border-radius: 3px;"
+            " font-size: 11px; font-weight: bold; padding: 2px 10px; outline: none; }"
+            "QPushButton:disabled { color: #5c6478; border-color: #3a4650; }"
+            % (bg.red(), bg.green(), bg.blue(), bg.alpha(), tx.name(), bd.name()))
+
+    def _to(self, end):
+        self._anim.stop()
+        self._anim.setStartValue(self._p)
+        self._anim.setEndValue(float(end))
+        self._anim.start()
+
+    def enterEvent(self, e):
+        self._to(1.0)
+        super().enterEvent(e)
+
+    def leaveEvent(self, e):
+        self._to(0.0)
+        super().leaveEvent(e)
+
+
+class FnLineEdit(QtWidgets.QLineEdit):
+    """The focus border never snaps: 1px border fades BORDER -> orange in 200 ms."""
+
+    def __init__(self, placeholder="", text="", parent=None):
+        super().__init__(text, parent)
+        self.setPlaceholderText(placeholder)
+        self.setFixedHeight(26)
+        self._fb = 0.0
+        self._fb_anim = QtCore.QVariantAnimation(self)
+        self._fb_anim.setDuration(200)
+        self._fb_anim.setEasingCurve(QtCore.QEasingCurve.Type.OutCubic)
+        self._fb_anim.valueChanged.connect(self._fb_apply)
+        self._fb_apply(0.0)
+
+    def _fb_apply(self, v):
+        self._fb = float(v)
+        c = _lerp(QtGui.QColor(BORDER), QtGui.QColor(ACCENT), self._fb)
+        self.setStyleSheet("QLineEdit { background-color: %s; color: %s; border-radius: 3px; padding: 0 8px;"
+                           " font-size: 11px; selection-background-color: %s; outline: none; border: 1px solid %s; }"
+                           % (BG_INPUT, TEXT_WHITE, ACCENT, c.name()))
+
+    def _fb_to(self, end):
+        self._fb_anim.stop()
+        self._fb_anim.setStartValue(self._fb)
+        self._fb_anim.setEndValue(float(end))
+        self._fb_anim.start()
+
+    def focusInEvent(self, e):
+        super().focusInEvent(e)
+        self._fb_to(1.0)
+
+    def focusOutEvent(self, e):
+        super().focusOutEvent(e)
+        self._fb_to(0.0)
+
+
+class GlyphX(QtWidgets.QWidget):
+    """Vector close cross; hover turns red."""
+    clicked = QtCore.pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(18, 18)
+        self.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+        self._hp = 0.0
+        self._anim = QtCore.QVariantAnimation(self)
+        self._anim.setDuration(180)
+        self._anim.valueChanged.connect(lambda v: (setattr(self, "_hp", float(v)), self.update()))
+
+    def _to(self, end):
+        self._anim.stop()
+        self._anim.setStartValue(self._hp)
+        self._anim.setEndValue(float(end))
+        self._anim.start()
+
+    def enterEvent(self, e):
+        self._to(1.0)
+
+    def leaveEvent(self, e):
+        self._to(0.0)
+
+    def mousePressEvent(self, e):
+        if e.button() == QtCore.Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+
+    def paintEvent(self, _):
+        p = QtGui.QPainter(self)
+        p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        c = _lerp(QtGui.QColor(TEXT_GRAY), QtGui.QColor("#ff3c3c"), self._hp)
+        p.setPen(QtGui.QPen(c, 1.6))
+        p.drawLine(QtCore.QPointF(5, 5), QtCore.QPointF(13, 13))
+        p.drawLine(QtCore.QPointF(13, 5), QtCore.QPointF(5, 13))
+        p.end()
+
+
+class FnDialog(QtWidgets.QDialog):
+    """Frameless dialog in the Script Manager style: 30px header, content, fade-in with a short rise."""
+
+    def __init__(self, title, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setWindowFlags(QtCore.Qt.WindowType.FramelessWindowHint | QtCore.Qt.WindowType.Dialog)
+        self._drag = None
+        self._shown = False
+        root = QtWidgets.QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+        hdr = QtWidgets.QFrame()
+        hdr.setFixedHeight(30)
+        hdr.setStyleSheet("background-color: %s;" % BG_HEADER)
+        hl = QtWidgets.QHBoxLayout(hdr)
+        hl.setContentsMargins(10, 0, 8, 0)
+        t = QtWidgets.QLabel(title)
+        t.setStyleSheet("color: %s; font-size: 12px; font-weight: bold; background: transparent;" % TEXT_WHITE)
+        hl.addWidget(t)
+        hl.addStretch(1)
+        x = GlyphX()
+        x.clicked.connect(self.reject)
+        hl.addWidget(x)
+        root.addWidget(hdr)
+        self.body = QtWidgets.QVBoxLayout()
+        self.body.setContentsMargins(12, 10, 12, 12)
+        self.body.setSpacing(8)
+        root.addLayout(self.body)
+        self.first_focus = None
+
+    def paintEvent(self, _e):
+        p = QtGui.QPainter(self)
+        p.fillRect(self.rect(), QtGui.QColor(BG_CONTENT))
+        p.setPen(QtGui.QPen(QtGui.QColor(BORDER_DARK), 1))
+        p.drawRect(self.rect().adjusted(0, 0, -1, -1))
+        p.end()
+
+    def open_over(self, widget):
+        self.adjustSize()
+        c = widget.frameGeometry().center() if widget.isWindow() else widget.mapToGlobal(widget.rect().center())
+        pos = c - QtCore.QPoint(self.width() // 2, self.height() // 2)
+        try:
+            scr = QtGui.QGuiApplication.screenAt(c) or QtGui.QGuiApplication.primaryScreen()
+            av = scr.availableGeometry()
+            pos = QtCore.QPoint(max(av.left(), min(pos.x(), av.right() - self.width())),
+                                max(av.top(), min(pos.y(), av.bottom() - self.height())))
+        except Exception:
+            pass
+        self.move(pos)
+
+    def showEvent(self, e):
+        super().showEvent(e)
+        if not self._shown:
+            self._shown = True
+            final = self.pos()
+            self.setWindowOpacity(0.0)
+            self.move(final + QtCore.QPoint(0, 14))
+            grp = QtCore.QParallelAnimationGroup(self)
+            a = QtCore.QPropertyAnimation(self, b"windowOpacity", grp)
+            a.setDuration(420)
+            a.setStartValue(0.0)
+            a.setEndValue(1.0)
+            a.setEasingCurve(_ease())
+            b = QtCore.QPropertyAnimation(self, b"pos", grp)
+            b.setDuration(420)
+            b.setStartValue(final + QtCore.QPoint(0, 14))
+            b.setEndValue(final)
+            b.setEasingCurve(_ease())
+            grp.addAnimation(a)
+            grp.addAnimation(b)
+            self._grp = grp
+            grp.start()
+            if self.first_focus is not None:
+                QtCore.QTimer.singleShot(0, lambda: (self.first_focus.setFocus(), self.first_focus.selectAll()
+                                                     if isinstance(self.first_focus, QtWidgets.QLineEdit) else None))
+
+    def mousePressEvent(self, e):
+        self._drag = None
+        if e.button() == QtCore.Qt.MouseButton.LeftButton and e.position().y() <= 30:
+            self._drag = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
+
+    def mouseMoveEvent(self, e):
+        if self._drag is not None and e.buttons() & QtCore.Qt.MouseButton.LeftButton:
+            self.move(e.globalPosition().toPoint() - self._drag)
+
+    def mouseReleaseEvent(self, e):
+        self._drag = None
+
+
+class NameDialog(FnDialog):
+    """One line of text with Cancel / OK (replaces QInputDialog)."""
+
+    def __init__(self, title, placeholder, text="", ok_text="OK", note="", parent=None):
+        super().__init__(title, parent)
+        self.setFixedWidth(340)
+        if note:
+            n = QtWidgets.QLabel(note)
+            n.setWordWrap(True)
+            n.setStyleSheet("color: %s; font-size: 11px; background: transparent;" % TEXT_GRAY)
+            self.body.addWidget(n)
+        self.edit = FnLineEdit(placeholder, text)
+        self.first_focus = self.edit
+        self.edit.returnPressed.connect(self._ok)
+        self.body.addWidget(self.edit)
+        row = QtWidgets.QHBoxLayout()
+        row.setSpacing(6)
+        cancel = AnimatedButton("Cancel")
+        cancel.clicked.connect(self.reject)
+        row.addWidget(cancel, 1)
+        ok = AnimatedButton(ok_text)
+        ok.clicked.connect(self._ok)
+        row.addWidget(ok, 1)
+        self.body.addLayout(row)
+
+    def _ok(self):
+        if self.edit.text().strip():
+            self.accept()
+
+    def value(self):
+        return self.edit.text().strip()
+
+
+class ConfirmDialog(FnDialog):
+    """A question with No / Yes (replaces QMessageBox.question)."""
+
+    def __init__(self, title, text, yes_text="Yes", parent=None):
+        super().__init__(title, parent)
+        self.setFixedWidth(360)
+        t = QtWidgets.QLabel(text)
+        t.setWordWrap(True)
+        t.setStyleSheet("color: %s; font-size: 11px; background: transparent;" % TEXT_ROW)
+        self.body.addWidget(t)
+        row = QtWidgets.QHBoxLayout()
+        row.setSpacing(6)
+        no = AnimatedButton("No")
+        no.clicked.connect(self.reject)
+        row.addWidget(no, 1)
+        yes = AnimatedButton(yes_text)
+        yes.clicked.connect(self.accept)
+        row.addWidget(yes, 1)
+        self.body.addLayout(row)
+
+
+def ask_text(parent, title, placeholder, note=""):
+    d = NameDialog(title, placeholder, note=note, parent=parent)
+    d.open_over(parent.window())
+    return d.value() if d.exec() == QtWidgets.QDialog.DialogCode.Accepted else None
+
+
+def ask_yes(parent, title, text, yes_text="Yes"):
+    d = ConfirmDialog(title, text, yes_text, parent=parent)
+    d.open_over(parent.window())
+    return d.exec() == QtWidgets.QDialog.DialogCode.Accepted
+
+
+def say(parent, title, text):
+    d = FnDialog(title, parent)
+    d.setFixedWidth(360)
+    t = QtWidgets.QLabel(text)
+    t.setWordWrap(True)
+    t.setStyleSheet("color: %s; font-size: 11px; background: transparent;" % TEXT_ROW)
+    d.body.addWidget(t)
+    ok = AnimatedButton("OK")
+    ok.clicked.connect(d.accept)
+    d.body.addWidget(ok)
+    d.open_over(parent.window())
+    d.exec()
+
+
+class FnSlider(QtWidgets.QWidget):
+    """The program's scroll slider: 18px strip, black 4px handle (light grey on hover),
+    arrows top and bottom, handle height follows the content. Sits over the
+    right edge of a QScrollArea / QAbstractScrollArea and hides when nothing scrolls."""
+    GW, HW, HMIN, AH = 18, 4, 12, 12
+
+    def __init__(self, area):
+        super().__init__(area)
+        self.area = area
+        self.vbar = area.verticalScrollBar()
+        area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setFixedWidth(self.GW)
+        self.setMouseTracking(True)
+        self._hover = False
+        self._drag = None
+        self._dir = 0
+        self._timer = QtCore.QTimer(self)
+        self._timer.setInterval(40)
+        self._timer.timeout.connect(lambda: self.vbar.setValue(self.vbar.value() + self._dir * 24))
+        self.vbar.valueChanged.connect(self.update)
+        self.vbar.rangeChanged.connect(lambda *_: self._place())
+        area.installEventFilter(self)
+        self._place()
+
+    def eventFilter(self, obj, e):
+        if e.type() in (QtCore.QEvent.Type.Resize, QtCore.QEvent.Type.Show, QtCore.QEvent.Type.LayoutRequest):
+            QtCore.QTimer.singleShot(0, self._place)
+        return False
+
+    def _place(self):
+        self.setGeometry(self.area.width() - self.GW, 0, self.GW, self.area.height())
+        self.setVisible(self.vbar.maximum() > 0)
+        self.raise_()
+        self.update()
+
+    def _track(self):
+        return self.AH + 2, self.height() - self.AH - 2
+
+    def _handle(self):
+        t0, t1 = self._track()
+        span = max(1, t1 - t0)
+        page = max(1, self.vbar.pageStep())
+        total = page + self.vbar.maximum()
+        h = max(self.HMIN, int(span * page / total))
+        y = t0 + int((span - h) * self.vbar.value() / max(1, self.vbar.maximum()))
+        return y, h
+
+    def paintEvent(self, _):
+        p = QtGui.QPainter(self)
+        p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        col = QtGui.QColor("#D4DDD4" if (self._hover or self._drag is not None) else "#000000")
+        p.setPen(QtGui.QPen(col, 1.4))
+        p.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+        cx = self.GW / 2
+        p.drawPolyline(QtGui.QPolygonF([QtCore.QPointF(cx - 3.5, 8), QtCore.QPointF(cx, 4), QtCore.QPointF(cx + 3.5, 8)]))
+        hh = self.height()
+        p.drawPolyline(QtGui.QPolygonF([QtCore.QPointF(cx - 3.5, hh - 8), QtCore.QPointF(cx, hh - 4),
+                                        QtCore.QPointF(cx + 3.5, hh - 8)]))
+        y, h = self._handle()
+        p.setPen(QtCore.Qt.PenStyle.NoPen)
+        p.setBrush(col)
+        p.drawRoundedRect(QtCore.QRectF(cx - self.HW / 2, y, self.HW, h), 2, 2)
+        p.end()
+
+    def enterEvent(self, e):
+        self._hover = True
+        self.update()
+
+    def leaveEvent(self, e):
+        self._hover = False
+        self.update()
+
+    def mousePressEvent(self, e):
+        if e.button() != QtCore.Qt.MouseButton.LeftButton:
+            return
+        y = e.position().y()
+        if y < self.AH + 2:
+            self._dir = -1
+            self._timer.start()
+            self.vbar.setValue(self.vbar.value() - 24)
+            return
+        if y > self.height() - self.AH - 2:
+            self._dir = 1
+            self._timer.start()
+            self.vbar.setValue(self.vbar.value() + 24)
+            return
+        hy, hh = self._handle()
+        if hy <= y <= hy + hh:
+            self._drag = (y, self.vbar.value())
+        else:
+            self.vbar.setValue(self.vbar.value() + (self.vbar.pageStep() if y > hy else -self.vbar.pageStep()))
+
+    def mouseMoveEvent(self, e):
+        if self._drag is not None:
+            y0, v0 = self._drag
+            t0, t1 = self._track()
+            _, h = self._handle()
+            span = max(1, (t1 - t0) - h)
+            self.vbar.setValue(int(v0 + (e.position().y() - y0) * self.vbar.maximum() / span))
+
+    def mouseReleaseEvent(self, e):
+        self._drag = None
+        self._timer.stop()
+        self.update()
+
+
 # ---- small painted widgets in the Script Manager language ----
 class Chevron(QtWidgets.QPushButton):
     """Small triangle: down = open, right = closed."""
@@ -1307,7 +1713,7 @@ class RailItem(QtWidgets.QWidget):
         self.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
         self.sel = False
         h = QtWidgets.QHBoxLayout(self)
-        h.setContentsMargins(22, 0, 10, 0)
+        h.setContentsMargins(22, 0, 20, 0)
         h.setSpacing(8)
         h.addWidget(Square(color))
         self.lbl = QtWidgets.QLabel(text)
@@ -1391,8 +1797,8 @@ class ChannelBar(QtWidgets.QFrame):
         st, fg, bg = look.get(state, (state, TEXT_GRAY, BG_INPUT))
         h.addWidget(tag_label(st, fg, bg))
         if ch.get("url") and ch["url"] != "solo":
-            b = QtWidgets.QPushButton("Copy link")
-            b.setObjectName("small")
+            b = AnimatedButton("Copy link")
+            b.setFixedHeight(22)
             b.setToolTip(ch["url"])
             b.clicked.connect(lambda: (QtWidgets.QApplication.clipboard().setText(self.ch["url"]), b.setText("Copied"),
                                        QtCore.QTimer.singleShot(1200, lambda: b.setText("Copy link"))))
@@ -1545,6 +1951,7 @@ class App(QtWidgets.QMainWindow):
         self.hdr = hdr
         self._drag = None
         self._resize = None
+        QtWidgets.QApplication.instance().installEventFilter(self)
         hdr.mousePressEvent = self._hdr_press
         hdr.mouseMoveEvent = self._hdr_move
         hdr.mouseReleaseEvent = self._hdr_release
@@ -1646,20 +2053,32 @@ class App(QtWidgets.QMainWindow):
             self.setGeometry(g)
             e.accept()
             return
-        if not self.isMaximized():
-            l, r, t, b = self._edges_at(e.position().toPoint())
-            if (l and t) or (r and b):
-                cur = QtCore.Qt.CursorShape.SizeFDiagCursor
-            elif (r and t) or (l and b):
-                cur = QtCore.Qt.CursorShape.SizeBDiagCursor
-            elif l or r:
-                cur = QtCore.Qt.CursorShape.SizeHorCursor
-            elif t or b:
-                cur = QtCore.Qt.CursorShape.SizeVerCursor
-            else:
-                cur = QtCore.Qt.CursorShape.ArrowCursor
-            self.setCursor(cur)
+        self._edge_cursor(e.position().toPoint())
         super().mouseMoveEvent(e)
+
+    def _edge_cursor(self, pos):
+        """Resize arrows only on the 4px frame; everywhere else the normal arrow."""
+        if self.isMaximized():
+            self.unsetCursor()
+            return
+        l, r, t, b = self._edges_at(pos)
+        if (l and t) or (r and b):
+            self.setCursor(QtCore.Qt.CursorShape.SizeFDiagCursor)
+        elif (r and t) or (l and b):
+            self.setCursor(QtCore.Qt.CursorShape.SizeBDiagCursor)
+        elif l or r:
+            self.setCursor(QtCore.Qt.CursorShape.SizeHorCursor)
+        elif t or b:
+            self.setCursor(QtCore.Qt.CursorShape.SizeVerCursor)
+        else:
+            self.unsetCursor()
+
+    def eventFilter(self, obj, e):
+        # Children swallow mouse moves, so the window never hears that the mouse
+        # left the frame: watch every move in the app and reset the arrows.
+        if e.type() == QtCore.QEvent.Type.MouseMove and self._resize is None:
+            self._edge_cursor(self.mapFromGlobal(QtGui.QCursor.pos()))
+        return False
 
     def mouseReleaseEvent(self, e):
         self._resize = None
@@ -1667,11 +2086,45 @@ class App(QtWidgets.QMainWindow):
 
     def open_menu(self):
         m = QtWidgets.QMenu(self)
+        a = m.addAction("Show only customers with a whitelisted channel")
+        a.setCheckable(True)
+        a.setChecked(bool(self.settings.get("only_with_channels")))
+        a.toggled.connect(self.set_only_with_channels)
+        m.addSeparator()
         m.addAction("Open session log", lambda: QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(SESSION_LOG)))
         m.addAction("Open storage folder", lambda: QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(STORE)))
         m.addSeparator()
         m.addAction("Reload everything from the site", lambda: self.bg(self.reload_site, True))
+        m.addSeparator()
+        m.addAction("Reset scan results on the site (scan everything again)", self.reset_site_scans)
         m.exec(self.menu_btn.mapToGlobal(QtCore.QPoint(0, self.menu_btn.height() + 4)))
+
+    def reset_site_scans(self):
+        if not ask_yes(self, "Reset scan results",
+                       "Every video on the site goes back to \"not scanned\" and Smart Scan will check them all "
+                       "again. Found matches that are already in the composers' sheets or released stay; "
+                       "matches not sent yet are removed. Continue?", "Reset"):
+            return
+
+        def go():
+            try:
+                r = api(self.settings, "POST", "", {"action": "reset_scans", "clearMatches": True}, timeout=120)
+                self.log("Reset on the site: %s" % (r.get("error") or "%d video(s) back in the queue, %d match(es) removed"
+                                                    % (r.get("requeued", 0), r.get("cleared", 0))))
+            except Exception as e:
+                self.log("Reset failed: %s" % e)
+            self.load_overview()
+        self.bg(go)
+
+    def set_only_with_channels(self, on):
+        self.settings["only_with_channels"] = bool(on)
+        save_settings(self.settings)
+        self.rebuild_rail()
+        if self.sel_key not in self.rail_items:
+            self.sel_key = next(iter(self.rail_items), None)
+            for k, it in self.rail_items.items():
+                it.set_selected(k == self.sel_key)
+            self.rebuild_content()
 
     # -- small layout helpers used by the pages --
     def section(self, title):
@@ -1786,8 +2239,7 @@ class App(QtWidgets.QMainWindow):
         rl = QtWidgets.QVBoxLayout(rail)
         rl.setContentsMargins(0, 8, 0, 0)
         rl.setSpacing(0)
-        self.search = QtWidgets.QLineEdit()
-        self.search.setPlaceholderText("Search customer, channel, video")
+        self.search = FnLineEdit("Search customer, channel, video")
         self.search.setClearButtonEnabled(True)
         self.search.textChanged.connect(self.on_search)
         sw = QtWidgets.QWidget()
@@ -1805,6 +2257,7 @@ class App(QtWidgets.QMainWindow):
         self.rail_lay.setContentsMargins(0, 0, 0, 0)
         self.rail_lay.setSpacing(0)
         self.rail_scroll.setWidget(self.rail_body)
+        self.rail_slider = FnSlider(self.rail_scroll)
         rl.addWidget(self.rail_scroll, 1)
 
         bottom = QtWidgets.QWidget()
@@ -1847,9 +2300,10 @@ class App(QtWidgets.QMainWindow):
         self.content.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
         self.content_body = QtWidgets.QWidget()
         self.content_lay = QtWidgets.QVBoxLayout(self.content_body)
-        self.content_lay.setContentsMargins(12, 10, 12, 12)
+        self.content_lay.setContentsMargins(12, 10, 22, 12)
         self.content_lay.setSpacing(6)
         self.content.setWidget(self.content_body)
+        self.content_slider = FnSlider(self.content)
         l.addWidget(self.content, 1)
         self.rebuild_rail()
         self.rebuild_content()
@@ -1958,11 +2412,13 @@ class App(QtWidgets.QMainWindow):
                 w_.deleteLater()
         self.rail_items = {}
         q = self.search_text
+        only = bool(self.settings.get("only_with_channels"))
         for kind, title in (("user", "Customers"), ("custom", "Custom")):
-            lst = [c for c in self.cust if c["kind"] == kind and self.matches_text(q, c)]
+            lst = [c for c in self.cust if c["kind"] == kind and self.matches_text(q, c)
+                   and not (only and kind == "user" and not [ch for ch in c["channels"] if ch.get("url") != "solo"])]
             head = QtWidgets.QWidget()
             hh = QtWidgets.QHBoxLayout(head)
-            hh.setContentsMargins(10, 4, 8, 4)
+            hh.setContentsMargins(10, 4, 20, 4)
             hh.setSpacing(8)
             open_attr = "_open_" + kind
             if not hasattr(self, open_attr):
@@ -2037,8 +2493,7 @@ class App(QtWidgets.QMainWindow):
         head.addWidget(label(info, "warm"))
         head.addStretch(1)
         head.addWidget(label("%d new match%s not in sheets" % (n_new, "" if n_new == 1 else "es"), "muted"))
-        b = QtWidgets.QPushButton("Send to Sheets")
-        b.setObjectName("green")
+        b = AnimatedButton("Send to Sheets", accent=GREEN)
         b.setToolTip("New matches go to each composer's Google Sheet")
         b.setEnabled(n_new > 0)
         b.clicked.connect(lambda: self.bg(self.send_sheets))
@@ -2060,13 +2515,14 @@ class App(QtWidgets.QMainWindow):
             tabs.addWidget(tb)
         tabs.addStretch(1)
         if self.sel_tab == "solo" and c["kind"] == "user":
-            bs = QtWidgets.QPushButton("+ Add solo video")
-            bs.setObjectName("small")
+            bs = AnimatedButton("+ Add solo video")
+            bs.setFixedHeight(22)
             bs.clicked.connect(lambda: self.add_solo(c["userId"]))
-            tabs.addWidget(bs)
+            tabs.addWidget(bs, 0, QtCore.Qt.AlignmentFlag.AlignVCenter)
         tw = QtWidgets.QWidget()
+        tw.setObjectName("tabsrow")
         tw.setLayout(tabs)
-        tw.setStyleSheet("border-bottom:1px solid #3a4650")
+        tw.setStyleSheet("#tabsrow { border-bottom: 1px solid #3a4650; }")
         self.content_lay.addWidget(tw)
 
         lst = chans if self.sel_tab == "channels" else solo
@@ -2305,8 +2761,7 @@ class App(QtWidgets.QMainWindow):
     def enqueue_site(self, vids, chid):
         """Put site videos into the check queue (results go back to the site)."""
         if self.base.ht is None:
-            QtWidgets.QMessageBox.information(self, "Track base not ready",
-                                              "The track base is empty, so there is nothing to search for yet.")
+            say(self, "Track base not ready", "The track base is empty, so there is nothing to search for yet.")
             return 0
         novoice = bool(self.settings["novoice"])
         added = []
@@ -2344,10 +2799,8 @@ class App(QtWidgets.QMainWindow):
             return
         todo = [v["videoId"] for v in ch["videos"] if self.video_state(v["videoId"]) in ("none", "err")]
         if not todo:
-            ok = QtWidgets.QMessageBox.question(
-                self, "Scan again", "All %d videos of \"%s\" are scanned. Scan them all again?"
-                % (len(ch["videos"]), ch.get("title") or "this channel"))
-            if ok != QtWidgets.QMessageBox.StandardButton.Yes:
+            if not ask_yes(self, "Scan again", "All %d videos of \"%s\" are scanned. Scan them all again?"
+                           % (len(ch["videos"]), ch.get("title") or "this channel"), "Scan again"):
                 return
             todo = [v["videoId"] for v in ch["videos"]]
         self.channel_total[chid] = 0
@@ -2463,11 +2916,12 @@ class App(QtWidgets.QMainWindow):
         self.load_overview()
 
     def add_custom(self):
-        group, ok = QtWidgets.QInputDialog.getText(self, "Custom list", "List name (for example Pixabay):")
-        if not ok or not group.strip():
+        group = ask_text(self, "Custom list", "List name, for example Pixabay",
+                         "Your own channel to watch, outside the customers' whitelists.")
+        if not group:
             return
-        url, ok = QtWidgets.QInputDialog.getText(self, "Custom list", "YouTube channel link:")
-        if not ok or not url.strip():
+        url = ask_text(self, "Custom list: " + group, "YouTube channel link")
+        if not url:
             return
 
         def go():
@@ -2478,12 +2932,13 @@ class App(QtWidgets.QMainWindow):
         self.bg(go)
 
     def add_solo(self, user_id):
-        url, ok = QtWidgets.QInputDialog.getText(self, "Solo video", "YouTube video link:")
-        if not ok or not url.strip():
+        url = ask_text(self, "Solo video", "YouTube video link",
+                       "A single video of this customer, without a channel. It goes into the queue.")
+        if not url:
             return
         m = re.search(r"(?:v=|youtu\.be/|/shorts/)([A-Za-z0-9_-]{11})", url.strip())
         if not m:
-            QtWidgets.QMessageBox.information(self, "Solo video", "That does not look like a YouTube video link.")
+            say(self, "Solo video", "That does not look like a YouTube video link.")
             return
 
         def go():

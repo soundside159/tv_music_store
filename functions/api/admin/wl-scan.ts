@@ -262,6 +262,23 @@ export const onRequestPost = async (ctx: Ctx) => {
       const r = await addSoloVideo(ctx.env as Env, String(body.userId ?? ""), vid);
       return json(r, "error" in r ? 400 : 200);
     }
+    case "reset_scans": {
+      // Everything scanned goes back into the queue (one channel or all). The
+      // found matches stay as history unless clearMatches is set.
+      const chId = typeof body.channelId === "string" && body.channelId ? body.channelId : null;
+      const where = chId ? `WHERE channel_id = ?1` : ``;
+      const q = db.prepare(
+        `UPDATE wl_videos SET status = 'queued', scanned_at = NULL, leased_at = NULL, found = 0, note = NULL ${where}`,
+      );
+      const r = await (chId ? q.bind(chId) : q).run();
+      let cleared = 0;
+      if (body.clearMatches) {
+        const m = db.prepare(`DELETE FROM wl_matches WHERE state IN ('new','in_sheet','not_eligible') ${where}`);
+        const rm = await (chId ? m.bind(chId) : m).run();
+        cleared = (rm as { meta?: { changes?: number } }).meta?.changes ?? 0;
+      }
+      return json({ ok: true, requeued: (r as { meta?: { changes?: number } }).meta?.changes ?? 0, cleared });
+    }
     case "solo_remove":
       return json(await removeSoloVideo(db, String(body.videoId ?? "")));
     case "result": {
