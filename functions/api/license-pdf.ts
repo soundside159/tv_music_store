@@ -62,10 +62,10 @@ const TIER_INFO: Record<string, LicenseInfo> = {
     scope: "grants full commercial rights, including broadcast and interactive media, for one (1) project.",
     permitted: [
       "Everything in the Commercial license",
-      "Broadcast TV, radio, film & cinema",
+      "Broadcast TV, radio, film, trailers & cinema",
+      "Streaming & VOD platforms (Netflix, Amazon, Tubi)",
       "Video games & software products",
       "Paid advertising campaigns",
-      "Client & commercial projects",
     ],
     notPermitted: [
       "Resale or redistribution of the track itself",
@@ -112,14 +112,15 @@ const PLAN_INFO: Record<string, LicenseInfo> = {
   },
   max: {
     name: "Max Plan License",
-    scope: "grants full commercial and broadcast rights across multiple brands and channels.",
+    scope: "grants commercial rights, including client work and paid online ads, across multiple brands and channels.",
     permitted: [
       "Commercial & client work",
-      "Paid ads & broadcast",
+      "Paid online ads & sponsored content",
       "Multiple channels / brands",
       "All online platforms",
     ],
     notPermitted: [
+      "TV, radio, cinema or VOD (needs Professional)",
       "Resale or redistribution of the track",
       "Reselling the track as stock music",
       "Registering the music as your own (Content ID)",

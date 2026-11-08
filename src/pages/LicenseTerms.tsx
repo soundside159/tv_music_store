@@ -60,13 +60,14 @@ const LicenseTerms = () => (
         <span className="text-foreground">One-time single-track licenses</span> are bought per track,
         for one project, and are perpetual for that project (see §4). Tiers: Personal (personal,
         non-commercial use), Commercial (client &amp; commercial use in one online project), and
-        Professional (adds TV/radio/film broadcast and games/software).
+        Professional (adds TV/radio broadcast, streaming and VOD platforms, films and trailers, and games/software).
       </P>
       <P>
         <span className="text-foreground">Subscription licenses</span> let you license and download
         tracks while your plan is active. Free covers personal, non-commercial use with an
         attribution credit; Pro covers monetized online content for one channel/brand; Max covers
-        commercial &amp; client work, paid ads, broadcast, and multiple brands. Licenses obtained
+        commercial &amp; client work, paid online ads, and multiple brands (TV, radio, cinema and
+        streaming/VOD need a one-time Professional license). Licenses obtained
         during an active subscription stay valid for those projects even after you cancel (see §4).
       </P>
 

@@ -52,8 +52,8 @@ export const licenseTiers: LicenseTier[] = [
     formats: "MP3, WAV, STEMS",
     usageTerms: [
       "Everything in Commercial",
-      "TV & radio broadcast",
-      "Films, games & apps",
+      "TV, radio & streaming (VOD)",
+      "Films, trailers, games & apps",
       "Software & installations",
       "Widest usage rights",
       "Lifetime license",

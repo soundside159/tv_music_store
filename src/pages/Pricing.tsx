@@ -36,7 +36,7 @@ const faq: { q: string; a: string }[] = [
   },
   {
     q: "Do I need a subscription for TV, film or game projects?",
-    a: "Broadcast, film, trailers and in-game use are covered by one-time track licenses, not by subscriptions: every track page offers Personal, Commercial and Professional — Professional includes TV & radio broadcast, films, games and apps, with WAV and stems. Pay once, licensed forever.",
+    a: "Broadcast, film, trailers and in-game use are covered by one-time track licenses, not by subscriptions: every track page offers Personal, Commercial and Professional — Professional includes TV & radio broadcast, streaming and VOD platforms (Netflix, Amazon, Tubi and others), films and trailers, games and apps, with WAV and stems. Pay once, licensed forever.",
   },
 ];
 

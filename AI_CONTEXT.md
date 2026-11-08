@@ -5137,3 +5137,5 @@ True: `brandCover()` was only in the AI path.
   /api/cert-clients {id, name}; the name is stored in the client's JSON as `name` (empty = show
   company/person). Picking a client animates the filled fields: text fades in with a short gold
   glow (`fill` state + `fillCls()` in CertDialog).
+- 2026-11-08: Professional one-time licence now names streaming/VOD (Netflix, Amazon, Tubi) and trailers: src/lib/licenses.ts usageTerms, functions/api/license-pdf.ts permitted list (replaced the duplicate "Client & commercial projects" line, still 5 lines, widths checked), LicenseTerms.tsx par.2, Pricing.tsx FAQ. Licensing.tsx table already had "TV & streaming broadcast". OPEN: LicenseTerms par.2 says Max covers "broadcast" but Licensing table says Max has no TV broadcast - owner to decide.
+- 2026-11-08: Max subscription does NOT include broadcast (same as Tunetank: Max = Commercial; TV/radio/cinema/VOD = one-time Professional). Fixed LicenseTerms.tsx par.2 and license-pdf.ts Max scope/permitted/notPermitted. OPEN: Pro plan PDF lists "Online client content" as permitted, but Pricing/Licensing say client work is Max only - owner to decide.
