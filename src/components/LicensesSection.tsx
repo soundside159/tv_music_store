@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Download, FileText, Loader2, Music2, Pencil } from "lucide-react";
+import { Download, FileText, Loader2, Music2, Pencil, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { downloadTrackVersion } from "@/lib/downloadTrack";
 
@@ -55,6 +55,22 @@ const EMPTY: CertDetails = {
   project: "",
 };
 
+interface SavedClient {
+  id: string;
+  details: CertDetails;
+}
+
+/** The name shown for a saved client: the company, else the person's name. */
+const clientLabel = (d: CertDetails) =>
+  d.company || [d.firstName, d.lastName].filter(Boolean).join(" ") || "Unnamed client";
+
+/** A second line under the client name: the person (when a company is set) or the place. */
+const clientSub = (d: CertDetails) => {
+  const person = [d.firstName, d.lastName].filter(Boolean).join(" ");
+  if (d.company && person) return person;
+  return [d.city, d.country].filter(Boolean).join(", ");
+};
+
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 
@@ -80,7 +96,69 @@ const CertDialog = ({
 }) => {
   const [d, setD] = useState<CertDetails>(initial);
   const [busy, setBusy] = useState(false);
-  const [asDefault, setAsDefault] = useState(false);
+  // Saved clients panel (left of the form). null = not loaded yet.
+  const [showClients, setShowClients] = useState(false);
+  const [clients, setClients] = useState<SavedClient[] | null>(null);
+  const [clientBusy, setClientBusy] = useState(false);
+
+  const loadClients = useCallback(async () => {
+    try {
+      const res = await fetch("/api/cert-clients", { credentials: "include" });
+      const body = (await res.json().catch(() => ({}))) as { clients?: SavedClient[] };
+      setClients(body.clients ?? []);
+    } catch {
+      setClients([]);
+    }
+  }, []);
+
+  const toggleClients = () => {
+    const next = !showClients;
+    setShowClients(next);
+    if (next && clients === null) void loadClients();
+  };
+
+  // Fill the form from a client. The project name stays as typed: it belongs
+  // to this licence, not to the client.
+  const pickClient = (c: SavedClient) => setD((prev) => ({ ...c.details, project: prev.project }));
+
+  const saveClient = async () => {
+    setClientBusy(true);
+    try {
+      const res = await fetch("/api/cert-clients", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ details: d }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        updated?: boolean;
+        clients?: SavedClient[];
+        error?: string;
+      };
+      if (!res.ok || !body.ok) throw new Error(body.error ?? "Could not save client");
+      setClients(body.clients ?? []);
+      toast.success(body.updated ? "Client updated" : "Client saved");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save client");
+    } finally {
+      setClientBusy(false);
+    }
+  };
+
+  const deleteClient = async (c: SavedClient) => {
+    setClients((prev) => (prev ?? []).filter((x) => x.id !== c.id));
+    try {
+      const res = await fetch(`/api/cert-clients?id=${encodeURIComponent(c.id)}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      toast.error("Could not delete client");
+      void loadClients();
+    }
+  };
 
   const set = (k: keyof CertDetails, v: string) => setD((prev) => ({ ...prev, [k]: v }));
 
@@ -93,7 +171,7 @@ const CertDialog = ({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           ...d,
-          ...(license ? { license: license.code, setDefault: asDefault } : {}),
+          ...(license ? { license: license.code } : {}),
         }),
       });
       const body = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
@@ -112,7 +190,73 @@ const CertDialog = ({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm">
-      <div className="mt-10 w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl">
+      <div className="mt-10 flex w-full max-w-lg flex-col gap-3 md:w-auto md:max-w-none md:flex-row md:items-stretch">
+      {showClients && (
+        <aside className="flex w-full flex-col rounded-2xl border border-border bg-card shadow-2xl md:w-72">
+          <div className="flex items-center justify-between px-5 pb-2 pt-5">
+            <span className={labelCls}>Saved clients</span>
+            <button
+              type="button"
+              onClick={() => setShowClients(false)}
+              aria-label="Close clients"
+              className="text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="flex max-h-[420px] flex-1 flex-col gap-1 overflow-y-auto px-3">
+            {clients === null && (
+              <p className="px-2 py-3 font-body text-xs text-muted-foreground">Loading…</p>
+            )}
+            {clients?.length === 0 && (
+              <p className="px-2 py-3 font-body text-xs leading-5 text-muted-foreground">
+                No clients yet. Fill in the form and click "Save as client" to reuse these details
+                on other licences.
+              </p>
+            )}
+            {clients?.map((c) => (
+              <div
+                key={c.id}
+                className="group flex items-center gap-1 rounded-lg transition-colors hover:bg-[#F4C430]/10"
+              >
+                <button
+                  type="button"
+                  onClick={() => pickClient(c)}
+                  className="min-w-0 flex-1 px-3 py-2.5 text-left"
+                >
+                  <span className="block truncate font-body text-sm font-medium text-foreground">
+                    {clientLabel(c.details)}
+                  </span>
+                  {clientSub(c.details) && (
+                    <span className="block truncate font-body text-xs text-muted-foreground">
+                      {clientSub(c.details)}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void deleteClient(c)}
+                  aria-label={`Delete ${clientLabel(c.details)}`}
+                  className="mr-2 rounded p-1 text-muted-foreground transition-colors hover:text-red-400"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="border-t border-border p-4">
+            <button
+              type="button"
+              disabled={clientBusy}
+              onClick={() => void saveClient()}
+              className="w-full rounded-lg border border-dashed border-border px-3 py-2.5 font-body text-xs font-medium text-foreground transition-colors hover:border-[#F4C430]/60 hover:text-[#F4C430] disabled:opacity-50"
+            >
+              {clientBusy ? "Saving…" : "+ Save as client"}
+            </button>
+          </div>
+        </aside>
+      )}
+      <div className="w-full rounded-2xl border border-border bg-card p-6 shadow-2xl md:w-[32rem]">
         <div className="flex items-start gap-3">
           <span
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
@@ -183,19 +327,18 @@ const CertDialog = ({
           </label>
         </div>
 
-        {license && (
-          <label className="mt-5 flex cursor-pointer items-center gap-2 font-body text-xs text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={asDefault}
-              onChange={(e) => setAsDefault(e.target.checked)}
-              className="h-4 w-4 accent-[#F4C430]"
-            />
-            Also save as default for future licences
-          </label>
-        )}
-
         <div className="mt-6 flex items-center justify-end gap-3">
+          <button
+            type="button"
+            onClick={toggleClients}
+            className={`mr-auto inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 font-body text-xs font-medium transition-colors ${
+              showClients
+                ? "border-[#F4C430]/60 text-[#F4C430]"
+                : "border-border text-foreground hover:border-[#F4C430]/60 hover:text-[#F4C430]"
+            }`}
+          >
+            <Users className="h-3.5 w-3.5" /> Clients
+          </button>
           <button
             type="button"
             onClick={onClose}
@@ -212,6 +355,7 @@ const CertDialog = ({
             {busy ? "Saving…" : "Save changes"}
           </button>
         </div>
+      </div>
       </div>
     </div>
   );

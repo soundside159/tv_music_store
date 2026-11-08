@@ -5120,3 +5120,14 @@ True: `brandCover()` was only in the AI path.
 - `src/components/LicensesSection.tsx`: "Edit certificate" on each licence row (loads that
   licence's details), checkbox "Also save as default for future licences", "Default details"
   button at the top.
+
+## 2026-11-08 Saved clients in "Edit certificate" (replaces the "save as default" checkbox)
+- NEW `functions/api/cert-clients.ts`: table `cert_clients` (id, user_id, data JSON, created_at).
+  GET -> the user's clients; POST {details} saves a snapshot of the form (project is never stored;
+  same company, case-insensitive, or same name when no company -> updates instead of a duplicate;
+  max 200); DELETE ?id= removes one. `cert-details.ts` now exports `cleanCertDetails()` (shared).
+- `src/components/LicensesSection.tsx` (CertDialog): "Clients" button bottom-left of the form opens
+  a "Saved clients" panel to the LEFT of the dialog (stacks on mobile): click a client = fills the
+  form (keeps the typed project), X = delete, "+ Save as client" = save the current form. The
+  "Also save as default for future licences" checkbox was REMOVED (owner); defaults are set only via
+  the "Default details" button at the top of Licenses.

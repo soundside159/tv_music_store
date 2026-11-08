@@ -82,6 +82,21 @@ export const getCertDetails = async (
   }
 };
 
+/** Trims and length-limits every field of an incoming details object. */
+export const cleanCertDetails = (body: Partial<CertDetails> | null | undefined): CertDetails => ({
+  firstName: clean(body?.firstName, 60),
+  lastName: clean(body?.lastName, 60),
+  company: clean(body?.company, 100),
+  vat: clean(body?.vat, 40),
+  address1: clean(body?.address1, 120),
+  address2: clean(body?.address2, 120),
+  city: clean(body?.city, 60),
+  region: clean(body?.region, 60),
+  postcode: clean(body?.postcode, 20),
+  country: clean(body?.country, 60),
+  project: clean(body?.project, 100),
+});
+
 const hasAny = (d: CertDetails): boolean => Object.values(d).some((v) => v && v.trim());
 
 export const ensureLicenseCertTable = async (db: D1Database): Promise<void> => {
@@ -202,19 +217,7 @@ export const onRequestPost = async (ctx: Ctx) => {
   const body = await readJson<Partial<CertDetails> & { license?: unknown; setDefault?: unknown }>(
     ctx.request,
   );
-  const details: CertDetails = {
-    firstName: clean(body?.firstName, 60),
-    lastName: clean(body?.lastName, 60),
-    company: clean(body?.company, 100),
-    vat: clean(body?.vat, 40),
-    address1: clean(body?.address1, 120),
-    address2: clean(body?.address2, 120),
-    city: clean(body?.city, 60),
-    region: clean(body?.region, 60),
-    postcode: clean(body?.postcode, 20),
-    country: clean(body?.country, 60),
-    project: clean(body?.project, 100),
-  };
+  const details = cleanCertDetails(body);
   const licenseId = typeof body?.license === "string" ? body.license.trim() : "";
   const setDefault = body?.setDefault === true;
 
