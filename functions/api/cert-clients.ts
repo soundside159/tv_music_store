@@ -9,7 +9,10 @@ import { cleanCertDetails, type CertDetails } from "./cert-details";
 // GET              -> { clients: [{ id, details }] } for the signed-in user
 // POST {details}   -> saves a client; same company name (case-insensitive)
 //                     updates that client instead of adding a duplicate
+// PATCH {id, name} -> renames a client (empty name = show the company/person)
 // DELETE ?id=<id>  -> removes one of the user's clients
+//
+// Stored JSON = the certificate details plus an optional display "name".
 
 const MAX_CLIENTS = 200;
 
@@ -29,22 +32,32 @@ const ensureTable = async (db: D1Database): Promise<void> => {
 
 const newId = () => `cl_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
 
-const parse = (data: string): CertDetails | null => {
+interface Parsed {
+  name: string;
+  details: CertDetails;
+}
+
+const parse = (data: string): Parsed | null => {
   try {
-    return cleanCertDetails(JSON.parse(data) as Partial<CertDetails>);
+    const obj = JSON.parse(data) as Partial<CertDetails> & { name?: unknown };
+    const name = typeof obj.name === "string" ? obj.name.trim().slice(0, 80) : "";
+    return { name, details: cleanCertDetails(obj) };
   } catch {
     return null;
   }
 };
+
+const pack = (name: string, details: CertDetails) => JSON.stringify({ ...details, name });
 
 const listClients = async (db: D1Database, userId: string) => {
   const rows = await db
     .prepare(`SELECT id, data FROM cert_clients WHERE user_id = ?1 ORDER BY created_at DESC LIMIT ?2`)
     .bind(userId, MAX_CLIENTS)
     .all<{ id: string; data: string }>();
-  return rows.results
-    .map((r) => ({ id: r.id, details: parse(r.data) }))
-    .filter((c): c is { id: string; details: CertDetails } => !!c.details);
+  return rows.results.flatMap((r) => {
+    const p = parse(r.data);
+    return p ? [{ id: r.id, name: p.name, details: p.details }] : [];
+  });
 };
 
 export const onRequestGet = async (ctx: Ctx) => {
@@ -80,16 +93,39 @@ export const onRequestPost = async (ctx: Ctx) => {
   if (same) {
     await db
       .prepare(`UPDATE cert_clients SET data = ?3 WHERE id = ?1 AND user_id = ?2`)
-      .bind(same.id, user.id, JSON.stringify(details))
+      .bind(same.id, user.id, pack(same.name, details))
       .run();
   } else {
     if (existing.length >= MAX_CLIENTS) return json({ error: "Client list is full" }, 400);
     await db
       .prepare(`INSERT INTO cert_clients (id, user_id, data) VALUES (?1, ?2, ?3)`)
-      .bind(newId(), user.id, JSON.stringify(details))
+      .bind(newId(), user.id, pack("", details))
       .run();
   }
   return json({ ok: true, updated: !!same, clients: await listClients(db, user.id) });
+};
+
+export const onRequestPatch = async (ctx: Ctx) => {
+  if (!ctx.env.DB) return json({ error: "DB not bound" }, 503);
+  const user = await getSessionUser(ctx);
+  if (!user) return json({ error: "Not signed in" }, 401);
+  const db = ctx.env.DB;
+  const body = await readJson<{ id?: unknown; name?: unknown }>(ctx.request);
+  const id = typeof body?.id === "string" ? body.id : "";
+  const name = typeof body?.name === "string" ? body.name.trim().slice(0, 80) : "";
+  if (!id) return json({ error: "id required" }, 400);
+  await ensureTable(db);
+  const row = await db
+    .prepare(`SELECT data FROM cert_clients WHERE id = ?1 AND user_id = ?2`)
+    .bind(id, user.id)
+    .first<{ data: string }>();
+  const p = row ? parse(row.data) : null;
+  if (!p) return json({ error: "Client not found" }, 404);
+  await db
+    .prepare(`UPDATE cert_clients SET data = ?3 WHERE id = ?1 AND user_id = ?2`)
+    .bind(id, user.id, pack(name, p.details))
+    .run();
+  return json({ ok: true, clients: await listClients(db, user.id) });
 };
 
 export const onRequestDelete = async (ctx: Ctx) => {

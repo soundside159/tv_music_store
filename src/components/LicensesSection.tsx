@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Download, FileText, Loader2, Music2, Pencil, Users, X } from "lucide-react";
+import { Check, Download, FileText, Loader2, Music2, Pencil, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { downloadTrackVersion } from "@/lib/downloadTrack";
 
@@ -57,15 +57,20 @@ const EMPTY: CertDetails = {
 
 interface SavedClient {
   id: string;
+  /** Custom display name; empty = show the company or the person. */
+  name: string;
   details: CertDetails;
 }
 
 /** The name shown for a saved client: the company, else the person's name. */
-const clientLabel = (d: CertDetails) =>
+const detailsLabel = (d: CertDetails) =>
   d.company || [d.firstName, d.lastName].filter(Boolean).join(" ") || "Unnamed client";
+const clientLabel = (c: SavedClient) => c.name || detailsLabel(c.details);
 
 /** A second line under the client name: the person (when a company is set) or the place. */
-const clientSub = (d: CertDetails) => {
+const clientSub = (c: SavedClient) => {
+  const d = c.details;
+  if (c.name) return detailsLabel(d);
   const person = [d.firstName, d.lastName].filter(Boolean).join(" ");
   if (d.company && person) return person;
   return [d.city, d.country].filter(Boolean).join(", ");
@@ -75,7 +80,7 @@ const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 
 const inputCls =
-  "w-full rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-[#F4C430] focus:outline-none";
+  "w-full rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-[#F4C430] focus:outline-none transition-[background-color,border-color] duration-500";
 const labelCls =
   "font-body text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground";
 
@@ -100,6 +105,11 @@ const CertDialog = ({
   const [showClients, setShowClients] = useState(false);
   const [clients, setClients] = useState<SavedClient[] | null>(null);
   const [clientBusy, setClientBusy] = useState(false);
+  // Fill animation after picking a client: "hide" = text invisible for one
+  // frame, "show" = text fades in with a gold glow, then back to normal.
+  const [fill, setFill] = useState<"none" | "hide" | "show">("none");
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [renameText, setRenameText] = useState("");
 
   const loadClients = useCallback(async () => {
     try {
@@ -119,7 +129,45 @@ const CertDialog = ({
 
   // Fill the form from a client. The project name stays as typed: it belongs
   // to this licence, not to the client.
-  const pickClient = (c: SavedClient) => setD((prev) => ({ ...c.details, project: prev.project }));
+  const pickClient = (c: SavedClient) => {
+    setFill("hide");
+    requestAnimationFrame(() => {
+      setD((prev) => ({ ...c.details, project: prev.project }));
+      requestAnimationFrame(() => setFill("show"));
+    });
+    window.setTimeout(() => setFill("none"), 1100);
+  };
+
+  const startRename = (c: SavedClient) => {
+    setRenaming(c.id);
+    setRenameText(clientLabel(c));
+  };
+
+  const saveRename = async (c: SavedClient) => {
+    const name = renameText.trim();
+    setRenaming(null);
+    if (name === clientLabel(c)) return;
+    setClients((prev) => (prev ?? []).map((x) => (x.id === c.id ? { ...x, name } : x)));
+    try {
+      const res = await fetch("/api/cert-clients", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: c.id, name }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      toast.error("Could not rename client");
+      void loadClients();
+    }
+  };
+
+  // Input styling during the fill animation (fields the client filled only).
+  const fillCls = (k: keyof CertDetails) => {
+    if (fill === "none" || k === "project" || !d[k]) return inputCls;
+    if (fill === "hide") return `${inputCls} text-transparent`;
+    return `${inputCls} border-[#F4C430]/70 bg-[#F4C430]/[0.07] transition-[color,background-color,border-color] duration-700`;
+  };
 
   const saveClient = async () => {
     setClientBusy(true);
@@ -193,18 +241,10 @@ const CertDialog = ({
       <div className="mt-10 flex w-full max-w-lg flex-col gap-3 md:w-auto md:max-w-none md:flex-row md:items-stretch">
       {showClients && (
         <aside className="flex w-full flex-col rounded-2xl border border-border bg-card shadow-2xl md:w-72">
-          <div className="flex items-center justify-between px-5 pb-2 pt-5">
+          <div className="px-5 pb-2 pt-5">
             <span className={labelCls}>Saved clients</span>
-            <button
-              type="button"
-              onClick={() => setShowClients(false)}
-              aria-label="Close clients"
-              className="text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <X className="h-4 w-4" />
-            </button>
           </div>
-          <div className="flex max-h-[420px] flex-1 flex-col gap-1 overflow-y-auto px-3">
+          <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 pb-2">
             {clients === null && (
               <p className="px-2 py-3 font-body text-xs text-muted-foreground">Loading…</p>
             )}
@@ -217,39 +257,78 @@ const CertDialog = ({
             {clients?.map((c) => (
               <div
                 key={c.id}
-                className="group flex items-center gap-1 rounded-lg transition-colors hover:bg-[#F4C430]/10"
+                className="group flex items-center gap-0.5 rounded-lg transition-colors hover:bg-[#F4C430]/10"
               >
-                <button
-                  type="button"
-                  onClick={() => pickClient(c)}
-                  className="min-w-0 flex-1 px-3 py-2.5 text-left"
-                >
-                  <span className="block truncate font-body text-sm font-medium text-foreground">
-                    {clientLabel(c.details)}
-                  </span>
-                  {clientSub(c.details) && (
-                    <span className="block truncate font-body text-xs text-muted-foreground">
-                      {clientSub(c.details)}
-                    </span>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void deleteClient(c)}
-                  aria-label={`Delete ${clientLabel(c.details)}`}
-                  className="mr-2 rounded p-1 text-muted-foreground transition-colors hover:text-red-400"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+                {renaming === c.id ? (
+                  <form
+                    className="flex min-w-0 flex-1 items-center gap-1 px-2 py-1.5"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void saveRename(c);
+                    }}
+                  >
+                    <input
+                      autoFocus
+                      value={renameText}
+                      onChange={(e) => setRenameText(e.target.value)}
+                      onBlur={() => void saveRename(c)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") setRenaming(null);
+                      }}
+                      aria-label="Client name"
+                      className={`${inputCls} py-1.5`}
+                    />
+                    <button
+                      type="submit"
+                      aria-label="Save name"
+                      className="rounded p-1 text-[#F4C430]"
+                    >
+                      <Check className="h-4 w-4" />
+                    </button>
+                  </form>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => pickClient(c)}
+                      className="min-w-0 flex-1 px-3 py-2.5 text-left"
+                    >
+                      <span className="block truncate font-body text-sm font-medium text-foreground">
+                        {clientLabel(c)}
+                      </span>
+                      {clientSub(c) && (
+                        <span className="block truncate font-body text-xs text-muted-foreground">
+                          {clientSub(c)}
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => startRename(c)}
+                      aria-label={`Rename ${clientLabel(c)}`}
+                      className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-[#F4C430] focus:opacity-100 group-hover:opacity-100"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void deleteClient(c)}
+                      aria-label={`Delete ${clientLabel(c)}`}
+                      className="mr-1.5 rounded p-1 text-muted-foreground transition-colors hover:text-red-400"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </>
+                )}
               </div>
             ))}
           </div>
-          <div className="border-t border-border p-4">
+          <div className="border-t border-border p-3">
             <button
               type="button"
               disabled={clientBusy}
               onClick={() => void saveClient()}
-              className="w-full rounded-lg border border-dashed border-border px-3 py-2.5 font-body text-xs font-medium text-foreground transition-colors hover:border-[#F4C430]/60 hover:text-[#F4C430] disabled:opacity-50"
+              className="w-full rounded-lg border border-dashed border-border px-3 py-2 font-body text-xs font-medium text-foreground transition-colors hover:border-[#F4C430]/60 hover:text-[#F4C430] disabled:opacity-50"
             >
               {clientBusy ? "Saving…" : "+ Save as client"}
             </button>
@@ -280,11 +359,11 @@ const CertDialog = ({
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1">
               <span className={labelCls}>First name</span>
-              <input value={d.firstName} onChange={(e) => set("firstName", e.target.value)} placeholder="First name" className={inputCls} />
+              <input value={d.firstName} onChange={(e) => set("firstName", e.target.value)} placeholder="First name" className={fillCls("firstName")} />
             </label>
             <label className="flex flex-col gap-1">
               <span className={labelCls}>Last name</span>
-              <input value={d.lastName} onChange={(e) => set("lastName", e.target.value)} placeholder="Last name" className={inputCls} />
+              <input value={d.lastName} onChange={(e) => set("lastName", e.target.value)} placeholder="Last name" className={fillCls("lastName")} />
             </label>
           </div>
 
@@ -296,31 +375,31 @@ const CertDialog = ({
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1">
               <span className={labelCls}>Company (optional)</span>
-              <input value={d.company} onChange={(e) => set("company", e.target.value)} placeholder="Company name" className={inputCls} />
+              <input value={d.company} onChange={(e) => set("company", e.target.value)} placeholder="Company name" className={fillCls("company")} />
             </label>
             <label className="flex flex-col gap-1">
               <span className={labelCls}>VAT ID (optional)</span>
-              <input value={d.vat} onChange={(e) => set("vat", e.target.value)} placeholder="VAT" className={inputCls} />
+              <input value={d.vat} onChange={(e) => set("vat", e.target.value)} placeholder="VAT" className={fillCls("vat")} />
             </label>
           </div>
 
           <div className="space-y-3">
             <span className={labelCls}>Address (optional)</span>
-            <input value={d.address1} onChange={(e) => set("address1", e.target.value)} placeholder="Address line 1" className={inputCls} />
-            <input value={d.address2} onChange={(e) => set("address2", e.target.value)} placeholder="Address line 2" className={inputCls} />
+            <input value={d.address1} onChange={(e) => set("address1", e.target.value)} placeholder="Address line 1" className={fillCls("address1")} />
+            <input value={d.address2} onChange={(e) => set("address2", e.target.value)} placeholder="Address line 2" className={fillCls("address2")} />
             <div className="grid gap-3 sm:grid-cols-2">
-              <input value={d.city} onChange={(e) => set("city", e.target.value)} placeholder="City" className={inputCls} />
-              <input value={d.region} onChange={(e) => set("region", e.target.value)} placeholder="State / Region" className={inputCls} />
+              <input value={d.city} onChange={(e) => set("city", e.target.value)} placeholder="City" className={fillCls("city")} />
+              <input value={d.region} onChange={(e) => set("region", e.target.value)} placeholder="State / Region" className={fillCls("region")} />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <input value={d.postcode} onChange={(e) => set("postcode", e.target.value)} placeholder="ZIP / Postal code" className={inputCls} />
-              <input value={d.country} onChange={(e) => set("country", e.target.value)} placeholder="Country" className={inputCls} />
+              <input value={d.postcode} onChange={(e) => set("postcode", e.target.value)} placeholder="ZIP / Postal code" className={fillCls("postcode")} />
+              <input value={d.country} onChange={(e) => set("country", e.target.value)} placeholder="Country" className={fillCls("country")} />
             </div>
           </div>
 
           <label className="flex flex-col gap-1">
             <span className={labelCls}>Project name (optional)</span>
-            <input value={d.project} onChange={(e) => set("project", e.target.value)} placeholder="What this license is used for" className={inputCls} />
+            <input value={d.project} onChange={(e) => set("project", e.target.value)} placeholder="What this license is used for" className={fillCls("project")} />
             <span className="font-body text-[11px] text-muted-foreground/70">
               E.g. "Brand Campaign 2026". Shown in the PDF.
             </span>

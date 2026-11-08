@@ -5131,3 +5131,9 @@ True: `brandCover()` was only in the AI path.
   form (keeps the typed project), X = delete, "+ Save as client" = save the current form. The
   "Also save as default for future licences" checkbox was REMOVED (owner); defaults are set only via
   the "Default details" button at the top of Licenses.
+- Follow-up (same day): panel header X removed (the Clients button toggles it); "+ Save as client"
+  footer made compact and pinned at the panel bottom (list fills the height). Clients can be
+  RENAMED (pencil on hover -> inline input, Enter/blur saves, Esc cancels): PATCH
+  /api/cert-clients {id, name}; the name is stored in the client's JSON as `name` (empty = show
+  company/person). Picking a client animates the filled fields: text fades in with a short gold
+  glow (`fill` state + `fillCls()` in CertDialog).
