@@ -345,7 +345,7 @@ const CertDialog = ({
           </span>
           <div className="min-w-0 flex-1">
             <h2 className="font-display text-xl font-semibold text-foreground">
-              {license ? "Edit certificate" : "Default certificate details"}
+              {license ? "Edit PDF certificate" : "Default certificate details"}
             </h2>
             <p className="mt-1 font-body text-xs leading-5 text-muted-foreground">
               {license
@@ -616,7 +616,7 @@ const LicensesSection = () => {
                 onClick={() => void openEditor(row)}
                 className="inline-flex shrink-0 items-center gap-1.5 font-body text-xs text-muted-foreground transition-colors hover:text-[#F4C430]"
               >
-                <Pencil className="h-3.5 w-3.5" /> Edit certificate
+                <Pencil className="h-3.5 w-3.5" /> Edit PDF certificate
               </button>
             )}
           </div>
