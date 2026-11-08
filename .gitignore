@@ -33,3 +33,4 @@ _to_delete/
 
 tools/whitelist_tester/data/
 __pycache__/
+deploy_auto.log

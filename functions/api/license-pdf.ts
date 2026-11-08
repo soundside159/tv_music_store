@@ -3,7 +3,7 @@ import { buildPdf, textWidth, type PdfOp, type PdfImage, type Rgb } from "./_pdf
 import { LOGO_ALPHA_B64, LOGO_HEIGHT, LOGO_RGB_B64, LOGO_WIDTH } from "./_logo";
 import { ASSETS } from "./_assets";
 import { getOrCreatePlanLicense } from "./_licenses";
-import { getCertDetails, type CertDetails } from "./cert-details";
+import { resolveCertDetails, type CertDetails } from "./cert-details";
 
 // GET /api/license-pdf?order=<sync_order_id>  -> certificate for a purchased
 //     one-time license (Account -> Licenses "License PDF").
@@ -605,14 +605,19 @@ const orderCert = (
     trackSlug: string | null;
     composer: string | null;
     cue?: CertData["cue"];
+    buyer?: BuyerDetails;
   },
 ): CertData => ({
   title: info.name,
   scope: info.scope,
   permitted: info.permitted,
   notPermitted: info.notPermitted,
-  licenseeName: a.licenseeName,
+  licenseeName: buyerName(a.buyer, a.licenseeName),
   licenseeEmail: a.licenseeEmail,
+  company: a.buyer?.company || undefined,
+  vat: a.buyer?.vat || undefined,
+  address: buyerAddress(a.buyer),
+  project: a.buyer?.project || undefined,
   licenseNumber: a.code,
   paymentRef: a.paymentRef || "—",
   issued: fmtDate(a.issued),
@@ -639,15 +644,15 @@ export const onRequestGet = async (ctx: Ctx) => {
   const trackId = url.searchParams.get("track");
   const licenseeName = user.name?.trim() || user.email;
   const isAdmin = user.role === "admin" || user.email === OWNER_EMAIL;
-  // Whatever the customer typed into "Edit PDF certificate" — printed as-is.
-  const buyer = await getCertDetails(db, user.id);
+  // The details printed on a certificate are resolved PER LICENCE below (the
+  // licence's own details, else its owner's defaults), never the viewer's.
 
   // --- admin: open a customer's subscription certificate by its code -------
   if (codeParam) {
     if (!isAdmin) return json({ error: "Admin only" }, 403);
     const row = await db
       .prepare(
-        `SELECT p.id, p.plan, p.plan_period_end, p.created_at, p.track_id,
+        `SELECT p.id, p.user_id, p.plan, p.plan_period_end, p.created_at, p.track_id,
                 u.email AS user_email, u.name AS user_name,
                 t.title AS track_title, t.slug AS track_slug, c.display_name AS composer
            FROM plan_licenses p
@@ -659,6 +664,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       .bind(codeParam)
       .first<{
         id: string;
+        user_id: string;
         plan: string;
         plan_period_end: string | null;
         created_at: string;
@@ -682,7 +688,7 @@ export const onRequestGet = async (ctx: Ctx) => {
         trackSlug: row.track_slug,
         composer: row.composer,
         cue: await fetchCue(db, row.track_id),
-        buyer,
+        buyer: await resolveCertDetails(db, row.user_id, row.id, false),
       }),
     );
     return pdfResponse(bytes, `license-${row.id}.pdf`);
@@ -692,7 +698,7 @@ export const onRequestGet = async (ctx: Ctx) => {
     // Admins can open any buyer's certificate; customers only their own.
     const row = await db
       .prepare(
-        `SELECT o.id, o.track_id, o.tier, o.price, o.stripe_session_id, o.created_at,
+        `SELECT o.id, o.user_id, o.track_id, o.tier, o.price, o.stripe_session_id, o.created_at,
                 COALESCE(o.status, 'active') AS status,
                 t.title AS track_title, t.slug AS track_slug, c.display_name AS composer,
                 u.email AS user_email, u.name AS user_name
@@ -705,6 +711,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       .bind(...(isAdmin ? [orderId] : [orderId, user.id]))
       .first<{
         id: string;
+        user_id: string;
         track_id: string;
         tier: string;
         price: number;
@@ -738,6 +745,8 @@ export const onRequestGet = async (ctx: Ctx) => {
         trackSlug: row.track_slug,
         composer: row.composer,
         cue: await fetchCue(db, row.track_id),
+        // Snapshot only when the owner downloads it, not when an admin looks.
+        buyer: await resolveCertDetails(db, row.user_id, row.id, row.user_id === user.id),
       }),
     );
     return pdfResponse(bytes, `license-${row.id}.pdf`);
@@ -778,11 +787,13 @@ export const onRequestGet = async (ctx: Ctx) => {
     // Mint (or reuse) the persistent, signed code for THIS track on THIS plan —
     // the code the customer sees in his Licenses list and the admin looks up.
     let code = `${plan.toUpperCase()} PLAN`;
+    let licenseCode: string | null = null;
     let issuedDate = fmtDate();
     let periodEnd = sub?.current_period_end ?? null;
     try {
       const lic = await getOrCreatePlanLicense(ctx.env, user.id, licenseTrackId, plan, periodEnd);
       code = lic.code;
+      licenseCode = lic.code;
       issuedDate = fmtDate(lic.createdAt);
       periodEnd = lic.planPeriodEnd ?? periodEnd;
     } catch {
@@ -801,7 +812,7 @@ export const onRequestGet = async (ctx: Ctx) => {
         trackSlug: track?.slug ?? (slug ?? null),
         composer: track?.composer ?? null,
         cue: await fetchCue(db, track?.id),
-        buyer,
+        buyer: await resolveCertDetails(db, user.id, licenseCode, true),
       }),
     );
     return pdfResponse(bytes, `license-${fileRef}.pdf`);

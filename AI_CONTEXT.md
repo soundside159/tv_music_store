@@ -5102,3 +5102,21 @@ True: `brandCover()` was only in the AI path.
 - 2026-11-06: AdminInlineContent.tsx AdminCoverControl (collection/playlist covers on their detail pages) got the "paste image link" button like the track page: /api/admin/fetch-image copies it into R2, collections get the brand stamp (brandIfCollection), playlists stay clean. Not deployed yet.
 - 2026-11-06 later: cover "paste link" boxes (AdminCoverControl + AdminTrackPanel) also accept a pasted PICTURE (clipboard file -> same upload as the button); blob: links (ChatGPT) cannot work, a toast explains "Copy image". Collection/playlist covers also accept a dropped image file. Not deployed yet.
 - 2026-11-06 later: "Cover updated but nothing changed" = /api/content edge cache (3-min time bucket while editing). refreshContent() now asks /api/content?fresh=1 for admin/editor sessions; content.ts builds it straight from D1 (no cache) only for staff. Not deployed yet.
+
+## 2026-11-08 Per-licence certificate details (Edit certificate on every licence)
+- WHY: video editors license tracks for different clients; one set of details per account
+  rewrote every PDF. Also found two bugs: one-time (sync_orders) certificates IGNORED the
+  "Edit PDF certificate" details entirely, and admin-opened subscription certificates printed
+  the ADMIN's details instead of the customer's.
+- `functions/api/cert-details.ts`: new table `license_cert_details` (license_id PK = sync order
+  id or plan licence code, user_id, data JSON). GET `?license=<code>` -> that licence's details
+  (else defaults, `custom` flag); POST `{license?, setDefault?, ...fields}` saves on the licence
+  (owner-checked via sync_orders / plan_licenses) and, with setDefault or no licence, the
+  defaults (`cert_details`). New `resolveCertDetails(db, ownerId, licenseId, snapshot)`:
+  licence details -> owner's defaults; with snapshot=true copies non-empty defaults onto the
+  licence on first download, so later default changes never rewrite issued certificates.
+- `functions/api/license-pdf.ts`: buyer details resolved PER LICENCE and for the licence OWNER
+  (admin views pass snapshot=false). `orderCert` now prints name/company/VAT/address/project.
+- `src/components/LicensesSection.tsx`: "Edit certificate" on each licence row (loads that
+  licence's details), checkbox "Also save as default for future licences", "Default details"
+  button at the top.

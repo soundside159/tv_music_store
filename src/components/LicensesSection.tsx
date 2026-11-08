@@ -7,7 +7,9 @@ import { downloadTrackVersion } from "@/lib/downloadTrack";
 // Account → Licenses. Every track the customer may use, in one list:
 // tracks covered by his subscription (a code minted per track when he downloaded
 // it) and tracks he bought outright. Each row: audio, PDF certificate, and an
-// Edit button for the details PRINTED on that certificate.
+// "Edit certificate" button for the details printed on THAT licence only, so a
+// video editor can put a different client on each one. "Default details" at the
+// top are used for licences that have no details of their own.
 
 const GOLD = "#F4C430";
 
@@ -65,16 +67,20 @@ const labelCls =
 const CertDialog = ({
   email,
   initial,
+  license,
   onClose,
   onSaved,
 }: {
   email: string;
   initial: CertDetails;
+  /** The licence being edited; null = the default details. */
+  license: LicenseRow | null;
   onClose: () => void;
   onSaved: () => void;
 }) => {
   const [d, setD] = useState<CertDetails>(initial);
   const [busy, setBusy] = useState(false);
+  const [asDefault, setAsDefault] = useState(false);
 
   const set = (k: keyof CertDetails, v: string) => setD((prev) => ({ ...prev, [k]: v }));
 
@@ -85,11 +91,16 @@ const CertDialog = ({
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(d),
+        body: JSON.stringify({
+          ...d,
+          ...(license ? { license: license.code, setDefault: asDefault } : {}),
+        }),
       });
       const body = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!res.ok || !body.ok) throw new Error(body.error ?? "Could not save");
-      toast.success("Saved — re-download a certificate to get the updated file");
+      toast.success(
+        license ? "Saved. Download the certificate to get the updated file" : "Default details saved",
+      );
       onSaved();
       onClose();
     } catch (e) {
@@ -111,11 +122,12 @@ const CertDialog = ({
           </span>
           <div className="min-w-0 flex-1">
             <h2 className="font-display text-xl font-semibold text-foreground">
-              Edit PDF certificate
+              {license ? "Edit certificate" : "Default certificate details"}
             </h2>
             <p className="mt-1 font-body text-xs leading-5 text-muted-foreground">
-              The name, company or address printed on your licence PDFs. Changes apply immediately —
-              re-download a certificate to get the updated file.
+              {license
+                ? `The name, company or address printed on the certificate for "${license.trackTitle}". Other licences are not changed.`
+                : "Printed on licences that have no details of their own. Certificates you already downloaded keep their details."}
             </p>
           </div>
         </div>
@@ -171,6 +183,18 @@ const CertDialog = ({
           </label>
         </div>
 
+        {license && (
+          <label className="mt-5 flex cursor-pointer items-center gap-2 font-body text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={asDefault}
+              onChange={(e) => setAsDefault(e.target.checked)}
+              className="h-4 w-4 accent-[#F4C430]"
+            />
+            Also save as default for future licences
+          </label>
+        )}
+
         <div className="mt-6 flex items-center justify-end gap-3">
           <button
             type="button"
@@ -221,7 +245,28 @@ const LicensesSection = () => {
   const [rows, setRows] = useState<LicenseRow[] | null>(null);
   const [details, setDetails] = useState<CertDetails>(EMPTY);
   const [email, setEmail] = useState("");
-  const [editing, setEditing] = useState(false);
+  // What the dialog edits: a licence, the defaults (null), or closed (undefined).
+  const [editing, setEditing] = useState<LicenseRow | null | undefined>(undefined);
+  const [editInitial, setEditInitial] = useState<CertDetails>(EMPTY);
+
+  const openEditor = async (row: LicenseRow | null) => {
+    if (!row) {
+      setEditInitial(details);
+      setEditing(null);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/cert-details?license=${encodeURIComponent(row.code)}`, {
+        credentials: "include",
+      });
+      const body = (await res.json().catch(() => ({}))) as { details?: CertDetails; error?: string };
+      if (!res.ok) throw new Error(body.error ?? "Could not load");
+      setEditInitial({ ...EMPTY, ...(body.details ?? {}) });
+      setEditing(row);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not load");
+    }
+  };
   // Which download button is preparing its file (WAV bundles zip on the server,
   // so the icon spins until the download actually starts). Key = `${id}:${fmt}`.
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -285,9 +330,19 @@ const LicensesSection = () => {
     <div className="space-y-4">
       <div>
         {/* Same page title as every other account section (was font-display). */}
-        <h1 className="text-2xl font-semibold text-foreground md:text-3xl">Licenses</h1>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h1 className="text-2xl font-semibold text-foreground md:text-3xl">Licenses</h1>
+          <button
+            type="button"
+            onClick={() => void openEditor(null)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 font-body text-xs font-medium text-foreground transition-colors hover:border-[#F4C430]/60 hover:text-[#F4C430]"
+          >
+            <Pencil className="h-3.5 w-3.5" /> Default details
+          </button>
+        </div>
         <p className="mt-1 font-body text-sm text-muted-foreground">
-          Tracks you've licensed — download the audio and the PDF certificate for each one.
+          Tracks you've licensed. Download the audio and the PDF certificate for each one, and edit
+          the details on any certificate to match your client.
         </p>
       </div>
 
@@ -335,10 +390,10 @@ const LicensesSection = () => {
             {!row.refunded && (
               <button
                 type="button"
-                onClick={() => setEditing(true)}
+                onClick={() => void openEditor(row)}
                 className="inline-flex shrink-0 items-center gap-1.5 font-body text-xs text-muted-foreground transition-colors hover:text-[#F4C430]"
               >
-                <Pencil className="h-3.5 w-3.5" /> Edit
+                <Pencil className="h-3.5 w-3.5" /> Edit certificate
               </button>
             )}
           </div>
@@ -373,11 +428,13 @@ const LicensesSection = () => {
         </div>
       ))}
 
-      {editing && (
+      {editing !== undefined && (
         <CertDialog
+          key={editing ? editing.id : "default"}
           email={email}
-          initial={details}
-          onClose={() => setEditing(false)}
+          initial={editInitial}
+          license={editing}
+          onClose={() => setEditing(undefined)}
           onSaved={() => void load()}
         />
       )}
