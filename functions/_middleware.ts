@@ -1,5 +1,5 @@
 import { cachedValue } from "./api/_cache";
-import { getVocabularies, type D1Database, type Env } from "./api/_utils";
+import { getLicensePrices, getVocabularies, type D1Database, type Env } from "./api/_utils";
 import {
   applyGuideSchedule,
   guideBySlug,
@@ -622,6 +622,16 @@ const buildSeo = async (env: Env, url: URL): Promise<Seo | typeof NOT_FOUND | nu
         .bind(code)
         .first<TrackRow>();
     }
+    // An UNLISTED track (link only): a real page for whoever has the link,
+    // kept out of search engines.
+    let unlisted = false;
+    if (!row) {
+      row = await db
+        .prepare(`${TRACK_SELECT} WHERE t.slug = ?1 AND t.status = 'unlisted' AND t.moderation_status = 'approved' LIMIT 1`)
+        .bind(slug)
+        .first<TrackRow>();
+      unlisted = !!row;
+    }
     if (!row) return NOT_FOUND;
 
     const facets = [...splitValues(row.use_case), ...splitValues(row.genre), ...splitValues(row.mood)];
@@ -637,11 +647,41 @@ const buildSeo = async (env: Env, url: URL): Promise<Seo | typeof NOT_FOUND | nu
         : []),
     ]);
 
+    // Everything an AI agent needs to pick and license the track without
+    // running the app: the facts, the licence options and their live prices.
+    const prices = await getLicensePrices(db);
+    const image = row.cover ? (row.cover.startsWith("http") ? row.cover : SITE + row.cover) : undefined;
+    const tiers = [
+      { id: "personal", name: "Personal licence", price: prices.personal,
+        covers: "personal and hobby use, YouTube and social media (monetized OK), podcasts, non-profit; MP3 + WAV" },
+      { id: "commercial", name: "Commercial licence", price: prices.commercial,
+        covers: "business use, client and freelance work, paid ads and sponsored content, YouTube and social media; MP3 + WAV + stems" },
+      { id: "professional", name: "Professional licence", price: prices.professional,
+        covers: "everything in Commercial plus TV and radio broadcast, streaming/VOD, films, trailers, games, apps; MP3 + WAV + stems" },
+    ];
+    const facts = [
+      row.duration ? `Length: ${row.duration}` : "",
+      row.bpm ? `Tempo: ${row.bpm} BPM` : "",
+      splitValues(row.genre).length ? `Genre: ${splitValues(row.genre).join(", ")}` : "",
+      splitValues(row.mood).length ? `Mood: ${splitValues(row.mood).join(", ")}` : "",
+      splitValues(row.use_case).length ? `Good for: ${splitValues(row.use_case).join(", ")}` : "",
+    ].filter(Boolean);
+    const licenceHtml =
+      `<h2 style="${H1_STYLE};font-size:18px;margin-top:20px">License this track</h2>` +
+      `<ul style="${LIST_STYLE}">` +
+      tiers
+        .map((t) => `<li>${esc(t.name)}: $${t.price} one-time, lifetime. Covers ${esc(t.covers)}.</li>`)
+        .join("") +
+      `<li>Or a subscription (Free, Pro, Max) for unlimited downloads: <a style="${LINK_STYLE}" href="/pricing">pricing</a>. ` +
+      `Every licence includes a licence certificate with a licence number; Content ID claims are sent for release on request.</li>` +
+      `</ul><p style="${P_STYLE}">Buy on this page: ${esc(SITE + path)}</p>`;
+
     return {
       title: `${row.title}${row.artist ? ` by ${row.artist}` : ""} — Royalty-Free Music | TV Music Store`,
       description,
       path,
-      image: row.cover ? (row.cover.startsWith("http") ? row.cover : SITE + row.cover) : undefined,
+      image,
+      noindex: unlisted,
       jsonLd: {
         "@context": "https://schema.org",
         "@type": "MusicRecording",
@@ -650,12 +690,25 @@ const buildSeo = async (env: Env, url: URL): Promise<Seo | typeof NOT_FOUND | nu
         ...(row.artist ? { byArtist: { "@type": "MusicGroup", name: row.artist } } : {}),
         ...(row.duration ? { duration: row.duration } : {}),
         ...(row.genre ? { genre: splitValues(row.genre) } : {}),
+        ...(image ? { image } : {}),
+        keywords: [...facets, ...(row.bpm ? [`${row.bpm} BPM`] : [])].join(", "),
         description,
+        license: `${SITE}/license-terms`,
+        offers: tiers.map((t) => ({
+          "@type": "Offer",
+          name: t.name,
+          description: `Covers ${t.covers}. One-time payment, lifetime licence.`,
+          price: t.price,
+          priceCurrency: "USD",
+          url: SITE + path,
+          availability: "https://schema.org/InStock",
+        })),
+        publisher: { "@type": "Organization", name: "TV Music Store", url: SITE },
       },
       body: shell(
         row.title,
         `${row.artist ? `by ${row.artist}. ` : ""}${description}`,
-        tagLinks,
+        (facts.length ? `<p style="${P_STYLE}">${facts.map(esc).join(" · ")}</p>` : "") + tagLinks + licenceHtml,
       ),
     };
   }
