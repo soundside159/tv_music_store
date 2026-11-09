@@ -88,6 +88,19 @@ export const onRequestPost = async (ctx: Ctx) => {
     await db.prepare(`DELETE FROM ai_search_hits WHERE ts < datetime('now', '-1 hour')`).run();
   }
 
+  // Daily ceiling on paid calls: every OpenAI answer is written to the cache, so
+  // the cache rows of the last 24 h ARE the paid calls. Past the ceiling the
+  // search still works, as a plain word search (the query words as keywords).
+  const DAILY_CAP = 3000;
+  const today = await db
+    .prepare(`SELECT COUNT(*) AS n FROM ai_search_cache WHERE created_at > datetime('now', '-1 day')`)
+    .first<{ n: number }>();
+  if ((today?.n ?? 0) >= DAILY_CAP) {
+    const words = q.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2).slice(0, 6);
+    const plain: RouteResult = { useCase: [], genre: [], mood: [], playlistIds: [], collectionIds: [], keywords: words };
+    return json({ ...plain, limited: true });
+  }
+
   // The compact digest: vocabulary + playlist/collection titles. No track data.
   const vocab = await getVocabularies(db);
   const playlists = (
