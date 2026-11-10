@@ -13,6 +13,7 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
+import { PROMO, money, promoActive, promoPrice } from "@/lib/promo";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { TrackRowList, TrackRowSkeletonList } from "@/components/TrackRowPlayer";
@@ -302,11 +303,24 @@ const Index = () => {
                   <div className="flex items-baseline justify-between">
                     <span className="font-body text-sm font-semibold text-foreground">{p.name}</span>
                     <span className="font-body text-lg font-semibold" style={{ color: GOLD }}>
-                      ${p.priceAnnualPerMonth}
+                      {promoActive() && p.priceAnnualPerMonth > 0 && (
+                        <span className="mr-1.5 text-sm font-normal text-muted-foreground line-through">
+                          ${p.priceAnnualPerMonth}
+                        </span>
+                      )}
+                      $
+                      {promoActive() && p.priceAnnualPerMonth > 0
+                        ? money(promoPrice(p.priceAnnualPerMonth))
+                        : p.priceAnnualPerMonth}
                       <span className="text-xs text-muted-foreground">/mo</span>
                     </span>
                   </div>
                   <p className="mt-2 font-body text-xs text-muted-foreground">{p.highlights[0]}</p>
+                  {promoActive() && p.priceAnnualPerMonth > 0 && (
+                    <p className="mt-1 font-body text-[11px] font-semibold uppercase tracking-wider text-[#e5484d]">
+                      {PROMO.ribbon} with {PROMO.code}
+                    </p>
+                  )}
                 </Link>
               ))}
             </div>

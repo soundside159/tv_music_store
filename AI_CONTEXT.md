@@ -5183,3 +5183,10 @@ True: `brandCover()` was only in the AI path.
 - Site display: src/lib/promo.ts (code, percent, endsAt; everything hides after endsAt), src/components/PromoStrip.tsx (gold strip inside the fixed nav, links to /pricing, pushes body down 2rem), ribbon + crossed price + "first year with promo code" in src/pages/Pricing.tsx and src/components/PlanModal.tsx (annual only).
 - Pricing.tsx: CTA buttons now use mt-auto so they line up at the bottom of all cards.
 - One-time track licences are NOT discounted yet (owner may add later).
+- WHERE THE PROMO IS SHOWN (to remove later, delete these blocks + src/lib/promo.ts + PromoStrip.tsx;
+  or just leave them: all hide automatically after PROMO.endsAt):
+  1. src/components/PromoStrip.tsx, mounted in src/components/Navigation.tsx (gold strip, every page)
+  2. src/pages/Pricing.tsx PlanCard (ribbon, crossed price, "first year with promo code")
+  3. src/components/PlanModal.tsx PlanCard (same; this popup is also opened from MyChannels "Upgrade to protect more channels")
+  4. src/pages/Index.tsx "Plans teaser" section on the homepage (crossed price + red line with the code)
+  5. Stripe: coupon "Early Black Friday: 20% off annual plans" / code BLACKFRIDAY20 (expires itself 30 Nov)

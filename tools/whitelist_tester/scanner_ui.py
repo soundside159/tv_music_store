@@ -1224,6 +1224,33 @@ class KeepColors(fx.RowDelegate):
         opt.state &= ~QtWidgets.QStyle.StateFlag.State_HasFocus  # no dotted frame around cells
 
 
+class NumberedRows(KeepColors):
+    """Tracks table (10.11.2026): the row number in grey before the title.
+    It is the row's place on screen, so it stays 1, 2, 3... after sorting or filtering."""
+    NUM_W = 46
+
+    def _pad(self, opt):
+        sp = max(1, opt.fontMetrics.horizontalAdvance(" "))
+        return " " * (self.NUM_W // sp + 1)
+
+    def initStyleOption(self, opt, index):
+        super().initStyleOption(opt, index)
+        if index.column() == 0 and not index.parent().isValid():
+            opt.text = self._pad(opt) + opt.text.lstrip()
+
+    def paint(self, p, opt, index):
+        super().paint(p, opt, index)
+        if index.column() != 0 or index.parent().isValid():
+            return
+        p.save()
+        p.setFont(opt.font)
+        p.setPen(QtGui.QColor(TEXT_GRAY))
+        r = QtCore.QRect(opt.rect.left(), opt.rect.top(), self.NUM_W - 8, opt.rect.height())
+        p.drawText(r, QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter,
+                   str(index.row() + 1))
+        p.restore()
+
+
 class CleanStyle(QtWidgets.QProxyStyle):
     """Fusion look on every Windows version, without the dotted focus frames."""
 
@@ -3724,7 +3751,7 @@ class App(QtWidgets.QMainWindow):
         t.setHeaderLabels(["Track", "Composer", "Where", "Added", "Found in videos", "Waiting release", ""])
         t.setRootIsDecorated(False)
         t.setIndentation(0)
-        t.setItemDelegate(KeepColors(t))
+        t.setItemDelegate(NumberedRows(t))
         t.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.SingleSelection)
         t.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         hd = t.header()

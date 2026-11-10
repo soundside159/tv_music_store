@@ -84,7 +84,7 @@ const fmtSize = (bytes: number) =>
 
 type TriState = "all" | "none" | "mixed";
 type FacetKey = "useCase" | "genre" | "mood";
-type SortMode = "default" | "trending" | "id";
+type SortMode = "default" | "trending" | "social" | "id";
 
 const inputCls =
   "rounded-lg border border-border bg-background px-3 py-2 font-body text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-[#F4C430] focus:outline-none";
@@ -366,6 +366,46 @@ const AdminTracksEdit = ({
   const [search, setSearch] = useState("");
   const [composer, setComposer] = useState("all");
   const [sort, setSort] = useState<SortMode>("default");
+  // 10.11.2026 Social column: the owner's own "posted to social media" ticks
+  // (api/admin/social-marks). Editors do not see it.
+  const [social, setSocial] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    if (editor) return;
+    let off = false;
+    fetch("/api/admin/social-marks", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { ids?: string[] } | null) => {
+        if (!off && d?.ids) setSocial(new Set(d.ids));
+      })
+      .catch(() => {});
+    return () => {
+      off = true;
+    };
+  }, [editor]);
+  const toggleSocial = (id: string) => {
+    const on = !social.has(id);
+    const flip = (want: boolean) =>
+      setSocial((s) => {
+        const n = new Set(s);
+        if (want) n.add(id);
+        else n.delete(id);
+        return n;
+      });
+    flip(on);
+    fetch("/api/admin/social-marks", {
+      method: "POST",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ trackId: id, on }),
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error(String(r.status));
+      })
+      .catch(() => {
+        flip(!on);
+        toast.error("Social mark not saved");
+      });
+  };
 
   // --- inline "#" (import_no) edit: double-click the number, type, Enter. The
   // backend inserts it into the list, cascading existing numbers up on collision.
@@ -1393,6 +1433,9 @@ const AdminTracksEdit = ({
       const set = new Set(trending);
       list = [...list].sort((a, b) => (set.has(b.id) ? 1 : 0) - (set.has(a.id) ? 1 : 0));
     }
+    if (sort === "social") {
+      list = [...list].sort((a, b) => (social.has(b.id) ? 1 : 0) - (social.has(a.id) ? 1 : 0));
+    }
     if (sort === "id") {
       // Sort by the spreadsheet "#" DESCENDING — biggest (newest) on top, as the
       // owner reads the list. Tracks without a number always sink to the bottom.
@@ -1412,7 +1455,7 @@ const AdminTracksEdit = ({
       });
     }
     return list;
-  }, [tracks, search, composer, sort, trending, statusTab, tagFilter, playlists, collections, categories, editedOnly, editorEdits]);
+  }, [tracks, search, composer, sort, trending, social, statusTab, tagFilter, playlists, collections, categories, editedOnly, editorEdits]);
 
   // The X on a row while the Show filter is on: pull the track out of the
   // filtered tag / playlist — the row then drops out of the list by itself.
@@ -2209,6 +2252,14 @@ const AdminTracksEdit = ({
   const panelColCls =
     "flex flex-col gap-4 rounded-xl border border-[#F4C430]/30 bg-card p-4 transition-opacity xl:sticky xl:top-24 xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto";
   const dimIf = (active: boolean) => (active ? "" : "pointer-events-none opacity-40");
+  // Table grid: editors have no Social column; the Show filter adds the remove column.
+  const rowGrid = editor
+    ? tagFilter
+      ? "grid-cols-[2.5rem_2.5rem_3.25rem_minmax(0,1fr)_4.5rem_7rem_4.5rem_5rem_6.5rem_2.5rem]"
+      : "grid-cols-[2.5rem_2.5rem_3.25rem_minmax(0,1fr)_4.5rem_7rem_4.5rem_5rem_6.5rem]"
+    : tagFilter
+      ? "grid-cols-[2.5rem_2.5rem_3.25rem_minmax(0,1fr)_4.5rem_7rem_4.5rem_4.5rem_5rem_6.5rem_2.5rem]"
+      : "grid-cols-[2.5rem_2.5rem_3.25rem_minmax(0,1fr)_4.5rem_7rem_4.5rem_4.5rem_5rem_6.5rem]";
 
   return (
     <>
@@ -2516,7 +2567,9 @@ const AdminTracksEdit = ({
 
     <div
       className={`mt-4 items-start gap-5 xl:grid ${
-        editor ? "xl:grid-cols-[minmax(0,1fr)_16rem_16rem]" : "xl:grid-cols-[minmax(0,1fr)_21rem_16rem_16rem]"
+        editor || !hasSelection
+          ? "xl:grid-cols-[minmax(0,1fr)_16rem_16rem]"
+          : "xl:grid-cols-[minmax(0,1fr)_21rem_16rem_16rem]"
       }`}
     >
       {/* ===== Left: table + pagination ===== */}
@@ -2540,8 +2593,8 @@ const AdminTracksEdit = ({
           </div>
         )}
         <div className="overflow-x-auto rounded-lg border border-border/60">
-          <div className="min-w-[44rem]">
-            <div className={`grid ${tagFilter ? "grid-cols-[2.5rem_2.5rem_3.25rem_minmax(0,1fr)_4.5rem_7rem_4.5rem_5rem_6.5rem_2.5rem]" : "grid-cols-[2.5rem_2.5rem_3.25rem_minmax(0,1fr)_4.5rem_7rem_4.5rem_5rem_6.5rem]"} items-center gap-2 border-b border-border/60 bg-secondary/40 px-3 py-2.5`}>
+          <div className="min-w-[48rem]">
+            <div className={`grid ${rowGrid} items-center gap-2 border-b border-border/60 bg-secondary/40 px-3 py-2.5`}>
               <span className="flex justify-center">
                 <RowCheckbox state={pageState} onToggle={togglePage} label="Select all visible" />
               </span>
@@ -2571,6 +2624,18 @@ const AdminTracksEdit = ({
               >
                 Trending
               </button>
+              {!editor && (
+                <button
+                  type="button"
+                  onClick={() => setSort((s) => (s === "social" ? "default" : "social"))}
+                  title="Posted to social media (only you see this). Click to sort."
+                  className={`text-center font-body text-xs uppercase tracking-wide transition-colors hover:text-[#F4C430] ${
+                    sort === "social" ? "text-[#F4C430]" : "text-muted-foreground"
+                  }`}
+                >
+                  Social
+                </button>
+              )}
               <span className="font-body text-xs uppercase tracking-wide text-muted-foreground">Duration</span>
               <span className="font-body text-xs uppercase tracking-wide text-muted-foreground">Edited</span>
               {tagFilter && <span aria-hidden />}
@@ -2587,7 +2652,7 @@ const AdminTracksEdit = ({
               return (
                 <div key={t.id} className="border-b border-border/40 last:border-b-0">
                 <div
-                  className={`grid ${tagFilter ? "grid-cols-[2.5rem_2.5rem_3.25rem_minmax(0,1fr)_4.5rem_7rem_4.5rem_5rem_6.5rem_2.5rem]" : "grid-cols-[2.5rem_2.5rem_3.25rem_minmax(0,1fr)_4.5rem_7rem_4.5rem_5rem_6.5rem]"} items-center gap-2 px-3 py-2 transition-colors ${
+                  className={`grid ${rowGrid} items-center gap-2 px-3 py-2 transition-colors ${
                     isSelected ? "bg-[#F4C430]/[0.06]" : "hover:bg-foreground/[0.03]"
                   }`}
                 >
@@ -2861,6 +2926,15 @@ const AdminTracksEdit = ({
                       label={`Toggle trending: ${t.title}`}
                     />
                   </span>
+                  {!editor && (
+                    <span className="flex justify-center">
+                      <RowCheckbox
+                        state={social.has(t.id) ? "all" : "none"}
+                        onToggle={() => toggleSocial(t.id)}
+                        label={`Toggle social: ${t.title}`}
+                      />
+                    </span>
+                  )}
                   <span className="font-body text-xs tabular-nums text-muted-foreground">{t.duration}</span>
                   {/* Last editor change: name + date; hover = the change list. */}
                   {editorEdits[t.id] ? (
@@ -3217,8 +3291,9 @@ const AdminTracksEdit = ({
           tags/cover/stems (single track only) =====
           The panel stays LIVE for a multi-selection — only the single-track
           fields below are hidden. Dimming the whole panel used to kill the AI
-          box with it, so batch tagging was unreachable. */}
-      {!editor && (
+          box with it, so batch tagging was unreachable.
+          10.11.2026: the panel shows only while a track is selected. */}
+      {!editor && hasSelection && (
       <aside
         className={`mt-6 flex flex-col rounded-xl border border-[#F4C430]/30 bg-card transition-opacity xl:sticky xl:top-24 xl:mt-0 xl:max-h-[calc(100vh-7rem)] ${dimIf(
           hasSelection,
