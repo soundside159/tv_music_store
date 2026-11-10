@@ -2,6 +2,7 @@
 // Minimal local typings so we don't need @cloudflare/workers-types yet.
 
 import { bumpUsage } from "./_usage";
+import { expireCreatorGrants } from "./_creators";
 
 export interface D1PreparedStatement {
   bind(...values: unknown[]): D1PreparedStatement;
@@ -118,6 +119,8 @@ export const getSessionUser = async (ctx: Ctx): Promise<SessionUser | null> => {
   )
     .bind(token)
     .first<SessionUser>();
+  // Free-Max grants for content creators run out by themselves (throttled).
+  if (row) await expireCreatorGrants(ctx.env.DB);
   return row ?? null;
 };
 

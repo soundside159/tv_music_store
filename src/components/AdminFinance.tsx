@@ -322,15 +322,6 @@ const AdminFinance = () => {
   const label = report.period.label; // "November", "October", "2026", "All time"
   const noPayments = report.period.id === "all" ? "No payments yet." : `No payments in ${label}.`;
 
-  // The money chain as one bar: every slice is a share of what customers paid.
-  const slices = [
-    { key: "tax", label: "Tax / VAT", value: flow.tax, color: "rgba(255,255,255,0.18)" },
-    { key: "fee", label: "Payment fees", value: flow.fee, color: "rgba(255,255,255,0.32)" },
-    { key: "composers", label: "Composers", value: flow.composers, color: "rgba(244,196,48,0.45)" },
-    { key: "store", label: "TV Music Store", value: flow.store, color: GOLD },
-    { key: "splitting", label: "Still splitting", value: flow.splitting, color: "rgba(255,255,255,0.08)" },
-  ].filter((s) => s.value > 0);
-  const barTotal = slices.reduce((a, s) => a + s.value, 0);
 
   const payAction = (b: Balance) =>
     b.payable ? (
@@ -377,29 +368,15 @@ const AdminFinance = () => {
           <p className="py-4 text-center font-body text-sm text-muted-foreground">{noPayments}</p>
         ) : (
           <>
-            <div className="flex h-3 w-full overflow-hidden rounded-full bg-background/60">
-              {slices.map((s) => (
-                <div
-                  key={s.key}
-                  title={`${s.label}: ${money(s.value)}`}
-                  style={{ width: `${(s.value / Math.max(1, barTotal)) * 100}%`, background: s.color }}
-                />
-              ))}
-            </div>
-            <div className="mt-3 divide-y divide-border/40">
+            <div className="divide-y divide-border/40">
               <Row label="Customers paid" value={money(flow.gross)} strong />
-              <Row sign="−" label="Tax / VAT" value={money(flow.tax)} swatch="rgba(255,255,255,0.18)" />
-              <Row sign="−" label="Payment fees" value={money(flow.fee)} swatch="rgba(255,255,255,0.32)" />
+              <Row sign="−" label="Tax / VAT" value={money(flow.tax)} />
+              <Row sign="−" label="Payment fees" value={money(flow.fee)} />
               <Row label="Net" value={money(flow.net)} strong />
-              <Row sign="→" label="Composers" value={money(flow.composers)} swatch="rgba(244,196,48,0.45)" />
-              <Row sign="→" label="TV Music Store" value={money(flow.store)} swatch={GOLD} color={GOLD} />
+              <Row sign="→" label="Composers" value={money(flow.composers)} />
+              <Row sign="→" label="TV Music Store" value={money(flow.store)} color={GOLD} />
               {flow.splitting > 0 && (
-                <Row
-                  sign="→"
-                  label="Still splitting"
-                  value={money(flow.splitting)}
-                  swatch="rgba(255,255,255,0.08)"
-                />
+                <Row sign="→" label="Still splitting" value={money(flow.splitting)} />
               )}
             </div>
             <p className="mt-3 font-body text-xs text-muted-foreground">

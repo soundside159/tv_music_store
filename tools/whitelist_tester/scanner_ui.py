@@ -1981,6 +1981,71 @@ class Square(QtWidgets.QWidget):
         p.end()
 
 
+class AudioDropZone(QtWidgets.QFrame):
+    """Manual check (10.11.2026): drop audio files here (or click to pick them) to see
+    whether they are in our track base. Calls on_files(list of paths)."""
+
+    def __init__(self, on_files):
+        super().__init__()
+        self.on_files = on_files
+        self.setAcceptDrops(True)
+        self.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+        self.setFixedHeight(54)
+        self.setToolTip("Is this track in our base? Drop audio files here or click to pick them.\n"
+                        "wav, mp3, flac, aif, ogg, m4a")
+        lay = QtWidgets.QVBoxLayout(self)
+        lay.setContentsMargins(10, 6, 10, 6)
+        self.txt = QtWidgets.QLabel("Drop an audio file here to find it in our base")
+        self.txt.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        lay.addWidget(self.txt)
+        self._hot(False)
+
+    def _hot(self, on):
+        col = GOLD if on else "#4a545c"
+        self.setStyleSheet("AudioDropZone{border:1px dashed %s;border-radius:4px;background:%s}"
+                           "QLabel{color:%s;font-size:12px;background:transparent;border:none}"
+                           % (col, "rgba(244,196,48,0.06)" if on else "transparent", GOLD if on else TEXT_GRAY))
+
+    @staticmethod
+    def _paths(e):
+        md = e.mimeData()
+        if not md.hasUrls():
+            return []
+        return [u.toLocalFile() for u in md.urls()
+                if u.isLocalFile() and os.path.splitext(u.toLocalFile())[1].lower() in AUDIO_EXT]
+
+    def dragEnterEvent(self, e):
+        if self._paths(e):
+            e.acceptProposedAction()
+            self._hot(True)
+
+    def dragLeaveEvent(self, e):
+        self._hot(False)
+
+    def dropEvent(self, e):
+        self._hot(False)
+        paths = self._paths(e)
+        if paths:
+            e.acceptProposedAction()
+            self.on_files(paths)
+
+    def enterEvent(self, e):
+        self._hot(True)
+        super().enterEvent(e)
+
+    def leaveEvent(self, e):
+        self._hot(False)
+        super().leaveEvent(e)
+
+    def mousePressEvent(self, e):
+        if e.button() == QtCore.Qt.MouseButton.LeftButton:
+            paths, _f = QtWidgets.QFileDialog.getOpenFileNames(
+                self, "Audio files to find in our base", "",
+                "Audio (%s);;All files (*.*)" % " ".join("*" + x for x in AUDIO_EXT))
+            if paths:
+                self.on_files(paths)
+
+
 class RailItem(QtWidgets.QWidget):
     """One customer / custom list in the left rail: square, name, scanning dot, count."""
     clicked = QtCore.pyqtSignal(str)
@@ -2586,9 +2651,15 @@ class App(QtWidgets.QMainWindow):
         self.load_overview()
         if self.settings["token"]:
             try:
+                had_base = bool(self.base.meta)
                 n = self.base.update(self.settings, self.log, self.stage)
-                self.base.fresh = []  # first fill: nothing to re-check
                 self.log("Track base ready: %d tracks (%d new)." % (len(self.base.meta), n))
+                if had_base and self.base.fresh:
+                    # tracks added on the site / in the folder while the program was closed:
+                    # look for them in every video already scanned (stored fingerprints)
+                    self.recheck_fresh()
+                else:
+                    self.base.fresh = []  # very first fill: no scanned videos to re-check yet
                 self.stage("Ready", 1)
             except Exception as e:
                 self.log("Could not reach the site: %s" % e)
@@ -3662,13 +3733,14 @@ class App(QtWidgets.QMainWindow):
             self.busy = False
 
     def recheck_fresh(self):
-        """New tracks on the site: look for them in videos already checked that
-        were published after the track appeared (stored fingerprints, no download)."""
+        """New tracks (site or unreleased folder): look for them in EVERY video
+        already checked, whatever its publish date (owner's rule; stored
+        fingerprints, no download)."""
         fresh, self.base.fresh = self.base.fresh, []
         if not fresh:
             return
-        since = min((self.base.meta[t].get("addedAt") or "0000") for t, _ in fresh if t in self.base.meta)
-        self.recheck_tracks(fresh, since)
+        self.log("Re-checking scanned videos for %d new track(s)." % len(fresh))
+        self.recheck_tracks(fresh)
 
     def recheck_tracks(self, pairs, since=""):
         """Look for the given tracks [(key, hashes)] in every video already scanned
@@ -4013,6 +4085,17 @@ class App(QtWidgets.QMainWindow):
                      "Paste a YouTube channel or video link above and press Load.")
         self.vcount = label("Paste a link above. Pick several videos with Ctrl or Shift.", "muted")
         ll.addWidget(self.vcount)
+        # 10.11.2026: is this audio file in our base? Only the answer, nothing goes in the list.
+        self.drop_zone = AudioDropZone(self.find_files)
+        ll.addWidget(self.drop_zone)
+        self.drop_res = QtWidgets.QLabel("")
+        self.drop_res.setWordWrap(True)
+        self.drop_res.setTextFormat(QtCore.Qt.TextFormat.RichText)
+        self.drop_res.setStyleSheet("font-size:12px")
+        self.drop_res.setVisible(False)
+        ll.addWidget(self.drop_res)
+        self._drop_todo = []
+        self._drop_busy = False
         row = QtWidgets.QHBoxLayout()
         row.setSpacing(8)
         self.cb_voice = fx.ToggleBox("Remove voice (slower)")
@@ -4399,6 +4482,48 @@ class App(QtWidgets.QMainWindow):
         if vids:
             self.vlist.setCurrentItem(self.vlist.topLevelItem(0))
             fx.reveal_tree(self.vlist)
+
+    # -- audio files (10.11.2026): is this track in our base? --
+    def find_files(self, paths):
+        if self.base.ht is None:
+            say(self, "Track base not ready", "The track base is empty, so there is nothing to search yet.")
+            return
+        self._drop_todo.extend(paths)
+        if not self._drop_busy:
+            self._drop_busy = True
+            self._drop_lines = []
+            self.bg(self._find_files)
+
+    def _drop_show(self, lines, busy=""):
+        html = "<br>".join(lines + (["<span style='color:%s'>%s</span>" % (TEXT_GRAY, busy)] if busy else []))
+        self.ui(lambda: (self.drop_res.setText(html), self.drop_res.setVisible(bool(html))))
+
+    def _find_files(self):
+        import html as _h
+        try:
+            while self._drop_todo:
+                path = self._drop_todo.pop(0)
+                name = _h.escape(os.path.basename(path))
+
+                def prog(text, frac, n=name):
+                    pct = "" if frac is None else "  %d%%" % int(100 * frac)
+                    self._drop_show(self._drop_lines, "%s: searching...%s" % (n, pct))
+                try:
+                    _s, rows = find_in_audio(self.base, path, False, prog)
+                    if rows:
+                        found = ", ".join("%s (%s)" % (_h.escape(r["title"]), _h.escape(r["composer"])) for r in rows)
+                        line = "<b style='color:%s'>%s</b><br><span style='color:%s'>In our base: %s</span>" % (
+                            TEXT_ROW, name, GOLD, found)
+                    else:
+                        line = "<b style='color:%s'>%s</b><br><span style='color:%s'>Not in our base</span>" % (
+                            TEXT_ROW, name, TEXT_GRAY)
+                except Exception as e:
+                    line = "<b style='color:%s'>%s</b><br><span style='color:%s'>Could not read the file: %s</span>" % (
+                        TEXT_ROW, name, RED, _h.escape(str(e).splitlines()[0] if str(e) else repr(e)))
+                self._drop_lines = (self._drop_lines + [line])[-6:]
+                self._drop_show(self._drop_lines)
+        finally:
+            self._drop_busy = False
 
     # -- checking (one after another, in the background) --
     def check_selected(self):

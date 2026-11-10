@@ -2,6 +2,7 @@ import { ensureAgreementTable, ensureAiOptinTable } from "../_agreement";
 import { ensureWithholdingColumns } from "../_revenue";
 import { ensureUploadPermColumns } from "./upload-audio";
 import { ensureStripeColumns } from "../stripe/_stripe";
+import { ensureCreatorTable } from "../_creators";
 import {
   deleteUserAccount,
   getSessionUser,
@@ -179,7 +180,30 @@ export const onRequestGet = async (ctx: Ctx) => {
     // table missing
   }
 
+  // Content creators (free Max until a date): ALL of them, active or not, so
+  // the Creators tab never loses one behind the 200-newest-users limit.
+  let creators: Array<{
+    user_id: string;
+    email: string;
+    name: string | null;
+    granted_at: string;
+    until: string;
+    note: string | null;
+  }> = [];
+  try {
+    await ensureCreatorTable(ctx.env.DB);
+    const cr = await ctx.env.DB.prepare(
+      `SELECT c.user_id, u.email, u.name, c.granted_at, c.until, c.note
+         FROM content_creators c JOIN users u ON u.id = c.user_id
+        ORDER BY c.until DESC`,
+    ).all<(typeof creators)[number]>();
+    creators = cr.results ?? [];
+  } catch {
+    // table missing - no creators yet
+  }
+
   return json({
+    creators,
     users: rows.results.map((u) => ({
       ...u,
       cue: cueByUser.get(u.id) ?? null,
@@ -307,6 +331,93 @@ const normalizeComposerSlugs = async (db: D1Database) => {
   }
 };
 
+/**
+ * Content Creator switch. `until` (YYYY-MM-DD) grants or extends free Max to the
+ * end of that day; null switches it off now. The creator row is never deleted:
+ * an inactive creator stays in the admin Creators tab.
+ */
+const setCreator = async (
+  db: D1Database,
+  userId: string,
+  until: string | null,
+  note?: string,
+): Promise<string | null> => {
+  await ensureCreatorTable(db);
+  await ensureStripeColumns(db);
+  const nowIso = new Date().toISOString();
+  const existing = await db
+    .prepare(`SELECT sub_id, granted_at, until FROM content_creators WHERE user_id = ?1`)
+    .bind(userId)
+    .first<{ sub_id: string | null; granted_at: string; until: string }>();
+  const latest = await db
+    .prepare(
+      `SELECT id, stripe_sub_id, plan, status FROM subscriptions
+        WHERE user_id = ?1 ORDER BY rowid DESC LIMIT 1`,
+    )
+    .bind(userId)
+    .first<{ id: string; stripe_sub_id: string | null; plan: string; status: string }>();
+  // Our own grant row = the latest row, made by us, never touched by Stripe.
+  const ownRow =
+    existing?.sub_id && latest && latest.id === existing.sub_id && !latest.stripe_sub_id ? latest.id : null;
+
+  if (until === null) {
+    if (!existing) return "This user is not a content creator";
+    await db.prepare(`UPDATE content_creators SET until = ?2 WHERE user_id = ?1`).bind(userId, nowIso).run();
+    if (ownRow) {
+      await db
+        .prepare(`UPDATE subscriptions SET plan = 'free', status = 'canceled', current_period_end = ?2 WHERE id = ?1`)
+        .bind(ownRow, nowIso)
+        .run();
+    }
+    return null;
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(until)) return "Pick an end date";
+  const untilIso = `${until}T23:59:59.000Z`;
+  if (untilIso <= nowIso) return "The end date must be in the future";
+
+  // A real paid subscription is running: don't stack a free grant on top of it
+  // (Stripe renewals update the latest row and would overwrite ours).
+  if (latest && latest.stripe_sub_id && latest.status === "active" && latest.plan !== "free") {
+    return "This user already pays for a subscription - cancel it first or wait until it ends";
+  }
+
+  let subId = ownRow;
+  if (subId) {
+    await db
+      .prepare(
+        `UPDATE subscriptions SET plan = 'max', status = 'active', current_period_end = ?2, cancel_at_period_end = 0
+          WHERE id = ?1`,
+      )
+      .bind(subId, untilIso)
+      .run();
+  } else {
+    subId = newId("crt");
+    await db
+      .prepare(
+        `INSERT INTO subscriptions (id, user_id, plan, interval, status, current_period_end, cancel_at_period_end)
+         VALUES (?1, ?2, 'max', NULL, 'active', ?3, 0)`,
+      )
+      .bind(subId, userId, untilIso)
+      .run();
+  }
+  // A new period starts when the old grant had already ended (or was switched off).
+  const stillRunning = !!existing && existing.until > nowIso;
+  await db
+    .prepare(
+      `INSERT INTO content_creators (user_id, granted_at, until, note, sub_id)
+       VALUES (?1, ?2, ?3, ?4, ?5)
+       ON CONFLICT(user_id) DO UPDATE SET
+         granted_at = CASE WHEN ?6 = 1 THEN content_creators.granted_at ELSE excluded.granted_at END,
+         until = excluded.until,
+         note = COALESCE(excluded.note, content_creators.note),
+         sub_id = excluded.sub_id`,
+    )
+    .bind(userId, nowIso, untilIso, note?.trim() ? note.trim().slice(0, 200) : null, subId, stillRunning ? 1 : 0)
+    .run();
+  return null;
+};
+
 export const onRequestPatch = async (ctx: Ctx) => {
   if (!ctx.env.DB) return json({ error: "DB not bound" }, 503);
   const gate = await requireAdmin(ctx);
@@ -321,6 +432,8 @@ export const onRequestPatch = async (ctx: Ctx) => {
     /** Artist page background photo path ("" clears it). */
     photo?: string;
     removeComposer?: boolean;
+    /** Content Creator: free Max until this day (YYYY-MM-DD); null = switch off now. */
+    creator?: { until: string | null; note?: string };
     /** Change the user's login email (unique; the owner account is protected). */
     email?: string;
     /** Upload rights of the composer profile: music and sounds are separate. */
@@ -347,9 +460,11 @@ export const onRequestPatch = async (ctx: Ctx) => {
   const bio = typeof body?.bio === "string" ? body.bio.trim().slice(0, 2000) : undefined;
   const photo = typeof body?.photo === "string" ? body.photo.trim().slice(0, 500) : undefined;
   const newEmail = typeof body?.email === "string" ? body.email.trim().toLowerCase() : undefined;
+  const creator = body?.creator;
   if (
     !userId ||
     (!role &&
+      !creator &&
       pseudonym === undefined &&
       bio === undefined &&
       photo === undefined &&
@@ -392,6 +507,10 @@ export const onRequestPatch = async (ctx: Ctx) => {
   }
   if (role) {
     await ctx.env.DB.prepare(`UPDATE users SET role = ?1 WHERE id = ?2`).bind(role, userId).run();
+  }
+  if (creator) {
+    const err = await setCreator(ctx.env.DB, userId, creator.until, creator.note);
+    if (err) return json({ error: err }, 400);
   }
   if (pseudonym !== undefined) {
     const err = await upsertComposer(ctx.env.DB, userId, pseudonym.slice(0, 60));

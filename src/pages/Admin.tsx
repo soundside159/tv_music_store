@@ -161,7 +161,26 @@ interface AdminLicense {
 /** The owner account — its Admin checkbox is locked so he can't demote himself. */
 const OWNER_EMAIL = "soundside159@gmail.com";
 
-type UserTab = "all" | "users" | "composers" | "admins";
+type UserTab = "all" | "users" | "composers" | "admins" | "creators";
+
+/** Content creator (blogger): free Max until a date. Kept after it runs out. */
+interface CreatorRow {
+  user_id: string;
+  email: string;
+  name: string | null;
+  granted_at: string;
+  until: string;
+  note: string | null;
+}
+
+const creatorActive = (c: CreatorRow | undefined) => !!c && c.until > new Date().toISOString();
+
+/** YYYY-MM-DD, `months` after the later of today and the current end date. */
+const creatorUntilPlus = (c: CreatorRow | undefined, months: number) => {
+  const base = creatorActive(c) ? new Date(c!.until) : new Date();
+  base.setUTCMonth(base.getUTCMonth() + months);
+  return base.toISOString().slice(0, 10);
+};
 
 /** Composer = has a pseudonym profile (or the legacy composer role). */
 const isComposerUser = (u: LiveUser) => !!u.pseudonym || u.role === "composer";
@@ -215,6 +234,7 @@ const Admin = () => {
   }, [sectionParam]);
   const [openPeriod, setOpenPeriod] = useState<string | null>(null);
   const [liveUsers, setLiveUsers] = useState<LiveUser[] | null>(null);
+  const [creators, setCreators] = useState<CreatorRow[]>([]);
   // Sound downloads total (their own table) — the Downloads dashboard card's sub-line.
   const [sfxDownloadsTotal, setSfxDownloadsTotal] = useState(0);
   const [usersError, setUsersError] = useState<string | null>(null);
@@ -224,6 +244,7 @@ const Admin = () => {
   // clip it), and the row whose Composer checkbox was just ticked (pseudonym
   // not saved yet).
   const [userTab, setUserTab] = useState<UserTab>("all");
+  const [usersReload, setUsersReload] = useState(0);
   // Dashboard → single-track license prices (site_config, server-priced carts).
   const [licPrices, setLicPrices] = useState<{ personal: string; commercial: string; professional: string } | null>(null);
   const [licBusy, setLicBusy] = useState(false);
@@ -322,15 +343,38 @@ const Admin = () => {
       .then(async (res) => {
         const data = (await res.json()) as {
           users?: LiveUser[];
+          creators?: CreatorRow[];
           sfxDownloads?: number;
           error?: string;
         };
         if (!res.ok || !data.users) throw new Error(data.error ?? "Failed to load users");
         setLiveUsers(data.users);
+        setCreators(data.creators ?? []);
         setSfxDownloadsTotal(data.sfxDownloads ?? 0);
       })
       .catch((e: Error) => setUsersError(e.message));
-  }, [isAdmin]);
+  }, [isAdmin, usersReload]);
+
+  // Content Creator: free Max until `until` (YYYY-MM-DD), or null = switch off.
+  const setCreator = async (userId: string, until: string | null) => {
+    if (until === null && !window.confirm("Switch off free Max for this creator now? He stays in the Creators tab.")) return;
+    setSavingUserId(userId);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ userId, creator: { until } }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Update failed");
+      setUsersReload((n) => n + 1);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Update failed");
+    } finally {
+      setSavingUserId(null);
+    }
+  };
 
   useEffect(() => {
     if (!isAdmin || section !== "licenses") return;
@@ -972,7 +1016,9 @@ const Admin = () => {
                     ["users", "Users", plain.length],
                     ["composers", "Composers", composers.length],
                     ["admins", "Admins", admins.length],
+                    ["creators", "Creators", creators.length],
                   ];
+                  const creatorById = new Map(creators.map((c) => [c.user_id, c]));
                   return (
                     <>
                       <div className="mb-4 flex w-fit gap-1 rounded-lg border border-border/60 bg-background/40 p-1">
@@ -991,6 +1037,74 @@ const Admin = () => {
                           </button>
                         ))}
                       </div>
+                      {userTab === "creators" ? (
+                        <div className="overflow-x-auto">
+                          {creators.length === 0 ? (
+                            <p className="font-body text-sm text-muted-foreground">
+                              No content creators yet. Open a user's menu and give him free Max.
+                            </p>
+                          ) : (
+                            <table className="w-full min-w-[640px] font-body text-sm">
+                              <thead>
+                                <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                                  <th className="py-2 pr-4">Creator</th>
+                                  <th className="py-2 pr-4">Free Max</th>
+                                  <th className="py-2 pr-4">Since</th>
+                                  <th className="py-2">Extend / stop</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {creators.map((c) => {
+                                  const on = creatorActive(c);
+                                  const busy = savingUserId === c.user_id;
+                                  return (
+                                    <tr key={c.user_id} className="border-b border-border/50 last:border-0">
+                                      <td className="py-2.5 pr-4">
+                                        <span className="block text-foreground">{c.name ?? c.email.split("@")[0]}</span>
+                                        <span className="block text-xs text-muted-foreground">{c.email}</span>
+                                      </td>
+                                      <td className="whitespace-nowrap py-2.5 pr-4">
+                                        <StatusPill
+                                          text={on ? `Active until ${c.until.slice(0, 10)}` : `Ended ${c.until.slice(0, 10)}`}
+                                          active={on}
+                                        />
+                                      </td>
+                                      <td className="whitespace-nowrap py-2.5 pr-4 text-muted-foreground">
+                                        {c.granted_at.slice(0, 10)}
+                                      </td>
+                                      <td className="py-2.5">
+                                        <span className="flex flex-wrap items-center gap-1.5">
+                                          {[3, 6, 12].map((m) => (
+                                            <button
+                                              key={m}
+                                              type="button"
+                                              disabled={busy}
+                                              onClick={() => void setCreator(c.user_id, creatorUntilPlus(c, m))}
+                                              className="rounded-md border border-border/60 px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430] disabled:opacity-50"
+                                            >
+                                              +{m} mo
+                                            </button>
+                                          ))}
+                                          {on && (
+                                            <button
+                                              type="button"
+                                              disabled={busy}
+                                              onClick={() => void setCreator(c.user_id, null)}
+                                              className="rounded-md border border-red-400/40 px-2 py-1 text-xs text-red-400 transition-colors hover:bg-red-400/10 disabled:opacity-50"
+                                            >
+                                              Stop
+                                            </button>
+                                          )}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          )}
+                        </div>
+                      ) : (
                       <div className="overflow-x-auto">
                         <table className="w-full min-w-[640px] font-body text-sm">
                           <thead>
@@ -1033,7 +1147,12 @@ const Admin = () => {
                                         Composer{u.pseudonym ? ` · ${u.pseudonym}` : ""}
                                       </span>
                                     )}
-                                    {u.role !== "admin" && u.role !== "editor" && !isComposerUser(u) && (
+                                    {creatorActive(creatorById.get(u.id)) && (
+                                      <span className="rounded-full bg-fuchsia-400/15 px-2.5 py-0.5 text-xs font-semibold text-fuchsia-300">
+                                        Creator
+                                      </span>
+                                    )}
+                                    {u.role !== "admin" && u.role !== "editor" && !isComposerUser(u) && !creatorActive(creatorById.get(u.id)) && (
                                       <span className="rounded-full bg-secondary px-2.5 py-0.5 text-xs text-muted-foreground">
                                         Customer
                                       </span>
@@ -1108,6 +1227,7 @@ const Admin = () => {
                           </tbody>
                         </table>
                       </div>
+                      )}
                     </>
                   );
                 })()}
@@ -1172,6 +1292,57 @@ const Admin = () => {
                         </p>
                       </>
                     )}
+                    {/* Content Creator: free Max until a date, switches itself off. */}
+                    {!ownerLocked && (() => {
+                      const cr = creators.find((c) => c.user_id === u.id);
+                      const on = creatorActive(cr);
+                      return (
+                        <div className="mt-3 border-t border-border/60 pt-3">
+                          <p className="mb-1 font-body text-[10px] font-bold uppercase tracking-[0.18em] text-fuchsia-300">
+                            Content creator (free Max)
+                          </p>
+                          <p className="mb-2 font-body text-[11px] text-muted-foreground">
+                            {on
+                              ? `Active until ${cr!.until.slice(0, 10)}`
+                              : cr
+                                ? `Ended ${cr.until.slice(0, 10)}. Extend to switch it on again.`
+                                : "Gives Max until the date you pick, then Free by itself."}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {[3, 6, 12].map((m) => (
+                              <button
+                                key={m}
+                                type="button"
+                                disabled={savingUserId === u.id}
+                                onClick={() => void setCreator(u.id, creatorUntilPlus(cr, m))}
+                                className="rounded-md border border-border/60 px-2 py-1 font-body text-xs text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430] disabled:opacity-50"
+                              >
+                                +{m} mo
+                              </button>
+                            ))}
+                            <input
+                              type="date"
+                              disabled={savingUserId === u.id}
+                              title="Or pick the exact end date"
+                              onChange={(e) => {
+                                if (e.target.value) void setCreator(u.id, e.target.value);
+                              }}
+                              className="rounded-md border border-border bg-background px-1.5 py-0.5 font-body text-xs text-foreground focus:border-[#F4C430] focus:outline-none"
+                            />
+                          </div>
+                          {on && (
+                            <button
+                              type="button"
+                              disabled={savingUserId === u.id}
+                              onClick={() => void setCreator(u.id, null)}
+                              className="mt-2 font-body text-[11px] text-red-400 hover:underline disabled:opacity-50"
+                            >
+                              Switch off now
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
                     {/* Login email (saves on Enter / click away; owner protected). */}
                     {!ownerLocked && (
                       <div className="mt-3">

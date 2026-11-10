@@ -20,6 +20,7 @@
 import { bumpUsage } from "../_usage";
 import { newId, type D1Database, type Env } from "../_utils";
 import { ytChannel } from "./_whitelist";
+import { creatorOn } from "../_creators";
 
 const YT = "https://www.googleapis.com/youtube/v3";
 export const PLAN_LIMITS: Record<string, number> = { free: 0, pro: 3, max: 10 };
@@ -207,6 +208,8 @@ export const currentPlan = async (db: D1Database, userId: string): Promise<strin
 export const paidOn = async (db: D1Database, userId: string, isoDate: string): Promise<boolean> => {
   if (await isAdminUser(db, userId)) return true;
   const day = (isoDate || "").slice(0, 10);
+  // Content creators: free Max on that day counts like a paid plan.
+  if (await creatorOn(db, userId, day)) return true;
   try {
     const any = await db
       .prepare(`SELECT 1 AS x FROM subscription_licenses WHERE user_id = ?1 LIMIT 1`)
