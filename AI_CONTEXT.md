@@ -5139,3 +5139,47 @@ True: `brandCover()` was only in the AI path.
   glow (`fill` state + `fillCls()` in CertDialog).
 - 2026-11-08: Professional one-time licence now names streaming/VOD (Netflix, Amazon, Tubi) and trailers: src/lib/licenses.ts usageTerms, functions/api/license-pdf.ts permitted list (replaced the duplicate "Client & commercial projects" line, still 5 lines, widths checked), LicenseTerms.tsx par.2, Pricing.tsx FAQ. Licensing.tsx table already had "TV & streaming broadcast". OPEN: LicenseTerms par.2 says Max covers "broadcast" but Licensing table says Max has no TV broadcast - owner to decide.
 - 2026-11-08: Max subscription does NOT include broadcast (same as Tunetank: Max = Commercial; TV/radio/cinema/VOD = one-time Professional). Fixed LicenseTerms.tsx par.2 and license-pdf.ts Max scope/permitted/notPermitted. OPEN: Pro plan PDF lists "Online client content" as permitted, but Pricing/Licensing say client work is Max only - owner to decide.
+
+## 2026-11-09 AI agents: machine-readable tracks, agent search API, MCP server, Bing, MCP Registry
+- `functions/_middleware.ts` (/track/ prerender): JSON-LD MusicRecording now has image, keywords
+  (use case/genre/mood/BPM), license URL, publisher and `offers` (Personal/Commercial/Professional,
+  LIVE prices from getLicensePrices). Bot body shows length/BPM/genre/mood/use case + a "License this
+  track" block with the three licences and prices. UNLISTED (link-only) tracks now render (noindex)
+  instead of a 404.
+- `functions/llms.txt.ts`: rewritten facts. Licence names fixed (was "Standard and Broadcast", which
+  do not exist) to Personal/Commercial/Professional with live prices; subscriptions; "films, trailers,
+  TV, streaming = Professional only"; Content ID + whitelist; catalogue is NON-exclusive; how agents
+  search and license; where the MCP server and JSON search live.
+- NEW `functions/api/agent/_search.ts` (shared), `functions/api/agent/search.ts`
+  (GET /api/agent/search?query=&mood=&genre=&use_case=&min_bpm=&max_bpm=&min_seconds=&max_seconds=&limit=,
+  ?tags=1 = vocabulary). Keyword scoring in memory, NO language model, published tracks only.
+- NEW `functions/mcp.ts` = MCP server at https://tvmusicstore.com/mcp (Streamable HTTP, stateless JSON,
+  read-only). Tools: search_music, list_tags, get_track (with licence prices), licensing_info.
+  Tested live 2026-11-09: works.
+- `functions/api/ai-search.ts`: daily cap of 3000 paid OpenAI calls (cache rows of the last 24 h);
+  past it the box answers as a plain word search (`limited: true`). Owner kept gpt-4o-mini (cheap).
+- Bing Webmaster Tools: tvmusicstore.com + fruitynest.app imported from Google Search Console,
+  sitemap submitted, 8 main URLs submitted. Cloudflare Crawler Hints ON (IndexNow pings to Bing).
+- Google Search Console: the property is the DOMAIN property `sc-domain:tvmusicstore.com` (the
+  https:// URL-prefix one is not ours). Sitemap https://tvmusicstore.com/sitemap.xml submitted.
+- Cloudflare AI Crawl Control (2026-11-09): AI crawlers are allowed; ~3.35k AI crawler requests/7 days
+  (OpenAI, Google, Claude, Perplexity, Bing...).
+
+### MCP Registry (official) - ONLY THE AI CHANGES THIS
+- Published as `com.tvmusicstore/music-search` v1.0.0 (domain auth over HTTP), status active.
+  Check: https://registry.modelcontextprotocol.io/v0/servers?search=tvmusicstore
+- Files: `tools/mcp_registry/server.json` (the listing), `tools/mcp_registry/publish_registry.py`
+  (owner presses Run in VS Code, no arguments: checks the proof on the live site, downloads
+  mcp-publisher into `bin/`, logs in, publishes), `public/.well-known/mcp-registry-auth` (public
+  proof, must stay deployed), `tools/mcp_registry/key.pem` (SECRET domain key, gitignored, never send).
+- RULE (owner, 2026-11-09): the owner never edits these. Any change (description, title, url, new
+  tools...) is done by the AI: edit server.json, RAISE "version" (1.0.1, 1.1.0...), then ask the owner
+  to press Run on publish_registry.py and check the registry link above.
+- PulseMCP and other directories take servers from the official registry (their own submit forms
+  are closed), so no separate submissions are needed.
+
+## Early Black Friday promo (2026-11-10)
+- Stripe promotion code BLACKFRIDAY20: 20% off once, annual plans only (min order $84), redeemable until 30 Nov 2026 23:59 GMT. Created in the Stripe dashboard.
+- Site display: src/lib/promo.ts (code, percent, endsAt; everything hides after endsAt), src/components/PromoStrip.tsx (gold strip inside the fixed nav, links to /pricing, pushes body down 2rem), ribbon + crossed price + "first year with promo code" in src/pages/Pricing.tsx and src/components/PlanModal.tsx (annual only).
+- Pricing.tsx: CTA buttons now use mt-auto so they line up at the bottom of all cards.
+- One-time track licences are NOT discounted yet (owner may add later).

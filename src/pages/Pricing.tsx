@@ -13,6 +13,7 @@ import { usePlans, useSubscription } from "@/hooks/useMockData";
 import { useAuthSession } from "@/hooks/useAuth";
 import { BILLING_ENABLED, planCardAction, startCheckout, switchPlan } from "@/lib/billing";
 import { useSeo } from "@/hooks/useSeo";
+import { PROMO, money, promoActive, promoPrice } from "@/lib/promo";
 import type { BillingInterval, PlanConfig, PlanId } from "@/types/domain";
 
 const GOLD = "#F4C430";
@@ -84,6 +85,8 @@ const PlanCard = ({
   const [busy, setBusy] = useState(false);
   const isPro = plan.id === "pro";
   const price = interval === "annual" ? plan.priceAnnualPerMonth : plan.priceMonthly;
+  // Promo applies to paid annual plans only (the Stripe code needs a yearly total).
+  const onPromo = promoActive() && interval === "annual" && plan.id !== "free";
 
   // One shared rule set with the PlanModal popup — see planCardAction in
   // lib/billing.ts. The current plan is a dead button on purpose: managing /
@@ -148,18 +151,39 @@ const PlanCard = ({
         </span>
       )}
       <h3 className="font-body text-lg font-semibold text-foreground">{plan.name}</h3>
+      {onPromo && (
+        <div className="pointer-events-none absolute inset-0 z-[2] overflow-hidden rounded-xl">
+          <div className="absolute right-[-50px] top-[34px] w-[200px] rotate-45 bg-[#e5484d] py-[5px] text-center font-body text-[10px] font-bold uppercase tracking-[0.06em] text-white shadow-[0_2px_6px_rgba(0,0,0,0.4)]">
+            {PROMO.ribbon}
+          </div>
+        </div>
+      )}
       <div className="mt-4 flex items-baseline gap-1">
-        <span className="font-body text-4xl font-semibold text-foreground">${price}</span>
+        {onPromo && (
+          <span className="mr-1.5 font-body text-lg text-muted-foreground line-through">${price}</span>
+        )}
+        <span className="font-body text-4xl font-semibold text-foreground">
+          ${onPromo ? money(promoPrice(price)) : price}
+        </span>
         <span className="font-body text-sm text-muted-foreground">/month</span>
       </div>
       <p className="mt-1 font-body text-xs text-muted-foreground">
-        {plan.id === "free"
-          ? "No credit card required"
-          : interval === "annual"
-            ? `Billed yearly · $${plan.priceMonthly}/mo if monthly`
-            : "Billed monthly"}
+        {plan.id === "free" ? (
+          "No credit card required"
+        ) : onPromo ? (
+          <>
+            ${money(promoPrice(price * 12))} first year with promo code{" "}
+            <span className="font-semibold" style={{ color: GOLD }}>
+              {PROMO.code}
+            </span>
+          </>
+        ) : interval === "annual" ? (
+          `Billed yearly · $${plan.priceMonthly}/mo if monthly`
+        ) : (
+          "Billed monthly"
+        )}
       </p>
-      <ul className="mt-6 flex flex-col gap-3">
+      <ul className="mb-8 mt-6 flex flex-col gap-3">
         {plan.highlights.map((h) => (
           <li key={h} className="flex items-start gap-2 font-body text-sm text-foreground/90">
             <Check className="mt-0.5 h-4 w-4 shrink-0" style={{ color: GOLD }} />
@@ -170,7 +194,7 @@ const PlanCard = ({
       {plan.id === "free" ? (
         <Link
           to={isAuthed ? "/catalog" : "/login"}
-          className="mt-8 rounded-lg border border-border py-2.5 text-center font-body text-sm font-semibold text-foreground transition-colors duration-300 hover:border-[#F4C430] hover:text-[#F4C430]"
+          className="mt-auto rounded-lg border border-border py-2.5 text-center font-body text-sm font-semibold text-foreground transition-colors duration-300 hover:border-[#F4C430] hover:text-[#F4C430]"
         >
           {cta}
         </Link>
@@ -179,7 +203,7 @@ const PlanCard = ({
           type="button"
           disabled={disabled}
           onClick={() => void onSelect()}
-          className={`mt-8 rounded-lg py-2.5 text-center font-body text-sm font-semibold transition-colors duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${
+          className={`mt-auto rounded-lg py-2.5 text-center font-body text-sm font-semibold transition-colors duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${
             isCurrent
               ? "border border-[#F4C430]/60 bg-[#F4C430]/10 text-[#F4C430] shadow-inner"
               : isPro

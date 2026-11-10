@@ -1,3 +1,4 @@
+import PromoStrip from "@/components/PromoStrip";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { LogOut, Mail, Menu, Search, ShoppingCart, User, X } from "lucide-react";
@@ -122,6 +123,7 @@ const Navigation = () => {
   return (
     <>
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/85 backdrop-blur-xl">
+      <PromoStrip />
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6">
         <div className="flex items-center justify-between h-16 md:h-20">
           {/* Left: logo + nav links */}

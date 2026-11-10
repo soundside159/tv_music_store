@@ -73,6 +73,7 @@ sys.path.insert(0, os.path.join(HERE, "engine"))
 import fp  # noqa: E402
 import sep  # noqa: E402
 import yt_dlp  # noqa: E402
+import scanner_fx as fx  # noqa: E402  (look and motion, 09.11.2026)
 
 GOLD = "#F4C430"
 PALETTE = ["#F4C430", "#ff8fb1", "#7cc7ff", "#9be38a", "#c9a0ff", "#ffb366", "#6ee7d8"]
@@ -596,20 +597,35 @@ def group_rows(base, found):
     return rows
 
 
-PITCH_SHIFTS = [-2, -1, 1, 2]  # semitones: uploaders often move the pitch to dodge Content ID
+PITCH_SHIFTS = [-2, -1, 1, 2]
+PREFETCH = 2  # videos of the queue downloaded in advance while one is analysed  # semitones: uploaders often move the pitch to dodge Content ID
 
 
 def match_shifts(base, hs, dur, debug=None, progress=None):
     """Search every fingerprint (original + pitch moved) and merge the finds.
     hs = {semitones the video was moved by: hashes}. A find in the copy moved
-    by +2 means the video itself has the track 2 semitones LOWER (pitch -2)."""
+    by +2 means the video itself has the track 2 semitones LOWER (pitch -2).
+    09.11.2026: the searches run at the same time (one per CPU core); the merge
+    goes in the same order as before, so the result is the same."""
+    order = sorted(hs, key=lambda x: (x != 0, abs(x), x))
+    if progress and len(order) > 1:
+        progress("Searching the track base (%d searches at once)" % len(order), None)
+    kw = match_kw()
+
+    def one(st):
+        d = {}
+        return fp.find_tracks(None, base.ht, hashes=hs[st], dur=dur, debug_out=d, **kw), d
+    workers = max(1, min(len(order), os.cpu_count() or 2))
+    if workers > 1:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            results = list(ex.map(one, order))
+    else:
+        results = [one(st) for st in order]
     found = []
-    for st in sorted(hs, key=lambda x: (x != 0, abs(x), x)):
-        if progress and st:
-            progress("Searching with the pitch moved %+d" % st, None)
-        segs = fp.find_tracks(None, base.ht, hashes=hs[st], dur=dur, **match_kw())
+    for st, (segs, d) in zip(order, results):
         if debug is not None:
-            debug.append(("original audio" if st == 0 else "pitch moved %+d semitones" % st, dict(fp.LAST_DEBUG)))
+            debug.append(("original audio" if st == 0 else "pitch moved %+d semitones" % st, d))
         for g in segs:
             g["pitch"] = -st
             if not any(o["track"] == g["track"] and o["start"] < g["end"] and g["start"] < o["end"] for o in found):
@@ -858,7 +874,8 @@ SESSION_LOG = os.path.join(DATA, "session_log.txt")  # this run only, cleared on
 QSS = """
 * { font-family: 'Segoe UI', 'Inter', sans-serif; color: #d8dde1; font-size: 12px; }
 QMainWindow { background: #485259; }
-QWidget#root { background: #12181D; }
+QWidget#root { background: #485259; }
+QStackedWidget, QStackedWidget > QWidget { background: transparent; }
 QPushButton#win { background: transparent; border: none; border-radius: 3px; color: #8a9299; font-size: 13px; padding: 0; }
 QPushButton#win:hover { background: #323b42; color: #ffffff; }
 QPushButton#winx { background: transparent; border: none; border-radius: 3px; color: #8a9299; font-size: 12px; padding: 0; }
@@ -887,8 +904,6 @@ QPushButton#circle { min-width: 18px; max-width: 18px; min-height: 18px; max-hei
                      border: 1px solid #4A5057; background: #323b42; padding: 0; font-size: 12px; font-weight: 700; }
 QPushButton#circle:hover { border-color: #E67E22; color: #E67E22; }
 QWidget#railitem { background: transparent; border-radius: 0; }
-QWidget#railitem:hover { background: #323b42; }
-QWidget#railitem[sel="true"] { background: #323b42; }
 QLabel#rowtext { color: #d8dde1; font-size: 11px; }
 QLabel#rowtextsel { color: #ffffff; font-size: 11px; }
 
@@ -906,12 +921,13 @@ QLabel#kpi { font-size: 20px; font-weight: 700; color: #ffffff; }
 QLabel#tag { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 3px; }
 QPushButton#tab { background: transparent; border: none; border-bottom: 2px solid transparent; border-radius: 0;
                   color: #8a9299; font-weight: 600; font-size: 11px; padding: 5px 2px 4px 2px; }
+QPushButton#tab:hover { color: #d8dde1; }
 QPushButton#tab:checked { color: #ffffff; border-bottom: 2px solid #E67E22; }
 
-QFrame#card, QFrame#pane, QFrame#sidecard { background: #2d373e; border: 1px solid #12181D; border-radius: 6px; }
+QFrame#card, QFrame#pane, QFrame#sidecard { background: #2d373e; border: none; border-radius: 6px; }
 QFrame#stat { background: #323b42; border: 1px solid #4A5057; border-radius: 4px; }
 QFrame#chan { background: #252E33; border-radius: 5px; }
-QFrame#vwrap { background: #2d373e; border-bottom: 1px solid #12181D; }
+QFrame#vwrap { background: transparent; border: none; }
 QSplitter::handle { background: transparent; }
 
 QLineEdit { background: #323b42; border: 1px solid #4A5057; border-radius: 4px; padding: 5px 9px;
@@ -923,7 +939,7 @@ QPushButton:hover { border-color: #E67E22; color: #E67E22; }
 QPushButton:disabled { color: #5c6478; border-color: #3a4650; }
 QPushButton#gold { background: #E67E22; color: #14191d; border: 1px solid #E67E22; font-weight: 700; }
 QPushButton#gold:hover { background: #f29a4a; color: #14191d; }
-QPushButton#gold:disabled { background: #6b4a24; border-color: #6b4a24; color: #2a2412; }
+QPushButton#gold:disabled { background: #3a4650; border-color: #3a4650; color: #6b7680; }
 QPushButton#scan { background: #323b42; border: 1px solid #E67E22; color: #E67E22; font-weight: 700; padding: 3px 10px; }
 QPushButton#scan:hover { background: #E67E22; color: #14191d; }
 QPushButton#stop { background: #323b42; border: 1px solid #8a9299; color: #d8dde1; font-weight: 700; padding: 3px 10px; }
@@ -933,6 +949,9 @@ QPushButton#ghost { background: transparent; border: 1px solid #4A5057; color: #
 QPushButton#ghost:hover { border-color: #E67E22; color: #E67E22; }
 QPushButton#ghost:checked { border-color: #E67E22; color: #E67E22; }
 QPushButton#small { padding: 2px 8px; font-size: 10px; min-height: 12px; }
+QPushButton#rowbtn { background: transparent; border: 1px solid transparent; color: #8a9299; padding: 2px 8px;
+                     font-size: 10px; min-height: 12px; }
+QPushButton#rowbtn:disabled { color: #4f5a62; }
 QPushButton#smallstop { padding: 2px 8px; font-size: 10px; min-height: 12px; border: 1px solid #8a9299; color: #d8dde1; }
 QPushButton#smallstop:hover { border-color: #ff6b6b; color: #ff6b6b; }
 QPushButton#chev { background: transparent; border: none; padding: 0; min-width: 14px; max-width: 14px; }
@@ -943,20 +962,23 @@ QCheckBox::indicator:checked { background: #E67E22; border-color: #E67E22; }
 QProgressBar { background: #12181D; border: none; border-radius: 2px; }
 QProgressBar::chunk { background: #E67E22; border-radius: 2px; }
 
-QTreeWidget, QListWidget { background: transparent; border: none; font-size: 11px;
-                           alternate-background-color: #46505a; }
-QTreeWidget#vtable { background: #485259; }
-QTreeWidget::item, QListWidget::item { padding: 5px 4px; border: none; border-bottom: 1px solid #3f4a52; }
-QTreeWidget::item:hover { background: #4f5a62; }
-QTreeWidget::item:selected, QListWidget::item:selected { background: #323b42; }
+QTreeWidget, QListWidget { background: #252E33; border: none; border-radius: 5px; font-size: 11px;
+                           alternate-background-color: #252E33; }
+QTreeWidget#vtable { background: #252E33; border-radius: 0; border-bottom-left-radius: 5px;
+                     border-bottom-right-radius: 5px; }
+QTreeWidget::item, QListWidget::item { padding: 5px 4px; border: none; border-bottom: 1px solid #2c363c; }
 QTreeWidget:focus { outline: none; }
-QHeaderView::section { background: transparent; color: #8a9299; border: none; border-bottom: 1px solid #3a4650;
-                       padding: 5px 6px; font-size: 10px; font-weight: 600; }
-QTreeWidget#pane, QFrame#pane QTreeWidget { background: #2d373e; }
-QPlainTextEdit { background: #252E33; border: 1px solid #12181D; border-radius: 4px; font-family: Consolas;
+QHeaderView { background: transparent; border: none; }
+QHeaderView::section { background: #252E33; color: #8a9299; border: none; border-bottom: 1px solid #323b42;
+                       padding: 6px 6px; font-size: 10px; font-weight: 600; }
+QHeaderView::section:hover { color: #d8dde1; }
+QPlainTextEdit { background: #252E33; border: none; border-radius: 4px; font-family: Consolas;
                  font-size: 11px; color: #aab3c2; }
-QSpinBox, QDoubleSpinBox { background: #323b42; border: 1px solid #4A5057; border-radius: 4px; padding: 3px 6px; }
+QSpinBox, QDoubleSpinBox { background: #323b42; border: 1px solid #4A5057; border-radius: 4px; padding: 3px 6px;
+                           font-weight: 600; }
 QSpinBox:focus, QDoubleSpinBox:focus { border-color: #E67E22; }
+QSpinBox::up-button, QSpinBox::down-button, QDoubleSpinBox::up-button, QDoubleSpinBox::down-button
+    { width: 0; height: 0; border: none; subcontrol-origin: border; }
 QComboBox { background: #323b42; border: 1px solid #4A5057; border-radius: 4px; padding: 4px 9px; font-size: 11px; }
 QComboBox:hover { border-color: #E67E22; }
 QComboBox::drop-down { border: none; width: 18px; }
@@ -966,14 +988,14 @@ QComboBox QAbstractItemView::item { min-height: 26px; padding: 0 10px; border-ra
 QComboBox QAbstractItemView::item:hover { background: #323b42; color: #ffffff; }
 QComboBox QAbstractItemView::item:selected { background: #3a2b20; color: #E67E22; }
 
-QTabWidget::pane { border: 1px solid #12181D; border-radius: 4px; background: #2d373e; top: -1px; }
+QTabWidget::pane { border: none; border-radius: 5px; background: #252E33; top: -1px; }
 QTabBar::tab { background: transparent; color: #8a9299; padding: 6px 12px; font-size: 11px; font-weight: 600;
                border: none; border-bottom: 2px solid transparent; margin-right: 4px; }
-QTabBar::tab:selected { color: #ffffff; border-bottom: 2px solid #E67E22; }
+QTabBar::tab:selected { color: #ffffff; }
 QTabBar::tab:hover { color: #d8dde1; }
 
 QScrollBar:vertical { background: transparent; width: 10px; }
-QScrollBar::handle:vertical { background: #12181D; border-radius: 4px; min-height: 24px; margin: 1px; }
+QScrollBar::handle:vertical { background: #12181D; border-radius: 2px; min-height: 24px; margin: 1px 3px; }
 QScrollBar:horizontal { background: transparent; height: 10px; }
 QScrollBar::handle:horizontal { background: #12181D; border-radius: 4px; min-width: 24px; margin: 1px; }
 QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
@@ -1099,7 +1121,7 @@ class Wave(QtWidgets.QWidget):
         path = QtGui.QPainterPath()
         path.addRoundedRect(QtCore.QRectF(self.rect()), 6, 6)
         p.setClipPath(path)
-        p.fillRect(self.rect(), QtGui.QColor("#0b0d11"))
+        p.fillRect(self.rect(), QtGui.QColor("#1e262b"))
         w, h = self.width(), self.height()
         if self.env is None:
             p.setPen(QtGui.QColor("#555"))
@@ -1129,7 +1151,7 @@ class Wave(QtWidgets.QWidget):
             m = float(self.env.max()) or 1.0
             mid = h / 2
             per_px = span * n / max(1, w)
-            grey, gold = QtGui.QColor("#3a4150"), QtGui.QColor(getattr(self, "color", GOLD))
+            grey, gold = QtGui.QColor("#4c5862"), QtGui.QColor(getattr(self, "color", GOLD))
             for x in range(w):
                 f = self.v0 + x / w * span
                 i = int(f * n)
@@ -1167,7 +1189,7 @@ class Wave(QtWidgets.QWidget):
             p.drawText(QtCore.QRectF(w - 66, h - 16, 60, 14), QtCore.Qt.AlignmentFlag.AlignRight, fmt(self.v1 * self.dur))
         if span < 0.999:
             # where we are in the whole audio: thin bar on top
-            p.fillRect(QtCore.QRectF(0, 0, w, 3), QtGui.QColor("#262626"))
+            p.fillRect(QtCore.QRectF(0, 0, w, 3), QtGui.QColor(BG_INPUT))
             p.fillRect(QtCore.QRectF(self.v0 * w, 0, max(4, span * w), 3), QtGui.QColor(GOLD))
             p.setPen(QtGui.QColor("#777"))
             p.drawText(QtCore.QRectF(w / 2 - 60, h - 16, 120, 14), QtCore.Qt.AlignmentFlag.AlignCenter,
@@ -1189,15 +1211,16 @@ class Cancelled(Exception):
     pass
 
 
-class KeepColors(QtWidgets.QStyledItemDelegate):
+class KeepColors(fx.RowDelegate):
     """Selected rows keep their own text colours (red = found, green = clean);
-    cells without a colour stay light (Windows would paint them black)."""
+    cells without a colour stay light (Windows would paint them black).
+    09.11.2026: rows fade on hover and the selected row gets an orange mark (fx.RowDelegate)."""
 
     def initStyleOption(self, opt, index):
         super().initStyleOption(opt, index)
         fg = index.data(QtCore.Qt.ItemDataRole.ForegroundRole)
         opt.palette.setBrush(QtGui.QPalette.ColorRole.HighlightedText,
-                             fg if fg is not None else QtGui.QBrush(QtGui.QColor("#f2f2f2")))
+                             fg if fg is not None else QtGui.QBrush(QtGui.QColor(TEXT_ROW)))
         opt.state &= ~QtWidgets.QStyle.StateFlag.State_HasFocus  # no dotted frame around cells
 
 
@@ -1210,7 +1233,25 @@ class CleanStyle(QtWidgets.QProxyStyle):
         return super().styleHint(hint, opt, w, ret)
 
     def drawPrimitive(self, el, opt, p, w=None):
-        if el == QtWidgets.QStyle.PrimitiveElement.PE_FrameFocusRect:
+        PE = QtWidgets.QStyle.PrimitiveElement
+        if el == PE.PE_FrameFocusRect:
+            return
+        arrows = {PE.PE_IndicatorArrowDown: "d", PE.PE_IndicatorArrowUp: "u",
+                  PE.PE_IndicatorArrowLeft: "l", PE.PE_IndicatorArrowRight: "r"}
+        if el in arrows:
+            # thin vector chevron instead of the stock filled triangle (09.11.2026)
+            r = QtCore.QRectF(opt.rect)
+            c = r.center()
+            s = min(r.width(), r.height(), 10.0) / 2.0 - 1
+            pts = {"d": [(-s, -s / 2), (0, s / 2), (s, -s / 2)], "u": [(-s, s / 2), (0, -s / 2), (s, s / 2)],
+                   "l": [(s / 2, -s), (-s / 2, 0), (s / 2, s)], "r": [(-s / 2, -s), (s / 2, 0), (-s / 2, s)]}[arrows[el]]
+            p.save()
+            p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+            on = bool(opt.state & QtWidgets.QStyle.StateFlag.State_MouseOver)
+            p.setPen(QtGui.QPen(QtGui.QColor(ACCENT if on else TEXT_GRAY), 1.4, QtCore.Qt.PenStyle.SolidLine,
+                                QtCore.Qt.PenCapStyle.RoundCap, QtCore.Qt.PenJoinStyle.RoundJoin))
+            p.drawPolyline(QtGui.QPolygonF([QtCore.QPointF(c.x() + x, c.y() + y) for x, y in pts]))
+            p.restore()
             return
         super().drawPrimitive(el, opt, p, w)
 
@@ -1219,11 +1260,12 @@ def dark_palette():
     pal = QtGui.QPalette()
     c = QtGui.QColor
     R_ = QtGui.QPalette.ColorRole
-    for role, col in [(R_.Window, "#111111"), (R_.WindowText, "#f2f2f2"), (R_.Base, "#161616"),
-                      (R_.AlternateBase, "#191919"), (R_.ToolTipBase, "#1d1d1d"), (R_.ToolTipText, "#f2f2f2"),
-                      (R_.Text, "#f2f2f2"), (R_.Button, "#1c1c1c"), (R_.ButtonText, "#f2f2f2"),
-                      (R_.BrightText, "#ffffff"), (R_.Highlight, "#2b2610"), (R_.HighlightedText, "#f2f2f2"),
-                      (R_.PlaceholderText, "#777777"), (R_.Link, GOLD)]:
+    # 09.11.2026: the Fruity Nest surfaces instead of near-black (headers, empty areas)
+    for role, col in [(R_.Window, BG_CONTENT), (R_.WindowText, TEXT_ROW), (R_.Base, "#252E33"),
+                      (R_.AlternateBase, "#252E33"), (R_.ToolTipBase, BG_HEADER), (R_.ToolTipText, TEXT_ROW),
+                      (R_.Text, TEXT_ROW), (R_.Button, BG_INPUT), (R_.ButtonText, TEXT_ROW),
+                      (R_.BrightText, "#ffffff"), (R_.Highlight, "#36424a"), (R_.HighlightedText, "#ffffff"),
+                      (R_.PlaceholderText, TEXT_GRAY), (R_.Link, GOLD)]:
         pal.setColor(role, c(col))
     pal.setColor(QtGui.QPalette.ColorGroup.Disabled, R_.Text, c("#666666"))
     pal.setColor(QtGui.QPalette.ColorGroup.Disabled, R_.ButtonText, c("#666666"))
@@ -1939,23 +1981,61 @@ class RailItem(QtWidgets.QWidget):
         self.cnt.setObjectName("cnt")
         h.addWidget(self.cnt)
 
+        # 09.11.2026: hover fill fades, the selection mark grows from the middle (OutExpo)
+        self._hv = 0.0
+        self._ind = 0.0
+        self._ha = QtCore.QVariantAnimation(self)
+        self._ha.valueChanged.connect(lambda v: (setattr(self, "_hv", float(v)), self.update()))
+        self._ia = QtCore.QVariantAnimation(self)
+        self._ia.setDuration(fx.ANIM_MS)
+        self._ia.setEasingCurve(QtCore.QEasingCurve.Type.OutExpo)
+        self._ia.valueChanged.connect(lambda v: (setattr(self, "_ind", float(v)), self.update()))
+
+    def _hover_to(self, end, ms):
+        self._ha.stop()
+        self._ha.setDuration(ms)
+        self._ha.setStartValue(self._hv)
+        self._ha.setEndValue(float(end))
+        self._ha.start()
+
+    def enterEvent(self, e):
+        self._hover_to(1.0, fx.HOVER_IN_MS)
+        super().enterEvent(e)
+
+    def leaveEvent(self, e):
+        self._hover_to(0.0, fx.HOVER_OUT_MS)
+        super().leaveEvent(e)
+
     def set_selected(self, on):
+        was = self.sel
         self.sel = on
         self.setProperty("sel", "true" if on else "false")
         self.lbl.setObjectName("rowtextsel" if on else "rowtext")
-        for w in (self, self.lbl):
-            w.style().unpolish(w)
-            w.style().polish(w)
+        self.lbl.style().unpolish(self.lbl)
+        self.lbl.style().polish(self.lbl)
+        self._ia.stop()
+        if on and not was and self.isVisible():
+            self._ia.setStartValue(0.0)
+            self._ia.setEndValue(1.0)
+            self._ia.start()
+        else:
+            self._ind = 1.0 if on else 0.0
         self.update()
 
     def paintEvent(self, e):
-        super().paintEvent(e)
-        if self.sel:
-            p = QtGui.QPainter(self)
+        p = QtGui.QPainter(self)
+        p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        bg = QtGui.QColor(BG_INPUT)
+        bg.setAlphaF(1.0 if self.sel else self._hv)
+        if bg.alphaF() > 0.0:
+            p.fillRect(self.rect(), bg)
+        if self.sel and self._ind > 0.0:
+            full = self.height() - 14
+            h = max(2.0, full * self._ind)
             p.setPen(QtCore.Qt.PenStyle.NoPen)
             p.setBrush(QtGui.QColor(ACCENT))
-            p.drawRoundedRect(QtCore.QRectF(0, 7, 3, self.height() - 14), 1.5, 1.5)
-            p.end()
+            p.drawRoundedRect(QtCore.QRectF(0, self.height() / 2.0 - h / 2.0, 3, h), 1.5, 1.5)
+        p.end()
 
     def mousePressEvent(self, e):
         if e.button() == QtCore.Qt.MouseButton.LeftButton:
@@ -1971,6 +2051,7 @@ def tag_label(text, fg, bg):
     l = QtWidgets.QLabel(text)
     l.setObjectName("tag")
     l.setStyleSheet("color:%s;background:%s" % (fg, bg))
+    l.setFixedHeight(18)  # a pill, not a block the height of the row (09.11.2026)
     return l
 
 
@@ -2128,6 +2209,7 @@ class App(QtWidgets.QMainWindow):
         lay.setContentsMargins(4, 4, 4, 4)
         lay.setSpacing(0)
         root.setMouseTracking(True)
+        root.setFocusPolicy(QtCore.Qt.FocusPolicy.ClickFocus)  # a click on empty space takes focus off fields
 
         # -- header strip: triangle menu, title, mode switch --
         hdr = QtWidgets.QWidget()
@@ -2148,15 +2230,10 @@ class App(QtWidgets.QMainWindow):
         sep.setStyleSheet("background:%s" % BORDER)
         hl.addWidget(sep)
         self.pages = QtWidgets.QStackedWidget()
-        self.navs = []
-        for i, name in enumerate(["Scanner", "Tracks", "Manual check", "Settings"]):
-            b = QtWidgets.QPushButton(name)
-            b.setObjectName("mode")
-            b.setCheckable(True)
-            b.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-            b.clicked.connect(lambda _, k=i: self.goto(k))
-            hl.addWidget(b)
-            self.navs.append(b)
+        # 09.11.2026: page names drawn by fx.NavTabs - the orange line glides to the page
+        self.nav = fx.NavTabs(["Scanner", "Tracks", "Manual check", "Settings"])
+        self.nav.changed.connect(self.goto)
+        hl.addWidget(self.nav)
         hl.addStretch(1)
         self.hdr_spin = Spinner(14, 1.8)
         hl.addWidget(self.hdr_spin)
@@ -2183,6 +2260,11 @@ class App(QtWidgets.QMainWindow):
         hdr.mouseDoubleClickEvent = lambda e: self.toggle_max()
         lay.addWidget(hdr)
         lay.addWidget(self.pages, 1)
+        # hint line at the bottom: tip of what is under the mouse, else the help of the page
+        self.page_hints = {}
+        self.footer = fx.Footer(self, lambda: (lambda h: h() if callable(h) else (h or ""))(
+            self.page_hints.get(self.pages.currentIndex(), "")))
+        lay.addWidget(self.footer)
 
         # hidden holders the other pages still use
         self.stage_lbl = QtWidgets.QLabel("")
@@ -2199,6 +2281,7 @@ class App(QtWidgets.QMainWindow):
         self.sel_tab = "channels"
         self.open_ch = set()
         self.open_vid = set()
+        self.sort_state = {}  # table -> (column, descending) chosen by a click on a column name
         self.rail_items = {}
         self.chan_bars = {}
         self.vtables = {}  # channelId -> VideoTable
@@ -2397,11 +2480,20 @@ class App(QtWidgets.QMainWindow):
 
     # ---- plumbing ----------------------------------------------------------
     def goto(self, k):
-        self.pages.setCurrentIndex(k)
-        for i, b in enumerate(self.navs):
-            b.setChecked(i == k)
+        changed = self.pages.currentIndex() != k
+        fx.fade_switch(self.pages, k)
+        self.nav.set_current(k, animate=self.isVisible())
         if k == 1:
-            self.rebuild_tracks()
+            self.rebuild_tracks(reveal=changed)
+        self.footer.refresh()
+        QtCore.QTimer.singleShot(0, self.unfocus)
+
+    def unfocus(self):
+        """No search / link field is selected by itself (09.11.2026, Stan)."""
+        try:
+            self.centralWidget().setFocus(QtCore.Qt.FocusReason.OtherFocusReason)
+        except RuntimeError:
+            pass
 
     def log(self, msg):
         self.sig.log.emit(msg)
@@ -2455,6 +2547,10 @@ class App(QtWidgets.QMainWindow):
     # ---- start ---------------------------------------------------------------
     def prepare(self):
         os.makedirs(CACHE, exist_ok=True)
+        try:
+            fp.warm_up()  # the CPU worker processes start now, not at the first video
+        except Exception as e:
+            self.log("Worker processes did not start (%s); fingerprints use one core." % e)
         if self.base.load():
             self.log("Track base loaded: %d tracks." % len(self.base.meta))
         else:
@@ -2472,6 +2568,9 @@ class App(QtWidgets.QMainWindow):
                 self.stage("Site not reachable", 0)
         else:
             self.stage("Enter the admin token in Settings", 0)
+        # read the composers' sheets once at start, so the states shown are the real ones
+        if self.settings["token"]:
+            self.sync_sheets()
         # same as pressing the refresh circles once: the site looks for new videos, then the list reloads
         if self.settings["token"]:
             self.reload_site(True)
@@ -2710,10 +2809,23 @@ class App(QtWidgets.QMainWindow):
         self.update_scan_marks()
 
     def select_cust(self, key):
+        same = key == self.sel_key
         self.sel_key = key
         for k, it in self.rail_items.items():
             it.set_selected(k == key)
         self.rebuild_content()
+        if not same:
+            self.reveal_content()
+
+    def reveal_content(self, only=None):
+        """The customer page flies in (09.11.2026); only = widgets to animate (else all)."""
+        def ws():
+            return only if only is not None else [self.content_lay.itemAt(i).widget()
+                                                  for i in range(self.content_lay.count())]
+
+        def vis():
+            return self.content.viewport().rect().translated(0, self.content.verticalScrollBar().value())
+        fx.reveal_widgets(self.content_body, ws, fx.BG_CONTENT, vis)
 
     # ---- right side ----
     def rebuild_content(self):
@@ -2741,10 +2853,26 @@ class App(QtWidgets.QMainWindow):
                 bl.addWidget(e)
                 self.content_lay.addWidget(box, 1)
                 return
-            e = label("No customers loaded yet.\n\nPress the round arrow next to Customers, "
-                      "or enter the admin token in Settings.", "empty")
+            box = QtWidgets.QWidget()
+            bl = QtWidgets.QVBoxLayout(box)
+            bl.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+            bl.setSpacing(14)
+            has_token = bool(self.settings.get("token"))
+            e = label("No customers loaded yet." if has_token else
+                      "Connect the scanner to the site to see your customers.", "empty")
             e.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-            self.content_lay.addWidget(e, 1)
+            bl.addWidget(e)
+            if has_token:
+                b = QtWidgets.QPushButton("Load customers")
+                b.setObjectName("scan")
+                b.clicked.connect(lambda: self.bg(self.reload_site, True))
+            else:
+                b = QtWidgets.QPushButton("Open Settings")
+                b.setObjectName("scan")
+                b.clicked.connect(lambda: self.goto(3))
+            b.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+            bl.addWidget(b, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+            self.content_lay.addWidget(box, 1)
             return
         chans = [ch for ch in c["channels"] if ch.get("url") != "solo"]
         solo = [ch for ch in c["channels"] if ch.get("url") == "solo"]
@@ -2843,6 +2971,10 @@ class App(QtWidgets.QMainWindow):
         else:
             self.open_ch.discard(chid)
         self.rebuild_content()
+        if open_:
+            t = self.vtables.get(chid)
+            if t is not None:
+                self.reveal_content([t])
 
     def claim_of(self, vid):
         """(key, text, fg, bg) of the claim state of a video from the site's matches."""
@@ -2906,7 +3038,7 @@ class App(QtWidgets.QMainWindow):
         self.vtables[ch["id"]] = t
         for v in ch["videos"]:
             vid = v["videoId"]
-            it = QtWidgets.QTreeWidgetItem(["", "", "", "", "", "", ""])
+            it = fx.SortItem(["", "", "", "", "", "", ""])
             it.setSizeHint(0, QtCore.QSize(0, 30))
             it.setData(0, 256, vid)
             it.setText(0, "  " + (v.get("title") or vid))
@@ -2917,7 +3049,8 @@ class App(QtWidgets.QMainWindow):
             it.setForeground(2, QtGui.QBrush(QtGui.QColor(TEXT_GRAY)))
             t.addTopLevelItem(it)
             b = QtWidgets.QPushButton("Scan")
-            b.setObjectName("small")
+            b.setObjectName("rowbtn")
+            b.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
             b.setFixedWidth(50)
             b.clicked.connect(lambda _, x=vid, c=ch["id"]: self.scan_video(x, c))
             t.setItemWidget(it, 6, b)
@@ -2925,9 +3058,24 @@ class App(QtWidgets.QMainWindow):
             self.fill_video_item(vid)
             if vid in self.open_vid:
                 self.add_wave_row(t, it, vid)
+        fx.make_sortable(t, self.sort_state, "videos")  # click a column name: sort (09.11.2026)
+        t._fx_after_sort = lambda tt=t: self.sync_video_sort(tt)
+        fx.resort(t)
         t.setFixedHeight(self.table_height(t))
         wl.addWidget(t)
         return wrap
+
+    def sync_video_sort(self, tree):
+        """One sort choice for every channel table: the others follow the one clicked."""
+        for t in self.vtables.values():
+            if t is tree:
+                continue
+            try:
+                t._fx_sort = self.sort_state.get("videos")
+                fx._paint_heads(t)
+                fx.resort(t)
+            except RuntimeError:
+                pass
 
     def table_height(self, t):
         h = t.header().sizeHint().height() + 6
@@ -2973,7 +3121,7 @@ class App(QtWidgets.QMainWindow):
         b = t.itemWidget(it, 6)
         if b is not None:
             b.setText("Stop" if key in ("run", "queue") else "Scan")
-            b.setObjectName("smallstop" if key in ("run", "queue") else "small")
+            b.setObjectName("smallstop" if key in ("run", "queue") else "rowbtn")
             b.style().unpolish(b)
             b.style().polish(b)
 
@@ -2999,6 +3147,7 @@ class App(QtWidgets.QMainWindow):
                 return
         if vid in self.open_vid:
             self.open_vid.discard(vid)
+            self.stop_play_in(it)
             it.takeChildren()
         else:
             self.open_vid.add(vid)
@@ -3331,7 +3480,11 @@ class App(QtWidgets.QMainWindow):
             v["scannedAt"] = time.strftime("%Y-%m-%dT%H:%M")
             v["found"] = len(rows)
         if rows:
-            self.matches_by_vid[vid] = [{"videoId": vid, "track": r["title"], "state": "new"} for r in rows]
+            # a track already known for this video keeps its state from the site (released stays
+            # released); only a really new find is "new" until the sheets are read again
+            known = {norm_title(m.get("track") or ""): m for m in self.matches_by_vid.get(vid) or []}
+            self.matches_by_vid[vid] = [known.get(norm_title(r["title"])) or
+                                        {"videoId": vid, "track": r["title"], "state": "new"} for r in rows]
         else:
             self.matches_by_vid.pop(vid, None)
         self.job_src.pop(vid, None)
@@ -3537,7 +3690,7 @@ class App(QtWidgets.QMainWindow):
         top.addWidget(self.tr_search)
         self.tr_where = QtWidgets.QComboBox()
         self.tr_where.addItems(["All tracks", "On the site", "Only in the unreleased folder", "Site + folder"])
-        self.tr_where.currentIndexChanged.connect(lambda _i: self.rebuild_tracks())
+        self.tr_where.currentIndexChanged.connect(lambda _i: self.rebuild_tracks(reveal=True))
         top.addWidget(self.tr_where)
         top.addStretch(1)
         self.tr_count = QtWidgets.QLabel("")
@@ -3551,13 +3704,17 @@ class App(QtWidgets.QMainWindow):
         b.clicked.connect(lambda: (os.makedirs(UNRELEASED, exist_ok=True),
                                    QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(UNRELEASED))))
         top.addWidget(b)
+        # only with "Site + folder": the folder copies of tracks already on the site can go
+        self.btn_del_dups = AnimatedButton("Delete folder copies", accent="#ff3c3c")
+        self.btn_del_dups.setToolTip("Delete from the unreleased folder every track that is on the site too "
+                                     "(the site version stays in the base)")
+        self.btn_del_dups.clicked.connect(self.delete_folder_dups)
+        self.btn_del_dups.setVisible(False)
+        top.addWidget(self.btn_del_dups)
         l.addLayout(top)
-        note = QtWidgets.QLabel("Site = published on TV Music Store (the base follows the site). Folder = a file in the "
-                                "unreleased folder on this PC, found in videos but not on the site yet. "
-                                "Right-click a track for more.")
-        note.setObjectName("warm")
-        note.setWordWrap(True)
-        l.addWidget(note)
+        # the long explanation lives in the footer now (shown while nothing else has a tip)
+        self.page_hints[1] = ("Site = published on TV Music Store (the base follows the site). Folder = a file in the "
+                              "unreleased folder on this PC, not on the site yet. Right-click a track for more.")
         wrap = QtWidgets.QFrame()
         wrap.setObjectName("vwrap")
         wl = QtWidgets.QVBoxLayout(wrap)
@@ -3582,6 +3739,9 @@ class App(QtWidgets.QMainWindow):
         # the last column is a text "button": no widget per row, so 600 rows fill instantly
         t.itemClicked.connect(lambda it, c: c == 6 and self.recheck_track(it.data(0, 256)))
         HandCells(t, lambda it, col: col in (0, 6))
+        fx.make_sortable(t, self.sort_state, "tracks")
+        fx.EmptyHint(t, lambda: "No tracks match." if self.base.meta else
+                     "The track base is empty. Press Update base to read the site catalogue.")
         self.tr_table = t
         wl.addWidget(t)
         l.addWidget(wrap, 1)
@@ -3602,7 +3762,7 @@ class App(QtWidgets.QMainWindow):
                 st[k] = (n + 1, wtg + (1 if m.get("state") == "new" else 0))
         return st
 
-    def rebuild_tracks(self):
+    def rebuild_tracks(self, reveal=False):
         t = getattr(self, "tr_table", None)
         if t is None:
             return
@@ -3633,7 +3793,7 @@ class App(QtWidgets.QMainWindow):
         n_dup = sum(1 for r in rows if r[4] == "dup")
         items = []
         for composer, title, key, m, state in rows:
-            it = QtWidgets.QTreeWidgetItem(["", "", "", "", "", "", ""])
+            it = fx.SortItem(["", "", "", "", "", "", ""])
             it.setSizeHint(0, QtCore.QSize(0, 30))
             it.setData(0, 256, key)
             it.setText(0, "  " + title)
@@ -3653,12 +3813,17 @@ class App(QtWidgets.QMainWindow):
             it.setToolTip(0, "%s\n%s\nDouble-click: open" % (title, m.get("path", "")))
             it.setText(6, "Re-check")
             it.setForeground(6, QtGui.QBrush(QtGui.QColor(ACCENT)))
+            it.setData(6, fx.HOVER_ONLY, True)  # shows on the row under the mouse
             it.setToolTip(6, "Look for this track in every video already scanned (no download)")
             items.append(it)
         t.addTopLevelItems(items)
+        fx.resort(t)
         t.setUpdatesEnabled(True)
+        if reveal:
+            fx.reveal_tree(t)
         self.tr_count.setText("%d tracks \u00b7 %d on the site \u00b7 %d folder only \u00b7 %d in both"
                               % (len(rows), n_site, n_local, n_dup))
+        self.btn_del_dups.setVisible(want == 3 and bool(self.folder_dups()))
 
     def open_track(self, key):
         m = self.base.meta.get(key)
@@ -3704,6 +3869,36 @@ class App(QtWidgets.QMainWindow):
             except Exception as e:
                 self.log("Re-check failed: %s" % e)
                 self.stage("Re-check failed", 0)
+        self.bg(go)
+
+    def folder_dups(self):
+        """Keys of folder tracks whose title is on the site too."""
+        site = {norm_title(m.get("title", "")) for m in self.base.meta.values() if m.get("source", "site") == "site"}
+        return [k for k, m in self.base.meta.items()
+                if m.get("source") == "local" and norm_title(m.get("title", "")) in site]
+
+    def delete_folder_dups(self):
+        keys = self.folder_dups()
+        if not keys:
+            return
+        if not ask_yes(self, "Delete folder copies",
+                       "Delete %d track%s from the unreleased folder?\nThey are on the site, so the site "
+                       "version stays in the base. Matches already found stay on the site."
+                       % (len(keys), "" if len(keys) == 1 else "s"), "Delete"):
+            return
+        paths = [self.base.meta[k]["path"] for k in keys if self.base.meta.get(k, {}).get("path")]
+
+        def go():
+            gone = 0
+            for p_ in paths:
+                try:
+                    os.remove(p_)
+                    gone += 1
+                except OSError as e:
+                    self.log("Could not delete %s: %s" % (p_, e))
+            self.log("Deleted %d folder cop%s of site tracks." % (gone, "y" if gone == 1 else "ies"))
+            self._update_base()
+            self.ui(self.rebuild_tracks)
         self.bg(go)
 
     def delete_local_track(self, key):
@@ -3785,11 +3980,15 @@ class App(QtWidgets.QMainWindow):
         self.vlist.itemSelectionChanged.connect(self.update_check_btn)
         self.vlist.itemDoubleClicked.connect(lambda *_: self.check_selected())
         ll.addWidget(self.vlist, 1)
+        self.vlist_slider = FnSlider(self.vlist)
+        fx.make_sortable(self.vlist, self.sort_state, "check")
+        fx.EmptyHint(self.vlist, lambda: "No videos match the filter." if self.vmeta else
+                     "Paste a YouTube channel or video link above and press Load.")
         self.vcount = label("Paste a link above. Pick several videos with Ctrl or Shift.", "muted")
         ll.addWidget(self.vcount)
         row = QtWidgets.QHBoxLayout()
         row.setSpacing(8)
-        self.cb_voice = QtWidgets.QCheckBox("Remove voice (slower)")
+        self.cb_voice = fx.ToggleBox("Remove voice (slower)")
         self.cb_voice.setToolTip("Finds quiet music under talking. Takes several times longer.")
         row.addWidget(self.cb_voice)
         row.addStretch(1)
@@ -3858,6 +4057,7 @@ class App(QtWidgets.QMainWindow):
         self.res.setItemDelegate(KeepColors(self.res))
         self.res.itemSelectionChanged.connect(self.draw)
         pl.addWidget(self.res)
+        self.res_slider = FnSlider(self.res)
         self.clean_lbl = label("None of our tracks found in this video.", "sub")
         self.clean_lbl.setStyleSheet("color:%s;font-size:13px;font-weight:600" % GREEN)
         pl.addWidget(self.clean_lbl)
@@ -3885,8 +4085,12 @@ class App(QtWidgets.QMainWindow):
         self.w_track = Wave()
         self.w_track.clicked.connect(lambda f: self.click_play("track", f))
         pl.addWidget(self.w_track)
-        self.hint_lbl = label(HINT_FOUND, "muted")
-        pl.addWidget(self.hint_lbl)
+        self.hint_lbl = label(HINT_FOUND, "muted")  # its text is shown in the footer (09.11.2026)
+        self.hint_lbl.setVisible(False)
+        self.page_hints[2] = lambda: (self.hint_lbl.text() if self.cur_vid else
+                                      "Double-click a video to check it right away.")
+        for wv in (self.w_video, self.w_track):
+            wv.setToolTip("")
 
         # why + matching settings
         self.tabs = QtWidgets.QTabWidget()
@@ -3900,6 +4104,7 @@ class App(QtWidgets.QMainWindow):
         wl.addStretch(1)
         self.tabs.addTab(why_page, "Why it was found")
         self.tabs.addTab(self.match_box(), "Matching settings")
+        self.tabs_line = fx.TabLine(self.tabs)
         pl.addWidget(self.tabs, 1)
 
         scroll = QtWidgets.QScrollArea()
@@ -3948,7 +4153,7 @@ class App(QtWidgets.QMainWindow):
         ]
         self.mspins = {}
         for i, (k, text, lo, hi, step, dec, tip) in enumerate(spec):
-            sb = QtWidgets.QDoubleSpinBox() if dec else QtWidgets.QSpinBox()
+            sb = fx.DragDoubleSpinBox() if dec else fx.DragSpinBox()
             if dec:
                 sb.setDecimals(dec)
             sb.setRange(lo, hi)
@@ -3963,7 +4168,7 @@ class App(QtWidgets.QMainWindow):
             hl.setMinimumHeight(44)  # wrapped labels get squeezed in a grid otherwise
             g.addWidget(hl, r0 + 2, col, QtCore.Qt.AlignmentFlag.AlignTop)
             self.mspins[k] = sb
-        self.cb_pitch = QtWidgets.QCheckBox("Also search in a shifted key (+-1 and +-2 semitones)")
+        self.cb_pitch = fx.ToggleBox("Also search in a shifted key (+-1 and +-2 semitones)")
         self.cb_pitch.setChecked(bool(MATCH.get("pitch")))
         self.cb_pitch.toggled.connect(lambda *_: self.match_note_update())
         g.addItem(QtWidgets.QSpacerItem(0, 6), 6, 0)
@@ -4153,7 +4358,7 @@ class App(QtWidgets.QMainWindow):
             if v["id"] in self.vmeta:
                 continue
             self.vmeta[v["id"]] = v
-            it = QtWidgets.QTreeWidgetItem([("[Short]  " if v["short"] else "") + v["title"],
+            it = fx.SortItem([("[Short]  " if v["short"] else "") + v["title"],
                                             fmt(v["dur"]) if v["dur"] else ""])
             it.setData(0, 256, v["id"])
             it.setToolTip(0, v["title"])
@@ -4161,10 +4366,12 @@ class App(QtWidgets.QMainWindow):
             self.vlist.addTopLevelItem(it)
             self.vitems[v["id"]] = it
             self.refresh_item(v["id"])
+        fx.resort(self.vlist)
         self.apply_filter()
         self.update_counts()
         if vids:
             self.vlist.setCurrentItem(self.vlist.topLevelItem(0))
+            fx.reveal_tree(self.vlist)
 
     # -- checking (one after another, in the background) --
     def check_selected(self):
@@ -4198,6 +4405,12 @@ class App(QtWidgets.QMainWindow):
             self.show_video(self.cur_vid)
 
     def _check_loop(self):
+        found_any = False
+        # 09.11.2026: the next videos of the queue download while this one is analysed
+        # (the download waits for the internet, the analysis for the CPU: now they overlap)
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutTimeout
+        pre = ThreadPoolExecutor(max_workers=PREFETCH)
+        pending = {}  # videoId -> download started early
         try:
             while True:
                 with self.qlock:
@@ -4205,6 +4418,10 @@ class App(QtWidgets.QMainWindow):
                         self.loop_on = False
                         break
                     vid, novoice, post = self.queue.pop(0)
+                    ahead = [q[0] for q in self.queue[:PREFETCH]]
+                for a in ahead:
+                    if a not in pending:
+                        pending[a] = pre.submit(download_audio, a)
                 self.checking, self.check_pct = vid, 0
                 self.ui(lambda v=vid: (self.refresh_item(v), self.show_if_current(v), self.update_scan_marks()))
                 v = self.vmeta.get(vid) or {"id": vid, "title": (self.vid_rows.get(vid) or {}).get("title") or vid,
@@ -4222,7 +4439,17 @@ class App(QtWidgets.QMainWindow):
                             self.ui(lambda: (self.refresh_item(v_id), self.fill_video_item(v_id)))
                 rows, err = [], None
                 try:
-                    audio = download_audio(vid, prog)
+                    fut = pending.pop(vid, None)
+                    if fut is None:
+                        audio = download_audio(vid, prog)
+                    else:
+                        while True:
+                            prog("Downloading audio (started early)...", None)  # stops here on Stop
+                            try:
+                                audio = fut.result(timeout=0.3)
+                                break
+                            except FutTimeout:
+                                pass
                     dbg = []
                     keep = {}
                     samples, rows = find_in_audio(self.base, audio, novoice, prog, dbg, keep)
@@ -4272,12 +4499,19 @@ class App(QtWidgets.QMainWindow):
                 self.checking = None
                 if self.cancel:
                     self.cancel = False
+                if post and rows and not err:
+                    found_any = True
                 if post:
                     self.ui(lambda v=vid, r=rows, e=err: self.site_stopped(v) if e == "stopped" else self.site_done(v, r, e))
                 self.ui(lambda v=vid: (self.refresh_item(v), self.show_if_current(v), self.update_counts(),
                                        self.apply_filter(), self.update_scan_marks()))
+            if found_any:
+                # smart check (09.11.2026, Stan): compare the finds with the composers' sheets, so a
+                # claim already Released there is not shown as "waiting for release"
+                self.sync_sheets()
             self.stage("Ready", 1)
         finally:
+            pre.shutdown(wait=False, cancel_futures=True)
             self.checking = None
             self.loop_on = False
             self.cancel = False
@@ -4501,7 +4735,29 @@ class App(QtWidgets.QMainWindow):
         self.play = (wave, pos, time.time(), len(data) / 44100.0, dur)
         self.ui(lambda: self.play_timer.start(50))
 
+    def stop_play_in(self, it):
+        """Stop the sound if it plays in a wave inside this row (the row is about to close)."""
+        if not self.play:
+            return
+        wave = self.play[0]
+        for j in range(it.childCount()):
+            holder = it.treeWidget().itemWidget(it.child(j), 0) if it.treeWidget() else None
+            try:
+                if holder is not None and (holder is wave or holder.isAncestorOf(wave)):
+                    self.stop_play()
+                    return
+            except RuntimeError:
+                self.stop_play()
+                return
+
     def _play_tick(self):
+        try:
+            self._play_tick_inner()
+        except RuntimeError:  # the wave being played was closed: stop, do not crash
+            self.play_timer.stop()
+            self.stop_play()
+
+    def _play_tick_inner(self):
         for wv in (self.w_video, self.w_track):
             if wv.head is not None:
                 wv.head = None
@@ -4553,11 +4809,11 @@ class App(QtWidgets.QMainWindow):
 
         # automatic scanning
         c2, g2 = self.section("Automatic scanning")
-        self.s_interval = QtWidgets.QSpinBox()
+        self.s_interval = fx.DragSpinBox()
         self.s_interval.setRange(1, 120)
         self.s_interval.setValue(int(self.settings["interval_min"]))
         self.s_interval.setSuffix(" min")
-        self.cb_novoice_auto = QtWidgets.QCheckBox("Remove voice in automatic scanning")
+        self.cb_novoice_auto = fx.ToggleBox("Remove voice in automatic scanning")
         self.cb_novoice_auto.setChecked(bool(self.settings["novoice"]))
         self.form_row(g2, 1, "Check every", self.s_interval, left=True)
         self.form_row(g2, 2, "Voice removal", self.cb_novoice_auto)
@@ -4749,8 +5005,20 @@ def main():
     app.setStyle(CleanStyle("Fusion"))
     app.setPalette(dark_palette())
     app.setStyleSheet(QSS)
+    fx_keep = fx.install(app)  # noqa: F841  hover fades for every plain button / box
+
+    def _hook(et, ev, tb):  # an error is written to the log; the program goes on instead of closing
+        line = "".join(traceback.format_exception(et, ev, tb))
+        try:
+            with open(SESSION_LOG, "a", encoding="utf-8") as f:
+                f.write(time.strftime("%H:%M:%S  ") + "ERROR (the program goes on): " + line + "\n")
+        except OSError:
+            pass
+        sys.__excepthook__(et, ev, tb)
+    sys.excepthook = _hook
     w = App()
     w.show()
+    QtCore.QTimer.singleShot(60, w.unfocus)
     w.refresh_status()
     sys.exit(app.exec())
 

@@ -36,3 +36,7 @@ __pycache__/
 deploy_auto.log
 tools/mcp_registry/key.pem
 tools/mcp_registry/bin/
+
+# Local audio and backups for the whitelist tester (never push)
+tools/whitelist_tester/unreleased/
+tools/whitelist_tester/Бекапы/

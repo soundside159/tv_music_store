@@ -85,12 +85,14 @@ def _pitch_peaks(peaks, semitones):
     return [tuple(x) for x in q]
 
 
-def hashes_multi_of(samples, density, shifts, semis):
+def hashes_multi_of(samples, density, shifts, semis, only=None):
     """Like hashes_of, for several pitch moves at once: {semitones: hashes}.
-    The audio is analysed once; each pitch move only re-pairs the peaks."""
+    The audio is analysed once; each pitch move only re-pairs the peaks.
+    only = do just this one of the `shifts` time offsets (a part of the work that
+    another CPU core can do at the same time; the parts together give the same set)."""
     an = _analyzer(density, shifts)
     lists = {st: [] for st in semis}
-    for s in range(max(1, shifts)):
+    for s in (range(max(1, shifts)) if only is None else [only]):
         off = int(s / max(1, shifts) * N_HOP)
         peaks = an.find_peaks(samples[off:], SR)
         if len(peaks):
@@ -136,12 +138,34 @@ CHUNK_S = 180.0  # long audio is fingerprinted in 3-minute pieces, several at on
 
 def _chunk_hashes(args):
     """Worker: hashes of one piece (for every pitch move), times shifted to the whole file."""
-    piece, first_frame, density, shifts, semis = args
-    hs = hashes_multi_of(piece, density, shifts, semis)
+    piece, first_frame, density, shifts, semis, only = args
+    hs = hashes_multi_of(piece, density, shifts, semis, only)
     for h in hs.values():
         if len(h):
             h[:, 0] += first_frame
     return hs
+
+
+_POOL = [None]
+
+
+def _pool():
+    """One set of worker processes for the whole run of the program."""
+    if _POOL[0] is None:
+        from concurrent.futures import ProcessPoolExecutor
+        workers = max(1, (os.cpu_count() or 2) - 1)
+        if workers < 2:
+            return None
+        _POOL[0] = ProcessPoolExecutor(max_workers=workers)
+    return _POOL[0]
+
+
+def warm_up():
+    """Start the worker processes now (in the background), not at the first video."""
+    ex = _pool()
+    if ex is not None:
+        for _ in range(ex._max_workers):
+            ex.submit(int, 0)
 
 
 def hashes_parallel(samples, density, shifts, progress=None, semis=(0,)):
@@ -151,29 +175,32 @@ def hashes_parallel(samples, density, shifts, progress=None, semis=(0,)):
     semis = list(semis)
     n = len(samples)
     step = int(CHUNK_S * SR)
+    # 10.11.2026: every piece is also split by its time offsets (one job per offset),
+    # so a short video uses several cores too and a long one all of them; the worker
+    # processes stay alive between videos (starting them cost seconds per video)
     if n <= step * 1.5:
-        if progress:
-            progress(0, 1)
-        hs = hashes_multi_of(samples, density, shifts, semis)
-        if progress:
-            progress(1, 1)
-        return hs if len(semis) > 1 else hs[semis[0]]
-    over = int(5 * SR)
-    jobs = []
-    for a in range(0, n, step):
-        a0 = a - (a % N_HOP)
-        jobs.append((samples[a0:min(n, a0 + step + over)], a0 // N_HOP, density, shifts, semis))
-    from concurrent.futures import ProcessPoolExecutor, as_completed
+        pieces = [(samples, 0)]
+    else:
+        over = int(5 * SR)
+        pieces = []
+        for a in range(0, n, step):
+            a0 = a - (a % N_HOP)
+            pieces.append((samples[a0:min(n, a0 + step + over)], a0 // N_HOP))
+    offs = list(range(max(1, shifts)))
+    jobs = [(pc, ff, density, shifts, semis, o) for pc, ff in pieces for o in offs]
     parts = {st: [] for st in semis}
-    workers = max(1, min(len(jobs), (os.cpu_count() or 2) - 1))
-    with ProcessPoolExecutor(max_workers=workers) as ex:
-        futs = [ex.submit(_chunk_hashes, j) for j in jobs]
-        for k, f in enumerate(as_completed(futs)):
-            for st, h in f.result().items():
-                if len(h):
-                    parts[st].append(h)
-            if progress:
-                progress(k + 1, len(jobs))
+    ex = _pool()
+    if ex is None:  # no worker processes here: the same work on this core
+        results = (_chunk_hashes(j) for j in jobs)
+    else:
+        from concurrent.futures import as_completed
+        results = (f.result() for f in as_completed([ex.submit(_chunk_hashes, j) for j in jobs]))
+    for k, res in enumerate(results):
+        for st, h in res.items():
+            if len(h):
+                parts[st].append(h)
+        if progress:
+            progress(k + 1, len(jobs))
     out = {st: (np.unique(np.concatenate(v), axis=0).astype(np.int32) if v else np.zeros((0, 2), np.int32))
            for st, v in parts.items()}
     return out if len(semis) > 1 else out[semis[0]]
@@ -194,6 +221,34 @@ def all_hits(ht, h):
     col = np.arange(total) - np.repeat(np.cumsum(n) - n, n)
     vals = ht.table[hm[rep], col].astype(np.int64)
     return np.stack([(vals >> ht.maxtimebits) - 1, (vals & tmask) - qt[rep], hm[rep], qt[rep]], axis=1)
+
+
+def _hits_compact(ht, h):
+    """Same hits as all_hits, for window_hits only (09.11.2026): int32 instead of int64
+    and without the hash column, so a search needs about a third of the memory and
+    several searches (pitch moves) can run at the same time. Columns: track_id,
+    time_skew, query_time; rows come out in query-time order when h is time-sorted."""
+    if len(h) and np.any(np.diff(h[:, 0]) < 0):
+        h = h[np.argsort(h[:, 0], kind="stable")]
+    hashmask = (1 << ht.hashbits) - 1
+    tmask = (1 << ht.maxtimebits) - 1
+    hm = (h[:, 1] & hashmask).astype(np.int32)
+    qt = h[:, 0].astype(np.int32)
+    n = np.minimum(ht.depth, ht.counts[hm]).astype(np.int32)
+    total = int(n.sum(dtype=np.int64))
+    if total == 0:
+        return np.zeros((0, 3), np.int32)
+    rep = np.repeat(np.arange(len(hm), dtype=np.int32), n)
+    start = np.cumsum(n, dtype=np.int64) - n
+    col = (np.arange(total, dtype=np.int64) - np.repeat(start, n)).astype(np.int32)
+    vals = ht.table[hm[rep], col].astype(np.int64)
+    del col
+    out = np.empty((total, 3), np.int32)
+    out[:, 0] = (vals >> ht.maxtimebits) - 1
+    q = qt[rep]
+    out[:, 1] = (vals & tmask) - q
+    out[:, 2] = q
+    return out
 
 
 def query_hashes(samples, progress=None):
@@ -218,7 +273,7 @@ def _fast_best(sl, window=2):
     +-window of it; the biggest count wins. Same idea as audfprint's
     _approx_match_counts, but without its slow loop over candidate tracks."""
     span = 1 << 22
-    key = sl[:, 0] * span + (sl[:, 1] + (span >> 1))
+    key = sl[:, 0].astype(np.int64) * span + (sl[:, 1].astype(np.int64) + (span >> 1))
     keys, counts = np.unique(key, return_counts=True)
     # Only the most frequent offsets can be the winner: score just those
     # (a real match piles many hits on one offset, noise spreads them out).
@@ -237,11 +292,10 @@ def window_hits(samples, ht, progress=None, hash_progress=None, hashes=None, dur
     if len(h) == 0:
         return []
     m = _matcher()
-    hits = all_hits(ht, h)
+    hits = _hits_compact(ht, h)  # columns: track, skew, query time (already in time order)
     if len(hits) == 0:
         return []
-    hits = hits[np.argsort(hits[:, 3], kind="stable")]
-    qt = hits[:, 3]
+    qt = hits[:, 2].astype(np.int64)  # contiguous int64: searchsorted stays fast (no cast per call)
     allq = np.sort(h[:, 0])  # every query hash time: how many the window had
     dur = dur if dur is not None else len(samples) / SR
     out = []
@@ -256,7 +310,7 @@ def window_hits(samples, ht, progress=None, hash_progress=None, hashes=None, dur
             if score > 0:
                 # Where in this window the matching hashes really are, so a
                 # segment starts/ends where the music does, not on a window edge.
-                ok = sl[(sl[:, 0] == tid) & (np.abs(sl[:, 1] - offs) <= m.window), 3]
+                ok = sl[(sl[:, 0] == tid) & (np.abs(sl[:, 1] - offs) <= m.window), 2]
                 t0 = int(ok.min()) if len(ok) else a
                 t1 = int(ok.max()) if len(ok) else b
                 nq = int(np.searchsorted(allq, b) - np.searchsorted(allq, a))
@@ -281,7 +335,7 @@ def noise_level(chains, track, min_score=MIN_SCORE, min_windows=MIN_WINDOWS):
 
 def find_tracks(samples, ht, min_score=MIN_SCORE, strong=STRONG_SCORE, min_windows=MIN_WINDOWS,
                 progress=None, hash_progress=None, hashes=None, dur=None, min_len=MIN_LEN_S, align=ALIGN_S,
-                noise_ratio=NOISE_RATIO):
+                noise_ratio=NOISE_RATIO, debug_out=None):
     """Chain windows into segments. A window joins the chain of the same track
     when its position inside the track moved forward by the same amount as
     the window itself (+-1 s): real music lines up, random lookalikes don't.
@@ -347,4 +401,6 @@ def find_tracks(samples, ht, min_score=MIN_SCORE, strong=STRONG_SCORE, min_windo
                               "pct": round(c["pct"], 1),
                               "verdict": c.get("verdict", "")}
                              for c in sorted(chains, key=lambda c: -c["score"])]}
+    if debug_out is not None:  # this call's details (LAST_DEBUG is shared when searches run at once)
+        debug_out.update(LAST_DEBUG)
     return sorted(keep, key=lambda g: g["start"])

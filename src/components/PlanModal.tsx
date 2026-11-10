@@ -5,6 +5,7 @@ import { usePlans, useSubscription } from "@/hooks/useMockData";
 import { useAuthSession } from "@/hooks/useAuth";
 import { BILLING_ENABLED, planCardAction, startCheckout, switchPlan } from "@/lib/billing";
 import type { BillingInterval, PlanConfig } from "@/types/domain";
+import { PROMO, money, promoActive, promoPrice } from "@/lib/promo";
 
 // Global "Pick a plan" popup (tunetank-style). Opened via openPlanModal()
 // ("tvms:pick-plan"), mounted in App.tsx. Shows the paid plans (Pro / Max) with
@@ -30,6 +31,8 @@ const PlanCard = ({
   const [busy, setBusy] = useState(false);
   const isMax = plan.id === "max";
   const price = interval === "annual" ? plan.priceAnnualPerMonth : plan.priceMonthly;
+  // Promo applies to annual billing only (the Stripe code needs a yearly total).
+  const onPromo = promoActive() && interval === "annual";
 
   // One shared rule set with /pricing — see planCardAction in lib/billing.ts.
   const action = planCardAction(activePlan, activeInterval, plan.id, interval);
@@ -93,15 +96,34 @@ const PlanCard = ({
       <p className="mt-1 font-body text-sm text-muted-foreground">
         {plan.id === "max" ? "For studios, brands & client work" : "For solo creators & channels"}
       </p>
+      {onPromo && (
+        <div className="pointer-events-none absolute inset-0 z-[2] overflow-hidden rounded-2xl">
+          <div className="absolute right-[-50px] top-[34px] w-[200px] rotate-45 bg-[#e5484d] py-[5px] text-center font-body text-[10px] font-bold uppercase tracking-[0.06em] text-white shadow-[0_2px_6px_rgba(0,0,0,0.4)]">
+            {PROMO.ribbon}
+          </div>
+        </div>
+      )}
       <div className="mt-4 flex items-baseline gap-2">
         {interval === "annual" && (
-          <span className="font-body text-lg text-muted-foreground line-through">${plan.priceMonthly}</span>
+          <span className="font-body text-lg text-muted-foreground line-through">
+            ${onPromo ? price : plan.priceMonthly}
+          </span>
         )}
-        <span className="font-body text-4xl font-semibold text-foreground">${price}</span>
+        <span className="font-body text-4xl font-semibold text-foreground">
+          ${onPromo ? money(promoPrice(price)) : price}
+        </span>
         <span className="font-body text-sm text-muted-foreground">
           /mo{interval === "annual" ? ", billed annually" : ""}
         </span>
       </div>
+      {onPromo && (
+        <p className="mt-1 font-body text-xs text-muted-foreground">
+          ${money(promoPrice(price * 12))} first year with promo code{" "}
+          <span className="font-semibold" style={{ color: GOLD }}>
+            {PROMO.code}
+          </span>
+        </p>
+      )}
 
       <button
         type="button"
