@@ -1,3 +1,4 @@
+import { licensePayPrice } from "@/lib/promo";
 import { useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import type { LicenseTierId } from "@/lib/licenses";
@@ -88,7 +89,8 @@ export const clearCart = (): void => {
 };
 
 export const cartTotal = (list: CartItem[]): number =>
-  list.reduce((sum, i) => sum + (licenseTierById(i.tier)?.price ?? 0), 0);
+  // 13.11.2026: the promo price (what the server charges), rounded to cents
+  Math.round(list.reduce((sum, i) => sum + licensePayPrice(licenseTierById(i.tier)?.price ?? 0), 0) * 100) / 100;
 
 export const useCart = (): { items: CartItem[]; count: number; total: number } => {
   const snap = useSyncExternalStore(subscribe, () => items, () => items);

@@ -25,3 +25,7 @@ export const money = (n: number): string => {
 /** Price after the promo discount. */
 export const promoPrice = (n: number): number =>
   Math.round(n * (100 - PROMO.percent)) / 100;
+
+/** 13.11.2026: what a single-track license really costs now (the promo applies
+ *  automatically, no code). The server charges the same: functions/api/_promo.ts. */
+export const licensePayPrice = (n: number): number => (promoActive() ? promoPrice(n) : n);

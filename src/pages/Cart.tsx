@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { licenseTierById, useLicenseTiers, type LicenseTierId } from "@/lib/licenses";
+import PromoPrice from "@/components/PromoPrice";
+import { PROMO, licensePayPrice, money, promoActive } from "@/lib/promo";
 import { clearCart, removeFromCart, setCartItemTier, useCart } from "@/hooks/useCart";
 import { trackEvent } from "@/lib/trackEvent";
 
@@ -273,14 +275,15 @@ const Cart = () => {
                       >
                         {liveTiers.map((t) => (
                           <option key={t.id} value={t.id}>
-                            {t.name} license — ${t.price}
+                            {t.name} license: ${money(licensePayPrice(t.price))}
+                            {promoActive() ? ` (was $${money(t.price)})` : ""}
                           </option>
                         ))}
                       </select>
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-2">
                       <span className="font-body text-base font-semibold text-foreground">
-                        ${tier?.price ?? 0}
+                        <PromoPrice base={tier?.price ?? 0} />
                       </span>
                       <button
                         type="button"
@@ -311,19 +314,24 @@ const Cart = () => {
                       </span>
                     </span>
                     <span className="shrink-0 font-body text-sm text-foreground">
-                      ${licenseTierById(item.tier)?.price ?? 0}
+                      <PromoPrice base={licenseTierById(item.tier)?.price ?? 0} />
                     </span>
                   </li>
                 ))}
               </ul>
               <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-4">
                 <span className="font-body text-sm text-muted-foreground">Subtotal</span>
-                <span className="font-body text-sm text-foreground">${total}</span>
+                <span className="font-body text-sm text-foreground">${money(total)}</span>
               </div>
+              {promoActive() && (
+                <p className="mt-2 font-body text-xs font-semibold text-[#e5484d]">
+                  {PROMO.label}: {PROMO.percent}% off every license, already applied
+                </p>
+              )}
               <div className="mt-2 flex items-center justify-between">
                 <span className="font-body text-base font-semibold text-foreground">Total</span>
                 <span className="font-body text-xl font-semibold" style={{ color: GOLD }}>
-                  ${total}
+                  ${money(total)}
                 </span>
               </div>
               <p className="mt-3 inline-flex items-center gap-1.5 font-body text-xs text-muted-foreground">

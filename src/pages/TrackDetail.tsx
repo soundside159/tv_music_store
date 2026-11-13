@@ -33,6 +33,7 @@ import { composerRecencyPercentile } from "@/lib/catalogSort";
 import { toggleFavourite, useFavourites } from "@/lib/favourites";
 import { usePlayer } from "@/components/playerContext";
 import { useLicenseTiers, type LicenseTierId } from "@/lib/licenses";
+import PromoPrice from "@/components/PromoPrice";
 import { addToCart } from "@/hooks/useCart";
 import { displayVersionLabel, openDownloadOptions } from "@/lib/downloadTrack";
 import { openPlanModal } from "@/lib/billing";
@@ -386,7 +387,9 @@ const TrackDetail = () => {
                       <p className="font-body text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                         {t.name}
                       </p>
-                      <p className="mt-1.5 font-body text-2xl font-semibold text-foreground">${t.price}</p>
+                      <p className="mt-1.5">
+                        <PromoPrice base={t.price} className="font-body text-2xl font-semibold text-foreground" />
+                      </p>
                       <p className="mt-1 font-body text-[11px] uppercase tracking-wide text-muted-foreground">
                         {t.formats}
                       </p>
@@ -408,7 +411,7 @@ const TrackDetail = () => {
               </div>
 
               <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-border/60 pt-5">
-                <span className="font-body text-3xl font-semibold text-foreground">${tier.price}</span>
+                <PromoPrice base={tier.price} badge className="font-body text-3xl font-semibold text-foreground" />
                 <button
                   type="button"
                   onClick={() =>

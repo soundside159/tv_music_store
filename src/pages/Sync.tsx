@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { useLicenseTiers } from "@/lib/licenses";
+import PromoPrice from "@/components/PromoPrice";
 
 // Single-track licensing page. Used to advertise legacy "Sync Standard $199 /
 // Sync Broadcast $399" tiers that never existed in the checkout — it now shows
@@ -69,7 +70,7 @@ const Sync = () => {
             >
               <h2 className="font-body text-lg font-semibold text-foreground">{t.name}</h2>
               <div className="mt-3 flex items-baseline gap-1">
-                <span className="font-body text-4xl font-semibold text-foreground">${t.price}</span>
+                <PromoPrice base={t.price} badge className="font-body text-4xl font-semibold text-foreground" />
                 <span className="font-body text-sm text-muted-foreground">/track</span>
               </div>
               <p className="mt-1 font-body text-xs text-muted-foreground">{t.formats}</p>

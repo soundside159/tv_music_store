@@ -1,5 +1,6 @@
 import { getLicensePrices, getSessionUser, json, readJson, type Ctx } from "../_utils";
 import { paypalCall, paypalConfigured, paypalToken, validateItems } from "./_paypal";
+import { applyLicensePromo } from "../_promo";
 
 // POST { items: [{ slug, tier }] } -> { id } PayPal order id.
 // Prices are computed server-side from the tier — never trusted from the client.
@@ -13,7 +14,8 @@ export const onRequestPost = async (ctx: Ctx) => {
 
   const body = await readJson<{ items?: unknown }>(ctx.request);
   // Live prices from the admin-editable site_config (fallback = defaults).
-  const prices = await getLicensePrices(ctx.env.DB);
+  // 13.11.2026: Black Friday -20% is applied right here (no promo code).
+  const prices = applyLicensePromo(await getLicensePrices(ctx.env.DB));
   const items = validateItems(body?.items, prices);
   if (!items) return json({ error: "Invalid cart items" }, 400);
 

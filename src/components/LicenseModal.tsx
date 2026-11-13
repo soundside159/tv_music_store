@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Check, ShoppingCart, X } from "lucide-react";
 import { useLicenseTiers, type LicenseTierId } from "@/lib/licenses";
+import PromoPrice from "@/components/PromoPrice";
 import { addToCart, type BuyLicenseArgs } from "@/hooks/useCart";
 
 // Global "Buy a license" popup. Any Buy-License button dispatches
@@ -97,7 +98,9 @@ const LicenseModal = () => {
                 <p className="font-body text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   {t.name}
                 </p>
-                <p className="mt-1.5 font-body text-2xl font-semibold text-foreground">${t.price}</p>
+                <p className="mt-1.5">
+                  <PromoPrice base={t.price} className="font-body text-2xl font-semibold text-foreground" />
+                </p>
                 <p className="mt-1 font-body text-[11px] uppercase tracking-wide text-muted-foreground">
                   {t.formats}
                 </p>
@@ -119,7 +122,7 @@ const LicenseModal = () => {
         </div>
 
         <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-border/60 pt-5">
-          <span className="font-body text-3xl font-semibold text-foreground">${tier.price}</span>
+          <PromoPrice base={tier.price} badge className="font-body text-3xl font-semibold text-foreground" />
           <button
             type="button"
             onClick={add}
