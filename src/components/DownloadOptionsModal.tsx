@@ -197,7 +197,13 @@ const DownloadOptionsModal = () => {
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">
                     <span className="font-body text-sm font-semibold text-foreground">{o.title}</span>
-                    {o.badge && <Badge label={license ? "LICENSED" : o.badge} />}
+                    {/* 13.11.2026: the plan badge only where the user's plan does NOT cover the format */}
+                    {o.badge &&
+                      (license ? (
+                        <Badge label="LICENSED" />
+                      ) : (planRank[plan] ?? 0) < (planRank[o.need] ?? 0) ? (
+                        <Badge label={o.badge} />
+                      ) : null)}
                   </span>
                   <span className="mt-0.5 block font-body text-xs text-muted-foreground">{o.description}</span>
                 </span>
