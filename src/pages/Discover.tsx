@@ -3,7 +3,9 @@ import { ArrowRight, Home } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { TrackRowList, TrackRowSkeletonList } from "@/components/TrackRowPlayer";
-import { useTracks } from "@/hooks/useTracks";
+import { patchCachedTrackFacet, useTracks } from "@/hooks/useTracks";
+import { useContentAdmin } from "@/components/AdminInlineContent";
+import { toast } from "sonner";
 import { interleaveByComposerRecency } from "@/lib/catalogSort";
 import { useVocabularies } from "@/hooks/useContent";
 import { useSeo } from "@/hooks/useSeo";
@@ -133,6 +135,31 @@ const DiscoverTag = ({ group, slug }: { group: DiscoverGroup; slug: string }) =>
   const exact = interleaveByComposerRecency(tracksWithTag(tracks, facet, slug));
   const related = relatedTracks(exact, tracks, RELATED_LIMIT);
 
+  // Admin / editor: the X on a row takes this tag off the track (13.11.2026),
+  // like removing a track from a playlist.
+  const admin = useContentAdmin();
+  const adminRemove = admin.canRemoveTracks
+    ? (trackId: string) => {
+        const track = tracks.find((t) => t.id === trackId);
+        const values = (track?.[facet] ?? "")
+          .split("/")
+          .map((v) => v.trim())
+          .filter((v) => v && tagSlug(v) === slug);
+        if (!track || values.length === 0) return;
+        void (async () => {
+          const ok = await admin.run({
+            action: "bulk_update_tracks",
+            trackIds: [trackId],
+            facets: { [facet]: { remove: values } },
+          });
+          if (ok) {
+            for (const v of values) patchCachedTrackFacet(trackId, facet, v, false);
+            toast.success(`${track.title} removed from ${label}`);
+          }
+        })();
+      }
+    : null;
+
   const title = `${label} Music — Royalty-Free ${label} Tracks | TV Music Store`;
   const description = `Download royalty-free ${label.toLowerCase()} music for video, ads, film, games and social. ${
     exact.length > 0 ? `${exact.length} ${label.toLowerCase()} track${exact.length === 1 ? "" : "s"} — ` : ""
@@ -187,6 +214,7 @@ const DiscoverTag = ({ group, slug }: { group: DiscoverGroup; slug: string }) =>
           ) : exact.length > 0 ? (
             <TrackRowList
               tracks={exact}
+              adminRemove={adminRemove}
               pageSize={PAGE_SIZE}
               resetKey={`${group}/${slug}`}
               waveMinLoadingMs={WAVE_MIN_LOADING_MS}

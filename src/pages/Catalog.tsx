@@ -12,11 +12,14 @@ import {
   Search,
   SlidersHorizontal,
   Sparkles,
+  X,
 } from "lucide-react";
+import { toast } from "sonner";
+import { useContentAdmin } from "@/components/AdminInlineContent";
 import Navigation from "@/components/Navigation";
 import cinemaHero from "@/assets/cinema-hero-wide.png";
 import { Input } from "@/components/ui/input";
-import { useTracks } from "@/hooks/useTracks";
+import { patchCachedTracks, useTracks } from "@/hooks/useTracks";
 import type { MusicCollection } from "@/data/musicCollections";
 import type { CatalogTrack } from "@/data/catalogTracks";
 import { useCollections, usePlaylists, useTrendingIds, useVocabularies } from "@/hooks/useContent";
@@ -91,6 +94,25 @@ const Catalog = () => {
   const musicCollections = useCollections();
   const activeCollection = musicCollections.find((collection) => collection.id === activeCollectionId) ?? null;
   const categoryParam = searchParams.get("category");
+  // Admin / editor on a category page: the X on a row takes the track out of
+  // that category (13.11.2026), like removing a track from a playlist.
+  const contentAdmin = useContentAdmin();
+  const removeFromCategory = (track: CatalogTrack) => {
+    if (!categoryParam) return;
+    void (async () => {
+      const ok = await contentAdmin.run({
+        action: "bulk_update_tracks",
+        trackIds: [track.id],
+        categoryChanges: { remove: [categoryParam] },
+      });
+      if (ok) {
+        patchCachedTracks({
+          [track.id]: { categoryIds: (track.categoryIds ?? []).filter((x) => x !== categoryParam) },
+        });
+        toast.success(`${track.title} removed from this category`);
+      }
+    })();
+  };
   const [query, setQuery] = useState(() => searchParams.get("search") ?? "");
   const [filters, setFilters] = useState<FilterValue>(() => {
     // Tag clicks arrive as ?usecase= / ?genre= / ?mood=; map them onto the
@@ -602,6 +624,11 @@ const Catalog = () => {
                     // begins — a hairline caption so the filter stays honest
                     // ("these no longer carry the tag you ticked").
                     const startsRelated = index === exactCount && related.length > 0;
+                    const canRemove =
+                      contentAdmin.canRemoveTracks &&
+                      !!categoryParam &&
+                      index < exactCount &&
+                      !!track.categoryIds?.includes(categoryParam);
 
                     return (
                       <Fragment key={track.id}>
@@ -613,6 +640,8 @@ const Catalog = () => {
                           <span className="h-px flex-1 bg-border/40" />
                         </div>
                       )}
+                      <div className="flex items-stretch">
+                      <div className="min-w-0 flex-1">
                       <TrackRow
                         activePlayer={activePlayer}
                         entranceDelay={0}
@@ -634,6 +663,19 @@ const Catalog = () => {
                         waveMinLoadingMs={WAVE_MIN_LOADING_MS}
                         waveReloadKey={reshimmerKey}
                       />
+                      </div>
+                      {canRemove && (
+                        <button
+                          type="button"
+                          onClick={() => removeFromCategory(track)}
+                          aria-label={`Remove ${track.title} from this category`}
+                          title="Admin: remove from this category"
+                          className="flex w-9 shrink-0 items-center justify-center border-l border-border/30 text-muted-foreground/60 transition-colors hover:bg-red-400/10 hover:text-red-400"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      </div>
                       </Fragment>
                     );
                   })}

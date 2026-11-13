@@ -868,7 +868,49 @@ RED = "#ff6b6b"
 ORANGE = "#ff9f43"
 GREEN = "#7ED957"
 STATUS_COLORS = {"none": "#4A5057", "queue": "#8a9299", "run": ACCENT, "found": RED, "clean": GREEN,
-                 "err": ORANGE}
+                 "err": ORANGE,
+                 # 13.11.2026 claim state of a video with our music:
+                 "part": "#5aa9ff",     # several tracks, only some claims released
+                 "rel": GREEN,          # every claim released (dot with a tick)
+                 "removed": "#8a9299"}  # matches taken out of the sheets
+LOOK_TIPS = {"found": "Our music found, the claim is not released yet",
+             "part": "Several of our tracks: some claims released, some not yet",
+             "rel": "Our music found, every claim released",
+             "removed": "Our music found, but the matches were taken out of the sheets",
+             "clean": "Clean: none of our tracks", "err": "The check failed", "none": "Not scanned yet"}
+# 13.11.2026: every composer has his own colour (same as the site's Whitelisting page)
+COMPOSER_COLORS = {"dredstudio": "#F4C430", "lumine wave": "#ff8fb1", "vicate": "#7cc7ff"}
+COMPOSER_SPARE = ["#9be38a", "#c9a0ff", "#ffb366", "#6ee7d8"]
+
+
+def composer_color(name):
+    key = (name or "").strip().lower()
+    if key in COMPOSER_COLORS:
+        return COMPOSER_COLORS[key]
+    if not key:
+        return TEXT_GRAY
+    import zlib
+    return COMPOSER_SPARE[zlib.crc32(key.encode("utf-8")) % len(COMPOSER_SPARE)]
+
+
+def scan_step(text):
+    """Short name of the scanning step for the video row and the channel bar."""
+    t = text.strip()
+    low = t.lower()
+    if low.startswith("downloading voice"):
+        return "getting voice model"
+    if low.startswith("downloading"):
+        return "downloading"
+    if low.startswith("analysing audio  part"):
+        nums = re.findall(r"\d+", t)
+        return "analysing %s/%s" % (nums[0], nums[1]) if len(nums) >= 2 else "analysing"
+    if low.startswith("analysing"):
+        return "analysing"
+    if low.startswith("searching"):
+        return "searching the base"
+    if low.startswith("removing voice"):
+        return "removing voice"
+    return low[:30]
 SESSION_LOG = os.path.join(DATA, "session_log.txt")  # this run only, cleared on start
 
 QSS = """
@@ -2216,17 +2258,21 @@ class ChannelBar(QtWidgets.QFrame):
         h.addWidget(self.btn_stop)
         self.set_progress(None)
 
-    def set_meta(self, n_videos, n_match, n_wait, n_done=None):
-        """n_done = scanned videos: "3/8 videos" orange until every one is scanned, then green."""
+    def set_meta(self, n_videos, n_found, n_open, n_done=None):
+        """13.11.2026: "4 of 6 scanned - 2 with our music - 1 not released" (or "all released")."""
+        dot = " &nbsp;&middot;&nbsp; "
         if n_done is None or not n_videos:
-            vids = "<span style='color:%s'>%d videos</span>" % (TEXT_GRAY, n_videos)
+            parts = ["<span style='color:%s'>%d video%s</span>" % (TEXT_GRAY, n_videos, "" if n_videos == 1 else "s")]
         else:
-            vids = "<span style='color:%s'>%d/%d videos</span>" % ("#9fe3b0" if n_done >= n_videos else ACCENT,
-                                                                   n_done, n_videos)
-        self.meta.setText(vids + " &nbsp;&middot;&nbsp; "
-                          "<span style='color:%s'>%d match</span> &nbsp;&middot;&nbsp; "
-                          "<span style='color:%s'>%d waiting release</span>"
-                          % (RED if n_match else TEXT_GRAY, n_match, TEXT_GRAY, n_wait))
+            parts = ["<span style='color:%s'>%d of %d scanned</span>"
+                     % ("#9fe3b0" if n_done >= n_videos else ACCENT, n_done, n_videos)]
+        if n_found:
+            parts.append("<span style='color:%s'>%d with our music</span>" % (RED if n_open else TEXT_GRAY, n_found))
+            parts.append("<span style='color:%s'>%d not released</span>" % (RED, n_open) if n_open
+                         else "<span style='color:%s'>all released</span>" % GREEN)
+        elif n_done:
+            parts.append("<span style='color:%s'>nothing found</span>" % TEXT_GRAY)
+        self.meta.setText(dot.join(parts))
 
     def set_progress(self, done_total):
         """done_total = (done, total) while this channel is being scanned, else None."""
@@ -2238,8 +2284,20 @@ class ChannelBar(QtWidgets.QFrame):
         self.btn_scan.setVisible(not on)
         if on:
             d, t = done_total
-            self.prog_lbl.setText("scanning %d / %d" % (d, t))
+            self._dt = (d, t)
+            self._show_prog()
             self.pbar.setValue(int(1000 * d / max(1, t)))
+
+    def set_now(self, text):
+        """13.11.2026: the video being scanned now and its step, next to the counter."""
+        if text != getattr(self, "_now", ""):
+            self._now = text
+            self._show_prog()
+
+    def _show_prog(self):
+        d, t = getattr(self, "_dt", (0, 0))
+        now = getattr(self, "_now", "")
+        self.prog_lbl.setText("scanning %d / %d%s" % (d, t, ("   " + now) if now else ""))
 
     def paintEvent(self, e):
         super().paintEvent(e)
@@ -2284,6 +2342,7 @@ class App(QtWidgets.QMainWindow):
         self.loop_on = False
         self.cancel = False
         self.check_pct = 0
+        self.check_step = ""  # 13.11.2026: what the scanner is doing with the current video
         self.cur_vid = None  # video shown on the right
         self.vmeta = {}  # videoId -> {id, title, dur, short}
         self.vitems = {}  # videoId -> list item
@@ -3042,10 +3101,7 @@ class App(QtWidgets.QMainWindow):
             bar.toggled.connect(self.toggle_channel)
             bar.scan.connect(self.scan_channel)
             bar.stop.connect(self.stop_channel)
-            n_match = sum(1 for v in ch["videos"] if self.matches_by_vid.get(v["videoId"]))
-            n_wait = sum(1 for v in ch["videos"] if self.claim_of(v["videoId"])[0] == "wait")
-            n_done = sum(1 for v in ch["videos"] if self.video_state(v["videoId"]) in ("found", "clean"))
-            bar.set_meta(len(ch["videos"]), n_match, n_wait, n_done)
+            bar.set_meta(*self.channel_counts(ch))
             self.content_lay.addWidget(bar)
             self.chan_bars[ch["id"]] = bar
             if ch["id"] in self.open_ch:
@@ -3090,6 +3146,47 @@ class App(QtWidgets.QMainWindow):
         if states == {"removed"}:
             return "removed", "removed from sheet", TEXT_GRAY, BG_INPUT
         return "other", ", ".join(sorted(states)), TEXT_GRAY, BG_INPUT
+
+    def claim_look(self, vid):
+        """13.11.2026 colour of a video with our music, by its claims in the sheets:
+        found = none released yet, part = some released, rel = all released, removed."""
+        ms = self.matches_by_vid.get(vid) or []
+        if not ms:
+            return "found"
+        states = [m.get("state") for m in ms]
+        live = [st for st in states if st != "removed"]
+        if not live:
+            return "removed"
+        n_rel = sum(1 for st in live if st == "released")
+        if n_rel == len(live):
+            return "rel"
+        return "part" if n_rel else "found"
+
+    def step_text(self):
+        step = self.check_step or "scanning"
+        if step in ("downloading", "removing voice") and self.check_pct:
+            return "%s %d%%" % (step, self.check_pct)
+        return step
+
+    def update_bar_now(self):
+        """Channel bar of the video being scanned: its short title and the step."""
+        if not hasattr(self, "chan_bars"):
+            return
+        chid = self.job_src.get(self.checking) if self.checking else None
+        for cid, bar in self.chan_bars.items():
+            if cid == chid and self.checking:
+                title = (self.vid_rows.get(self.checking) or {}).get("title") or self.checking
+                bar.set_now("%s: %s" % (title[:28] + ("..." if len(title) > 28 else ""), self.step_text()))
+            else:
+                bar.set_now("")
+
+    def channel_counts(self, ch):
+        vids = [x["videoId"] for x in ch["videos"]]
+        n_done = sum(1 for x in vids if self.video_state(x) in ("found", "clean"))
+        looks = [self.claim_look(x) for x in vids if self.video_state(x) == "found"]
+        n_found = sum(1 for lk in looks if lk != "removed")
+        n_open = sum(1 for lk in looks if lk in ("found", "part"))
+        return len(vids), n_found, n_open, n_done
 
     def video_state(self, vid):
         """none / queue / run / found / clean / err for a site video."""
@@ -3192,21 +3289,24 @@ class App(QtWidgets.QMainWindow):
         v = self.vid_rows.get(vid) or {}
         c = self.checks.get(vid) or {}
         key = self.video_state(vid)
-        it.setIcon(0, self.dot_icon(key))
+        look = self.claim_look(vid) if key == "found" else key
+        it.setIcon(0, self.dot_icon(look))
+        it.setToolTip(0, LOOK_TIPS.get(look, ""))
         it.setForeground(0, QtGui.QBrush(QtGui.QColor(TEXT_TILE)))
         it.setText(2, fmt(c["dur"]) if c.get("dur") else "")
         ms = self.matches_by_vid.get(vid) or []
         n = len({m["track"] for m in ms}) if ms else len(c.get("rows") or [])
         if key in ("found", "clean"):
             it.setText(3, str(n))
-            it.setForeground(3, QtGui.QBrush(QtGui.QColor(RED if n else TEXT_GRAY)))
+            it.setForeground(3, QtGui.QBrush(QtGui.QColor(STATUS_COLORS[look] if n and look != "removed"
+                                                          else TEXT_GRAY)))
             when = (c.get("at") or (v.get("scannedAt") or "").replace("T", " ")[:16])
             it.setText(4, when)
             it.setForeground(4, QtGui.QBrush(QtGui.QColor(TEXT_GRAY)))
         else:
             it.setText(3, "-")
             it.setForeground(3, QtGui.QBrush(QtGui.QColor(TEXT_GRAY)))
-            it.setText(4, {"run": "scanning %d%%" % self.check_pct, "queue": "in queue", "err": "error",
+            it.setText(4, {"run": self.step_text(), "queue": "in queue", "err": "error",
                            "none": "not scanned"}[key])
             it.setForeground(4, QtGui.QBrush(QtGui.QColor(ACCENT if key == "run" else TEXT_GRAY)))
         f = it.font(4)
@@ -3382,7 +3482,7 @@ class App(QtWidgets.QMainWindow):
                 lg = QtWidgets.QHBoxLayout()
                 lg.setSpacing(5)
                 lg.addWidget(Square(col))
-                lg_t = QtWidgets.QLabel("%s (%s)" % (title, comp))
+                lg_t = QtWidgets.QLabel("%s <span style='color:%s'>(%s)</span>" % (title, composer_color(comp), comp))
                 lg_t.setObjectName("muted")
                 lg.addWidget(lg_t)
                 head.addLayout(lg)
@@ -3521,10 +3621,7 @@ class App(QtWidgets.QMainWindow):
         bar = self.chan_bars.get(chid)
         ch = self.find_channel(chid) if chid else None
         if bar and ch:
-            n_match = sum(1 for x in ch["videos"] if self.matches_by_vid.get(x["videoId"]))
-            n_wait = sum(1 for x in ch["videos"] if self.claim_of(x["videoId"])[0] == "wait")
-            n_done = sum(1 for x in ch["videos"] if self.video_state(x["videoId"]) in ("found", "clean"))
-            bar.set_meta(len(ch["videos"]), n_match, n_wait, n_done)
+            bar.set_meta(*self.channel_counts(ch))
 
     def update_scan_marks(self):
         """Dots and counters for whatever is being scanned now (cheap, no rebuild)."""
@@ -3550,6 +3647,7 @@ class App(QtWidgets.QMainWindow):
             self.fill_video_item(vid)
         for chid, bar in self.chan_bars.items():
             self.update_bar_meta(chid)
+        self.update_bar_now()
         left = len(self.queue) + (1 if self.checking else 0)
         total = len(self.job_src) if self.running else 0
         if self.running:
@@ -3897,6 +3995,7 @@ class App(QtWidgets.QMainWindow):
             it.setData(0, 256, key)
             it.setText(0, "  " + title)
             it.setText(1, composer)
+            it.setForeground(1, QtGui.QBrush(QtGui.QColor(composer_color(composer))))
             word, col = look[state]
             it.setText(2, word)
             it.setForeground(2, QtGui.QBrush(QtGui.QColor(col)))
@@ -4396,6 +4495,14 @@ class App(QtWidgets.QMainWindow):
             p.setBrush(QtGui.QColor(STATUS_COLORS[key]))
             p.setPen(QtCore.Qt.PenStyle.NoPen)
             p.drawEllipse(3, 3, 14, 14)
+            if key == "rel":  # all claims released: a dark tick inside the green dot
+                pen = QtGui.QPen(QtGui.QColor("#1d2a1f"), 2.2)
+                pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
+                pen.setJoinStyle(QtCore.Qt.PenJoinStyle.RoundJoin)
+                p.setPen(pen)
+                p.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+                p.drawPolyline(QtGui.QPolygonF([QtCore.QPointF(6.5, 10.3), QtCore.QPointF(9, 12.8),
+                                                QtCore.QPointF(13.6, 7.6)]))
             p.end()
             ic = QtGui.QIcon()
             ic.addPixmap(pm, QtGui.QIcon.Mode.Normal)
@@ -4511,7 +4618,8 @@ class App(QtWidgets.QMainWindow):
                 try:
                     _s, rows = find_in_audio(self.base, path, False, prog)
                     if rows:
-                        found = ", ".join("%s (%s)" % (_h.escape(r["title"]), _h.escape(r["composer"])) for r in rows)
+                        found = ", ".join("%s <span style='color:%s'>(%s)</span>" % (
+                            _h.escape(r["title"]), composer_color(r["composer"]), _h.escape(r["composer"])) for r in rows)
                         line = "<b style='color:%s'>%s</b><br><span style='color:%s'>In our base: %s</span>" % (
                             TEXT_ROW, name, GOLD, found)
                     else:
@@ -4574,7 +4682,7 @@ class App(QtWidgets.QMainWindow):
                 for a in ahead:
                     if a not in pending:
                         pending[a] = pre.submit(download_audio, a)
-                self.checking, self.check_pct = vid, 0
+                self.checking, self.check_pct, self.check_step = vid, 0, "starting"
                 self.ui(lambda v=vid: (self.refresh_item(v), self.show_if_current(v), self.update_scan_marks()))
                 v = self.vmeta.get(vid) or {"id": vid, "title": (self.vid_rows.get(vid) or {}).get("title") or vid,
                                             "dur": 0}
@@ -4584,11 +4692,13 @@ class App(QtWidgets.QMainWindow):
                     if self.cancel:
                         raise Cancelled()
                     self.stage("%s  -  %s" % (title[:50], text), frac)
-                    if frac is not None:
-                        pct = int(100 * frac)
-                        if pct != self.check_pct:
-                            self.check_pct = pct
-                            self.ui(lambda: (self.refresh_item(v_id), self.fill_video_item(v_id)))
+                    step = scan_step(text)
+                    pct = int(100 * frac) if frac is not None else self.check_pct
+                    if step != self.check_step or (frac is not None and pct != self.check_pct):
+                        if step != self.check_step and frac is None:
+                            pct = 0
+                        self.check_step, self.check_pct = step, pct
+                        self.ui(lambda: (self.refresh_item(v_id), self.fill_video_item(v_id), self.update_bar_now()))
                 rows, err = [], None
                 try:
                     fut = pending.pop(vid, None)
@@ -4631,6 +4741,8 @@ class App(QtWidgets.QMainWindow):
                         self.log("%s: FAILED %s" % (v["title"], msg))
                         err = msg
                 if post and err != "stopped":
+                    self.check_step = "sending to the site"
+                    self.ui(lambda v_=vid: (self.fill_video_item(v_), self.update_bar_now()))
                     try:
                         if err:
                             api(self.settings, "POST", "", {"action": "result", "videoId": vid, "error": err})
@@ -4768,6 +4880,7 @@ class App(QtWidgets.QMainWindow):
                 for col in range(1, 5):
                     it.setForeground(col, QtGui.QBrush(QtGui.QColor("#9a9a9a")))
                 it.setToolTip(0, "Not counted: " + verdict_text(r["rejected"]))
+            it.setForeground(1, QtGui.QBrush(QtGui.QColor(composer_color(r["composer"]))))
             self.res.addTopLevelItem(it)
         view = self.view_rows
         self.res.setVisible(bool(view))
