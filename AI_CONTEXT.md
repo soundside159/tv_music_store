@@ -5204,3 +5204,4 @@ True: `brandCover()` was only in the AI path.
 - Campaign assets: Promotion "Black Friday 20% off Annual plans, code BLACKFRIDAY20, until 30 Nov"; campaign headline "20% Off Annual Plans" (ends 30 Nov).
 - Results per group: Admin -> Analytics, sources gads-vlog / gads-family / gads-crime (same-day attribution only).
 - Same day: Black Friday email sent from tvmusicstore@gmail.com to all 37 free customers in Bcc batches of 10 (offer: 20% + extra 5% on reply; no code yet, owner makes a Stripe code if someone replies).
+- 2026-11-13 later: Whitelisting renames (owner): main button "Sync", tabs "Claims" (found claims per composer) / "Customer channels" (customers channels, solo videos, check-from dates), "Admin Custom" (was Custom). Composer rows now in the approved mockup look: 3px colour bar on the left, name, stacked numbers waiting/released on the right, sheet = small link icon, whole row clickable.

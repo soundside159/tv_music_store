@@ -237,7 +237,7 @@ const AdminWhitelist = () => {
           style={{ background: GOLD }}
         >
           {busy === "all" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-          {busy === "all" && step ? step : "Update everything"}
+          {busy === "all" && step ? step : "Sync"}
         </button>
         {/* Emails stay a separate, deliberate action (owner rule). */}
         <button
@@ -266,11 +266,11 @@ const AdminWhitelist = () => {
       <div className="flex flex-wrap items-center gap-1.5">
         {(
           [
-            ["composers", "By composer"],
-            ["channels", "By customer"],
+            ["composers", "Claims"],
+            ["channels", "Customer channels"],
             ...(more
               ? ([
-                  ["custom", `Custom · ${(data.customLists ?? [...new Set(data.channels.filter((c) => c.group).map((c) => c.group))]).length}`],
+                  ["custom", `Admin Custom · ${(data.customLists ?? [...new Set(data.channels.filter((c) => c.group).map((c) => c.group))]).length}`],
                   ["scanner", "Scanner"],
                 ] as const)
               : []),
@@ -340,47 +340,50 @@ const AdminWhitelist = () => {
             const isOpen = needle ? rows.length > 0 : !!open[c.id];
             if (needle && rows.length === 0) return null;
             return (
-              <div key={c.id} className="overflow-hidden rounded-2xl border border-border bg-card">
-                <div className="h-[3px]" style={{ background: c.color }} />
-                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3">
-                  <button
-                    type="button"
-                    onClick={() => setOpen((o) => ({ ...o, [c.id]: !isOpen }))}
-                    className="flex items-center gap-2"
-                  >
-                    {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                    <span className="min-w-[150px] text-left font-body text-base font-bold" style={{ color: c.color }}>
-                      {c.name}
-                    </span>
-                  </button>
-                  {/* Two numbers only: waiting (in the sheet or about to be) and released. */}
-                  <span className="font-body text-xs text-muted-foreground">
-                    <b className={`mr-1 text-sm ${waiting.length + fresh.length ? "text-red-400" : "text-muted-foreground"}`}>
+              <div
+                key={c.id}
+                className="overflow-hidden rounded-r-xl border border-l-0 border-border bg-card"
+                style={{ borderLeft: `3px solid ${c.color}` }}
+              >
+                {/* Whole row opens the list; numbers stacked on the right (owner's approved look). */}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setOpen((o) => ({ ...o, [c.id]: !isOpen }))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") setOpen((o) => ({ ...o, [c.id]: !isOpen }));
+                  }}
+                  className="flex cursor-pointer items-center gap-4 px-4 py-3 hover:bg-white/[0.02]"
+                >
+                  <span className="min-w-0 flex-1 truncate font-body text-base font-semibold text-foreground">{c.name}</span>
+                  <span className="text-center">
+                    <b className={`block font-body text-lg leading-tight ${waiting.length + fresh.length ? "text-red-400" : "text-muted-foreground"}`}>
                       {waiting.length + fresh.length}
                     </b>
-                    waiting
-                    {waiting.length > 0 && oldest > 0 && (
-                      <span className="ml-1 text-[11px]">({oldest === 1 ? "1 day" : `${oldest} days`})</span>
-                    )}
+                    <span className="block font-body text-[11px] text-muted-foreground">
+                      waiting{waiting.length > 0 && oldest > 0 ? ` · ${oldest}d` : ""}
+                    </span>
                   </span>
-                  <span className="font-body text-xs text-muted-foreground">
-                    <b className={`mr-1 text-sm ${released.length ? "text-emerald-300" : "text-muted-foreground"}`}>{released.length}</b>
-                    released
+                  <span className="text-center">
+                    <b className={`block font-body text-lg leading-tight ${released.length ? "text-emerald-300" : "text-muted-foreground"}`}>
+                      {released.length}
+                    </b>
+                    <span className="block font-body text-[11px] text-muted-foreground">released</span>
                   </span>
-                  <span className="ml-auto">
-                    {c.sheetUrl ? (
-                      <a
-                        href={c.sheetUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 font-body text-xs font-semibold text-foreground hover:border-[#F4C430] hover:text-[#F4C430]"
-                      >
-                        Open sheet <ExternalLink className="h-3 w-3" />
-                      </a>
-                    ) : (
-                      <span className="font-body text-xs text-muted-foreground">no sheet yet (Scanner tab)</span>
-                    )}
-                  </span>
+                  {c.sheetUrl ? (
+                    <a
+                      href={c.sheetUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="Open this composer's sheet"
+                      onClick={(e) => e.stopPropagation()}
+                      className="rounded-md p-1.5 text-muted-foreground hover:text-[#F4C430]"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  ) : (
+                    <span title="No sheet yet (Scanner tab)" className="w-7" />
+                  )}
                 </div>
                 {isOpen && (
                   <div className="border-t border-border/60 px-4 pb-2">
@@ -439,7 +442,7 @@ const AdminWhitelist = () => {
                           </div>
                           <div className="min-w-0">
                             {ch?.group ? (
-                              <Pill ok>Custom · {ch.group}</Pill>
+                              <Pill ok>Admin Custom · {ch.group}</Pill>
                             ) : (
                               <>
                                 <Pill ok>
