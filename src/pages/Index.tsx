@@ -20,7 +20,7 @@ import { CatalogArt, CollectionsArt, PlaylistsArt, SectionCardArtStyle } from "@
 import CardCarousel from "@/components/CardCarousel";
 import { useCategories, useEditorPickIds, usePlaylists, useTrendingTracks, useVocabularies } from "@/hooks/useContent";
 import type { LivePlaylist } from "@/hooks/useContent";
-import { usePlans } from "@/hooks/useMockData";
+import { useIsStaff, usePlans } from "@/hooks/useMockData";
 
 const GOLD = "#F4C430";
 
@@ -53,7 +53,9 @@ const BROWSE_TABS: { id: BrowseTab; label: string; icon: typeof LayoutGrid }[] =
 /** Editor Picks card: the SMALL playlist tile (the square parallelogram from the
  *  playlist page header), not the tall shelf card used on /playlists. Title and
  *  track count sit under the art, so the picture stays clean. */
-const EditorPickCard = ({ playlist }: { playlist: LivePlaylist }) => (
+const EditorPickCard = ({ playlist }: { playlist: LivePlaylist }) => {
+  const staff = useIsStaff();
+  return (
   <Link to={`/playlist/${playlist.slug}`} className="group block">
     <div
       style={{ transform: "skewX(-9deg)" }}
@@ -82,11 +84,14 @@ const EditorPickCard = ({ playlist }: { playlist: LivePlaylist }) => (
     <p className="mt-3 truncate font-body text-sm font-semibold text-foreground transition-colors duration-200 group-hover:text-[#F4C430]">
       {playlist.title}
     </p>
-    <p className="font-body text-xs text-muted-foreground">
-      {playlist.trackIds.length} track{playlist.trackIds.length === 1 ? "" : "s"}
-    </p>
+    {staff && (
+      <p className="font-body text-xs text-muted-foreground">
+        {playlist.trackIds.length} track{playlist.trackIds.length === 1 ? "" : "s"}
+      </p>
+    )}
   </Link>
-);
+  );
+};
 
 const Index = () => {
   const plans = usePlans();

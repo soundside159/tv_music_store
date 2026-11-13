@@ -7,6 +7,7 @@ import Footer from "@/components/Footer";
 import CardCarousel from "@/components/CardCarousel";
 import { usePlayer } from "@/components/playerContext";
 import { useTracks } from "@/hooks/useTracks";
+import { useIsStaff } from "@/hooks/useMockData";
 import type { CatalogTrack } from "@/data/catalogTracks";
 import { refreshContent, useContentReady, useEditorPickIds, usePlaylists, type LivePlaylist } from "@/hooks/useContent";
 import {
@@ -23,6 +24,7 @@ import {
 
 const PlaylistCard = ({ playlist, tracks }: { playlist: LivePlaylist; tracks: CatalogTrack[] }) => {
   const { activePlayer, isPlaying, playVersion } = usePlayer();
+  const staff = useIsStaff(); // track count: admin and editor only (13.11.2026)
   // Every playable track of this playlist, in order — becomes the prev/next
   // queue when the card's play button starts the first one.
   const playlistTracks = playlist.trackIds
@@ -107,7 +109,7 @@ const PlaylistCard = ({ playlist, tracks }: { playlist: LivePlaylist; tracks: Ca
           >
             {playlist.title}
           </h3>
-          <p className="mt-1 font-body text-xs text-white/60">{playlist.trackIds.length} tracks</p>
+          {staff && <p className="mt-1 font-body text-xs text-white/60">{playlist.trackIds.length} tracks</p>}
           <div className="mt-2.5 flex items-center justify-between">
             <span className="block h-px w-[70px] bg-gradient-to-r from-[#F4C430]/80 to-[#F4C430]/0" />
             <span

@@ -20,6 +20,7 @@ import Navigation from "@/components/Navigation";
 import cinemaHero from "@/assets/cinema-hero-wide.png";
 import { Input } from "@/components/ui/input";
 import { patchCachedTracks, useTracks } from "@/hooks/useTracks";
+import { useIsStaff } from "@/hooks/useMockData";
 import type { MusicCollection } from "@/data/musicCollections";
 import type { CatalogTrack } from "@/data/catalogTracks";
 import { useCollections, usePlaylists, useTrendingIds, useVocabularies } from "@/hooks/useContent";
@@ -97,6 +98,7 @@ const Catalog = () => {
   // Admin / editor on a category page: the X on a row takes the track out of
   // that category (13.11.2026), like removing a track from a playlist.
   const contentAdmin = useContentAdmin();
+  const staff = useIsStaff(); // playlist track counts: admin and editor only (13.11.2026)
   const removeFromCategory = (track: CatalogTrack) => {
     if (!categoryParam) return;
     void (async () => {
@@ -571,7 +573,9 @@ const Catalog = () => {
                           to={`/playlist/${pl.slug}`}
                           image={pl.image}
                           title={pl.title}
-                          sub={`${pl.trackIds.length} track${pl.trackIds.length === 1 ? "" : "s"}${pl.theme ? ` · ${pl.theme}` : ""}`}
+                          sub={[staff ? `${pl.trackIds.length} track${pl.trackIds.length === 1 ? "" : "s"}` : "", pl.theme ?? ""]
+                            .filter(Boolean)
+                            .join(" · ")}
                         />
                       ))
                     : aiCollections.map((c) => (

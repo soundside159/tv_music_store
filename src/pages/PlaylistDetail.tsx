@@ -6,6 +6,7 @@ import { TrackRowList, TrackRowSkeletonList } from "@/components/TrackRowPlayer"
 import type { CatalogTrack } from "@/data/catalogTracks";
 import { useContentReady, usePlaylists } from "@/hooks/useContent";
 import { useTracks } from "@/hooks/useTracks";
+import { useIsStaff } from "@/hooks/useMockData";
 import {
   AdminCoverControl,
   AdminDeleteItemButton,
@@ -44,6 +45,7 @@ const PlaylistDetail = () => {
   const { tracks: allTracks, isLoading: tracksLoading } = useTracks();
   // Inline admin editing: click title/description, hover cover, X on rows.
   const admin = useContentAdmin();
+  const staff = useIsStaff(); // track count: admin and editor only (13.11.2026)
   const playlist = playlists.find((p) => p.slug === slug || p.id === slug);
   const tracks = playlist
     ? playlist.trackIds
@@ -150,7 +152,7 @@ const PlaylistDetail = () => {
               />
             </p>
             <p className="mt-2 font-body text-xs text-muted-foreground">
-              {tracks.length} tracks · Royalty-free · Licence included
+              {staff ? `${tracks.length} tracks · ` : ""}Royalty-free · Licence included
             </p>
             <AdminDeleteItemButton
               kind="playlist"

@@ -71,6 +71,12 @@ export const useCurrentUser = (): User | null => {
   return live.status === "authed" ? live.user : persona.user;
 };
 
+/** 13.11.2026: admin or editor (staff see track counts on playlists). */
+export const useIsStaff = (): boolean => {
+  const user = useCurrentUser();
+  return user?.role === "admin" || user?.role === "editor";
+};
+
 /** Composer profile of the current user, if they are a composer (admin previews as cmp_1). */
 export const useComposer = (): Composer | null => {
   const user = useCurrentUser();
