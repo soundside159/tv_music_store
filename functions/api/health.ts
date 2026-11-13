@@ -1,6 +1,15 @@
-import { json, type Ctx } from "./_utils";
+import { adminTokenOk, getSessionUser, json, OWNER_EMAIL, type Ctx } from "./_utils";
 
 export const onRequestGet = async (ctx: Ctx) => {
+  // 13.11.2026: the details (which keys are set, Stripe live/test, DB errors)
+  // are for the owner only; everyone else just sees that the site is up.
+  let staff = adminTokenOk(ctx);
+  if (!staff) {
+    const user = await getSessionUser(ctx).catch(() => null);
+    staff = !!user && (user.role === "admin" || user.email === OWNER_EMAIL);
+  }
+  // The sign-in window needs to know whether "Continue with Google" works.
+  if (!staff) return json({ ok: true, google: ctx.env.GOOGLE_CLIENT_ID ? "configured" : "missing" });
   let db = "not bound";
   try {
     if (ctx.env.DB) {

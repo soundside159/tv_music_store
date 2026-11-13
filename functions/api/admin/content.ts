@@ -340,9 +340,9 @@ const ensureCategoryTablesRaw = async (db: D1Database) => {
         .bind(id, title, i)
         .run();
     }
-  }
-  const links = await db.prepare(`SELECT 1 AS n FROM category_tracks LIMIT 1`).first<{ n: number }>();
-  if (!links) {
+    // Only on this very first run: copy the old single tracks.category values.
+    // 13.11.2026: it used to run whenever category_tracks was empty, so clearing
+    // every category refilled them from the old field.
     await db
       .prepare(
         `INSERT OR IGNORE INTO category_tracks (category_id, track_id, sort)

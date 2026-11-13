@@ -166,16 +166,33 @@ const buildTracks = async (ctx: Ctx, includeDrafts: boolean, slug?: string): Pro
     categoryTableExists = false;
   }
 
+  // 13.11.2026: the public catalog does not show real download counts, only a
+  // popularity rank (same order for the Popular sort, no numbers), and leaves
+  // out internal fields. Staff (?drafts=1) still gets everything.
+  const levels = [...new Set([...downloadsByTrack.values()].filter((n) => n > 0))].sort((a, b) => a - b);
+  const rankOf = new Map(levels.map((n, i) => [n, i + 1]));
+  const popularity = (id: string) => {
+    const n = downloadsByTrack.get(id) ?? 0;
+    return includeDrafts ? n : rankOf.get(n) ?? 0;
+  };
+
   return json({
-    tracks: tracks.results.map((t) => ({
-      ...t,
-      artist: (t.composer_id && composerNames.get(t.composer_id)) || null,
-      artist_slug: (t.composer_id && composerSlugs.get(t.composer_id)) || null,
-      tags: t.tags ? (JSON.parse(t.tags) as string[]) : [],
-      versions: byTrack.get(t.id) ?? [],
-      collection_ids: collectionsByTrack.get(t.id) ?? [],
-      category_ids: categoryTableExists ? categoriesByTrack.get(t.id) ?? [] : [t.category],
-      downloads: downloadsByTrack.get(t.id) ?? 0,
-    })),
+    tracks: tracks.results.map((t) => {
+      const row: Record<string, unknown> = {
+        ...t,
+        artist: (t.composer_id && composerNames.get(t.composer_id)) || null,
+        artist_slug: (t.composer_id && composerSlugs.get(t.composer_id)) || null,
+        tags: t.tags ? (JSON.parse(t.tags) as string[]) : [],
+        versions: byTrack.get(t.id) ?? [],
+        collection_ids: collectionsByTrack.get(t.id) ?? [],
+        category_ids: categoryTableExists ? categoriesByTrack.get(t.id) ?? [] : [t.category],
+        downloads: popularity(t.id),
+      };
+      if (!includeDrafts) {
+        delete row.moderation_status;
+        delete row.composer_id;
+      }
+      return row;
+    }),
   });
 };
