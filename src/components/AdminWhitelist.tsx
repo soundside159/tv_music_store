@@ -69,12 +69,26 @@ interface Overview {
   channels: Channel[];
   matches: Match[];
   customLists?: string[];
+  sheetsSyncedAt?: string | null;
   videos?: { videoId: string; channelId: string; title: string; publishedAt: string; status: string; found: number }[];
 }
 
 const GOLD = "#F4C430";
 const PALETTE = ["#F4C430", "#ff8fb1", "#7cc7ff", "#9be38a", "#c9a0ff", "#ffb366", "#6ee7d8"];
 const API = "/api/admin/wl-scan";
+/** The one plain button style of this page (the gold one is reserved for the main action). */
+const BTN =
+  "inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 font-body text-xs font-semibold text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430] disabled:opacity-40";
+
+const agoText = (iso: string) => {
+  const min = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (min < 1) return "just now";
+  if (min < 60) return `${min} min ago`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `${h} h ago`;
+  const d = Math.round(h / 24);
+  return d === 1 ? "1 day ago" : `${d} days ago`;
+};
 
 const fmt = (s: number) => {
   const t = Math.max(0, Math.round(s));
@@ -120,6 +134,8 @@ const AdminWhitelist = () => {
   const [showReleased, setShowReleased] = useState(false);
   const [showRemoved, setShowRemoved] = useState(false);
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  // "More": Custom / Scanner tabs and the search + filters, hidden by default.
+  const [more, setMore] = useState(false);
 
   const load = useCallback(() => {
     fetch(`${API}?action=overview`, { credentials: "include" })
@@ -143,6 +159,35 @@ const AdminWhitelist = () => {
       toast.error(e instanceof Error ? e.message : "Failed");
     } finally {
       setBusy(null);
+    }
+  };
+
+  const [step, setStep] = useState("");
+  // The routine in one click: look for new videos, read the composers' sheets
+  // (what they released), then write the new claims into their sheets.
+  const updateEverything = async () => {
+    setBusy("all");
+    const notes: string[] = [];
+    try {
+      setStep("Looking for new videos...");
+      const r1 = await post({ action: "refresh", force: true });
+      notes.push(`${r1.queued ?? 0} new video(s)`);
+      setStep("Reading composer sheets...");
+      const r2 = await post({ action: "sheets_sync" });
+      notes.push(`${r2.released ?? 0} newly released`);
+      setStep("Writing new claims to sheets...");
+      const r3 = await post({ action: "sheets_update" });
+      const added = Object.values((r3.added as Record<string, number>) ?? {}).reduce((a, b) => a + b, 0);
+      notes.push(`${added} added to sheets`);
+      const miss = (r3.missingSheets as string[]) ?? [];
+      if (miss.length) notes.push(`no sheet yet for ${miss.length} composer(s)`);
+      toast.success(`Updated: ${notes.join(" · ")}`);
+    } catch (e) {
+      toast.error(`${step || "Update"} failed: ${e instanceof Error ? e.message : "error"}`);
+    } finally {
+      setStep("");
+      setBusy(null);
+      load();
     }
   };
 
@@ -181,47 +226,20 @@ const AdminWhitelist = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <h2 className="font-display text-2xl font-bold text-foreground">Whitelisting</h2>
-        {/* Left of the line: find and read. Right of the line: send out. */}
+        {/* One button does the routine: new videos -> read sheets -> write new claims. */}
         <button
           type="button"
           disabled={busy !== null}
-          title="Walk every customer channel on YouTube for new videos now (Smart Scan does this by itself)"
-          onClick={() =>
-            void act("refresh", { action: "refresh", force: true }, (d) => `${d.queued ?? 0} new video(s) queued from ${d.channels ?? 0} channel(s)`)
-          }
-          className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 font-body text-xs font-semibold text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430] disabled:opacity-40"
+          onClick={() => void updateEverything()}
+          className="inline-flex items-center gap-2 rounded-lg px-4 py-2 font-body text-xs font-bold text-black disabled:opacity-40"
+          style={{ background: GOLD }}
         >
-          {busy === "refresh" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
-          Look for new videos
+          {busy === "all" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+          {busy === "all" && step ? step : "Update everything"}
         </button>
-        <button
-          type="button"
-          disabled={busy !== null}
-          title="Read the composers' sheets now (the page does this by itself every 5 minutes)"
-          onClick={() => void act("sync", { action: "sheets_sync" }, (d) => `${d.released ?? 0} newly released`)}
-          className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 font-body text-xs font-semibold text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430] disabled:opacity-40"
-        >
-          {busy === "sync" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-          Sync sheets
-        </button>
-        <span aria-hidden="true" className="mx-1 hidden h-6 w-px self-center bg-border md:block" />
-        <button
-          type="button"
-          disabled={busy !== null || newCount === 0}
-          onClick={() =>
-            void act("sheets", { action: "sheets_update" }, (d) => {
-              const added = Object.values((d.added as Record<string, number>) ?? {}).reduce((a, b) => a + b, 0);
-              const miss = (d.missingSheets as string[]) ?? [];
-              return `${added} video(s) added to composer sheets${miss.length ? `; no sheet yet for ${miss.length} composer(s)` : ""}`;
-            })
-          }
-          className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 font-body text-xs font-semibold text-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430] disabled:opacity-40"
-        >
-          {busy === "sheets" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-          Update composer sheets{newCount ? ` · ${newCount} new` : ""}
-        </button>
+        {/* Emails stay a separate, deliberate action (owner rule). */}
         <button
           type="button"
           disabled={busy !== null}
@@ -234,39 +252,56 @@ const AdminWhitelist = () => {
                 : `Nothing to send${skipped.length ? ` · ${skipped.join(", ")}` : ""}`;
             })
           }
-          className="inline-flex items-center gap-2 rounded-lg px-3 py-2 font-body text-xs font-bold text-black disabled:opacity-40"
-          style={{ background: GOLD }}
+          className={BTN}
         >
           {busy === "email" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
           Email composers
         </button>
       </div>
+      <p className="-mt-2 font-body text-xs text-muted-foreground">
+        {data.sheetsSyncedAt ? `Last update ${agoText(data.sheetsSyncedAt)}` : "Not updated yet"} ·{" "}
+        <span className={scannerOnline ? "text-emerald-300" : ""}>Scanner {scannerOnline ? "online" : "offline"}</span>
+      </p>
 
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
         {(
           [
-            ["composers", "Composers"],
-            ["channels", `Channels / videos · ${data.channels.filter((c) => !c.group && c.url !== "solo").length}`],
-            ["custom", `Custom · ${(data.customLists ?? [...new Set(data.channels.filter((c) => c.group).map((c) => c.group))]).length}`],
-            ["scanner", "Scanner"],
-          ] as const
+            ["composers", "By composer"],
+            ["channels", "By customer"],
+            ...(more
+              ? ([
+                  ["custom", `Custom · ${(data.customLists ?? [...new Set(data.channels.filter((c) => c.group).map((c) => c.group))]).length}`],
+                  ["scanner", "Scanner"],
+                ] as const)
+              : []),
+          ] as ReadonlyArray<readonly [typeof tab, string]>
         ).map(([id, label]) => (
           <button
             key={id}
             type="button"
             onClick={() => setTab(id)}
-            className={`rounded-full border px-3.5 py-1.5 font-body text-xs font-semibold transition-colors ${
-              tab === id ? "border-[#F4C430] bg-[#F4C430] text-black" : "border-border text-muted-foreground hover:text-foreground"
+            className={`rounded-lg border px-3 py-1.5 font-body text-xs font-semibold transition-colors ${
+              tab === id ? "border-foreground/60 text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
             {label}
           </button>
         ))}
+        <button
+          type="button"
+          onClick={() => {
+            if (more && (tab === "custom" || tab === "scanner")) setTab("composers");
+            setMore((m) => !m);
+          }}
+          className="ml-1 inline-flex items-center gap-1 rounded-lg px-2 py-1.5 font-body text-xs text-muted-foreground hover:text-foreground"
+        >
+          More {more ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+        </button>
       </div>
 
       {tab === "composers" && (
         <>
-          <div className="flex flex-wrap items-center gap-3">
+          {more && <div className="flex flex-wrap items-center gap-3">
             <label className="flex min-w-[260px] flex-1 items-center gap-2 rounded-xl border border-border bg-card px-3 py-2">
               <Search className="h-4 w-4 text-muted-foreground" />
               <input
@@ -284,7 +319,7 @@ const AdminWhitelist = () => {
               <input type="checkbox" checked={showRemoved} onChange={(e) => setShowRemoved(e.target.checked)} className="accent-[#F4C430]" />
               Show removed too
             </label>
-          </div>
+          </div>}
 
           {composerList.length === 0 && (
             <p className="font-body text-sm text-muted-foreground">No matches yet. The desktop scanner adds them as it checks new videos.</p>
@@ -318,29 +353,19 @@ const AdminWhitelist = () => {
                       {c.name}
                     </span>
                   </button>
+                  {/* Two numbers only: waiting (in the sheet or about to be) and released. */}
                   <span className="font-body text-xs text-muted-foreground">
-                    <b className="mr-1 text-sm text-red-400">{waiting.length}</b>waiting
-                  </span>
-                  <span className="font-body text-xs text-muted-foreground">
-                    <b className="mr-1 text-sm text-foreground">{fresh.length}</b>not in sheet yet
-                  </span>
-                  <span className="font-body text-xs text-muted-foreground">
-                    <b className="mr-1 text-sm text-emerald-300">{released.length}</b>released
-                  </span>
-                  {removed.length > 0 && (
-                    <span className="font-body text-xs text-muted-foreground">
-                      <b className="mr-1 text-sm text-muted-foreground">{removed.length}</b>removed
-                    </span>
-                  )}
-                  <span className="font-body text-xs text-muted-foreground">
-                    {waiting.length ? (
-                      <>
-                        <b className="mr-1 text-sm text-red-400">{oldest}</b>
-                        {oldest === 1 ? "day oldest" : "days oldest"}
-                      </>
-                    ) : (
-                      "-"
+                    <b className={`mr-1 text-sm ${waiting.length + fresh.length ? "text-red-400" : "text-muted-foreground"}`}>
+                      {waiting.length + fresh.length}
+                    </b>
+                    waiting
+                    {waiting.length > 0 && oldest > 0 && (
+                      <span className="ml-1 text-[11px]">({oldest === 1 ? "1 day" : `${oldest} days`})</span>
                     )}
+                  </span>
+                  <span className="font-body text-xs text-muted-foreground">
+                    <b className={`mr-1 text-sm ${released.length ? "text-emerald-300" : "text-muted-foreground"}`}>{released.length}</b>
+                    released
                   </span>
                   <span className="ml-auto">
                     {c.sheetUrl ? (
