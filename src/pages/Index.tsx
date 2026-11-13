@@ -6,8 +6,6 @@ import {
   Clapperboard,
   Layers,
   LayoutGrid,
-  Library,
-  ListMusic,
   Music2,
   ShieldCheck,
   Sparkles,
@@ -18,6 +16,7 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { TrackRowList, TrackRowSkeletonList } from "@/components/TrackRowPlayer";
 import { discoverPath } from "@/lib/discovery";
+import { CatalogArt, CollectionsArt, PlaylistsArt, SectionCardArtStyle } from "@/components/SectionCardArt";
 import CardCarousel from "@/components/CardCarousel";
 import { useCategories, useEditorPickIds, usePlaylists, useTrendingTracks, useVocabularies } from "@/hooks/useContent";
 import type { LivePlaylist } from "@/hooks/useContent";
@@ -147,28 +146,26 @@ const Index = () => {
 
         {/* Section cards: Catalog / Collections / Playlists */}
         <section className="mx-auto w-full max-w-7xl px-4 pb-14 sm:px-6">
+          {/* 13.11.2026: vector art with a hover animation (src/components/SectionCardArt.tsx) */}
+          <SectionCardArtStyle />
           <div className="grid gap-4 sm:grid-cols-3">
             {[
-              { to: "/catalog", icon: Library, title: "Catalog", text: "Every track in the library", bg: "/images/panels/catalog.png" },
-              { to: "/collections", icon: Layers, title: "Collections", text: "Curated by style and genre", bg: "/images/panels/collections.png" },
-              { to: "/playlists", icon: ListMusic, title: "Playlists", text: "Handpicked for your use case", bg: "/images/panels/playlists.png" },
+              { to: "/catalog", title: "Catalog", text: "Every track in the library", Art: CatalogArt },
+              { to: "/collections", title: "Collections", text: "Curated by style and genre", Art: CollectionsArt },
+              { to: "/playlists", title: "Playlists", text: "Handpicked for your use case", Art: PlaylistsArt },
             ].map((c) => (
               <Link
                 key={c.to}
                 to={c.to}
-                style={{ backgroundImage: `url('${c.bg}')` }}
-                className="group flex items-center gap-4 rounded-xl border border-border bg-card bg-cover bg-center p-5 transition-colors hover:border-[#F4C430]/60"
+                className="group relative flex min-h-[92px] items-center overflow-hidden rounded-xl border border-border bg-card p-5 pr-36 transition-colors hover:border-[#F4C430]/60"
               >
-                <span className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground transition-colors group-hover:text-[#F4C430]">
-                  <c.icon className="h-5 w-5" />
-                </span>
-                <span className="min-w-0 flex-1">
+                <span className="relative z-[1] min-w-0 flex-1">
                   <span className="block font-body text-sm font-semibold text-foreground transition-colors group-hover:text-[#F4C430]">
                     {c.title}
                   </span>
                   <span className="block truncate font-body text-xs text-muted-foreground">{c.text}</span>
                 </span>
-                <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-all group-hover:translate-x-0.5 group-hover:text-[#F4C430]" />
+                <c.Art />
               </Link>
             ))}
           </div>

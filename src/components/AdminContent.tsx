@@ -1769,6 +1769,27 @@ const AdminContent = ({ tab, editor = false }: { tab: Tab; editor?: boolean }) =
                     </button>
                     <button
                       type="button"
+                      disabled={busy || c.trackIds.length === 0}
+                      hidden={editor}
+                      title="Take every track out of this category (to sort it again)"
+                      className="rounded-lg border border-border px-3 py-1.5 font-body text-xs text-muted-foreground transition-colors hover:border-destructive hover:text-destructive disabled:opacity-40"
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `Clear "${c.title}"? All ${c.trackIds.length} tracks leave this category only. ` +
+                              "They stay on the site with all their tags, collections and playlists.",
+                          )
+                        ) {
+                          void run({ action: "clear_category", id: c.id }, "Category cleared").then((ok) => {
+                            if (ok) void refreshContent();
+                          });
+                        }
+                      }}
+                    >
+                      Clear
+                    </button>
+                    <button
+                      type="button"
                       disabled={busy}
                       hidden={editor}
                       className="rounded-lg border border-border px-3 py-1.5 font-body text-xs text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"

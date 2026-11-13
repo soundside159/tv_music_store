@@ -839,6 +839,14 @@ export const onRequestPost = async (ctx: Ctx) => {
       }
       return json({ ok: true, id });
     }
+    case "clear_category": {
+      // 13.11.2026: empty a category (to sort it again). Only its own track list
+      // goes; the tracks, their tags, collections and playlists are untouched.
+      if (!body.id) return json({ error: "id required" }, 400);
+      await ensureCategoryTables(db);
+      const r = await db.prepare(`DELETE FROM category_tracks WHERE category_id = ?1`).bind(body.id).run();
+      return json({ ok: true, removed: (r as { meta?: { changes?: number } }).meta?.changes ?? 0 });
+    }
     case "delete_category": {
       if (!body.id) return json({ error: "id required" }, 400);
       await ensureCategoryTables(db);

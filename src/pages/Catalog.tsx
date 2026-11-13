@@ -276,7 +276,9 @@ const Catalog = () => {
       // Admin-curated membership when present; legacy single category otherwise.
       const matchesCategory =
         !categoryParam ||
-        (track.categoryIds && track.categoryIds.length > 0
+        // 13.11.2026: an EMPTY list means "in no category" (a cleared or removed
+        // track must not come back through the old single category field).
+        (track.categoryIds
           ? track.categoryIds.includes(categoryParam)
           : track.category === categoryParam);
       // AI mode: the sidebar filters are PAUSED, not cleared — hand-picked
