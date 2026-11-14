@@ -20,7 +20,8 @@ import CountUp from "@/components/CountUp";
 // Needs your attention; every sale of the selected period.
 
 const GOLD = "#F4C430";
-const GOLD_SOFT = "rgba(244,196,48,0.38)";
+// Solid colours only (owner: no see-through bars).
+const SUB_COLOR = "#B07D12";
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 // One colour per composer, stable by list order (same idea as the scanner).
@@ -79,12 +80,15 @@ const Tile = ({ label, children }: { label: string; children: React.ReactNode })
   </Card>
 );
 
-/** Month / All switch. The month pill opens a small year + month picker. */
+/** Month / day / All switch. The pill opens a picker: year, months, then the
+ *  days of the chosen month (pick a month = whole month, pick a day = that day). */
 const PeriodPicker = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => {
   const [open, setOpen] = useState(false);
   const now = thisMonth();
-  const isMonth = value !== "all";
-  const [year, setYear] = useState(Number((isMonth ? value : now).slice(0, 4)));
+  const today = new Date().toISOString().slice(0, 10);
+  const isAll = value === "all";
+  const shownMonth = isAll ? now : value.slice(0, 7);
+  const [view, setView] = useState(shownMonth);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -94,63 +98,104 @@ const PeriodPicker = ({ value, onChange }: { value: string; onChange: (v: string
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, [open]);
-  const shown = isMonth ? value : now;
-  const label = `${MONTHS[Number(shown.slice(5, 7)) - 1]}${shown.slice(0, 4) === now.slice(0, 4) ? "" : ` ${shown.slice(0, 4)}`}`;
+  const year = Number(view.slice(0, 4));
+  const yearSuffix = (y: string) => (y === now.slice(0, 4) ? "" : ` ${y}`);
+  const label =
+    !isAll && value.length === 10
+      ? `${Number(value.slice(8, 10))} ${MONTHS[Number(value.slice(5, 7)) - 1]}${yearSuffix(value.slice(0, 4))}`
+      : `${MONTHS[Number(shownMonth.slice(5, 7)) - 1]}${yearSuffix(shownMonth.slice(0, 4))}`;
+  // Days of the viewed month, Monday first.
+  const vm = Number(view.slice(5, 7)) - 1;
+  const daysIn = new Date(Date.UTC(year, vm + 1, 0)).getUTCDate();
+  const lead = (new Date(Date.UTC(year, vm, 1)).getUTCDay() + 6) % 7;
   const pill = (active: boolean) =>
     `inline-flex items-center gap-1 whitespace-nowrap rounded-full px-3 py-1 font-body text-xs font-semibold transition-colors ${
       active ? "bg-[#F4C430] text-background" : "text-muted-foreground hover:text-foreground"
+    }`;
+  const cell = (active: boolean) =>
+    `rounded-lg py-1.5 font-body text-xs transition-colors disabled:opacity-30 ${
+      active ? "bg-[#F4C430] font-semibold text-background" : "text-foreground hover:bg-white/5"
     }`;
   return (
     <div ref={box} className="relative flex gap-1 rounded-full border border-border/70 bg-card/60 p-1">
       <button
         type="button"
-        className={pill(isMonth)}
+        className={pill(!isAll)}
         onClick={() => {
-          if (!isMonth) onChange(now);
-          setYear(Number(shown.slice(0, 4)));
-          setOpen((o) => !o || !isMonth);
+          if (isAll) onChange(now);
+          setView(shownMonth);
+          setOpen((o) => !o || isAll);
         }}
       >
         {label}
         <ChevronDown className="h-3.5 w-3.5" />
       </button>
-      <button type="button" className={pill(!isMonth)} onClick={() => { onChange("all"); setOpen(false); }}>
+      <button type="button" className={pill(isAll)} onClick={() => { onChange("all"); setOpen(false); }}>
         All
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-30 mt-2 w-64 rounded-xl border border-border bg-card p-3 shadow-xl">
+        <div className="absolute right-0 top-full z-30 mt-2 w-72 rounded-xl border border-border bg-card p-3 shadow-xl">
           <div className="mb-2 flex items-center justify-between font-body text-sm text-foreground">
-            <button type="button" onClick={() => setYear((y) => y - 1)} className="rounded p-1 text-muted-foreground hover:text-foreground">
+            <button
+              type="button"
+              onClick={() => setView(`${year - 1}${view.slice(4)}`)}
+              className="rounded p-1 text-muted-foreground hover:text-foreground"
+            >
               <ChevronLeft className="h-4 w-4" />
             </button>
             <span className="font-semibold">{year}</span>
             <button
               type="button"
               disabled={year >= Number(now.slice(0, 4))}
-              onClick={() => setYear((y) => y + 1)}
+              onClick={() => setView(`${year + 1}${view.slice(4)}`)}
               className="rounded p-1 text-muted-foreground hover:text-foreground disabled:opacity-30"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
-          <div className="grid grid-cols-3 gap-1">
+          <div className="grid grid-cols-4 gap-1">
             {MONTHS_SHORT.map((m, i) => {
               const key = `${year}-${String(i + 1).padStart(2, "0")}`;
-              const future = key > now;
               return (
                 <button
                   key={m}
                   type="button"
-                  disabled={future}
+                  disabled={key > now}
+                  onClick={() => {
+                    setView(key);
+                    onChange(key);
+                  }}
+                  className={cell(key === value || (key === view && value.startsWith(key)))}
+                >
+                  {m}
+                </button>
+              );
+            })}
+          </div>
+          <div className="my-2 h-px bg-border/70" />
+          <div className="grid grid-cols-7 gap-1 text-center">
+            {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((d) => (
+              <span key={d} className="py-1 font-body text-[10px] uppercase text-muted-foreground">
+                {d}
+              </span>
+            ))}
+            {Array.from({ length: lead }, (_, i) => (
+              <span key={`l${i}`} />
+            ))}
+            {Array.from({ length: daysIn }, (_, i) => {
+              const key = `${view}-${String(i + 1).padStart(2, "0")}`;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  disabled={key > today}
                   onClick={() => {
                     onChange(key);
                     setOpen(false);
                   }}
-                  className={`rounded-lg py-1.5 font-body text-xs transition-colors disabled:opacity-30 ${
-                    key === value ? "bg-[#F4C430] font-semibold text-background" : "text-foreground hover:bg-white/5"
-                  }`}
+                  className={cell(key === value)}
                 >
-                  {m}
+                  {i + 1}
                 </button>
               );
             })}
@@ -234,7 +279,7 @@ const AdminSales = ({
     : [];
 
   const IncomeRow = ({ dot, name, slug, m }: { dot: string; name: string; slug?: string | null; m: Money2 }) => (
-    <li className="flex items-center justify-between gap-3 py-2.5 font-body text-sm">
+    <li className="grid grid-cols-[minmax(0,1fr)_5.5rem_5.5rem] items-center gap-3 py-2.5 font-body text-sm">
       <span className="flex min-w-0 items-center gap-2.5">
         <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: dot }} />
         {slug ? (
@@ -247,10 +292,8 @@ const AdminSales = ({
           </span>
         )}
       </span>
-      <span className="flex shrink-0 items-baseline gap-2 tabular-nums">
-        <span className="font-semibold text-foreground">{money(m.earned)}</span>
-        {m.pending > 0 && <span className="text-xs text-muted-foreground">+{money(m.pending)} pending</span>}
-      </span>
+      <span className="text-right font-semibold tabular-nums text-foreground">{money(m.earned)}</span>
+      <span className="text-right text-xs tabular-nums text-muted-foreground">{m.pending > 0 ? `+${money(m.pending)}` : ""}</span>
     </li>
   );
 
@@ -277,29 +320,40 @@ const AdminSales = ({
         <>
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
               <Tile label="Revenue">
                 <p className="font-body text-2xl font-semibold tabular-nums sm:text-3xl" style={{ color: GOLD }}>
                   <CountUp cents={data.totals.gross} format={money} />
                 </p>
               </Tile>
+              </div>
               <Tile label="Subscribers">
                 <p className="font-body text-2xl font-semibold tabular-nums text-foreground sm:text-3xl">{data.activeSubs.total}</p>
                 <span className="whitespace-nowrap font-body text-xs text-muted-foreground">
                   Pro {data.activeSubs.pro} · Max {data.activeSubs.max}
                 </span>
               </Tile>
-              <Tile label={period === "all" ? "Customers" : "New customers"}>
+              <Tile label="Customers">
                 <p className="font-body text-2xl font-semibold tabular-nums text-foreground sm:text-3xl">{data.customers}</p>
-              </Tile>
-              <Tile label="Downloads">
-                <p className="font-body text-2xl font-semibold tabular-nums text-foreground sm:text-3xl">{data.downloads}</p>
               </Tile>
             </div>
 
             <Card className="flex flex-col p-4 sm:p-5">
               <div className="h-44 min-h-0 flex-1">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chart} margin={{ top: 14, right: 4, bottom: 0, left: -14 }} barCategoryGap="22%">
+                  <BarChart
+                    data={chart}
+                    margin={{ top: 14, right: 4, bottom: 0, left: -14 }}
+                    barCategoryGap="22%"
+                    className="cursor-pointer"
+                    onClick={(st: { activeLabel?: string | number } | null) => {
+                      // Click a bar: that day (or month in the All view); click it again to go back.
+                      const k = st?.activeLabel != null ? String(st.activeLabel) : "";
+                      if (!k || k > new Date().toISOString().slice(0, 10)) return;
+                      if (k === period) setPeriod(k.length === 10 ? k.slice(0, 7) : "all");
+                      else setPeriod(k);
+                    }}
+                  >
                     <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
                     <XAxis
                       dataKey="k"
@@ -328,11 +382,12 @@ const AdminSales = ({
                         fontSize: 12,
                       }}
                     />
-                    {showToday && (
+                    {showToday && todayKey !== period && (
                       <ReferenceLine x={todayKey} stroke="rgba(244,196,48,0.45)" strokeDasharray="3 3" />
                     )}
+                    {period.length === 10 && <ReferenceLine x={period} stroke={GOLD} strokeWidth={1.5} />}
                     <Bar dataKey="license" name="Licenses" stackId="a" fill={GOLD} radius={[4, 4, 0, 0]} animationDuration={900} />
-                    <Bar dataKey="subscription" name="Subscriptions" stackId="a" fill={GOLD_SOFT} radius={[4, 4, 0, 0]} animationDuration={900} />
+                    <Bar dataKey="subscription" name="Subscriptions" stackId="a" fill={SUB_COLOR} radius={[4, 4, 0, 0]} animationDuration={900} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -341,7 +396,7 @@ const AdminSales = ({
                   <span className="h-2 w-2 rounded-full" style={{ backgroundColor: GOLD }} /> Licenses
                 </span>
                 <span className="flex items-center gap-1.5 whitespace-nowrap">
-                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: GOLD_SOFT }} /> Subscriptions
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: SUB_COLOR }} /> Subscriptions
                 </span>
               </div>
             </Card>
@@ -392,7 +447,7 @@ const AdminSales = ({
               Sales <span className="font-normal text-muted-foreground">· {sales.length}</span>
             </h3>
             {sales.length === 0 ? (
-              <p className="mt-3 font-body text-xs text-muted-foreground">No sales in {data.period.label}.</p>
+              <p className="mt-3 font-body text-xs text-muted-foreground">No sales {period.length === 10 ? "on" : "in"} {data.period.label}.</p>
             ) : (
               <ul className="mt-2 divide-y divide-border/60">
                 {sales.map((s) => (

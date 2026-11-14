@@ -39,6 +39,9 @@ const handle = async (ctx: Ctx) => {
   const since = period.from;
   const until = period.to;
   const bucketLen = period.bucket === "month" ? 7 : 10;
+  // A single day still charts its whole month (the day is marked on the chart).
+  const chartFrom = period.chart?.from ?? since;
+  const chartTo = period.chart ? period.chart.to : until;
 
   type TotRow = { source: string; n: number; gross: number; net: number };
   const totalsFor = async (from: string, to: string | null) => {
@@ -102,7 +105,7 @@ const handle = async (ctx: Ctx) => {
         WHERE status != 'refunded' AND ${inRange("created_at", 1, 3)}
         GROUP BY k, source ORDER BY k`,
     )
-    .bind(since, bucketLen, until)
+    .bind(chartFrom, bucketLen, chartTo)
     .all<{ k: string; source: string; gross: number; n: number }>();
   const seriesMap = new Map<string, { k: string; license: number; subscription: number; sales: number }>();
   for (const r of seriesRes.results ?? []) {
@@ -186,7 +189,10 @@ const handle = async (ctx: Ctx) => {
   const first = await db
     .prepare(`SELECT MIN(substr(created_at,1,10)) AS d FROM revenue_events`)
     .first<{ d: string | null }>();
-  const series = axisKeys(period, first?.d ?? null).map(
+  const series = axisKeys(
+    period.chart ? { ...period, from: period.chart.from, to: period.chart.to } : period,
+    first?.d ?? null,
+  ).map(
     (k) => seriesMap.get(k) ?? { k, license: 0, subscription: 0, sales: 0 },
   );
 
@@ -208,8 +214,11 @@ const handle = async (ctx: Ctx) => {
     async () =>
       (
         await db
-          .prepare(`SELECT COUNT(*) AS n FROM users u WHERE ${inRange("u.created_at", 1, 2)} AND ${customerWhere}`)
-          .bind(since, until, OWNER_EMAIL)
+          .prepare(
+            `SELECT COUNT(*) AS n FROM users u
+              WHERE (?1 IS NULL OR substr(u.created_at,1,10) < ?1) AND ${customerWhere.replace("?3", "?2")}`,
+          )
+          .bind(until, OWNER_EMAIL)
           .first<{ n: number }>()
       )?.n ?? 0,
     0,

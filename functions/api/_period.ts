@@ -7,7 +7,7 @@
 // same-length range just before it (for the +/- % on the dashboard); "all"
 // has none. `bucket` tells the chart whether to group by day or by month.
 
-export type PeriodId = "this_month" | "last_month" | "this_year" | "all" | `${number}-${number}`;
+export type PeriodId = "this_month" | "last_month" | "this_year" | "all" | `${number}-${number}` | `${number}-${number}-${number}`;
 
 export interface Period {
   id: PeriodId;
@@ -17,6 +17,8 @@ export interface Period {
   to: string | null;
   prev: { from: string; to: string } | null;
   bucket: "day" | "month";
+  /** Chart range when it differs from the period (a single day shows its whole month). */
+  chart?: { from: string; to: string };
 }
 
 const day = (d: Date) => d.toISOString().slice(0, 10);
@@ -29,6 +31,26 @@ export const resolvePeriod = (raw: string | null): Period => {
   const now = new Date();
   const y = now.getUTCFullYear();
   const m = now.getUTCMonth();
+  // One day: ?period=2026-11-13 (Dashboard day picker / chart bar click).
+  const dd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw ?? "");
+  if (dd) {
+    const d0 = new Date(Date.UTC(Number(dd[1]), Number(dd[2]) - 1, Number(dd[3])));
+    if (!Number.isNaN(d0.getTime())) {
+      const next = new Date(d0.getTime() + 86400000);
+      const prevDay = new Date(d0.getTime() - 86400000);
+      const py = d0.getUTCFullYear();
+      const pm = d0.getUTCMonth();
+      return {
+        id: raw as PeriodId,
+        label: `${d0.getUTCDate()} ${MONTHS[pm]}${py === y ? "" : ` ${py}`}`,
+        from: day(d0),
+        to: day(next),
+        prev: { from: day(prevDay), to: day(d0) },
+        bucket: "day",
+        chart: { from: monthStart(py, pm), to: monthStart(py, pm + 1) },
+      };
+    }
+  }
   // Any calendar month: ?period=2026-09 (Dashboard month picker).
   const mm = /^(\d{4})-(\d{2})$/.exec(raw ?? "");
   if (mm) {
