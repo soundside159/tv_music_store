@@ -57,6 +57,7 @@ interface Data {
   series: { k: string; license: number; subscription: number; sales: number }[];
   recent: Sale[];
   customers: number;
+  newToday: number;
   downloads: number;
   income: { admin: Money2; composers: ({ id: string; name: string; slug: string | null } & Money2)[] };
   attention: {
@@ -263,6 +264,12 @@ const AdminSales = ({
     if (k === period) setPeriod(k.length === 10 ? k.slice(0, 7) : "all");
     else setPeriod(k);
   };
+  const [narrow, setNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 640);
+  useEffect(() => {
+    const on = () => setNarrow(window.innerWidth < 640);
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, []);
   const sales = data?.recent ?? [];
   const attention = data
     ? [
@@ -318,31 +325,32 @@ const AdminSales = ({
 
       {data && (
         <>
-          {/* One wide strip: Revenue | Subscribers | Customers. */}
+          {/* One thin strip: Revenue | Subscribers | Customers, label and value on one line. */}
           <Card className="grid grid-cols-3 divide-x divide-border/70 p-0">
-            <div className="min-w-0 px-4 py-4 sm:px-6">
-              <p className="whitespace-nowrap font-body text-xs uppercase tracking-wide text-muted-foreground">Revenue</p>
-              <p className="mt-1 font-body text-2xl font-semibold tabular-nums sm:text-3xl" style={{ color: GOLD }}>
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 px-4 py-2.5 sm:px-6">
+              <span className="whitespace-nowrap font-body text-xs uppercase tracking-wide text-muted-foreground">Revenue</span>
+              <span className="font-body text-xl font-semibold tabular-nums" style={{ color: GOLD }}>
                 <CountUp cents={data.totals.gross} format={money} />
-              </p>
+              </span>
             </div>
-            <div className="min-w-0 px-4 py-4 sm:px-6">
-              <p className="whitespace-nowrap font-body text-xs uppercase tracking-wide text-muted-foreground">Subscribers</p>
-              <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
-                <p className="font-body text-2xl font-semibold tabular-nums text-foreground sm:text-3xl">{data.activeSubs.total}</p>
-                <span className="whitespace-nowrap font-body text-xs text-muted-foreground">
-                  Pro {data.activeSubs.pro} · Max {data.activeSubs.max}
-                </span>
-              </div>
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 px-4 py-2.5 sm:px-6">
+              <span className="whitespace-nowrap font-body text-xs uppercase tracking-wide text-muted-foreground">Subscribers</span>
+              <span className="font-body text-xl font-semibold tabular-nums text-foreground">{data.activeSubs.total}</span>
+              <span className="whitespace-nowrap font-body text-xs text-muted-foreground">
+                Pro {data.activeSubs.pro} · Max {data.activeSubs.max}
+              </span>
             </div>
-            <div className="min-w-0 px-4 py-4 sm:px-6">
-              <p className="whitespace-nowrap font-body text-xs uppercase tracking-wide text-muted-foreground">Customers</p>
-              <p className="mt-1 font-body text-2xl font-semibold tabular-nums text-foreground sm:text-3xl">{data.customers}</p>
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 px-4 py-2.5 sm:px-6">
+              <span className="whitespace-nowrap font-body text-xs uppercase tracking-wide text-muted-foreground">Customers</span>
+              <span className="font-body text-xl font-semibold tabular-nums text-foreground">{data.customers}</span>
+              <span className={`whitespace-nowrap font-body text-xs ${data.newToday > 0 ? "text-emerald-400" : "text-muted-foreground"}`}>
+                +{data.newToday} new today
+              </span>
             </div>
           </Card>
 
-            <Card className="p-4 sm:p-5">
-              <div className="h-56">
+            <Card className="px-3 pb-2 pt-3 sm:px-4">
+              <div className="h-36">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={chart}
@@ -377,8 +385,8 @@ const AdminSales = ({
                       }}
                       tickLine={false}
                       axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
-                      interval="preserveStartEnd"
-                      minTickGap={6}
+                      // Every date under the chart (every 2nd on a phone).
+                      interval={narrow && chart.length > 16 ? 1 : 0}
                     />
                     <YAxis
                       allowDecimals={false}
@@ -407,7 +415,7 @@ const AdminSales = ({
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-              <div className="mt-2 flex gap-4 font-body text-[11px] text-muted-foreground">
+              <div className="mt-1 flex gap-4 px-2 font-body text-[11px] text-muted-foreground">
                 <span className="flex items-center gap-1.5 whitespace-nowrap">
                   <span className="h-2 w-2 rounded-full" style={{ backgroundColor: GOLD }} /> Licenses
                 </span>

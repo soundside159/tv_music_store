@@ -223,6 +223,19 @@ const handle = async (ctx: Ctx) => {
       )?.n ?? 0,
     0,
   );
+  const newToday = await safe(
+    async () =>
+      (
+        await db
+          .prepare(
+            `SELECT COUNT(*) AS n FROM users u
+              WHERE substr(u.created_at,1,10) = ?1 AND ${customerWhere.replace("?3", "?2")}`,
+          )
+          .bind(today, OWNER_EMAIL)
+          .first<{ n: number }>()
+      )?.n ?? 0,
+    0,
+  );
   const downloads = await safe(
     async () =>
       (
@@ -333,6 +346,7 @@ const handle = async (ctx: Ctx) => {
 
   return json({
     customers,
+    newToday,
     downloads,
     income,
     attention: { claimsWaiting, tracksInReview, payoutsDue },
