@@ -46,18 +46,7 @@ const buildContent = async (ctx: Ctx): Promise<Response> => {
   // `theme` groups the /playlists page into sections; older DBs may not have
   // the column yet (added lazily by the admin API) — degrade gracefully.
   type PlRow = { id: string; title: string; description: string | null; image: string | null; theme: string | null; photo_settings?: string | null };
-  const playlists = await (async () => {
-    // 14.11.2026: hidden playlists are left out for visitors
-    try {
-      return await db
-        .prepare(
-          `SELECT id, title, description, image, theme, photo_settings FROM playlists
-            WHERE COALESCE(hidden, 0) = 0 ORDER BY sort`,
-        )
-        .all<PlRow>();
-    } catch {
-      // older DB: no hidden column yet
-    }
+  const allPlaylists = await (async () => {
     try {
       return await db
         .prepare(`SELECT id, title, description, image, theme, photo_settings FROM playlists ORDER BY sort`)
@@ -76,6 +65,16 @@ const buildContent = async (ctx: Ctx): Promise<Response> => {
       return { results: legacy.results.map((p) => ({ ...p, theme: null })) };
     }
   })();
+  // 14.11.2026: hidden playlists are left out for visitors. Read separately, so
+  // it works whichever of the queries above matched this database.
+  const hiddenIds = new Set<string>();
+  try {
+    const h = await db.prepare(`SELECT id FROM playlists WHERE COALESCE(hidden, 0) = 1`).all<{ id: string }>();
+    for (const r of h.results) hiddenIds.add(r.id);
+  } catch {
+    // older DB: no hidden column yet
+  }
+  const playlists = { results: allPlaylists.results.filter((p) => !hiddenIds.has(p.id)) };
   const colTracks = await db
     .prepare(`SELECT collection_id, track_id FROM collection_tracks ORDER BY sort`)
     .all<{ collection_id: string; track_id: string }>();
