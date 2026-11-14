@@ -8,7 +8,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Globe2, MonitorSmartphone, MousePointerClick, Users } from "lucide-react";
+import { MonitorSmartphone } from "lucide-react";
 import { PeriodPicker } from "@/components/AdminSales";
 
 // Admin -> Analytics: the self-hosted, cookie-less visitor stats.
@@ -187,34 +187,7 @@ const delta = (cur: number, prev: number) => {
 };
 
 const Card = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
-  <div className={`rounded-xl border border-border bg-card p-5 ${className}`}>{children}</div>
-);
-
-const StatCard = ({
-  icon: Icon,
-  label,
-  value,
-  sub,
-}: {
-  icon: typeof Users;
-  label: string;
-  value: string;
-  sub?: { text: string; up: boolean } | null;
-}) => (
-  <Card>
-    <div className="flex items-center gap-2">
-      <Icon className="h-4 w-4 text-muted-foreground" />
-      <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-    </div>
-    <div className="mt-1 flex items-baseline gap-2">
-      <p className="font-body text-3xl font-semibold text-foreground">{value}</p>
-      {sub && (
-        <span className={`font-body text-xs font-semibold ${sub.up ? "text-emerald-400" : "text-red-400"}`}>
-          {sub.text}
-        </span>
-      )}
-    </div>
-  </Card>
+  <div className={`rounded-xl border border-border bg-card p-4 ${className}`}>{children}</div>
 );
 
 /** One "top …" list: label, thin share bar, views count. */
@@ -302,12 +275,7 @@ const AdminAnalytics = () => {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl text-foreground">Analytics</h1>
-          <p className="font-body text-xs text-muted-foreground">
-            Own cookie-less stats — bots and your admin visits are not counted.
-          </p>
-        </div>
+        <h2 className="text-xl text-foreground">Analytics</h2>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex gap-1 rounded-full border border-border/70 bg-card/60 p-1">
             {RANGES.map((r) => (
@@ -332,38 +300,39 @@ const AdminAnalytics = () => {
 
       {data && (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard
-              icon={Users}
-              label={`Visitors · ${data.label ?? `${data.days}d`}`}
-              value={data.totals.visitors.toLocaleString()}
-              sub={delta(data.totals.visitors, data.previous.visitors)}
-            />
-            <StatCard
-              icon={MousePointerClick}
-              label={`Pageviews · ${data.label ?? `${data.days}d`}`}
-              value={data.totals.views.toLocaleString()}
-              sub={delta(data.totals.views, data.previous.views)}
-            />
-            <StatCard icon={Globe2} label="Countries" value={String(data.countries.length)} />
-            <Card>
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
-                </span>
-                <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">Online now</p>
+          {/* One thin strip, same as the Dashboard. */}
+          <div className="grid grid-cols-2 divide-border/70 rounded-xl border border-border bg-card sm:grid-cols-4 sm:divide-x">
+            {(
+              [
+                ["Visitors", data.totals.visitors, delta(data.totals.visitors, data.previous.visitors)],
+                ["Pageviews", data.totals.views, delta(data.totals.views, data.previous.views)],
+                ["Countries", data.countries.length, null],
+              ] as [string, number, { text: string; up: boolean } | null][]
+            ).map(([label, value, d]) => (
+              <div key={label} className="flex min-w-0 flex-wrap items-baseline gap-x-3 px-4 py-2.5 sm:px-6">
+                <span className="whitespace-nowrap font-body text-xs uppercase tracking-wide text-muted-foreground">{label}</span>
+                <span className="font-body text-xl font-semibold tabular-nums text-foreground">{value.toLocaleString()}</span>
+                {d && (
+                  <span className={`whitespace-nowrap font-body text-xs font-semibold ${d.up ? "text-emerald-400" : "text-red-400"}`}>
+                    {d.text}
+                  </span>
+                )}
               </div>
-              <p className="mt-1 font-body text-3xl font-semibold text-foreground">{data.online}</p>
-              <p className="font-body text-[10px] text-muted-foreground">unique visitors, last 30 min</p>
-            </Card>
+            ))}
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 px-4 py-2.5 sm:px-6" title="Unique visitors in the last 30 minutes">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+              </span>
+              <span className="whitespace-nowrap font-body text-xs uppercase tracking-wide text-muted-foreground">Online now</span>
+              <span className="font-body text-xl font-semibold tabular-nums text-foreground">{data.online}</span>
+            </div>
           </div>
 
-          <Card>
-            <h3 className="font-body text-sm font-semibold text-foreground">Traffic</h3>
-            <div className="mt-3 h-64">
+          <Card className="px-2 pb-1 pt-2 sm:px-3">
+            <div className="h-40">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chart} margin={{ top: 4, right: 8, bottom: 0, left: -18 }}>
+                <AreaChart data={chart} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}>
                   <defs>
                     <linearGradient id="gViews" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor={GOLD} stopOpacity={0.35} />
@@ -399,17 +368,9 @@ const AdminAnalytics = () => {
                     }}
                   />
                   <Area type="monotone" dataKey="views" name="Pageviews" stroke={GOLD} fill="url(#gViews)" strokeWidth={2} />
-                  <Area type="monotone" dataKey="visitors" name="Visitors" stroke={BLUE} fill="url(#gVisitors)" strokeWidth={2} />
+                  <Area type="monotone" dataKey="visitors" name="Unique visitors" stroke={BLUE} fill="url(#gVisitors)" strokeWidth={2} />
                 </AreaChart>
               </ResponsiveContainer>
-            </div>
-            <div className="mt-2 flex gap-4 font-body text-[11px] text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: GOLD }} /> Pageviews
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: BLUE }} /> Unique visitors
-              </span>
             </div>
           </Card>
 

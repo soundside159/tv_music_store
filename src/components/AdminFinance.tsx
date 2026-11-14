@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { SectionHeading } from "@/components/SectionHeading";
-import PeriodTabs, { type PeriodId } from "@/components/PeriodTabs";
+import { PeriodPicker } from "@/components/AdminSales";
 import CountUp from "@/components/CountUp";
 
 // Admin -> Finance, top to bottom, one question per block (owner's brief):
@@ -57,7 +56,7 @@ const stripeLinkFor = (e: RevenueEvent, testMode: boolean): string | null => {
 };
 
 interface Report {
-  period: { id: PeriodId; label: string; from: string; to: string | null };
+  period: { id: string; label: string; from: string; to: string | null };
   policy: { holdbackDays: number; thresholdCents: number };
   income: { store: number; composer: number; total: number; splitting: number; composerNames: string[] };
   flow: {
@@ -93,25 +92,12 @@ const Card = ({
   right?: React.ReactNode;
   children: React.ReactNode;
 }) => (
-  <div className="rounded-xl border border-border bg-card p-5">
+  <div className="rounded-xl border border-border bg-card p-4">
     <div className="flex flex-wrap items-center justify-between gap-2">
       <h2 className="font-body text-sm font-semibold text-foreground">{title}</h2>
       {right}
     </div>
-    <div className="mt-3">{children}</div>
-  </div>
-);
-
-/** One big number with a label (the "My income" tiles). */
-const Big = ({ label, cents, note, gold }: { label: string; cents: number; note?: string; gold?: boolean }) => (
-  <div
-    className={`rounded-xl border p-4 ${gold ? "border-[#F4C430]/50 bg-[#F4C430]/[0.06]" : "border-border/70 bg-background/40"}`}
-  >
-    <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-    <p className="mt-1 font-body text-3xl font-semibold tabular-nums" style={{ color: gold ? GOLD : undefined }}>
-      <CountUp cents={cents} format={money} />
-    </p>
-    {note && <p className="mt-0.5 font-body text-[11px] text-muted-foreground">{note}</p>}
+    <div className="mt-2">{children}</div>
   </div>
 );
 
@@ -131,7 +117,7 @@ const Row = ({
   color?: string;
   swatch?: string;
 }) => (
-  <div className="flex items-baseline justify-between gap-4 py-1.5 font-body text-sm">
+  <div className="flex items-baseline justify-between gap-4 py-1 font-body text-sm">
     <span className={`inline-flex items-center gap-2 ${strong ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
       {swatch && <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: swatch }} />}
       {sign && <span className="w-3 text-muted-foreground/70">{sign}</span>}
@@ -238,12 +224,13 @@ const ReportExport = () => {
 };
 
 const AdminFinance = () => {
-  const [period, setPeriod] = useState<PeriodId>("this_month");
+  // Same picker as the Dashboard: a month ("2026-11"), a day ("2026-11-13") or "all".
+  const [period, setPeriod] = useState<string>(() => new Date().toISOString().slice(0, 7));
   const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async (p: PeriodId) => {
+  const load = useCallback(async (p: string) => {
     try {
       const res = await fetch(`/api/admin/finance?period=${p}`, { credentials: "include" });
       const data = (await res.json()) as Report & { error?: string };
@@ -295,7 +282,10 @@ const AdminFinance = () => {
   };
 
   const header = (
-    <SectionHeading title="Finance" right={<PeriodTabs value={period} onChange={setPeriod} />} />
+    <div className="flex items-center justify-between gap-3">
+      <h2 className="text-xl text-foreground">Finance</h2>
+      <PeriodPicker value={period} onChange={setPeriod} />
+    </div>
   );
 
   if (error) {
@@ -343,29 +333,35 @@ const AdminFinance = () => {
     <div className="space-y-4">
       {header}
 
-      {/* 1 — what I earned */}
-      <Card title={`My income · ${label}`}>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Big label="As TV Music Store" cents={income.store} note="The store's share after composers" />
-          <Big
-            label="As composer"
-            cents={income.composer}
-            note={income.composerNames.length ? income.composerNames.join(", ") : "No composer profile linked"}
-          />
-          <Big label="Total to you" cents={income.total} gold />
+      {/* 1 - what I earned: one thin strip, same as the Dashboard */}
+      <div>
+        <div className="grid grid-cols-3 divide-x divide-border/70 rounded-xl border border-border bg-card">
+          {(
+            [
+              ["As TV Music Store", income.store, false],
+              ["As composer", income.composer, false],
+              ["Total to you", income.total, true],
+            ] as [string, number, boolean][]
+          ).map(([l, cents, gold]) => (
+            <div key={l} className="flex min-w-0 flex-wrap items-baseline gap-x-3 px-4 py-2.5 sm:px-6">
+              <span className="whitespace-nowrap font-body text-xs uppercase tracking-wide text-muted-foreground">{l}</span>
+              <span className="font-body text-xl font-semibold tabular-nums" style={{ color: gold ? GOLD : undefined }}>
+                <CountUp cents={cents} format={money} />
+              </span>
+            </div>
+          ))}
         </div>
         {income.splitting > 0 && (
-          <p className="mt-3 font-body text-xs text-muted-foreground">
-            Still splitting: {money(income.splitting)} from subscriptions whose paid period has not closed yet.
-            It is shared out between composers and the store when that period ends.
+          <p className="mt-1.5 px-1 font-body text-[11px] text-muted-foreground">
+            + {money(income.splitting)} from subscriptions not split yet (their paid period has not closed).
           </p>
         )}
-      </Card>
+      </div>
 
       {/* 2 — where the money went */}
       <Card title="Where the money went">
         {flow.gross === 0 ? (
-          <p className="py-4 text-center font-body text-sm text-muted-foreground">{noPayments}</p>
+          <p className="py-2 text-center font-body text-sm text-muted-foreground">{noPayments}</p>
         ) : (
           <>
             <div className="divide-y divide-border/40">
@@ -379,13 +375,13 @@ const AdminFinance = () => {
                 <Row sign="→" label="Still splitting" value={money(flow.splitting)} />
               )}
             </div>
-            <p className="mt-3 font-body text-xs text-muted-foreground">
+            <p className="mt-2 font-body text-xs text-muted-foreground">
               Single licenses: {flow.license.count} · {money(flow.license.gross)} &nbsp;|&nbsp; Subscriptions:{" "}
               {flow.subscription.count} · {money(flow.subscription.gross)}
             </p>
 
             {report.composers.length > 0 && (
-              <div className="mt-4 border-t border-border/60 pt-3">
+              <div className="mt-3 border-t border-border/60 pt-2">
                 <div className="mb-1 flex items-center justify-between">
                   <p className="font-body text-xs uppercase tracking-wide text-muted-foreground">Composer shares</p>
                   <button
@@ -419,16 +415,16 @@ const AdminFinance = () => {
         }
       >
         {report.balances.length === 0 ? (
-          <p className="py-4 text-center font-body text-sm text-muted-foreground">Nothing to pay out.</p>
+          <p className="py-2 text-center font-body text-sm text-muted-foreground">Nothing to pay out.</p>
         ) : (
           <div className="divide-y divide-border/40">
             {report.balances.map((b) => (
-              <div key={b.composerId} className="py-3 font-body text-sm">
+              <div key={b.composerId} className="py-2 font-body text-sm">
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-medium text-foreground">{b.name}</span>
                   {payAction(b)}
                 </div>
-                <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
+                <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
                   <div>
                     <p className="text-muted-foreground">Ready</p>
                     <p className="tabular-nums text-foreground">{money(b.released)}</p>
@@ -467,7 +463,7 @@ const AdminFinance = () => {
       {/* 4 — the ledger for the period */}
       <Card title={`Payments · ${label}`}>
         {report.events.length === 0 ? (
-          <p className="py-4 text-center font-body text-sm text-muted-foreground">{noPayments}</p>
+          <p className="py-2 text-center font-body text-sm text-muted-foreground">{noPayments}</p>
         ) : (
           <div className="divide-y divide-border/40">
             {report.events.map((e) => {
@@ -475,9 +471,7 @@ const AdminFinance = () => {
               return (
                 <div
                   key={e.id}
-                  className={`flex items-center justify-between gap-3 py-2.5 font-body text-sm ${
-                    e.status === "refunded" ? "opacity-50" : ""
-                  }`}
+                  className="flex items-center justify-between gap-3 py-2 font-body text-sm"
                 >
                   <div className="min-w-0">
                     <p className="truncate text-foreground">{e.user_email ?? "—"}</p>
@@ -498,7 +492,9 @@ const AdminFinance = () => {
                     </p>
                   </div>
                   <div className="shrink-0 text-right">
-                    <p className="font-semibold tabular-nums text-foreground">{money(e.gross_cents)}</p>
+                    <p className={`font-semibold tabular-nums ${e.status === "refunded" ? "text-red-400" : "text-foreground"}`}>
+                      {e.status === "refunded" ? `-${money(e.gross_cents)}` : money(e.gross_cents)}
+                    </p>
                     <p className="text-xs tabular-nums text-muted-foreground">net {money(e.net_cents)}</p>
                   </div>
                 </div>
