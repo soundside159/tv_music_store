@@ -343,7 +343,24 @@ const handle = async (ctx: Ctx) => {
     { count: 0, amount: 0 },
   );
 
+  // What visitors searched for in the period (functions/api/search-log.ts).
+  const searches = await safe(
+    async () =>
+      (
+        await db
+          .prepare(
+            `SELECT lower(query) AS q, COUNT(*) AS n FROM search_log
+              WHERE ${inRange("created_at", 1, 2)}
+              GROUP BY lower(query) ORDER BY n DESC, MAX(created_at) DESC LIMIT 100`,
+          )
+          .bind(since, until)
+          .all<{ q: string; n: number }>()
+      ).results ?? [],
+    [] as { q: string; n: number }[],
+  );
+
   return json({
+    searches,
     customers,
     newToday,
     downloads,

@@ -116,6 +116,24 @@ const Catalog = () => {
     })();
   };
   const [query, setQuery] = useState(() => searchParams.get("search") ?? "");
+  // Remember what visitors search for (Admin -> Dashboard -> Customer searches).
+  // Plain search is logged once typing pauses; staff searches are skipped.
+  const lastLogged = useRef("");
+  const logSearch = (raw: string) => {
+    const q = raw.trim();
+    if (staff || q.length < 2 || q.toLowerCase() === lastLogged.current) return;
+    lastLogged.current = q.toLowerCase();
+    void fetch("/api/search-log", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ q }),
+    }).catch(() => undefined);
+  };
+  useEffect(() => {
+    const t = window.setTimeout(() => logSearch(query), 1500);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
   const [filters, setFilters] = useState<FilterValue>(() => {
     // Tag clicks arrive as ?usecase= / ?genre= / ?mood=; map them onto the
     // sidebar option if one matches, otherwise use the raw value (filtering
@@ -180,6 +198,7 @@ const Catalog = () => {
   const runAiSearch = async () => {
     const q = aiQuery.trim();
     if (q.length < 3 || aiBusy) return;
+    logSearch(q);
     const seq = ++aiSeqRef.current;
     setAiBusy(true);
     setAiError(null);

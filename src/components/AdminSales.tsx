@@ -57,6 +57,7 @@ interface Data {
   series: { k: string; license: number; subscription: number; sales: number }[];
   recent: Sale[];
   customers: number;
+  searches: { q: string; n: number }[];
   newToday: number;
   downloads: number;
   income: { admin: Money2; composers: ({ id: string; name: string; slug: string | null } & Money2)[] };
@@ -270,6 +271,23 @@ const AdminSales = ({
     window.addEventListener("resize", on);
     return () => window.removeEventListener("resize", on);
   }, []);
+  // "Customer searches" block: folded by default, remembered.
+  const [showSearches, setShowSearches] = useState(() => {
+    try {
+      return localStorage.getItem("tvms_admin_searches_open") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleSearches = () => {
+    const next = !showSearches;
+    setShowSearches(next);
+    try {
+      localStorage.setItem("tvms_admin_searches_open", next ? "1" : "0");
+    } catch {
+      /* storage blocked */
+    }
+  };
   const sales = data?.recent ?? [];
   const attention = data
     ? [
@@ -513,16 +531,46 @@ const AdminSales = ({
                       )}
                     </div>
                     <span
-                      className={`text-right font-semibold tabular-nums ${s.refunded ? "text-muted-foreground line-through" : "text-[#F4C430]"}`}
+                      className={`text-right font-semibold tabular-nums ${s.refunded ? "text-red-400" : "text-[#F4C430]"}`}
                       title={s.refunded ? "Refunded" : undefined}
                     >
-                      {money(s.amountCents)}
+                      {s.refunded ? `-${money(s.amountCents)}` : money(s.amountCents)}
+                      {s.refunded && <span className="block text-[10px] font-normal">Refunded</span>}
                     </span>
                   </li>
                 ))}
               </ul>
             )}
           </Card>
+
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={toggleSearches}
+              className="flex w-full items-center justify-between gap-3 rounded-xl border border-border bg-card px-5 py-3 text-left font-body text-sm font-semibold text-foreground transition-colors hover:border-[#F4C430]/60"
+            >
+              <span>
+                Customer searches <span className="font-normal text-muted-foreground">· {data.searches.length}</span>
+              </span>
+              <span className="whitespace-nowrap text-xs font-normal text-muted-foreground">{showSearches ? "Hide" : "Show"}</span>
+            </button>
+            {showSearches && (
+              <Card className="py-3">
+                {data.searches.length === 0 ? (
+                  <p className="font-body text-xs text-muted-foreground">Nobody searched {period.length === 10 ? "on" : "in"} {data.period.label}.</p>
+                ) : (
+                  <ul className="divide-y divide-border/40">
+                    {data.searches.map((x) => (
+                      <li key={x.q} className="flex items-center justify-between gap-3 py-2 font-body text-sm">
+                        <span className="min-w-0 truncate text-foreground">{x.q}</span>
+                        <span className="shrink-0 tabular-nums text-muted-foreground">{x.n}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Card>
+            )}
+          </div>
         </>
       )}
     </div>
