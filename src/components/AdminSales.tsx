@@ -349,12 +349,12 @@ const AdminSales = ({
             </div>
           </Card>
 
-            <Card className="px-3 pb-2 pt-3 sm:px-4">
-              <div className="h-36">
+            <Card className="px-2 pb-1 pt-2 sm:px-3">
+              <div className="h-40">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={chart}
-                    margin={{ top: 14, right: 4, bottom: 0, left: -14 }}
+                    margin={{ top: 8, right: 4, bottom: 0, left: -14 }}
                     barCategoryGap="22%"
                     className="cursor-pointer"
                     onClick={(st: { activeLabel?: string | number } | null) =>
@@ -414,14 +414,6 @@ const AdminSales = ({
                     <Bar dataKey="subscription" name="Subscriptions" stackId="a" fill={SUB_COLOR} radius={[4, 4, 0, 0]} animationDuration={900} />
                   </BarChart>
                 </ResponsiveContainer>
-              </div>
-              <div className="mt-1 flex gap-4 px-2 font-body text-[11px] text-muted-foreground">
-                <span className="flex items-center gap-1.5 whitespace-nowrap">
-                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: GOLD }} /> Licenses
-                </span>
-                <span className="flex items-center gap-1.5 whitespace-nowrap">
-                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: SUB_COLOR }} /> Subscriptions
-                </span>
               </div>
             </Card>
 
