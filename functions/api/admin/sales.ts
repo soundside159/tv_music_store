@@ -288,7 +288,6 @@ const handle = async (ctx: Ctx) => {
   const income = {
     admin: { earned: split.store, pending: split.splitting },
     composers: composerRows
-      .filter((c) => c.tracks > 0 || inc.has(c.id))
       .map((c) => ({
         id: c.id,
         name: c.name ?? "(no name)",
