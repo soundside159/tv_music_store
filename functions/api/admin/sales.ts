@@ -1,5 +1,5 @@
 import { getSessionUser, json, OWNER_EMAIL, type Ctx } from "../_utils";
-import { ensureRevenueTables } from "../_revenue";
+import { allocateDue, ensureRevenueTables, getPayoutPolicy, releaseDateOf } from "../_revenue";
 import { axisKeys, inRange, resolvePeriod } from "../_period";
 
 // Admin -> Dashboard "Sales" block. One read-only call:
@@ -28,6 +28,12 @@ const handle = async (ctx: Ctx) => {
   if (user.role !== "admin" && user.email !== OWNER_EMAIL) return json({ error: "Admin only" }, 403);
   const db = ctx.env.DB;
   await ensureRevenueTables(db);
+  // Split what is due first, so the Income block is never stale.
+  try {
+    await allocateDue(db);
+  } catch {
+    // never block the dashboard on the splitter
+  }
 
   const period = resolvePeriod(new URL(ctx.request.url).searchParams.get("period"));
   const since = period.from;
@@ -184,7 +190,143 @@ const handle = async (ctx: Ctx) => {
     (k) => seriesMap.get(k) ?? { k, license: 0, subscription: 0, sales: 0 },
   );
 
+  // ---- Dashboard extras ----------------------------------------------------
+  const today = new Date().toISOString().slice(0, 10);
+  const policy = await getPayoutPolicy(db);
+  const safe = async <T,>(fn: () => Promise<T>, fallback: T): Promise<T> => {
+    try {
+      return await fn();
+    } catch {
+      return fallback;
+    }
+  };
+
+  // Customers = real buyers: not admins / editors / composers, not the owner.
+  const customerWhere = `u.role NOT IN ('admin','editor','composer') AND u.email != ?3
+     AND NOT EXISTS (SELECT 1 FROM composers c WHERE c.user_id = u.id)`;
+  const customers = await safe(
+    async () =>
+      (
+        await db
+          .prepare(`SELECT COUNT(*) AS n FROM users u WHERE ${inRange("u.created_at", 1, 2)} AND ${customerWhere}`)
+          .bind(since, until, OWNER_EMAIL)
+          .first<{ n: number }>()
+      )?.n ?? 0,
+    0,
+  );
+  const downloads = await safe(
+    async () =>
+      (
+        await db
+          .prepare(`SELECT COUNT(*) AS n FROM download_log WHERE ${inRange("created_at", 1, 2)}`)
+          .bind(since, until)
+          .first<{ n: number }>()
+      )?.n ?? 0,
+    0,
+  );
+
+  // Income of the period: the store's share (Admin) and every composer.
+  // earned = already payable (month past the hold-back), pending = not yet.
+  const composerRows = await safe(
+    async () =>
+      (
+        await db
+          .prepare(
+            `SELECT c.id, c.display_name AS name, c.slug,
+                    (SELECT COUNT(*) FROM tracks t WHERE t.composer_id = c.id) AS tracks
+               FROM composers c ORDER BY c.display_name COLLATE NOCASE`,
+          )
+          .all<{ id: string; name: string | null; slug: string | null; tracks: number }>()
+      ).results ?? [],
+    [] as { id: string; name: string | null; slug: string | null; tracks: number }[],
+  );
+  const allocRows = await safe(
+    async () =>
+      (
+        await db
+          .prepare(
+            `SELECT a.composer_id AS composer_id, a.month AS month, SUM(a.amount_cents) AS amount
+               FROM revenue_allocations a JOIN revenue_events e ON e.id = a.event_id
+              WHERE a.kind = 'author' AND e.status = 'allocated' AND ${inRange("e.created_at", 1, 2)}
+              GROUP BY a.composer_id, a.month`,
+          )
+          .bind(since, until)
+          .all<{ composer_id: string | null; month: string; amount: number }>()
+      ).results ?? [],
+    [] as { composer_id: string | null; month: string; amount: number }[],
+  );
+  const inc = new Map<string, { earned: number; pending: number }>();
+  for (const r of allocRows) {
+    if (!r.composer_id) continue;
+    const e = inc.get(r.composer_id) ?? { earned: 0, pending: 0 };
+    if (releaseDateOf(r.month, policy.holdbackDays) <= today) e.earned += r.amount ?? 0;
+    else e.pending += r.amount ?? 0;
+    inc.set(r.composer_id, e);
+  }
+  const income = {
+    admin: { earned: split.store, pending: split.splitting },
+    composers: composerRows
+      .filter((c) => c.tracks > 0 || inc.has(c.id))
+      .map((c) => ({
+        id: c.id,
+        name: c.name ?? "(no name)",
+        slug: c.slug,
+        earned: inc.get(c.id)?.earned ?? 0,
+        pending: inc.get(c.id)?.pending ?? 0,
+      })),
+  };
+
+  // Needs your attention (not tied to the period).
+  const claimsWaiting = await safe(
+    async () =>
+      (await db.prepare(`SELECT COUNT(*) AS n FROM claim_requests WHERE status <> 'done'`).first<{ n: number }>())?.n ?? 0,
+    0,
+  );
+  const tracksInReview = await safe(
+    async () =>
+      (await db.prepare(`SELECT COUNT(*) AS n FROM tracks WHERE moderation_status = 'pending'`).first<{ n: number }>())
+        ?.n ?? 0,
+    0,
+  );
+  // Composer payouts due: released (past hold-back), unpaid, over the threshold.
+  const payoutsDue = await safe(
+    async () => {
+      const lines =
+        (
+          await db
+            .prepare(
+              `SELECT a.month AS month, a.composer_id AS composer_id, SUM(a.amount_cents) AS amount
+                 FROM revenue_allocations a
+                 LEFT JOIN payout_runs p ON p.month = a.month AND p.composer_id = a.composer_id
+                WHERE a.kind = 'author' AND a.composer_id IS NOT NULL
+                  AND (p.status IS NULL OR p.status <> 'paid')
+                GROUP BY a.month, a.composer_id`,
+            )
+            .all<{ month: string; composer_id: string; amount: number }>()
+        ).results ?? [];
+      const released = new Map<string, number>();
+      for (const l of lines) {
+        if (releaseDateOf(l.month, policy.holdbackDays) > today) continue;
+        released.set(l.composer_id, (released.get(l.composer_id) ?? 0) + (l.amount ?? 0));
+      }
+      let count = 0;
+      let amount = 0;
+      for (const v of released.values()) {
+        if (v > 0 && v >= policy.thresholdCents) {
+          count += 1;
+          amount += v;
+        }
+      }
+      return { count, amount };
+    },
+    { count: 0, amount: 0 },
+  );
+
   return json({
+    customers,
+    downloads,
+    income,
+    attention: { claimsWaiting, tracksInReview, payoutsDue },
     period: { id: period.id, label: period.label },
     bucket: period.bucket,
     currency: recent[0]?.currency ?? "usd",

@@ -7,7 +7,7 @@
 // same-length range just before it (for the +/- % on the dashboard); "all"
 // has none. `bucket` tells the chart whether to group by day or by month.
 
-export type PeriodId = "this_month" | "last_month" | "this_year" | "all";
+export type PeriodId = "this_month" | "last_month" | "this_year" | "all" | `${number}-${number}`;
 
 export interface Period {
   id: PeriodId;
@@ -29,6 +29,22 @@ export const resolvePeriod = (raw: string | null): Period => {
   const now = new Date();
   const y = now.getUTCFullYear();
   const m = now.getUTCMonth();
+  // Any calendar month: ?period=2026-09 (Dashboard month picker).
+  const mm = /^(\d{4})-(\d{2})$/.exec(raw ?? "");
+  if (mm) {
+    const py = Number(mm[1]);
+    const pm = Number(mm[2]) - 1;
+    if (pm >= 0 && pm < 12 && py > 2000) {
+      return {
+        id: raw as PeriodId,
+        label: `${MONTHS[pm]}${py === y ? "" : ` ${py}`}`,
+        from: monthStart(py, pm),
+        to: monthStart(py, pm + 1),
+        prev: { from: monthStart(py, pm - 1), to: monthStart(py, pm) },
+        bucket: "day",
+      };
+    }
+  }
   switch (raw) {
     case "last_month":
       return {

@@ -248,6 +248,14 @@ const Admin = () => {
   // Dashboard → single-track license prices (site_config, server-priced carts).
   const [licPrices, setLicPrices] = useState<{ personal: string; commercial: string; professional: string } | null>(null);
   const [licBusy, setLicBusy] = useState(false);
+  // Dashboard → "Services & credits" is folded by default (owner rarely reads it).
+  const [showServices, setShowServices] = useState(() => {
+    try {
+      return localStorage.getItem("tvms_admin_services_open") === "1";
+    } catch {
+      return false;
+    }
+  });
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   // top OR bottom anchor: near the viewport's lower edge the menu is pinned to
   // the bottom instead ("pushed up"), and maxH + overflow-y keep every field
@@ -816,37 +824,14 @@ const Admin = () => {
           >
             {section === "dashboard" && (
               <>
-                <AdminSales onOpenCustomer={setProfileUserId} />
-                <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <Stat
-                    label="Customers"
-                    value={liveUsers ? String(custUsers.length) : "—"}
-                    sub={liveUsers ? `${freeCount} on Free` : undefined}
-                  />
-                  <Stat
-                    label="Paid subscribers"
-                    value={liveUsers ? String(paidCount) : "—"}
-                    sub={liveUsers ? `Pro ${proCount} · Max ${maxCount}` : undefined}
-                  />
-                  <Stat
-                    label="Downloads (all-time)"
-                    value={liveUsers ? String(totalDownloads) : "—"}
-                    sub={liveUsers ? `+ ${sfxDownloadsTotal} sound downloads` : undefined}
-                  />
-                  <Stat
-                    label="Paid share"
-                    value={liveUsers && custUsers.length ? `${Math.round((paidCount / custUsers.length) * 100)}%` : "—"}
-                    sub="of all accounts"
-                  />
-                </div>
+                <AdminSales
+                  onOpenCustomer={setProfileUserId}
+                  onOpenSection={(id) => openSection(id)}
+                  unreadMail={unreadMail}
+                />
                 {usersError && (
                   <Card>
                     <p className="font-body text-sm text-red-400">{usersError}</p>
-                  </Card>
-                )}
-                {!liveUsers && !usersError && (
-                  <Card>
-                    <p className="font-body text-sm text-muted-foreground">Loading live stats…</p>
                   </Card>
                 )}
                 {licPrices && (
@@ -892,9 +877,26 @@ const Admin = () => {
                 {/* Everything below the rule is "services & credits" — the
                     dashboard is becoming the owner's single landing screen. */}
                 <div className="my-2 h-px bg-border/60" />
-                <AdminUsage />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !showServices;
+                    setShowServices(next);
+                    try {
+                      localStorage.setItem("tvms_admin_services_open", next ? "1" : "0");
+                    } catch {
+                      /* storage blocked — just this visit */
+                    }
+                  }}
+                  className="flex w-full items-center justify-between gap-3 rounded-xl border border-border bg-card px-5 py-3 text-left font-body text-sm font-semibold text-foreground transition-colors hover:border-[#F4C430]/60"
+                >
+                  Services &amp; credits
+                  <span className="whitespace-nowrap text-xs font-normal text-muted-foreground">{showServices ? "Hide" : "Show"}</span>
+                </button>
+                {showServices && <AdminUsage />}
                 {/* Straight to the money page (owner request): OpenAI's billing
                     overview, where the balance is topped up. */}
+                {showServices && (
                 <a
                   href="https://platform.openai.com/settings/organization/billing/overview"
                   target="_blank"
@@ -904,6 +906,7 @@ const Admin = () => {
                   OpenAI Billing — top up balance
                   <ExternalLink className="h-3.5 w-3.5" />
                 </a>
+                )}
               </>
             )}
 
