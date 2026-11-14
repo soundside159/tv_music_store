@@ -73,13 +73,6 @@ const Card = ({ children, className = "" }: { children: React.ReactNode; classNa
   <div className={`rounded-xl border border-border bg-card p-5 ${className}`}>{children}</div>
 );
 
-const Tile = ({ label, children }: { label: string; children: React.ReactNode }) => (
-  <Card className="min-w-0 p-4 sm:p-5">
-    <p className="whitespace-nowrap font-body text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-    <div className="mt-1 flex flex-wrap items-baseline gap-x-2">{children}</div>
-  </Card>
-);
-
 /** Month / day / All switch. The pill opens a picker: year, months, then the
  *  days of the chosen month (pick a month = whole month, pick a day = that day). */
 const PeriodPicker = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => {
@@ -263,6 +256,13 @@ const AdminSales = ({
   const todayKey = data?.bucket === "month" ? nowIso.slice(0, 7) : nowIso.slice(0, 10);
   const showToday = chart.some((r) => r.k === todayKey) && chart.length > 1;
 
+  // Click a bar or a date under the chart: that day (a month in the All view);
+  // click the selected one again to go back to the whole month / All.
+  const pick = (k: string) => {
+    if (!k || k > new Date().toISOString().slice(0, 10)) return;
+    if (k === period) setPeriod(k.length === 10 ? k.slice(0, 7) : "all");
+    else setPeriod(k);
+  };
   const sales = data?.recent ?? [];
   const attention = data
     ? [
@@ -318,47 +318,63 @@ const AdminSales = ({
 
       {data && (
         <>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
-              <Tile label="Revenue">
-                <p className="font-body text-2xl font-semibold tabular-nums sm:text-3xl" style={{ color: GOLD }}>
-                  <CountUp cents={data.totals.gross} format={money} />
-                </p>
-              </Tile>
-              </div>
-              <Tile label="Subscribers">
+          {/* One wide strip: Revenue | Subscribers | Customers. */}
+          <Card className="grid grid-cols-3 divide-x divide-border/70 p-0">
+            <div className="min-w-0 px-4 py-4 sm:px-6">
+              <p className="whitespace-nowrap font-body text-xs uppercase tracking-wide text-muted-foreground">Revenue</p>
+              <p className="mt-1 font-body text-2xl font-semibold tabular-nums sm:text-3xl" style={{ color: GOLD }}>
+                <CountUp cents={data.totals.gross} format={money} />
+              </p>
+            </div>
+            <div className="min-w-0 px-4 py-4 sm:px-6">
+              <p className="whitespace-nowrap font-body text-xs uppercase tracking-wide text-muted-foreground">Subscribers</p>
+              <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
                 <p className="font-body text-2xl font-semibold tabular-nums text-foreground sm:text-3xl">{data.activeSubs.total}</p>
                 <span className="whitespace-nowrap font-body text-xs text-muted-foreground">
                   Pro {data.activeSubs.pro} · Max {data.activeSubs.max}
                 </span>
-              </Tile>
-              <Tile label="Customers">
-                <p className="font-body text-2xl font-semibold tabular-nums text-foreground sm:text-3xl">{data.customers}</p>
-              </Tile>
+              </div>
             </div>
+            <div className="min-w-0 px-4 py-4 sm:px-6">
+              <p className="whitespace-nowrap font-body text-xs uppercase tracking-wide text-muted-foreground">Customers</p>
+              <p className="mt-1 font-body text-2xl font-semibold tabular-nums text-foreground sm:text-3xl">{data.customers}</p>
+            </div>
+          </Card>
 
-            <Card className="flex flex-col p-4 sm:p-5">
-              <div className="h-44 min-h-0 flex-1">
+            <Card className="p-4 sm:p-5">
+              <div className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={chart}
                     margin={{ top: 14, right: 4, bottom: 0, left: -14 }}
                     barCategoryGap="22%"
                     className="cursor-pointer"
-                    onClick={(st: { activeLabel?: string | number } | null) => {
-                      // Click a bar: that day (or month in the All view); click it again to go back.
-                      const k = st?.activeLabel != null ? String(st.activeLabel) : "";
-                      if (!k || k > new Date().toISOString().slice(0, 10)) return;
-                      if (k === period) setPeriod(k.length === 10 ? k.slice(0, 7) : "all");
-                      else setPeriod(k);
-                    }}
+                    onClick={(st: { activeLabel?: string | number } | null) =>
+                      pick(st?.activeLabel != null ? String(st.activeLabel) : "")
+                    }
                   >
                     <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
                     <XAxis
                       dataKey="k"
-                      tickFormatter={fmtKey}
-                      tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 11 }}
+                      tick={(t: { x: number; y: number; payload: { value: string } }) => {
+                        const k = String(t.payload.value);
+                        const sel = k === period;
+                        const future = k > new Date().toISOString().slice(0, 10);
+                        return (
+                          <text
+                            x={t.x}
+                            y={t.y + 12}
+                            textAnchor="middle"
+                            fontSize={11}
+                            fontWeight={sel ? 700 : 400}
+                            fill={sel ? GOLD : "rgba(255,255,255,0.55)"}
+                            style={{ cursor: future ? "default" : "pointer" }}
+                            onClick={() => pick(k)}
+                          >
+                            {fmtKey(k)}
+                          </text>
+                        );
+                      }}
                       tickLine={false}
                       axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
                       interval="preserveStartEnd"
@@ -400,7 +416,6 @@ const AdminSales = ({
                 </span>
               </div>
             </Card>
-          </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
