@@ -31,7 +31,12 @@ const CookieConsent = () => {
       aria-label="Cookie consent"
       className="fixed inset-x-0 bottom-0 z-[80] border-t border-border bg-card/95 shadow-2xl backdrop-blur-md"
     >
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-6 sm:px-6 md:flex-row md:items-center md:justify-between md:py-8">
+      {/* Pulsing gold frame to draw the eye to the banner */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 animate-pulse border-2 border-[#F4C430] shadow-[0_0_24px_rgba(244,196,48,0.45)]"
+      />
+      <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-6 sm:px-6 md:flex-row md:items-center md:justify-between md:py-8">
         <div className="flex min-w-0 items-start gap-3">
           <Cookie className="mt-0.5 h-6 w-6 shrink-0 text-[#F4C430]" />
           <div className="min-w-0">
@@ -48,17 +53,17 @@ const CookieConsent = () => {
         <div className="flex shrink-0 gap-3">
           <button
             type="button"
-            onClick={() => decide("denied")}
-            className="flex-1 rounded-lg border border-border bg-background px-6 py-3 font-body text-sm font-semibold text-foreground transition-colors hover:border-foreground/40 md:flex-none"
-          >
-            Reject
-          </button>
-          <button
-            type="button"
             onClick={() => decide("granted")}
             className="flex-1 rounded-lg bg-[#F4C430] px-8 py-3 font-body text-sm font-bold text-background transition-colors hover:bg-[#F4C430]/85 md:flex-none"
           >
             Accept
+          </button>
+          <button
+            type="button"
+            onClick={() => decide("denied")}
+            className="flex-1 rounded-lg border border-border bg-background px-6 py-3 font-body text-sm font-semibold text-foreground transition-colors hover:border-foreground/40 md:flex-none"
+          >
+            Reject
           </button>
         </div>
       </div>
