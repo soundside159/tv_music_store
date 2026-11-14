@@ -402,6 +402,15 @@ const ensurePlaylistThemeColumnRaw = async (db: D1Database) => {
   }
 };
 
+// 14.11.2026: a playlist can be HIDDEN from visitors (owner toggle).
+const ensurePlaylistHiddenColumnRaw = async (db: D1Database) => {
+  try {
+    await db.prepare(`ALTER TABLE playlists ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0`).run();
+  } catch {
+    // column already exists
+  }
+};
+
 interface ItemBody {
   id?: string;
   title?: string;
@@ -477,6 +486,7 @@ export const onRequestGet = async (ctx: Ctx) => {
   await ensureSiteConfig(db);
   await ensureCategoryTables(db);
   await ensurePlaylistThemeColumn(db);
+  await ensurePlaylistHiddenColumn(db);
 
   const categories = await db
     .prepare(`SELECT id, title, sort FROM categories ORDER BY sort`)
@@ -488,8 +498,11 @@ export const onRequestGet = async (ctx: Ctx) => {
     .prepare(`SELECT id, title, short_title, description, image, sort FROM collections ORDER BY sort`)
     .all<{ id: string; title: string; short_title: string | null; description: string | null; image: string | null; sort: number }>();
   const playlists = await db
-    .prepare(`SELECT id, title, description, image, theme, sort FROM playlists ORDER BY sort`)
-    .all<{ id: string; title: string; description: string | null; image: string | null; theme: string | null; sort: number }>();
+    .prepare(`SELECT id, title, description, image, theme, sort, hidden FROM playlists ORDER BY sort`)
+    .all<{ id: string; title: string; description: string | null; image: string | null; theme: string | null; sort: number; hidden: number | null }>();
+  const picksAfterRow = await db
+    .prepare(`SELECT value FROM site_config WHERE key = 'editor_picks_after_theme'`)
+    .first<{ value: string }>();
   const colTracks = await db
     .prepare(`SELECT collection_id, track_id FROM collection_tracks ORDER BY sort`)
     .all<{ collection_id: string; track_id: string }>();
@@ -614,8 +627,10 @@ export const onRequestGet = async (ctx: Ctx) => {
       description: p.description ?? "",
       image: p.image ?? "",
       theme: p.theme ?? "",
+      hidden: !!p.hidden,
       trackIds: plMap[p.id] ?? [],
     })),
+    editorPicksAfter: picksAfterRow?.value ?? "",
     editorEdits: await loadEditorEdits(db),
   });
 };
@@ -971,6 +986,29 @@ export const onRequestPost = async (ctx: Ctx) => {
       return json({ ok: true });
     }
 
+    case "set_playlist_hidden": {
+      // 14.11.2026: hide / show a playlist for visitors (tracks, cover, text stay).
+      if (!body.id) return json({ error: "id required" }, 400);
+      await ensurePlaylistHiddenColumn(db);
+      await db
+        .prepare(`UPDATE playlists SET hidden = ?2 WHERE id = ?1`)
+        .bind(body.id, (body as { hidden?: boolean }).hidden ? 1 : 0)
+        .run();
+      return json({ ok: true });
+    }
+    case "set_editor_picks_position": {
+      // 14.11.2026: where the Editor Picks shelf sits on /playlists: after this
+      // theme section ("" = at the very top).
+      const after = typeof body.value === "string" ? body.value.slice(0, 120) : "";
+      await db
+        .prepare(
+          `INSERT INTO site_config (key, value) VALUES ('editor_picks_after_theme', ?1)
+           ON CONFLICT(key) DO UPDATE SET value = ?1`,
+        )
+        .bind(after)
+        .run();
+      return json({ ok: true });
+    }
     case "set_editor_picks": {
       // Editor Picks: the owner's ordered list of EXISTING playlists. Unknown
       // ids are dropped, 12 max — plenty for one rail.
@@ -2163,3 +2201,4 @@ const ensureTrackCoverColumn = once(ensureTrackCoverColumnRaw);
 const ensureCategoryTables = once(ensureCategoryTablesRaw);
 const ensureSiteConfig = once(ensureSiteConfigRaw);
 const ensurePlaylistThemeColumn = once(ensurePlaylistThemeColumnRaw);
+const ensurePlaylistHiddenColumn = once(ensurePlaylistHiddenColumnRaw);

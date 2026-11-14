@@ -103,10 +103,12 @@ export const onRequestPost = async (ctx: Ctx) => {
 
   // The compact digest: vocabulary + playlist/collection titles. No track data.
   const vocab = await getVocabularies(db);
+  // 14.11.2026: hidden playlists are not offered (older DB without the column: all)
   const playlists = (
     await db
-      .prepare(`SELECT id, title, theme FROM playlists ORDER BY sort`)
+      .prepare(`SELECT id, title, theme FROM playlists WHERE COALESCE(hidden, 0) = 0 ORDER BY sort`)
       .all<{ id: string; title: string; theme: string | null }>()
+      .catch(() => db.prepare(`SELECT id, title, theme FROM playlists ORDER BY sort`).all<{ id: string; title: string; theme: string | null }>())
   ).results;
   const collections = (
     await db

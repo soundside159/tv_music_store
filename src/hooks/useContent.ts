@@ -53,6 +53,8 @@ interface ApiContent {
   trending?: string[];
   /** Owner-picked playlist ids for the Editor Picks rail (ordered). */
   editorPicks?: string[];
+  /** Theme section the Editor Picks shelf follows on /playlists ("" = top). */
+  editorPicksAfter?: string;
   categories?: { id: string; title: string }[];
   composers?: LiveComposer[];
   /** Guide publication dates set in Admin -> Articles (slug -> YYYY-MM-DD). */
@@ -340,6 +342,26 @@ export const useTrendingIds = (): string[] => {
     };
   }, []);
   return ids;
+};
+
+/** 14.11.2026: theme the Editor Picks shelf follows on /playlists ("" = top). */
+export const useEditorPicksAfter = (): string => {
+  const [after, setAfter] = useState<string>(() => cache?.editorPicksAfter ?? "");
+  useEffect(() => {
+    let cancelled = false;
+    const apply = () => {
+      void fetchContent().then((data) => {
+        if (!cancelled) setAfter(data?.editorPicksAfter ?? "");
+      });
+    };
+    apply();
+    contentListeners.add(apply);
+    return () => {
+      cancelled = true;
+      contentListeners.delete(apply);
+    };
+  }, []);
+  return after;
 };
 
 /** Editor Picks — the owner's hand-picked playlist ids (ordered, may be []). */

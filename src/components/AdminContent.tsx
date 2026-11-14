@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, ChevronDown, ChevronRight, ChevronUp, GripVertical, MoreHorizontal, Pause, Play, Plus, Sparkles, Star, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, ChevronUp, Eye, EyeOff, GripVertical, MoreHorizontal, Pause, Play, Plus, Sparkles, Star, X } from "lucide-react";
 import WaveformPreview from "@/components/WaveformPreview";
 import { toast } from "sonner";
 import { makeThumbnail } from "@/lib/audioEncoding";
@@ -26,6 +26,8 @@ interface ContentItem {
   image: string;
   /** Playlists only: section on the /playlists page ("" = no theme). */
   theme?: string;
+  /** Playlists only: hidden from visitors (14.11.2026). */
+  hidden?: boolean;
   trackIds: string[];
 }
 
@@ -48,6 +50,8 @@ interface ContentData {
   composers?: { id: string; userId: string | null; displayName: string }[];
   /** Owner-picked playlist ids for the homepage Editor Picks rail (ordered). */
   editorPicks?: string[];
+  /** Theme the Editor Picks shelf follows on /playlists ("" = top). */
+  editorPicksAfter?: string;
   /** Editor change log per track (marker + history in Tracks Edit). */
   editorEdits?: Record<
     string,
@@ -770,6 +774,16 @@ const AdminContent = ({ tab, editor = false }: { tab: Tab; editor?: boolean }) =
   // Toggled from the ⋯ menu on any playlist row; the pinned strip above the
   // sections shows the current picks and removes them.
   const editorPicks = data.editorPicks ?? [];
+  // 14.11.2026: hide / show a playlist for visitors.
+  const togglePlaylistHidden = (item: ContentItem) => {
+    void run(
+      { action: "set_playlist_hidden", id: item.id, hidden: !item.hidden },
+      item.hidden ? "Playlist is visible again" : "Playlist hidden from visitors",
+    ).then((ok) => {
+      if (ok) void refreshContent();
+    });
+  };
+
   const toggleEditorPick = (id: string) => {
     const picked = editorPicks.includes(id);
     const next = picked ? editorPicks.filter((x) => x !== id) : [...editorPicks, id];
@@ -810,6 +824,20 @@ const AdminContent = ({ tab, editor = false }: { tab: Tab; editor?: boolean }) =
       }
     }
   }
+
+  // 14.11.2026: Editor Picks position among the theme sections (0 = top).
+  const picksAfter = (data.editorPicksAfter ?? "").trim().toLowerCase();
+  const picksPos = picksAfter
+    ? Math.max(0, playlistSections.findIndex((s) => s.theme.toLowerCase() === picksAfter) + 1)
+    : 0;
+  const moveEditorPicks = (dir: -1 | 1) => {
+    const next = Math.min(playlistSections.length, Math.max(0, picksPos + dir));
+    if (next === picksPos || busy) return;
+    const value = next === 0 ? "" : playlistSections[next - 1].theme;
+    void run({ action: "set_editor_picks_position", value }, "Editor Picks moved").then((ok) => {
+      if (ok) void refreshContent();
+    });
+  };
 
   /** Adds a theme to the persisted list (so it survives F5 while empty). */
   const addPlaylistTheme = async (name: string) => {
@@ -1227,8 +1255,13 @@ const AdminContent = ({ tab, editor = false }: { tab: Tab; editor?: boolean }) =
                reorder or drop it into another theme; ↑↓ move whole themes. */
             <div className="mt-5 flex flex-col gap-4">
               {/* The Editor Picks strip — what the homepage rail (and the top
-                  of /playlists) shows, in this exact order. */}
-              <div className="rounded-lg border border-[#F4C430]/40 bg-[#F4C430]/[0.04]">
+                  of /playlists) shows, in this exact order.
+                  14.11.2026: it can sit between theme sections (arrows); CSS
+                  `order` places it, the sections get even numbers. */}
+              <div
+                className="rounded-lg border border-[#F4C430]/40 bg-[#F4C430]/[0.04]"
+                style={{ order: picksPos * 2 + 1 }}
+              >
                 <div className="flex items-center gap-2 border-b border-[#F4C430]/20 px-3 py-2">
                   <Star className="h-4 w-4 fill-[#F4C430] text-[#F4C430]" />
                   <span className="font-body text-xs font-semibold uppercase tracking-wide text-foreground">
@@ -1237,7 +1270,29 @@ const AdminContent = ({ tab, editor = false }: { tab: Tab; editor?: boolean }) =
                   <span className="font-body text-[11px] text-muted-foreground">
                     {editorPicks.length === 0
                       ? "nothing picked — the homepage shows the first 6 playlists as a fallback"
-                      : `${editorPicks.length} picked · shown on the homepage and on top of /playlists`}
+                      : `${editorPicks.length} picked · shown on the homepage and on /playlists`}
+                  </span>
+                  <span className="ml-auto flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={picksPos === 0 || busy}
+                      onClick={() => moveEditorPicks(-1)}
+                      title="Move Editor Picks up on /playlists"
+                      aria-label="Move Editor Picks up"
+                      className="text-muted-foreground transition-colors hover:text-[#F4C430] disabled:opacity-30"
+                    >
+                      <ChevronUp className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={picksPos >= playlistSections.length || busy}
+                      onClick={() => moveEditorPicks(1)}
+                      title="Move Editor Picks down on /playlists"
+                      aria-label="Move Editor Picks down"
+                      className="text-muted-foreground transition-colors hover:text-[#F4C430] disabled:opacity-30"
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </button>
                   </span>
                 </div>
                 {editorPicks.length > 0 && (
@@ -1300,6 +1355,7 @@ const AdminContent = ({ tab, editor = false }: { tab: Tab; editor?: boolean }) =
               {playlistSections.map((sec, si) => (
                 <div
                   key={sec.theme || "__none"}
+                  style={{ order: si * 2 + 2 }}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => {
                     e.preventDefault();
@@ -1435,7 +1491,7 @@ const AdminContent = ({ tab, editor = false }: { tab: Tab; editor?: boolean }) =
                           e.stopPropagation();
                           dropPlaylist(sec.theme, item.id);
                         }}
-                        className={dragPlaylistId === item.id ? "opacity-40" : ""}
+                        className={dragPlaylistId === item.id ? "opacity-40" : item.hidden ? "opacity-50" : ""}
                       >
                         <div className="flex items-center gap-3 px-3 py-2.5">
                           <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-muted-foreground/50" />
@@ -1467,6 +1523,11 @@ const AdminContent = ({ tab, editor = false }: { tab: Tab; editor?: boolean }) =
                                 <Star className="mr-1.5 inline h-3 w-3 fill-[#F4C430] text-[#F4C430]" />
                               )}
                               {item.title}
+                              {item.hidden && (
+                                <span className="ml-2 rounded bg-foreground/10 px-1.5 py-0.5 align-middle font-body text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                  Hidden
+                                </span>
+                              )}
                             </Link>
                             <span className="block truncate font-body text-xs text-muted-foreground">
                               {item.trackIds.length} tracks · /playlist/{item.id}
@@ -1507,6 +1568,22 @@ const AdminContent = ({ tab, editor = false }: { tab: Tab; editor?: boolean }) =
                                       {editorPicks.includes(item.id)
                                         ? "Remove from Editor Picks"
                                         : "Add to Editor Picks"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={busy}
+                                      onClick={() => {
+                                        setPickMenuId(null);
+                                        togglePlaylistHidden(item);
+                                      }}
+                                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left font-body text-xs text-foreground transition-colors hover:bg-foreground/[0.05] disabled:opacity-50"
+                                    >
+                                      {item.hidden ? (
+                                        <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+                                      ) : (
+                                        <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                                      )}
+                                      {item.hidden ? "Show to visitors" : "Hide from visitors"}
                                     </button>
                                   </span>
                                 </>

@@ -162,7 +162,8 @@ export const onRequestGet = async (ctx: Ctx) => {
       const rows = await db
         .prepare(
           `SELECT p.id FROM playlists p
-            WHERE (SELECT COUNT(*) FROM playlist_tracks j WHERE j.playlist_id = p.id) >= 5`,
+            WHERE (SELECT COUNT(*) FROM playlist_tracks j WHERE j.playlist_id = p.id) >= 5
+              AND COALESCE(p.hidden, 0) = 0`,
         )
         .all<{ id: string }>();
       for (const p of rows.results) lines.push(url(`/playlist/${p.id}`, "weekly", "0.6"));

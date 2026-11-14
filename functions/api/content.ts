@@ -47,6 +47,17 @@ const buildContent = async (ctx: Ctx): Promise<Response> => {
   // the column yet (added lazily by the admin API) — degrade gracefully.
   type PlRow = { id: string; title: string; description: string | null; image: string | null; theme: string | null; photo_settings?: string | null };
   const playlists = await (async () => {
+    // 14.11.2026: hidden playlists are left out for visitors
+    try {
+      return await db
+        .prepare(
+          `SELECT id, title, description, image, theme, photo_settings FROM playlists
+            WHERE COALESCE(hidden, 0) = 0 ORDER BY sort`,
+        )
+        .all<PlRow>();
+    } catch {
+      // older DB: no hidden column yet
+    }
     try {
       return await db
         .prepare(`SELECT id, title, description, image, theme, photo_settings FROM playlists ORDER BY sort`)
@@ -92,6 +103,19 @@ const buildContent = async (ctx: Ctx): Promise<Response> => {
     if (row) editorPicks = JSON.parse(row.value) as string[];
   } catch {
     // none picked yet
+  }
+  // Hidden playlists never appear in Editor Picks either.
+  const visiblePl = new Set(playlists.results.map((p) => p.id));
+  editorPicks = editorPicks.filter((id) => visiblePl.has(id));
+  // 14.11.2026: the theme section the Editor Picks shelf follows ("" = top).
+  let editorPicksAfter = "";
+  try {
+    const row = await db
+      .prepare(`SELECT value FROM site_config WHERE key = 'editor_picks_after_theme'`)
+      .first<{ value: string }>();
+    editorPicksAfter = row?.value ?? "";
+  } catch {
+    // not set
   }
 
   // Categories (homepage chips / catalog?category=...). Tables are created by
@@ -190,6 +214,7 @@ const buildContent = async (ctx: Ctx): Promise<Response> => {
   return json({
     trending,
     editorPicks,
+    editorPicksAfter,
     categories,
     composers,
     guideSchedule,

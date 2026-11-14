@@ -9,7 +9,7 @@ import { usePlayer } from "@/components/playerContext";
 import { useTracks } from "@/hooks/useTracks";
 import { useIsStaff } from "@/hooks/useMockData";
 import type { CatalogTrack } from "@/data/catalogTracks";
-import { refreshContent, useContentReady, useEditorPickIds, usePlaylists, type LivePlaylist } from "@/hooks/useContent";
+import { refreshContent, useContentReady, useEditorPickIds, useEditorPicksAfter, usePlaylists, type LivePlaylist } from "@/hooks/useContent";
 import {
   AdminItemBar,
   useAdminDragReorder,
@@ -284,6 +284,7 @@ const Playlists = () => {
   const ready = useContentReady();
   // Owner-curated Editor Picks — pinned ABOVE the theme sections.
   const editorPickIds = useEditorPickIds();
+  const editorPicksAfter = useEditorPicksAfter().trim().toLowerCase();
   const editorPicks = editorPickIds
     .map((id) => playlists.find((p) => p.id === id))
     .filter((p): p is LivePlaylist => !!p);
@@ -311,6 +312,12 @@ const Playlists = () => {
     }
   }
   if (sections.length === 0) sections.push({ theme: "", items: [] });
+  const shownSections = sections.filter((section) => section.theme || section.items.length > 0);
+  // 14.11.2026: the Editor Picks shelf sits after the chosen theme ("" = top).
+  const picksIdx = editorPicksAfter
+    ? shownSections.findIndex((s) => s.theme.toLowerCase() === editorPicksAfter)
+    : -1;
+  const picksOrder = picksIdx >= 0 ? picksIdx * 2 + 3 : 1;
 
   return (
     <div className="min-h-screen bg-background">
@@ -335,9 +342,9 @@ const Playlists = () => {
             </CardCarousel>
           </div>
         ) : (
-          <>
+          <div className="flex flex-col">
             {editorPicks.length > 0 && (
-              <section className="mt-12">
+              <section className="mt-12" style={{ order: picksOrder }}>
                 <h2 className="mb-6 font-display text-2xl font-semibold text-white">
                   Editor Picks
                 </h2>
@@ -350,10 +357,8 @@ const Playlists = () => {
                 </CardCarousel>
               </section>
             )}
-            {sections
-              .filter((section) => section.theme || section.items.length > 0)
-              .map((section) => (
-              <section key={section.theme || "__general"} className="mt-12">
+            {shownSections.map((section, si) => (
+              <section key={section.theme || "__general"} className="mt-12" style={{ order: si * 2 + 2 }}>
                 {section.theme && (
                   <h2 className="mb-6 font-display text-2xl font-semibold text-white">
                     {section.theme}
@@ -371,6 +376,7 @@ const Playlists = () => {
                 </CardCarousel>
               </section>
             ))}
+<div style={{ order: 9999 }}>
             <NewThemeButton
               admin={admin}
               onCreate={(theme) => {
@@ -386,7 +392,8 @@ const Playlists = () => {
                 }
               }}
             />
-          </>
+            </div>
+          </div>
         )}
       </main>
       <Footer />
