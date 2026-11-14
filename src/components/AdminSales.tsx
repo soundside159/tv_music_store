@@ -77,12 +77,14 @@ const Card = ({ children, className = "" }: { children: React.ReactNode; classNa
 
 /** Month / day / All switch. The pill opens a picker: year, months, then the
  *  days of the chosen month (pick a month = whole month, pick a day = that day). */
-const PeriodPicker = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => {
+export const PeriodPicker = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => {
   const [open, setOpen] = useState(false);
   const now = thisMonth();
   const today = new Date().toISOString().slice(0, 10);
   const isAll = value === "all";
-  const shownMonth = isAll ? now : value.slice(0, 7);
+  // Also used by Analytics, where the value can be "7" / "30" / "90" (days).
+  const isDate = /^\d{4}-\d{2}/.test(value);
+  const shownMonth = isDate ? value.slice(0, 7) : now;
   const [view, setView] = useState(shownMonth);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -96,7 +98,7 @@ const PeriodPicker = ({ value, onChange }: { value: string; onChange: (v: string
   const year = Number(view.slice(0, 4));
   const yearSuffix = (y: string) => (y === now.slice(0, 4) ? "" : ` ${y}`);
   const label =
-    !isAll && value.length === 10
+    isDate && value.length === 10
       ? `${Number(value.slice(8, 10))} ${MONTHS[Number(value.slice(5, 7)) - 1]}${yearSuffix(value.slice(0, 4))}`
       : `${MONTHS[Number(shownMonth.slice(5, 7)) - 1]}${yearSuffix(shownMonth.slice(0, 4))}`;
   // Days of the viewed month, Monday first.
@@ -115,11 +117,11 @@ const PeriodPicker = ({ value, onChange }: { value: string; onChange: (v: string
     <div ref={box} className="relative flex gap-1 rounded-full border border-border/70 bg-card/60 p-1">
       <button
         type="button"
-        className={pill(!isAll)}
+        className={pill(isDate)}
         onClick={() => {
-          if (isAll) onChange(now);
+          if (!isDate) onChange(now);
           setView(shownMonth);
-          setOpen((o) => !o || isAll);
+          setOpen((o) => !o || !isDate);
         }}
       >
         {label}

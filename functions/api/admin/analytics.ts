@@ -15,32 +15,70 @@ export const onRequestGet = async (ctx: Ctx) => {
   await ensureHitsTable(db);
 
   const url = new URL(ctx.request.url);
-  const days = Math.min(90, Math.max(7, Number(url.searchParams.get("days")) || 30));
-  const since = `-${days} day`;
+  // Window: ?days=7|30|90 (rolling), or ?period=YYYY-MM | YYYY-MM-DD | all
+  // (same picker as the Dashboard). Every range is [from, to) on days.
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const addDays = (s: string, n: number) => {
+    const d = new Date(`${s}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + n);
+    return iso(d);
+  };
+  const today = iso(new Date());
+  const tomorrow = addDays(today, 1);
+  const periodRaw = url.searchParams.get("period") ?? "";
+  let from: string;
+  let to: string;
+  let label: string;
+  const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const mDay = /^(\d{4})-(\d{2})-(\d{2})$/.exec(periodRaw);
+  const mMonth = /^(\d{4})-(\d{2})$/.exec(periodRaw);
+  if (mDay) {
+    from = periodRaw;
+    to = addDays(from, 1);
+    label = `${Number(mDay[3])} ${MONTHS[Number(mDay[2]) - 1]}`;
+  } else if (mMonth) {
+    from = `${periodRaw}-01`;
+    const d = new Date(Date.UTC(Number(mMonth[1]), Number(mMonth[2]), 1));
+    to = iso(d);
+    label = MONTHS[Number(mMonth[2]) - 1];
+  } else if (periodRaw === "all") {
+    const first = await db.prepare(`SELECT MIN(day) AS d FROM analytics_hits`).first<{ d: string | null }>();
+    from = first?.d ?? today;
+    to = tomorrow;
+    label = "All";
+  } else {
+    const n = Math.min(90, Math.max(7, Number(url.searchParams.get("days")) || 30));
+    from = addDays(today, -n);
+    to = tomorrow;
+    label = `${n}d`;
+  }
+  const len = Math.max(1, Math.round((Date.parse(to) - Date.parse(from)) / 86400000));
+  const prevFrom = addDays(from, -len);
+  // Dates above are built here (never raw user text), so they are safe inline.
+  const inWin = (col = "day") => `${col} >= '${from}' AND ${col} < '${to}'`;
+  const days = len;
 
   const series = await db
     .prepare(
       `SELECT day, COUNT(*) AS views, COUNT(DISTINCT visitor) AS visitors
-         FROM analytics_hits WHERE day >= date('now', ?1) AND event = '' GROUP BY day ORDER BY day`,
+         FROM analytics_hits WHERE ${inWin()} AND event = '' GROUP BY day ORDER BY day`,
     )
-    .bind(since)
     .all<{ day: string; views: number; visitors: number }>();
 
   const totals = await db
     .prepare(
       `SELECT COUNT(*) AS views, COUNT(DISTINCT visitor) AS visitors
-         FROM analytics_hits WHERE day >= date('now', ?1) AND event = ''`,
+         FROM analytics_hits WHERE ${inWin()} AND event = ''`,
     )
-    .bind(since)
     .first<{ views: number; visitors: number }>();
 
   // Same-length window right before this one — the "vs previous period" deltas.
   const prev = await db
     .prepare(
       `SELECT COUNT(*) AS views, COUNT(DISTINCT visitor) AS visitors
-         FROM analytics_hits WHERE day >= date('now', ?1) AND day < date('now', ?2) AND event = ''`,
+         FROM analytics_hits WHERE day >= ?1 AND day < ?2 AND event = ''`,
     )
-    .bind(`-${days * 2} day`, since)
+    .bind(prevFrom, from)
     .first<{ views: number; visitors: number }>();
 
   const online = await db
@@ -56,10 +94,9 @@ export const onRequestGet = async (ctx: Ctx) => {
         .prepare(
           `SELECT ${col} AS k, COUNT(*) AS views, COUNT(DISTINCT visitor) AS visitors
              FROM analytics_hits
-            WHERE day >= date('now', ?1) AND event = ''${skipEmpty ? ` AND ${col} != ''` : ""}
+            WHERE ${inWin()} AND event = ''${skipEmpty ? ` AND ${col} != ''` : ""}
             GROUP BY ${col} ORDER BY views DESC LIMIT ${limit}`,
         )
-        .bind(since)
         .all<{ k: string; views: number; visitors: number }>()
     ).results;
 
@@ -67,8 +104,7 @@ export const onRequestGet = async (ctx: Ctx) => {
   const step = async (cond: string) =>
     (
       await db
-        .prepare(`SELECT COUNT(DISTINCT visitor) AS n FROM analytics_hits WHERE day >= date('now', ?1) AND ${cond}`)
-        .bind(since)
+        .prepare(`SELECT COUNT(DISTINCT visitor) AS n FROM analytics_hits WHERE ${inWin()} AND ${cond}`)
         .first<{ n: number }>()
     )?.n ?? 0;
   const funnel = [
@@ -90,10 +126,9 @@ export const onRequestGet = async (ctx: Ctx) => {
                 COUNT(DISTINCT CASE WHEN e.event = 'purchase' THEN e.visitor END) AS paid
            FROM analytics_hits h
            LEFT JOIN analytics_hits e ON e.visitor = h.visitor AND e.event != ''
-          WHERE h.day >= date('now', ?1) AND h.src != '' AND h.event = ''
+          WHERE ${inWin("h.day")} AND h.src != '' AND h.event = ''
           GROUP BY h.src ORDER BY visitors DESC LIMIT 15`,
       )
-      .bind(since)
       .all<{ k: string; visitors: number; actions: number; paid: number }>()
   ).results;
   const sourcePages = (
@@ -101,15 +136,17 @@ export const onRequestGet = async (ctx: Ctx) => {
       .prepare(
         `SELECT src || ' ' || path AS k, COUNT(DISTINCT visitor) AS visitors
            FROM analytics_hits
-          WHERE day >= date('now', ?1) AND src != '' AND event = ''
+          WHERE ${inWin()} AND src != '' AND event = ''
           GROUP BY src, path ORDER BY visitors DESC LIMIT 15`,
       )
-      .bind(since)
       .all<{ k: string; visitors: number }>()
   ).results;
 
   return json({
     days,
+    from,
+    to,
+    label,
     funnel,
     sources,
     sourcePages,

@@ -9,6 +9,7 @@ import {
   YAxis,
 } from "recharts";
 import { Globe2, MonitorSmartphone, MousePointerClick, Users } from "lucide-react";
+import { PeriodPicker } from "@/components/AdminSales";
 
 // Admin -> Analytics: the self-hosted, cookie-less visitor stats.
 // Data comes from /api/admin/analytics in one call (see functions/api/admin/
@@ -25,6 +26,9 @@ interface TopRow {
 }
 interface Data {
   days: number;
+  from?: string;
+  to?: string;
+  label?: string;
   series: { day: string; views: number; visitors: number }[];
   totals: { views: number; visitors: number };
   previous: { views: number; visitors: number };
@@ -248,7 +252,9 @@ const TopList = ({ title, rows, label }: { title: string; rows: TopRow[]; label?
 };
 
 const AdminAnalytics = () => {
-  const [days, setDays] = useState<(typeof RANGES)[number]>(30);
+  // "7" | "30" | "90" = rolling days; "YYYY-MM" / "YYYY-MM-DD" / "all" = picker.
+  const [range, setRange] = useState<string>("30");
+  const rolling = /^\d{1,2}$/.test(range);
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -256,7 +262,7 @@ const AdminAnalytics = () => {
     let cancelled = false;
     setData(null);
     setError(null);
-    fetch(`/api/admin/analytics?days=${days}`, { credentials: "include" })
+    fetch(`/api/admin/analytics?${rolling ? `days=${range}` : `period=${range}`}`, { credentials: "include" })
       .then(async (res) => {
         const d = (await res.json()) as Data & { error?: string };
         if (!res.ok) throw new Error(d.error ?? "Failed to load analytics");
@@ -268,7 +274,7 @@ const AdminAnalytics = () => {
     return () => {
       cancelled = true;
     };
-  }, [days]);
+  }, [range]);
 
   // The chart wants EVERY day on the axis — fill the gaps with zeroes so a
   // quiet Tuesday shows as a dip, not as a missing point.
@@ -276,11 +282,19 @@ const AdminAnalytics = () => {
     if (!data) return [];
     const byDay = new Map(data.series.map((s) => [s.day, s]));
     const out: { day: string; views: number; visitors: number }[] = [];
-    for (let i = data.days - 1; i >= 0; i--) {
+    // Every day of the window up to today (a month in progress stops today).
+    const today = new Date().toISOString().slice(0, 10);
+    const start = data.from ?? (() => {
       const d = new Date();
-      d.setUTCDate(d.getUTCDate() - i);
+      d.setUTCDate(d.getUTCDate() - (data.days - 1));
+      return d.toISOString().slice(0, 10);
+    })();
+    const d = new Date(`${start}T00:00:00Z`);
+    for (let guard = 0; guard < 400; guard++) {
       const key = d.toISOString().slice(0, 10);
+      if (key > today || (data.to && key >= data.to)) break;
       out.push(byDay.get(key) ?? { day: key, views: 0, visitors: 0 });
+      d.setUTCDate(d.getUTCDate() + 1);
     }
     return out;
   }, [data]);
@@ -294,19 +308,22 @@ const AdminAnalytics = () => {
             Own cookie-less stats — bots and your admin visits are not counted.
           </p>
         </div>
-        <div className="flex gap-1 rounded-full border border-border/70 bg-card/60 p-1">
-          {RANGES.map((r) => (
-            <button
-              key={r}
-              type="button"
-              onClick={() => setDays(r)}
-              className={`rounded-full px-3 py-1 font-body text-xs font-semibold transition-colors ${
-                days === r ? "bg-[#F4C430] text-background" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {r}d
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex gap-1 rounded-full border border-border/70 bg-card/60 p-1">
+            {RANGES.map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => setRange(String(r))}
+                className={`rounded-full px-3 py-1 font-body text-xs font-semibold transition-colors ${
+                  range === String(r) ? "bg-[#F4C430] text-background" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {r}d
+              </button>
+            ))}
+          </div>
+          <PeriodPicker value={range} onChange={setRange} />
         </div>
       </div>
 
@@ -318,13 +335,13 @@ const AdminAnalytics = () => {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
               icon={Users}
-              label={`Visitors · ${data.days}d`}
+              label={`Visitors · ${data.label ?? `${data.days}d`}`}
               value={data.totals.visitors.toLocaleString()}
               sub={delta(data.totals.visitors, data.previous.visitors)}
             />
             <StatCard
               icon={MousePointerClick}
-              label={`Pageviews · ${data.days}d`}
+              label={`Pageviews · ${data.label ?? `${data.days}d`}`}
               value={data.totals.views.toLocaleString()}
               sub={delta(data.totals.views, data.previous.views)}
             />

@@ -254,13 +254,14 @@ const handle = async (ctx: Ctx) => {
       (
         await db
           .prepare(
-            `SELECT c.id, c.display_name AS name, c.slug,
-                    (SELECT COUNT(*) FROM tracks t WHERE t.composer_id = c.id) AS tracks
+            `SELECT c.id, c.display_name AS name, c.slug, c.user_id AS user_id,
+                    (SELECT COUNT(*) FROM tracks t WHERE t.composer_id = c.id)
+                    + (SELECT COUNT(*) FROM sfx x WHERE x.composer_id = c.id) AS tracks
                FROM composers c ORDER BY c.display_name COLLATE NOCASE`,
           )
-          .all<{ id: string; name: string | null; slug: string | null; tracks: number }>()
+          .all<{ id: string; name: string | null; slug: string | null; user_id: string | null; tracks: number }>()
       ).results ?? [],
-    [] as { id: string; name: string | null; slug: string | null; tracks: number }[],
+    [] as { id: string; name: string | null; slug: string | null; user_id: string | null; tracks: number }[],
   );
   const allocRows = await safe(
     async () =>
@@ -287,7 +288,10 @@ const handle = async (ctx: Ctx) => {
   }
   const income = {
     admin: { earned: split.store, pending: split.splitting },
+    // Real composers only: a linked account, tracks or sounds, or money. The old demo
+    // rows (Composer One/Two/Three: no account, no tracks) stay out.
     composers: composerRows
+      .filter((c) => !!c.user_id || c.tracks > 0 || inc.has(c.id))
       .map((c) => ({
         id: c.id,
         name: c.name ?? "(no name)",
