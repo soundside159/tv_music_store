@@ -144,7 +144,7 @@ const LinkCard = ({
   </a>
 );
 
-const AdminUsage = () => {
+const AdminUsage = ({ embedded = false }: { embedded?: boolean } = {}) => {
   const [report, setReport] = useState<Report | null>(null);
 
   const load = useCallback(async () => {
@@ -283,14 +283,14 @@ const AdminUsage = () => {
 
   return (
     <div className="space-y-4">
-      <div>
+      {!embedded && <div>
         <h2 className="font-body text-sm font-semibold text-foreground">Services &amp; credits</h2>
         <p className="mt-1 font-body text-xs text-muted-foreground">
           YouTube is metered here (its cost is fixed and countable). Resend and OpenAI publish no
           "credits left" figure, so they link straight to their own dashboards — an honest link beats
           an invented number.
         </p>
-      </div>
+      </div>}
 
       <div className="grid gap-4 md:grid-cols-3">
         {/* The one real meter. */}

@@ -877,36 +877,40 @@ const Admin = () => {
                 {/* Everything below the rule is "services & credits" — the
                     dashboard is becoming the owner's single landing screen. */}
                 <div className="my-2 h-px bg-border/60" />
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = !showServices;
-                    setShowServices(next);
-                    try {
-                      localStorage.setItem("tvms_admin_services_open", next ? "1" : "0");
-                    } catch {
-                      /* storage blocked — just this visit */
-                    }
-                  }}
-                  className="flex w-full items-center justify-between gap-3 rounded-xl border border-border bg-card px-5 py-3 text-left font-body text-sm font-semibold text-foreground transition-colors hover:border-[#F4C430]/60"
-                >
-                  Services &amp; credits
-                  <span className="whitespace-nowrap text-xs font-normal text-muted-foreground">{showServices ? "Hide" : "Show"}</span>
-                </button>
-                {showServices && <AdminUsage />}
-                {/* Straight to the money page (owner request): OpenAI's billing
-                    overview, where the balance is topped up. */}
-                {showServices && (
-                <a
-                  href="https://platform.openai.com/settings/organization/billing/overview"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex w-fit items-center gap-2 rounded-lg border border-border px-4 py-2 font-body text-sm text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
-                >
-                  OpenAI Billing — top up balance
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-                )}
+                {/* One card: the header bar opens / folds the content inside it. */}
+                <div className="overflow-hidden rounded-xl border border-border bg-card">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !showServices;
+                      setShowServices(next);
+                      try {
+                        localStorage.setItem("tvms_admin_services_open", next ? "1" : "0");
+                      } catch {
+                        /* storage blocked - just this visit */
+                      }
+                    }}
+                    className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left font-body text-sm font-semibold text-foreground transition-colors hover:text-[#F4C430]"
+                  >
+                    Services &amp; credits
+                    <span className="whitespace-nowrap text-xs font-normal text-muted-foreground">{showServices ? "Hide" : "Show"}</span>
+                  </button>
+                  {showServices && (
+                    <div className="flex flex-col gap-4 border-t border-border/70 p-5">
+                      <AdminUsage embedded />
+                      {/* Straight to the money page (owner request): OpenAI billing. */}
+                      <a
+                        href="https://platform.openai.com/settings/organization/billing/overview"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex w-fit items-center gap-2 rounded-lg border border-border px-4 py-2 font-body text-sm text-muted-foreground transition-colors hover:border-[#F4C430] hover:text-[#F4C430]"
+                      >
+                        OpenAI Billing — top up balance
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    </div>
+                  )}
+                </div>
               </>
             )}
 

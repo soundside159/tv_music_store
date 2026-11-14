@@ -545,11 +545,12 @@ const AdminSales = ({
             )}
           </Card>
 
-          <div className="flex flex-col gap-2">
+          {/* One card: the header bar opens / folds the list inside it. */}
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
             <button
               type="button"
               onClick={toggleSearches}
-              className="flex w-full items-center justify-between gap-3 rounded-xl border border-border bg-card px-5 py-3 text-left font-body text-sm font-semibold text-foreground transition-colors hover:border-[#F4C430]/60"
+              className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left font-body text-sm font-semibold text-foreground transition-colors hover:text-[#F4C430]"
             >
               <span>
                 Customer searches <span className="font-normal text-muted-foreground">· {data.searches.length}</span>
@@ -557,7 +558,7 @@ const AdminSales = ({
               <span className="whitespace-nowrap text-xs font-normal text-muted-foreground">{showSearches ? "Hide" : "Show"}</span>
             </button>
             {showSearches && (
-              <Card className="py-3">
+              <div className="border-t border-border/70 px-5 py-3">
                 {data.searches.length === 0 ? (
                   <p className="font-body text-xs text-muted-foreground">Nobody searched {period.length === 10 ? "on" : "in"} {data.period.label}.</p>
                 ) : (
@@ -570,7 +571,7 @@ const AdminSales = ({
                     ))}
                   </ul>
                 )}
-              </Card>
+              </div>
             )}
           </div>
         </>
