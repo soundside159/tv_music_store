@@ -5205,3 +5205,18 @@ True: `brandCover()` was only in the AI path.
 - Results per group: Admin -> Analytics, sources gads-vlog / gads-family / gads-crime (same-day attribution only).
 - Same day: Black Friday email sent from tvmusicstore@gmail.com to all 37 free customers in Bcc batches of 10 (offer: 20% + extra 5% on reply; no code yet, owner makes a Stripe code if someone replies).
 - 2026-11-13 later: Whitelisting renames (owner): main button "Sync", tabs "Claims" (found claims per composer) / "Customer channels" (customers channels, solo videos, check-from dates), "Admin Custom" (was Custom). Composer rows now in the approved mockup look: 3px colour bar on the left, name, stacked numbers waiting/released on the right, sheet = small link icon, whole row clickable.
+
+- **2026-11-14 (Meta pixel + cookie consent):** Meta Ads "TV Music Store 1" (traffic objective,
+  886474059271673) paused after ~GBP 7 / 64 visitors / 0 signups. Ads with a signup goal need a pixel.
+  Pixel = dataset "TV Music Store" ID 1337211998527581 in business "Cinematic Courses", ad account
+  "Courses AD" (1409768047268554) - new TVMS Meta campaigns should run from that account.
+  NEW `src/lib/metaPixel.ts` (consent in localStorage `tvms_cookie_consent`; loadMetaPixel injects
+  fbevents.js + init + PageView only after consent; metaTrack(); flushSignupEvent()). NEW
+  `src/components/CookieConsent.tsx` (bottom panel, Accept gold + Reject equal-easy, hidden on /admin),
+  mounted in App.tsx after WelcomeModal. `trackEvent()` now also sends Meta AddToCart /
+  InitiateCheckout / Purchase (optional valueUsd; Cart passes cart total). Signup: `_utils.ts`
+  SIGNUP_MARK_COOKIE (`tvms_signup`, JS-readable, 10 min) appended on NEW non-admin accounts in
+  auth/verify.ts, auth/register.ts, auth/google/callback.ts; `refreshSession()` calls
+  flushSignupEvent() -> one CompleteRegistration (consent-gated). Privacy.tsx: Meta pixel + consent
+  wording. Lint 0 errors on touched files; tsc clean on touched files (pre-existing tsc errors in
+  PlanModal.tsx / Composer.tsx untouched). Owner: deploy.bat.

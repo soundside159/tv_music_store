@@ -5,6 +5,7 @@ import {
   readJson,
   sessionCookieHeader,
   SESSION_DAYS,
+  SIGNUP_MARK_COOKIE,
   type Ctx,
 } from "../_utils";
 import { sendWelcomeEmail } from "../_email";
@@ -39,6 +40,7 @@ export const onRequestPost = async (ctx: Ctx) => {
 
   const ownerRole = email === OWNER_EMAIL ? "admin" : "customer";
 
+  let isNewSignup = false;
   if (!user) {
     const id = newId("usr");
     await ctx.env.DB.prepare(`INSERT INTO users (id, email, role) VALUES (?1, ?2, ?3)`)
@@ -51,6 +53,7 @@ export const onRequestPost = async (ctx: Ctx) => {
       .run();
     user = { id, email, name: null, role: ownerRole };
     if (ownerRole !== "admin") {
+      isNewSignup = true;
       await sendWelcomeEmail(ctx.env, email, null);
       await subscribeEmail(ctx.env.DB, email, "signup");
     }
@@ -67,9 +70,11 @@ export const onRequestPost = async (ctx: Ctx) => {
     .bind(token, user.id)
     .run();
 
-  return json(
+  const res = json(
     { ok: true, user },
     200,
     { "set-cookie": sessionCookieHeader(token, SESSION_DAYS * 86400) },
   );
+  if (isNewSignup) res.headers.append("set-cookie", SIGNUP_MARK_COOKIE);
+  return res;
 };

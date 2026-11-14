@@ -51,6 +51,7 @@ import LicenseModal from "./components/LicenseModal";
 import PlanModal from "./components/PlanModal";
 import AttributionModal from "./components/AttributionModal";
 import WelcomeModal from "./components/WelcomeModal";
+import CookieConsent from "./components/CookieConsent";
 import { PlayerProvider } from "./components/PlayerProvider";
 import { useContentReady } from "./hooks/useContent";
 
@@ -116,6 +117,7 @@ const App = () => (
           <PlanModal />
           <AttributionModal />
           <WelcomeModal />
+          <CookieConsent />
         </PlayerProvider>
       </BrowserRouter>
     </TooltipProvider>

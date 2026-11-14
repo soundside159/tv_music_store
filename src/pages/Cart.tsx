@@ -203,7 +203,7 @@ const Cart = () => {
   useEffect(() => {
     const outcome = new URLSearchParams(window.location.search).get("checkout");
     if (outcome === "success") {
-      trackEvent("purchase");
+      trackEvent("purchase", total);
       clearCart();
       toast.success("Payment complete! Your licenses are in your account.");
       navigate("/account?section=license&purchase=success", { replace: true });

@@ -1,3 +1,4 @@
+import { flushSignupEvent } from "@/lib/metaPixel";
 import { useEffect, useSyncExternalStore } from "react";
 import type { Subscription, User } from "@/types/domain";
 
@@ -157,6 +158,8 @@ export const refreshSession = (): Promise<void> => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       session = mapSession((await res.json()) as ApiMeResponse);
       writeHint(session);
+      // New account just created -> one Meta CompleteRegistration (consent-gated).
+      flushSignupEvent();
     })
     .catch(() => {
       // API unreachable (local dev without functions) — treat as guest.

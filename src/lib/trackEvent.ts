@@ -5,6 +5,8 @@
 //   then removes it from the address bar so it is not copied along when the
 //   visitor shares the page.
 
+import { metaTrack } from "@/lib/metaPixel";
+
 export type FunnelEvent = "download" | "add_to_cart" | "checkout" | "purchase";
 
 export const sendHit = (body: Record<string, string>) => {
@@ -24,8 +26,23 @@ export const sendHit = (body: Record<string, string>) => {
   }
 };
 
-export const trackEvent = (event: FunnelEvent) => {
+const META_EVENTS: Record<FunnelEvent, string | null> = {
+  download: null,
+  add_to_cart: "AddToCart",
+  checkout: "InitiateCheckout",
+  purchase: "Purchase",
+};
+
+/** valueUsd: order total when known (sent to the Meta pixel with currency USD). */
+export const trackEvent = (event: FunnelEvent, valueUsd?: number) => {
   sendHit({ path: window.location.pathname, event });
+  const meta = META_EVENTS[event];
+  if (meta) {
+    metaTrack(
+      meta,
+      typeof valueUsd === "number" && valueUsd > 0 ? { value: valueUsd, currency: "USD" } : undefined,
+    );
+  }
 };
 
 const TAG_PARAMS = ["s", "src", "ref", "utm_source", "utm_campaign", "utm_medium", "utm_content"];

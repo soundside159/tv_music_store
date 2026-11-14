@@ -55,10 +55,10 @@ const Privacy = () => (
         ]}
       />
       <P>
-        We do not sell your data and we do not use it for third-party advertising. Our visitor
-        statistics are collected by our own cookie-less system (see Analytics below) — we set no
-        analytics or advertising cookies and share nothing with ad networks; if that ever changes, we
-        will ask for consent first.
+        We do not sell your data. Our visitor statistics are collected by our own cookie-less system
+        (see Analytics below). Only if you click "Accept" in our cookie banner do we also use the Meta
+        (Facebook/Instagram) pixel to measure which of our ads bring visitors, sign-ups and purchases
+        (consent) — see Cookies below. If you click "Reject", nothing is shared with ad networks.
       </P>
 
       <H2>Payments</H2>
@@ -125,9 +125,12 @@ const Privacy = () => (
       <H2>Cookies</H2>
       <P>
         We use essential cookies to keep you signed in and remember your cart and preferences. These
-        are required for the site to work. We set no analytics or advertising cookies — our visitor
-        statistics work without cookies entirely (see Analytics above). If we ever add cookies that
-        need consent, we will show a consent banner first.
+        are required for the site to work. Our visitor statistics work without cookies entirely (see
+        Analytics above). With your consent ("Accept" in the cookie banner) we also load the Meta pixel,
+        which sets advertising cookies and tells Meta Platforms Ireland Ltd when a visit came from our
+        ads and whether it led to a sign-up or purchase, so we can measure and improve our advertising.
+        If you click "Reject" the pixel is never loaded. To change your choice, clear this site's data
+        in your browser and the banner will appear again.
       </P>
 
       <H2>Children</H2>

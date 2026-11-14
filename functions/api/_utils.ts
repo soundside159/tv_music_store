@@ -99,6 +99,10 @@ export const getCookie = (request: Request, name: string): string | null => {
 export const SESSION_COOKIE = "tvms_session";
 export const SESSION_DAYS = 30;
 
+// Short-lived, JS-readable marker for a NEW account: the frontend turns it
+// into one Meta pixel CompleteRegistration (only with marketing consent).
+export const SIGNUP_MARK_COOKIE = "tvms_signup=1; Path=/; Secure; SameSite=Lax; Max-Age=600";
+
 export const sessionCookieHeader = (token: string, maxAgeSeconds: number) =>
   `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAgeSeconds}`;
 

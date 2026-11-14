@@ -5,6 +5,7 @@ import {
   openSession,
   OWNER_EMAIL,
   type Ctx,
+  SIGNUP_MARK_COOKIE,
 } from "../../_utils";
 import { sendWelcomeEmail } from "../../_email";
 import { subscribeEmail } from "../../_newsletter";
@@ -67,6 +68,7 @@ export const onRequestGet = async (ctx: Ctx) => {
     .bind(email)
     .first<{ id: string; role: string; name: string | null }>();
 
+  let isNewSignup = false;
   if (!user) {
     const id = newId("usr");
     await ctx.env.DB.prepare(
@@ -81,6 +83,7 @@ export const onRequestGet = async (ctx: Ctx) => {
       .run();
     user = { id, role, name };
     if (role !== "admin") {
+      isNewSignup = true;
       await sendWelcomeEmail(ctx.env, email, name);
       await subscribeEmail(ctx.env.DB, email, "signup");
     }
@@ -104,5 +107,6 @@ export const onRequestGet = async (ctx: Ctx) => {
     "set-cookie",
     `${NEXT_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
   );
+  if (isNewSignup) headers.append("set-cookie", SIGNUP_MARK_COOKIE);
   return new Response(null, { status: 302, headers });
 };

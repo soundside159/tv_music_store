@@ -7,6 +7,7 @@ import {
   OWNER_EMAIL,
   readJson,
   type Ctx,
+  SIGNUP_MARK_COOKIE,
 } from "../_utils";
 import { sendWelcomeEmail } from "../_email";
 import { subscribeEmail } from "../_newsletter";
@@ -46,6 +47,7 @@ export const onRequestPost = async (ctx: Ctx) => {
   const passwordHash = await hashPassword(password);
 
   let user: { id: string; email: string; name: string | null; role: string };
+  let isNewSignup = false;
 
   if (existing) {
     if (existing.password_hash) {
@@ -71,11 +73,14 @@ export const onRequestPost = async (ctx: Ctx) => {
       .run();
     user = { id, email, name, role };
     if (role !== "admin") {
+      isNewSignup = true;
       await sendWelcomeEmail(ctx.env, email, name);
       await subscribeEmail(ctx.env.DB, email, "signup");
     }
   }
 
   const cookie = await openSession(ctx.env.DB, user.id);
-  return json({ ok: true, user }, 200, { "set-cookie": cookie });
+  const res = json({ ok: true, user }, 200, { "set-cookie": cookie });
+  if (isNewSignup) res.headers.append("set-cookie", SIGNUP_MARK_COOKIE);
+  return res;
 };
