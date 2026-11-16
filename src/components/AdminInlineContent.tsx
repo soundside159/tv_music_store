@@ -30,6 +30,8 @@ export interface ContentAdmin {
   /** Like run, but returns the parsed response (e.g. the created id). */
   call: (payload: Record<string, unknown>) => Promise<Record<string, unknown> | null>;
   reload: () => Promise<void> | void;
+  /** Patch the loaded copy locally (no server round trip). */
+  setData: (u: (prev: AdminContentData | null) => AdminContentData | null) => void;
 }
 
 /** Admin gate + admin content data for the public content pages. */
@@ -38,8 +40,8 @@ export const useContentAdmin = (): ContentAdmin => {
   const { source } = useTracks();
   const enabled = user?.role === "admin" && source === "api";
   const canRemoveTracks = (user?.role === "admin" || user?.role === "editor") && source === "api";
-  const { data, run, call, reload } = useAdminTrackContent(canRemoveTracks);
-  return { enabled, canRemoveTracks, data, run, call, reload };
+  const { data, run, call, reload, setData } = useAdminTrackContent(canRemoveTracks);
+  return { enabled, canRemoveTracks, data, run, call, reload, setData };
 };
 
 const itemsOf = (data: AdminContentData | null, kind: ContentKind): AdminContentItem[] =>
@@ -820,15 +822,31 @@ export const makeRemoveTrackHandler = (
   if (!admin.canRemoveTracks || !item) return null;
   return (trackId: string) => {
     void (async () => {
+      // Remove ONLY this one track (a delta), never resend the whole list:
+      // a whole-list save from a stale or half-loaded copy once emptied a
+      // playlist (16.11.2026).
       const ok = await admin.run({
-        action: "set_tracks",
-        id: item.id,
-        kind,
-        trackIds: item.trackIds.filter((x) => x !== trackId),
+        action: "bulk_update_tracks",
+        trackIds: [trackId],
+        ...(kind === "collection"
+          ? { collectionChanges: { remove: [item.id] } }
+          : { playlistChanges: { remove: [item.id] } }),
       });
       if (ok) {
         toast.success(`Removed from ${item.title}`);
-        await afterChange(admin);
+        // Drop the track from the loaded copy instead of reloading everything
+        // from the server (each full reload reads thousands of rows).
+        admin.setData((prev) => {
+          if (!prev) return prev;
+          const key = kind === "collection" ? "collections" : "playlists";
+          return {
+            ...prev,
+            [key]: prev[key].map((x) =>
+              x.id === item.id ? { ...x, trackIds: x.trackIds.filter((t) => t !== trackId) } : x,
+            ),
+          };
+        });
+        refreshContent();
         onTracksChanged?.();
       }
     })();

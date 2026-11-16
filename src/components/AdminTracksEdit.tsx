@@ -1609,6 +1609,17 @@ const AdminTracksEdit = ({
   ) => {
     if (disabled || selected.length === 0) return;
     const to = nextState(delta[item.id] ?? memberBase(item));
+    // Many tracks at once: ask first - one stray click with a big selection
+    // once emptied a whole playlist (16.11.2026).
+    if (
+      selected.length >= 5 &&
+      !window.confirm(
+        to === "all"
+          ? `Add ${selected.length} selected tracks to "${item.title}"?`
+          : `Remove ${selected.length} selected tracks from "${item.title}"?`,
+      )
+    )
+      return;
     setDelta((prev) => ({ ...prev, [item.id]: to }));
 
     const change = to === "all" ? { add: [item.id] } : { remove: [item.id] };

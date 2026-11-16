@@ -91,7 +91,8 @@ export const useAdminTrackContent = (enabled: boolean) => {
       return;
     }
     try {
-      const res = await fetch("/api/admin/content", { credentials: "include" });
+      // lite=1: no editor history (not shown here) - far fewer database reads.
+      const res = await fetch("/api/admin/content?lite=1", { credentials: "include" });
       if (!res.ok) return;
       const d = (await res.json()) as Partial<AdminContentData>;
       if (d.vocabularies) {

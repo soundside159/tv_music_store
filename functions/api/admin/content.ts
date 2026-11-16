@@ -53,6 +53,9 @@ const ensureEditLogRaw = async (db: D1Database) => {
     )
     .run();
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_track_edit_log_track ON track_edit_log(track_id)`).run();
+  // By date: the Tracks Edit history reads only the newest rows instead of
+  // scanning the whole log on every admin load (D1 rows-read limit, 16.11.2026).
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_track_edit_log_at ON track_edit_log(at)`).run();
   await db
     .prepare(`CREATE TABLE IF NOT EXISTS track_edit_review (track_id TEXT PRIMARY KEY, reviewed_at TEXT NOT NULL)`)
     .run();
@@ -631,7 +634,9 @@ export const onRequestGet = async (ctx: Ctx) => {
       trackIds: plMap[p.id] ?? [],
     })),
     editorPicksAfter: picksAfterRow?.value ?? "",
-    editorEdits: await loadEditorEdits(db),
+    // ?lite=1 (public pages' admin tools) never show the editor history -
+    // skip it, it is the heaviest read here.
+    editorEdits: new URL(ctx.request.url).searchParams.get("lite") ? {} : await loadEditorEdits(db),
   });
 };
 
@@ -900,13 +905,15 @@ export const onRequestPost = async (ctx: Ctx) => {
           ...old.filter((id) => !next.includes(id)).map((trackId) => ({ trackId, summary: `-${label}: ${title}` })),
         ]);
       }
-      await db.prepare(`DELETE FROM ${join} WHERE ${col} = ?1`).bind(body.id).run();
-      for (let i = 0; i < body.trackIds.length; i++) {
-        await db
-          .prepare(`INSERT OR IGNORE INTO ${join} (${col}, track_id, sort) VALUES (?1, ?2, ?3)`)
-          .bind(body.id, body.trackIds[i], i)
-          .run();
-      }
+      // ONE transaction (db.batch): the old way deleted the whole list and
+      // re-inserted it row by row, so anyone reading in between (a page
+      // reload, a second click) saw a half-empty list and could save that
+      // back - this emptied a playlist on 16.11.2026.
+      const ins = db.prepare(`INSERT OR IGNORE INTO ${join} (${col}, track_id, sort) VALUES (?1, ?2, ?3)`);
+      await db.batch([
+        db.prepare(`DELETE FROM ${join} WHERE ${col} = ?1`).bind(body.id),
+        ...body.trackIds.map((tid: string, i: number) => ins.bind(body.id, tid, i)),
+      ]);
       return json({ ok: true });
     }
 
@@ -1693,11 +1700,13 @@ export const onRequestPost = async (ctx: Ctx) => {
       const target = rows.results.find((r) => r.version_id === versionId);
       if (!target) return json({ error: "Version not found" }, 404);
       const ordered = [target, ...rows.results.filter((r) => r.version_id !== versionId)];
-      await db.prepare(`DELETE FROM track_versions WHERE track_id = ?1`).bind(trackId).run();
+      // One transaction: never a moment with the versions half re-inserted.
+      const stmts = [db.prepare(`DELETE FROM track_versions WHERE track_id = ?1`).bind(trackId)];
       for (let i = 0; i < ordered.length; i++) {
         const v = ordered[i];
         const vid = i === 0 ? "main" : `v${i + 1}`;
-        await db
+        stmts.push(
+          db
           .prepare(
             `INSERT INTO track_versions
                (id, track_id, version_id, label, duration, preview_src, preview_128, r2_key_wav, sort)
@@ -1713,9 +1722,10 @@ export const onRequestPost = async (ctx: Ctx) => {
             v.preview_128,
             v.r2_key_wav,
             i,
-          )
-          .run();
+          ),
+        );
       }
+      await db.batch(stmts);
       await db
         .prepare(`UPDATE tracks SET duration = ?2 WHERE id = ?1`)
         .bind(trackId, target.duration ?? "")
@@ -1757,11 +1767,13 @@ export const onRequestPost = async (ctx: Ctx) => {
         ...rows.results.filter((r) => !wanted.includes(r.version_id)),
       ];
 
-      await db.prepare(`DELETE FROM track_versions WHERE track_id = ?1`).bind(trackId).run();
+      // One transaction: never a moment with the versions half re-inserted.
+      const stmts = [db.prepare(`DELETE FROM track_versions WHERE track_id = ?1`).bind(trackId)];
       for (let i = 0; i < ordered.length; i++) {
         const v = ordered[i];
         const vid = i === 0 ? "main" : `v${i + 1}`;
-        await db
+        stmts.push(
+          db
           .prepare(
             `INSERT INTO track_versions
                (id, track_id, version_id, label, duration, preview_src, preview_128, r2_key_wav, sort)
@@ -1777,9 +1789,10 @@ export const onRequestPost = async (ctx: Ctx) => {
             v.preview_128,
             v.r2_key_wav,
             i,
-          )
-          .run();
+          ),
+        );
       }
+      await db.batch(stmts);
       // The track's headline duration follows its Main version.
       await db
         .prepare(`UPDATE tracks SET duration = ?2 WHERE id = ?1`)
